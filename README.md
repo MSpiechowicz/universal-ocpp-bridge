@@ -34,3 +34,7 @@ The command uses a local Cargo toolchain when Cargo, rustfmt, and Clippy are
 available. Otherwise it automatically runs the checks in the pinned
 `rust:1.85.1-bookworm` Docker image. Install Rust with rustup or ensure Docker is
 installed and running.
+
+Runtime bridge, environment, release, process, and selected-target identity is owned by the
+service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
+for production defaults and isolated staging/demo examples.

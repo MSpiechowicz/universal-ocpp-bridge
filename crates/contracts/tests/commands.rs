@@ -73,9 +73,18 @@ fn request_payload_cannot_supply_authenticated_origin_or_unknown_operation() {
         "operation":{"kind":"mirror_observed_state","parameters":{}},
         "expires_at":"2026-09-01T14:01:00Z"
     }"#;
+    let forged_runtime = r#"{
+        "request_id":"cmd-3",
+        "resource":{"bridge_id":"bridge-berlin-1","station_id":"station-7"},
+        "operation":{"kind":"start","parameters":{"authorization_reference":null}},
+        "expires_at":"2026-09-01T14:01:00Z",
+        "environment":"production",
+        "release_digest":"sha256:forged"
+    }"#;
 
     assert!(serde_json::from_str::<CommandRequest<BaseReportPayload>>(injected_origin).is_err());
     assert!(serde_json::from_str::<CommandRequest<BaseReportPayload>>(unknown_operation).is_err());
+    assert!(serde_json::from_str::<CommandRequest<BaseReportPayload>>(forged_runtime).is_err());
 }
 
 #[test]

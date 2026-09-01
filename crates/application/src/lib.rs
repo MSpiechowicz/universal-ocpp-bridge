@@ -40,17 +40,19 @@ pub use target::{
     ValidatedTargetConfiguration,
 };
 
-use uob_contracts::ContractVersion;
+use uob_contracts::{ContractVersion, RuntimeIdentity, ServiceIdentity};
 
 /// Composition-independent application facade.
-#[derive(Clone, Debug, Default)]
-pub struct Application;
+#[derive(Clone, Debug)]
+pub struct Application {
+    identity: ServiceIdentity,
+}
 
 impl Application {
-    /// Creates the application facade without selecting any concrete adapter.
+    /// Creates the application facade with composition-root-owned identity.
     #[must_use]
-    pub const fn new() -> Self {
-        Self
+    pub const fn new(identity: ServiceIdentity) -> Self {
+        Self { identity }
     }
 
     /// Reports the contract version supported by the domain layer.
@@ -58,14 +60,49 @@ impl Application {
     pub const fn contract_version(&self) -> ContractVersion {
         uob_domain::supported_contract()
     }
+
+    /// Returns the trusted identity exposed to APIs and diagnostics.
+    #[must_use]
+    pub const fn identity(&self) -> &ServiceIdentity {
+        &self.identity
+    }
+
+    /// Returns the canonical runtime context to attach to events and exports.
+    #[must_use]
+    pub const fn runtime_identity(&self) -> &RuntimeIdentity {
+        &self.identity.runtime
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use uob_contracts::{
+        ArtifactDigest, BridgeId, Environment, ProcessInstanceId, ReleaseId, RuntimeIdentity,
+        ServiceIdentity,
+    };
+
     use super::Application;
+
+    fn identity() -> ServiceIdentity {
+        ServiceIdentity {
+            bridge_id: BridgeId::new("bridge-test").expect("bridge ID"),
+            runtime: RuntimeIdentity {
+                environment: Environment::Demo,
+                release_id: ReleaseId::new("test-release").expect("release ID"),
+                release_digest: ArtifactDigest::new("sha256:test").expect("release digest"),
+                process_instance_id: ProcessInstanceId::new("process-test").expect("process ID"),
+            },
+            selected_target_id: None,
+        }
+    }
 
     #[test]
     fn application_does_not_require_an_adapter_to_construct() {
-        assert_eq!(Application::new().contract_version().major, 1);
+        let identity = identity();
+        let application = Application::new(identity.clone());
+
+        assert_eq!(application.contract_version().major, 1);
+        assert_eq!(application.identity(), &identity);
+        assert_eq!(application.runtime_identity(), &identity.runtime);
     }
 }

@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "ArtifactDigest": {
+      "description": "Content digest identifying the immutable release artifact.",
+      "type": "string"
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Trusted runtime environment assigned by the process composition root.",
+      "oneOf": [
+        {
+          "const": "production",
+          "description": "Live charging environment.",
+          "type": "string"
+        },
+        {
+          "const": "staging",
+          "description": "Isolated qualification environment.",
+          "type": "string"
+        },
+        {
+          "const": "demo",
+          "description": "Explicit local demonstration or test environment.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessInstanceId": {
+      "description": "Unique identity of one running process instance.",
+      "type": "string"
+    },
+    "ReleaseId": {
+      "description": "Immutable identity of a built release.",
+      "type": "string"
+    },
+    "RuntimeIdentity": {
+      "description": "Immutable process and release context attached to emitted records.",
+      "properties": {
+        "environment": {
+          "$ref": "#/$defs/Environment",
+          "description": "Trusted environment of this process."
+        },
+        "process_instance_id": {
+          "$ref": "#/$defs/ProcessInstanceId",
+          "description": "Unique identity of this process invocation."
+        },
+        "release_digest": {
+          "$ref": "#/$defs/ArtifactDigest",
+          "description": "Digest of the running release artifact."
+        },
+        "release_id": {
+          "$ref": "#/$defs/ReleaseId",
+          "description": "Immutable release identity."
+        }
+      },
+      "required": [
+        "environment",
+        "release_id",
+        "release_digest",
+        "process_instance_id"
+      ],
+      "type": "object"
+    },
+    "TargetInstanceId": {
+      "description": "Stable identity of a configured target instance.",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/service-identity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Trusted bridge, release, process, and selected-target context exposed by the service.",
+  "properties": {
+    "bridge_id": {
+      "$ref": "#/$defs/BridgeId",
+      "description": "Stable logical bridge installation configured for this process."
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeIdentity",
+      "description": "Canonical environment, release, and process context."
+    },
+    "selected_target_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TargetInstanceId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Explicit selected target, absent for an API-only service."
+    }
+  },
+  "required": [
+    "bridge_id",
+    "runtime"
+  ],
+  "title": "ServiceIdentity",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

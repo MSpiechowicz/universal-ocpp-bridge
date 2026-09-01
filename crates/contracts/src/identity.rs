@@ -3,6 +3,8 @@ use std::{error::Error, fmt};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
+use crate::TargetInstanceId;
+
 macro_rules! stable_id {
     ($name:ident, $description:literal) => {
         #[doc = $description]
@@ -109,6 +111,19 @@ pub struct RuntimeIdentity {
     pub release_digest: ArtifactDigest,
     /// Unique identity of this process invocation.
     pub process_instance_id: ProcessInstanceId,
+}
+
+/// Trusted bridge, release, process, and selected-target context exposed by the service.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceIdentity {
+    /// Stable logical bridge installation configured for this process.
+    pub bridge_id: BridgeId,
+    /// Canonical environment, release, and process context.
+    pub runtime: RuntimeIdentity,
+    /// Explicit selected target, absent for an API-only service.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_target_id: Option<TargetInstanceId>,
 }
 
 /// Optional canonical charging resource below a station.

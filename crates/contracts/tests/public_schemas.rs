@@ -5,7 +5,7 @@ use serde_json::{Map, Value, json};
 use uob_contracts::{
     Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExportBatch,
     ExportRecord, ExportReport, ResourceCapabilities, ResourceRef, RuntimeIdentity,
-    StationSnapshot, TraceRecord,
+    ServiceIdentity, StationSnapshot, TraceRecord,
 };
 
 const SCHEMAS: &[(&str, &str)] = &[
@@ -24,6 +24,10 @@ const SCHEMAS: &[(&str, &str)] = &[
     (
         "runtime-identity",
         include_str!("../schemas/v1.0/runtime-identity.schema.json"),
+    ),
+    (
+        "service-identity",
+        include_str!("../schemas/v1.0/service-identity.schema.json"),
     ),
     (
         "data-point-descriptor",
@@ -120,6 +124,10 @@ fn published_schema_snapshots_match_the_rust_contracts() {
         generated::<RuntimeIdentity>("runtime-identity")
     );
     assert_eq!(
+        published("service-identity"),
+        generated::<ServiceIdentity>("service-identity")
+    );
+    assert_eq!(
         published("data-point-descriptor"),
         generated::<DataPointDescriptor>("data-point-descriptor")
     );
@@ -172,6 +180,14 @@ fn canonical_examples_validate_against_their_public_schemas() {
         .expect("event fixture");
     assert_valid("event-envelope", &event);
     assert_valid("runtime-identity", &event["runtime"]);
+    assert_valid(
+        "service-identity",
+        &json!({
+            "bridge_id": "bridge-berlin-1",
+            "runtime": event["runtime"],
+            "selected_target_id": "main-ems"
+        }),
+    );
     assert_valid(
         "data-point-descriptor",
         &serde_json::from_str(include_str!("fixtures/data-point-descriptor-v1.json"))
