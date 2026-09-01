@@ -1,0 +1,22 @@
+{
+  "schema_version": { "major": 1, "revision": 0 },
+  "request_id": "cmd-target-start-7",
+  "correlation_id": "workflow-42",
+  "resource": {
+    "bridge_id": "bridge-berlin-1",
+    "station_id": "station-7",
+    "resource": { "kind": "evse", "evse_id": "evse-1", "connector_id": "connector-2" },
+    "native_protocol_reference": { "protocol": "ocpp201", "evse_id": 1, "connector_id": 2 }
+  },
+  "operation": {
+    "kind": "start",
+    "parameters": { "authorization_reference": "local-auth-9" }
+  },
+  "expires_at": "2026-09-01T14:01:00Z",
+  "origin": {
+    "kind": "target",
+    "target_instance_id": "main-ems",
+    "principal_id": "ems-operator-4"
+  },
+  "admitted_at": "2026-09-01T14:00:01Z"
+}
