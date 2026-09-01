@@ -2,6 +2,7 @@
 
 mod event;
 mod identity;
+mod point;
 mod timestamp;
 
 pub use event::{
@@ -12,6 +13,12 @@ pub use identity::{
     ArtifactDigest, BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource,
     Environment, IdentityError, NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceRef,
     RuntimeIdentity, StationId,
+};
+pub use point::{
+    AccessMode, DataPointConstraints, DataPointDescriptor, DataPointValue, EngineeringUnit,
+    ExactDecimal, ExactDecimalError, Freshness, MeasurementContext, MeasurementLocation,
+    MeasurementMetadata, MeasurementPhase, NamedEnumValue, PointId, PointIdentityError, Quality,
+    QualityLevel, SemanticName, TypedValue, UnitConversionError, ValueType,
 };
 pub use timestamp::UtcTimestamp;
 
