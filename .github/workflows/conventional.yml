@@ -1,0 +1,57 @@
+name: Conventional commits and documentation
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conventional-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional:
+    name: PR title, commit range, and documentation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out reviewed source and pull request history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install the reviewed Cocogitto release
+        env:
+          COG_ARCHIVE_SHA256: e03938ff2c4c86d71c00c0f3284dbbe95c5ca76fe34a51f33e945c23010d59bb
+          COG_ARCHIVE_URL: https://github.com/cocogitto/cocogitto/releases/download/7.0.0/cocogitto-7.0.0-x86_64-unknown-linux-musl.tar.gz
+        run: |
+          archive="$RUNNER_TEMP/cocogitto-7.0.0.tar.gz"
+          tool_directory="$RUNNER_TEMP/cocogitto-bin"
+          curl --fail --location --proto '=https' --tlsv1.2 "$COG_ARCHIVE_URL" --output "$archive"
+          printf '%s  %s\n' "$COG_ARCHIVE_SHA256" "$archive" | sha256sum --check
+          mkdir --parents "$tool_directory"
+          tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP"
+          install --mode 0755 "$RUNNER_TEMP/x86_64-unknown-linux-musl/cog" "$tool_directory/cog"
+          printf '%s\n' "$tool_directory" >>"$GITHUB_PATH"
+      - name: Confirm the Cocogitto version
+        run: test "$(cog --version)" = "cog 7.0.0"
+      - name: Configure the checkout-local identity required by Cocogitto
+        run: |
+          git config --local user.name "Conventional Check"
+          git config --local user.email "conventional-check@example.invalid"
+      - name: Verify the pull request title as literal data
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: ./scripts/check-conventional.sh title
+      - name: Check pull request commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./scripts/check-conventional.sh range "$BASE_SHA" "$HEAD_SHA"
+      - name: Test Conventional Commit safeguards
+        run: ./scripts/test-conventional-checks.sh
+      - name: Check documentation links and formatting
+        run: cargo run --quiet --package uob-repository-checks
