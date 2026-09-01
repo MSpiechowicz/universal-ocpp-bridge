@@ -73,6 +73,10 @@ Future industrial drivers remain behind the target registry and canonical data/c
 the [industrial adapter extension boundary](docs/architecture/industrial-adapter-extension.md) for
 the mapping checklist, unavailable first-release OPC UA kind, and compatibility limits.
 
+Critical target deliveries remain owned by their original target instance and configuration
+revision across restarts. See [target destination changes](docs/configuration/target-destination-changes.md)
+for offline previews, restart-required state, audited archive/discard handling, and dispatch guards.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
