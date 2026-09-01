@@ -474,7 +474,7 @@ pub struct DataPointDescriptor {
 }
 
 impl DataPointConstraints {
-    fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.minimum.is_none() && self.maximum.is_none() && self.enum_values.is_empty()
     }
 }

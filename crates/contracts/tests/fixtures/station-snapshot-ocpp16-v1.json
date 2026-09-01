@@ -1,0 +1,111 @@
+{
+  "schema_version": { "major": 1, "revision": 0 },
+  "station": {
+    "bridge_id": "bridge-berlin-1",
+    "station_id": "station-16",
+    "native_protocol_reference": { "protocol": "ocpp16", "connector_id": 0 }
+  },
+  "observed_at": "2026-09-01T14:00:00Z",
+  "connectivity": {
+    "status": "connected",
+    "protocol": "ocpp16j",
+    "connected_at": "2026-09-01T13:00:00Z",
+    "last_message_at": "2026-09-01T13:59:58Z"
+  },
+  "capabilities": {
+    "operations": [
+      { "operation": { "kind": "reset" } }
+    ],
+    "optional": [
+      {
+        "name": "local_authorization_list",
+        "value": { "type": "boolean", "value": true }
+      }
+    ],
+    "protocol_details": [
+      {
+        "protocol": "ocpp16j",
+        "name": "number_of_connectors",
+        "value": { "type": "unsigned_integer", "value": 2 }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resource": {
+        "bridge_id": "bridge-berlin-1",
+        "station_id": "station-16",
+        "resource": { "kind": "connector", "connector_id": "connector-1" },
+        "native_protocol_reference": { "protocol": "ocpp16", "connector_id": 1 }
+      },
+      "availability": "occupied",
+      "capabilities": {
+        "operations": [
+          { "operation": { "kind": "start" } },
+          {
+            "operation": { "kind": "stop" },
+            "parameters": [
+              { "name": "transaction_id", "value_type": "text", "required": true }
+            ]
+          },
+          {
+            "operation": { "kind": "set_charging_limit" },
+            "parameters": [
+              {
+                "name": "current_amps",
+                "value_type": "decimal",
+                "required": true,
+                "constraints": {
+                  "minimum": { "type": "decimal", "value": "6" },
+                  "maximum": { "type": "decimal", "value": "32" }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "current_values": [
+        {
+          "point_id": "station-16.connector-1.power.active",
+          "value": { "type": "decimal", "value": "7.2" },
+          "observed_at": "2026-09-01T13:59:57Z",
+          "quality": { "level": "good" },
+          "freshness": { "status": "fresh", "valid_until": "2026-09-01T14:00:07Z" },
+          "measurement": {
+            "original_value": "7200",
+            "original_unit": "W",
+            "measurand": "power.active.import",
+            "protocol_reference": { "protocol": "ocpp16", "connector_id": 1 }
+          }
+        }
+      ]
+    },
+    {
+      "resource": {
+        "bridge_id": "bridge-berlin-1",
+        "station_id": "station-16",
+        "resource": { "kind": "connector", "connector_id": "connector-2" },
+        "native_protocol_reference": { "protocol": "ocpp16", "connector_id": 2 }
+      },
+      "availability": "available",
+      "capabilities": {
+        "optional": [
+          { "name": "state_mirror_only" }
+        ]
+      }
+    }
+  ],
+  "transactions": [
+    {
+      "transaction_id": "tx-16-9001",
+      "resource": {
+        "bridge_id": "bridge-berlin-1",
+        "station_id": "station-16",
+        "resource": { "kind": "connector", "connector_id": "connector-1" },
+        "native_protocol_reference": { "protocol": "ocpp16", "connector_id": 1 }
+      },
+      "state": "active",
+      "started_at": "2026-09-01T13:45:00Z"
+    }
+  ]
+}

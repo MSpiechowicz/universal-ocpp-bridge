@@ -3,6 +3,7 @@
 mod event;
 mod identity;
 mod point;
+mod snapshot;
 mod timestamp;
 
 pub use event::{
@@ -19,6 +20,12 @@ pub use point::{
     ExactDecimal, ExactDecimalError, Freshness, MeasurementContext, MeasurementLocation,
     MeasurementMetadata, MeasurementPhase, NamedEnumValue, PointId, PointIdentityError, Quality,
     QualityLevel, SemanticName, TypedValue, UnitConversionError, ValueType,
+};
+pub use snapshot::{
+    AvailabilityState, CapabilityError, CapabilityName, ChargingResourceSnapshot, Connectivity,
+    Operation, OperationParameter, OptionalCapability, ParameterName, ProtocolCapabilityDetail,
+    ProtocolEdition, ResourceCapabilities, StationSnapshot, SupportedOperation, TransactionId,
+    TransactionSnapshot, TransactionState,
 };
 pub use timestamp::UtcTimestamp;
 
