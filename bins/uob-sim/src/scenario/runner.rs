@@ -1,17 +1,19 @@
-use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
+use tokio::task::JoinSet;
 use tokio::time::timeout;
 
+use super::fault::complete_heartbeat_pair_out_of_order;
+use super::scheduling::{StepWork, deterministic_jitter, fault_selected, validate_and_group_steps};
 use super::{
-    ActionKind, FailureCategory, RunFailure, RunReport, ScenarioDefinition, SimulatorConfiguration,
-    StationDefinition, StepDefinition,
+    ActionKind, DiagnosticCounts, FailureCategory, FaultKind, RunFailure, RunReport,
+    ScenarioDefinition, SimulatorConfiguration, StationDefinition, StationState, StepDefinition,
 };
-use crate::{ProtocolClient, SimulatorClientConfig, SimulatorProtocolClient};
+use crate::{ClientDiagnostics, ProtocolClient, SimulatorClientConfig, SimulatorProtocolClient};
 
 pub type ConnectFuture<'a> = Pin<
     Box<
@@ -119,201 +121,368 @@ impl ScenarioRunner {
         seed: u64,
         mut cancellation: CancellationToken,
     ) -> RunReport {
-        if let Err(failure) = validate_station_references(configuration, scenario) {
-            return RunReport::failed(seed, failure);
-        }
-
-        let stations: HashMap<_, _> = configuration
-            .stations
-            .iter()
-            .map(|station| (station.id.as_str(), station))
-            .collect();
-        let mut clients: HashMap<String, Box<dyn ProtocolClient>> = HashMap::new();
         let mut report = RunReport::new(seed);
+        let grouped = match validate_and_group_steps(configuration, scenario) {
+            Ok(grouped) => grouped,
+            Err((failure, rejected_steps)) => {
+                report.diagnostics.rejected_steps = rejected_steps;
+                report.finish_failure(failure);
+                return report;
+            }
+        };
         report.push("run_started", "running", None, None, None, None);
 
-        for step in &scenario.steps {
-            report.push(
-                "step_started",
-                "running",
-                Some(&step.id),
-                Some(&step.station),
-                Some(step.action.name()),
-                None,
-            );
-            let station = stations[step.station.as_str()];
-            let duration = Duration::from_millis(step.timeout_ms);
-            let result = {
-                let execution = self.execute_step(step, station, &mut clients);
-                tokio::pin!(execution);
-                tokio::select! {
-                    () = cancellation.cancelled() => Err(RunFailure::new(
-                        FailureCategory::Cancelled,
-                        "cancelled",
-                        "scenario cancelled",
-                    )),
-                    result = timeout(duration, &mut execution) => match result {
-                        Ok(result) => result,
-                        Err(_) => Err(RunFailure::new(
-                            FailureCategory::Timeout,
-                            "step_timeout",
-                            "scenario step exceeded its wall-clock timeout",
-                        )),
-                    },
-                }
+        let (stop, stop_token) = cancellation_pair();
+        let mut workers = JoinSet::new();
+        for station in &configuration.stations {
+            let Some(steps) = grouped.get(&station.id) else {
+                continue;
             };
-
-            match result {
-                Ok(detail) => report.push(
-                    "step_passed",
-                    "passed",
-                    Some(&step.id),
-                    Some(&step.station),
-                    Some(step.action.name()),
-                    Some(detail),
-                ),
-                Err(failure) => {
-                    report.push(
-                        "step_failed",
-                        "failed",
-                        Some(&step.id),
-                        Some(&step.station),
-                        Some(step.action.name()),
-                        Some(failure.message.clone()),
-                    );
-                    let force = matches!(
-                        failure.category,
-                        FailureCategory::Timeout | FailureCategory::Cancelled
-                    );
-                    cleanup_clients(&mut clients, force).await;
-                    report.finish_failure(failure);
+            let (sender, receiver) = mpsc::channel(station.step_capacity);
+            for step in steps.iter().cloned() {
+                if sender.try_send(step).is_err() {
+                    report.diagnostics.rejected_steps += 1;
+                    report.finish_failure(RunFailure::new(
+                        FailureCategory::Setup,
+                        "station_step_queue_rejected",
+                        "validated station work was rejected by its bounded queue",
+                    ));
                     return report;
                 }
             }
-        }
-
-        cleanup_clients(&mut clients, false).await;
-        report.push("run_passed", "passed", None, None, None, None);
-        report
-    }
-
-    async fn execute_step(
-        &self,
-        step: &StepDefinition,
-        station: &StationDefinition,
-        clients: &mut HashMap<String, Box<dyn ProtocolClient>>,
-    ) -> Result<String, RunFailure> {
-        let detail = match step.action {
-            ActionKind::Connect => {
-                if clients.contains_key(&step.station) {
-                    return Err(assertion_failure(
-                        "already_connected",
-                        "station is already connected",
-                    ));
-                }
-                let client = self
-                    .connector
-                    .connect(station.client_config())
-                    .await
-                    .map_err(|_| {
-                        RunFailure::new(
-                            FailureCategory::Setup,
-                            "peer_unavailable",
-                            "station peer is unavailable or rejected the connection",
-                        )
-                    })?;
-                let detail = client.version().websocket_protocol().to_owned();
-                clients.insert(step.station.clone(), client);
-                detail
-            }
-            ActionKind::Heartbeat => {
-                let client = connected_client(clients, &step.station)?;
-                client.heartbeat().await.map_err(|_| {
-                    assertion_failure("heartbeat_failed", "Heartbeat exchange failed")
-                })?
-            }
-            ActionKind::Wait => {
-                let duration_ms = step.duration_ms.expect("validated wait duration");
-                self.clock.sleep(Duration::from_millis(duration_ms)).await;
-                format!("{duration_ms}ms")
-            }
-            ActionKind::Disconnect => {
-                let Some(client) = clients.remove(&step.station) else {
-                    return Err(assertion_failure(
-                        "not_connected",
-                        "station is not connected",
-                    ));
-                };
-                client.shutdown().await.map_err(|_| {
-                    assertion_failure("disconnect_failed", "station disconnect failed")
-                })?;
-                "stopped".to_owned()
-            }
-        };
-        assert_detail(step, &detail)?;
-        Ok(detail)
-    }
-}
-
-fn connected_client<'a>(
-    clients: &'a HashMap<String, Box<dyn ProtocolClient>>,
-    station_id: &str,
-) -> Result<&'a dyn ProtocolClient, RunFailure> {
-    clients
-        .get(station_id)
-        .map(AsRef::as_ref)
-        .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))
-}
-
-fn assert_detail(step: &StepDefinition, actual: &str) -> Result<(), RunFailure> {
-    if let Some(expected) = &step.expect_detail {
-        if expected != actual {
-            return Err(assertion_failure(
-                "unexpected_event_detail",
-                "observed event detail did not match the expected value",
+            drop(sender);
+            workers.spawn(run_station(
+                Arc::clone(&self.connector),
+                Arc::clone(&self.clock),
+                station.clone(),
+                receiver,
+                seed,
+                stop_token.clone(),
             ));
         }
+
+        let mut runs = Vec::new();
+        let mut primary_failure = None;
+        while !workers.is_empty() {
+            tokio::select! {
+                () = cancellation.cancelled(), if primary_failure.is_none() => {
+                    primary_failure = Some(RunFailure::new(
+                        FailureCategory::Cancelled,
+                        "cancelled",
+                        "scenario cancelled",
+                    ));
+                    stop.cancel();
+                }
+                joined = workers.join_next() => {
+                    match joined {
+                        Some(Ok(run)) => {
+                            if primary_failure.is_none() {
+                                if let Some(failure) = run.failure.clone() {
+                                    primary_failure = Some(failure);
+                                    stop.cancel();
+                                }
+                            }
+                            runs.push(run);
+                        }
+                        Some(Err(_)) => {
+                            if primary_failure.is_none() {
+                                primary_failure = Some(RunFailure::new(
+                                    FailureCategory::Setup,
+                                    "station_worker_failed",
+                                    "a station worker stopped unexpectedly",
+                                ));
+                                stop.cancel();
+                            }
+                        }
+                        None => break,
+                    }
+                }
+            }
+        }
+
+        let mut executions: Vec<_> = runs
+            .into_iter()
+            .flat_map(|run| {
+                report.diagnostics.merge(run.diagnostics);
+                run.executions
+            })
+            .collect();
+        executions.sort_by_key(|execution| execution.index);
+        for execution in executions {
+            report_step(&mut report, &execution);
+        }
+
+        if let Some(failure) = primary_failure {
+            report.finish_failure(failure);
+        } else {
+            report.finish_success();
+        }
+        report
     }
-    Ok(())
 }
 
-fn validate_station_references(
-    configuration: &SimulatorConfiguration,
-    scenario: &ScenarioDefinition,
-) -> Result<(), RunFailure> {
-    let station_ids: HashSet<_> = configuration
-        .stations
-        .iter()
-        .map(|station| station.id.as_str())
-        .collect();
-    if scenario
-        .steps
-        .iter()
-        .any(|step| !station_ids.contains(step.station.as_str()))
-    {
-        Err(RunFailure::new(
-            FailureCategory::Setup,
-            "unknown_station",
-            "scenario references a station not present in the configuration",
-        ))
-    } else {
-        Ok(())
-    }
+struct StepExecution {
+    index: usize,
+    step: StepDefinition,
+    selected_fault: Option<FaultKind>,
+    result: Result<String, RunFailure>,
 }
 
-async fn cleanup_clients(clients: &mut HashMap<String, Box<dyn ProtocolClient>>, force: bool) {
-    for (_, client) in clients.drain() {
-        if force {
-            let _ = timeout(Duration::from_secs(2), client.force_shutdown()).await;
-            client.abort();
-        } else if timeout(Duration::from_secs(2), client.shutdown())
-            .await
-            .is_err()
-        {
-            client.abort();
+struct StationRun {
+    executions: Vec<StepExecution>,
+    failure: Option<RunFailure>,
+    diagnostics: DiagnosticCounts,
+}
+
+async fn run_station(
+    connector: Arc<dyn ScenarioConnector>,
+    clock: Arc<dyn ScenarioClock>,
+    station: StationDefinition,
+    mut steps: mpsc::Receiver<StepWork>,
+    seed: u64,
+    mut cancellation: CancellationToken,
+) -> StationRun {
+    let mut state = StationState::from_definition(&station);
+    let mut client = None;
+    let mut executions = Vec::new();
+    let mut failure = None;
+    let mut diagnostics = DiagnosticCounts::default();
+
+    while let Some(work) = steps.recv().await {
+        let selected_fault = work
+            .step
+            .fault
+            .as_ref()
+            .filter(|fault| fault_selected(seed, &station.id, &work.step.id, fault))
+            .map(|fault| fault.kind);
+        let result = {
+            let execution = execute_step(
+                &connector,
+                &clock,
+                &station,
+                &work.step,
+                selected_fault,
+                &mut client,
+                &mut state,
+                &mut diagnostics,
+                seed,
+            );
+            tokio::pin!(execution);
+            tokio::select! {
+                () = cancellation.cancelled() => Err(RunFailure::new(
+                    FailureCategory::Cancelled,
+                    "cancelled",
+                    "scenario cancelled",
+                )),
+                result = timeout(Duration::from_millis(work.step.timeout_ms), &mut execution) => {
+                    result.unwrap_or_else(|_| Err(RunFailure::new(
+                        FailureCategory::Timeout,
+                        "step_timeout",
+                        "scenario step exceeded its wall-clock timeout",
+                    )))
+                }
+            }
+        };
+        if let Err(step_failure) = &result {
+            failure = Some(step_failure.clone());
+        }
+        executions.push(StepExecution {
+            index: work.index,
+            step: work.step,
+            selected_fault,
+            result,
+        });
+        if failure.is_some() {
+            break;
         }
     }
+
+    let force = failure.as_ref().is_some_and(|failure| {
+        matches!(
+            failure.category,
+            FailureCategory::Timeout | FailureCategory::Cancelled
+        )
+    });
+    cleanup_client(&mut client, force, &mut diagnostics).await;
+    StationRun {
+        executions,
+        failure,
+        diagnostics,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_step(
+    connector: &Arc<dyn ScenarioConnector>,
+    clock: &Arc<dyn ScenarioClock>,
+    station: &StationDefinition,
+    step: &StepDefinition,
+    selected_fault: Option<FaultKind>,
+    client: &mut Option<Box<dyn ProtocolClient>>,
+    state: &mut StationState,
+    diagnostics: &mut DiagnosticCounts,
+    seed: u64,
+) -> Result<String, RunFailure> {
+    let jitter = deterministic_jitter(seed, &station.id, &step.id, step.jitter_ms);
+    let start_delay = step.start_delay_ms.saturating_add(jitter);
+    if start_delay > 0 {
+        clock.sleep(Duration::from_millis(start_delay)).await;
+    }
+
+    if matches!(selected_fault, Some(FaultKind::Disconnect)) {
+        cleanup_client(client, true, diagnostics).await;
+        state.connected = false;
+    }
+    if matches!(selected_fault, Some(FaultKind::MissingResponse)) {
+        let connected = client
+            .as_deref()
+            .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?;
+        let _ = connected.heartbeat().await;
+        std::future::pending::<()>().await;
+    }
+    if matches!(selected_fault, Some(FaultKind::OutOfOrderResponse)) {
+        let connected = client
+            .as_deref()
+            .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?;
+        let delay = Duration::from_millis(step.fault.as_ref().map_or(0, |fault| fault.delay_ms));
+        let result = complete_heartbeat_pair_out_of_order(connected, clock, delay).await?;
+        step.assert_detail(&result)?;
+        return Ok(result);
+    }
+
+    let result = execute_action(connector, clock, station, step, client, state).await?;
+    if matches!(selected_fault, Some(FaultKind::ResponseDelay)) {
+        let delay = step.fault.as_ref().map_or(0, |fault| fault.delay_ms);
+        clock.sleep(Duration::from_millis(delay)).await;
+    }
+    step.assert_detail(&result)?;
+    Ok(result)
+}
+
+async fn execute_action(
+    connector: &Arc<dyn ScenarioConnector>,
+    clock: &Arc<dyn ScenarioClock>,
+    station: &StationDefinition,
+    step: &StepDefinition,
+    client: &mut Option<Box<dyn ProtocolClient>>,
+    state: &mut StationState,
+) -> Result<String, RunFailure> {
+    match step.action {
+        ActionKind::Connect => {
+            if client.is_some() {
+                return Err(assertion_failure(
+                    "already_connected",
+                    "station is already connected",
+                ));
+            }
+            let connected = connector
+                .connect(station.client_config())
+                .await
+                .map_err(|_| {
+                    RunFailure::new(
+                        FailureCategory::Setup,
+                        "peer_unavailable",
+                        "station peer is unavailable or rejected the connection",
+                    )
+                })?;
+            let detail = connected.version().websocket_protocol().to_owned();
+            *client = Some(connected);
+            state.connected = true;
+            Ok(detail)
+        }
+        ActionKind::Heartbeat => client
+            .as_deref()
+            .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?
+            .heartbeat()
+            .await
+            .map_err(|_| assertion_failure("heartbeat_failed", "Heartbeat exchange failed")),
+        ActionKind::Wait => {
+            let duration_ms = step.duration_ms.expect("validated wait duration");
+            clock.sleep(Duration::from_millis(duration_ms)).await;
+            Ok(format!("{duration_ms}ms"))
+        }
+        ActionKind::Disconnect => {
+            let Some(connected) = client.take() else {
+                return Err(assertion_failure(
+                    "not_connected",
+                    "station is not connected",
+                ));
+            };
+            connected
+                .shutdown()
+                .await
+                .map_err(|_| assertion_failure("disconnect_failed", "station disconnect failed"))?;
+            state.connected = false;
+            Ok("stopped".to_owned())
+        }
+    }
+}
+
+async fn cleanup_client(
+    client: &mut Option<Box<dyn ProtocolClient>>,
+    force: bool,
+    diagnostics: &mut DiagnosticCounts,
+) {
+    let Some(client) = client.take() else {
+        return;
+    };
+    merge_client_diagnostics(diagnostics, client.diagnostics());
+    let requires_force = force
+        || !matches!(
+            timeout(Duration::from_secs(2), client.shutdown()).await,
+            Ok(Ok(()))
+        );
+    if requires_force {
+        let _ = timeout(Duration::from_secs(2), client.force_shutdown()).await;
+        client.abort();
+    }
+    merge_client_diagnostics(diagnostics, client.diagnostics());
     tokio::task::yield_now().await;
+}
+
+fn merge_client_diagnostics(counts: &mut DiagnosticCounts, client: ClientDiagnostics) {
+    counts.rejected_commands = counts.rejected_commands.max(client.rejected_commands);
+    counts.dropped_traces = counts.dropped_traces.max(client.dropped_traces);
+}
+
+fn report_step(report: &mut RunReport, execution: &StepExecution) {
+    let step = &execution.step;
+    report.push(
+        "step_started",
+        "running",
+        Some(&step.id),
+        Some(&step.station),
+        Some(step.action.name()),
+        None,
+    );
+    if let Some(fault) = execution.selected_fault {
+        report.push(
+            "fault_selected",
+            "running",
+            Some(&step.id),
+            Some(&step.station),
+            Some(step.action.name()),
+            Some(fault.name().to_owned()),
+        );
+    }
+    match &execution.result {
+        Ok(detail) => report.push(
+            "step_passed",
+            "passed",
+            Some(&step.id),
+            Some(&step.station),
+            Some(step.action.name()),
+            Some(detail.clone()),
+        ),
+        Err(failure) => report.push(
+            "step_failed",
+            "failed",
+            Some(&step.id),
+            Some(&step.station),
+            Some(step.action.name()),
+            Some(failure.message.clone()),
+        ),
+    }
 }
 
 fn assertion_failure(code: &'static str, message: &'static str) -> RunFailure {
