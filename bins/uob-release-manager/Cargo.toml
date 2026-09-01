@@ -7,5 +7,8 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[dependencies]
+uob-contracts = { path = "../../crates/contracts" }
+
 [lints]
 workspace = true

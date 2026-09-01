@@ -42,3 +42,7 @@ for production defaults and isolated staging/demo examples.
 Diagnostic observations are centrally redacted and serialized before any downstream sink can see
 them. See [the diagnostic redaction boundary](docs/security/diagnostic-redaction.md) for the typed
 safe-field policy, fail-closed vendor payload handling, and inert-renderer requirement.
+
+Normal release promotion is fail-closed on real old-to-new-to-old data evidence. See the
+[reversible release compatibility policy](docs/operations/release-compatibility.md) for schema
+ranges, additive migration rules, configuration projections, and security floors.
