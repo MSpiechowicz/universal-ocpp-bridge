@@ -4,16 +4,16 @@ use uob_application::Application;
 use uob_target_adapter::TargetRegistry;
 
 /// Fully composed service dependencies.
-pub struct ServiceComposition {
+pub struct ServiceComposition<E, P> {
     /// Target kinds available in this service build.
-    pub targets: TargetRegistry,
+    pub targets: TargetRegistry<E, P>,
     /// Target-neutral application facade.
     pub application: Application,
 }
 
 /// Creates the production composition without requiring a built-in target.
 #[must_use]
-pub fn compose(targets: TargetRegistry) -> ServiceComposition {
+pub fn compose<E, P>(targets: TargetRegistry<E, P>) -> ServiceComposition<E, P> {
     ServiceComposition {
         targets,
         application: Application::new(),
@@ -22,28 +22,15 @@ pub fn compose(targets: TargetRegistry) -> ServiceComposition {
 
 #[cfg(test)]
 mod tests {
-    use uob_target_adapter::{TargetAdapter, TargetRegistry};
+    use uob_target_adapter::TargetRegistry;
 
     use super::compose;
 
-    struct AlternateTarget;
-
-    impl TargetAdapter for AlternateTarget {
-        fn kind(&self) -> &'static str {
-            "example.alternate"
-        }
-    }
-
     #[test]
-    fn alternate_adapter_is_added_only_in_the_composition_root() {
-        let mut targets = TargetRegistry::new();
-        targets
-            .register(AlternateTarget)
-            .expect("unique target kind");
+    fn service_starts_without_constructing_an_unselected_target() {
+        let service = compose(TargetRegistry::<(), ()>::new());
 
-        let service = compose(targets);
-
-        assert!(service.targets.contains("example.alternate"));
+        assert!(service.targets.is_empty());
         assert_eq!(service.application.contract_version().major, 1);
     }
 }

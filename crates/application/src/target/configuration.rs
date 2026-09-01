@@ -80,6 +80,64 @@ pub struct ConfigurationSchema {
     pub fields: Vec<ConfigurationField>,
 }
 
+impl ConfigurationSchema {
+    /// Validates required fields, declared names, and value kinds without resolving secrets or
+    /// performing I/O.
+    ///
+    /// # Errors
+    ///
+    /// Returns a sanitized field error for the first missing, unknown, or incorrectly typed
+    /// setting.
+    pub fn validate_shape(
+        &self,
+        configuration: &TargetConfiguration,
+    ) -> Result<(), ConfigurationError> {
+        for field in &self.fields {
+            let value = configuration.setting(&field.name);
+            if field.required && value.is_none() {
+                return Err(ConfigurationError::field(
+                    ConfigurationErrorCode::MissingField,
+                    &field.name,
+                ));
+            }
+            if let Some(value) = value {
+                if !field.kind.accepts(value) {
+                    return Err(ConfigurationError::field(
+                        ConfigurationErrorCode::InvalidField,
+                        &field.name,
+                    ));
+                }
+            }
+        }
+
+        for (name, _) in configuration.settings() {
+            if !self.fields.iter().any(|field| field.name == name) {
+                return Err(ConfigurationError::field(
+                    ConfigurationErrorCode::UnknownField,
+                    name,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ConfigurationFieldKind {
+    const fn accepts(self, value: &ConfigurationValue) -> bool {
+        matches!(
+            (self, value),
+            (Self::Text, ConfigurationValue::Text(_))
+                | (Self::Integer, ConfigurationValue::Integer(_))
+                | (Self::Boolean, ConfigurationValue::Boolean(_))
+                | (
+                    Self::CredentialReference,
+                    ConfigurationValue::CredentialReference(_)
+                )
+        )
+    }
+}
+
 /// Unvalidated settings for one configured target instance.
 ///
 /// The type intentionally has no `Debug` implementation, avoiding accidental diagnostic output
