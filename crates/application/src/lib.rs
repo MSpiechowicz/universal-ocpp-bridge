@@ -1,6 +1,7 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
 mod storage;
+mod target;
 
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
@@ -9,6 +10,18 @@ pub use storage::{
     PageLimit, PageLimitError, PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor,
     RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode,
     StorageFuture,
+};
+pub use target::{
+    AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,
+    ConfigurationErrorCode, ConfigurationField, ConfigurationFieldKind, ConfigurationSchema,
+    ConfigurationValue, CredentialReference, DeliveryOutcome, DeliveryReport, DeliverySemantic,
+    DiagnosticDrop, ErrorRetryClassification, TargetCapability, TargetCommandPort,
+    TargetConfiguration, TargetContext, TargetDelivery, TargetDeliveryClass,
+    TargetDeliveryReceiver, TargetDescriptor, TargetDiagnostic, TargetDiagnosticPort, TargetError,
+    TargetErrorCode, TargetHealth, TargetHealthState, TargetLimits, TargetMessage,
+    TargetMessageClass, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
+    TargetQueryPort, TargetQueryResult, TargetReportPort, TargetRuntimeLimits, TargetShutdown,
+    TargetTask, ValidatedTargetConfiguration,
 };
 
 use uob_contracts::ContractVersion;
