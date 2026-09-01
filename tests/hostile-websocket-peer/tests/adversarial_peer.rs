@@ -13,6 +13,7 @@ use uob_hostile_websocket_peer::{
 
 type ServerSocket = WebSocketStream<TcpStream>;
 
+#[allow(clippy::result_large_err)]
 async fn accept(listener: &TcpListener) -> ServerSocket {
     let (tcp, _) = listener.accept().await.unwrap();
     tokio_tungstenite::accept_hdr_async(

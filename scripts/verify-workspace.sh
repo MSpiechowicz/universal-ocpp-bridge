@@ -22,7 +22,7 @@ elif ! command -v cargo >/dev/null 2>&1 \
     exit 127
   fi
 
-  readonly rust_image="rust:1.87.0-bookworm@sha256:6d79f767859a5f025a062505fa9f2c1a041cadafcee71fbcbd226223be462f18"
+  readonly rust_image="rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922"
   readonly cargo_cache="uob-verify-cargo-home"
   readonly target_cache="uob-verify-target"
   readonly host_uid="$(id -u)"
@@ -53,13 +53,9 @@ elif ! command -v cargo >/dev/null 2>&1 \
 fi
 
 cargo fmt --all --check
-cargo check --workspace --all-targets
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo test --package uob-contracts --test public_schemas
-cargo test --package uob-storage-adapter --test sqlite_operational_store
-cargo test --package uob-release-manager --test release_compatibility
-cargo run --quiet --package uob-ocpp-fixtures
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+cargo run --locked --quiet --package uob-ocpp-fixtures
 ./scripts/test-boundaries.sh
 
 packages=(
@@ -83,7 +79,7 @@ packages=(
 )
 
 for package in "${packages[@]}"; do
-  cargo check --package "$package"
+  cargo check --locked --package "$package"
 done
 
 echo "workspace verification complete"

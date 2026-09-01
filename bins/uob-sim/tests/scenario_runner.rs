@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use std::future::pending;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

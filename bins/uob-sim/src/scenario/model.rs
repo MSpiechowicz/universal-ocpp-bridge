@@ -328,21 +328,21 @@ fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             "only wait actions require duration_ms",
         ));
     }
-    if let Some(event) = &step.expect_event {
-        if event != step.action.event() {
-            return Err(setup_failure(
-                "unsupported_expected_event",
-                "expected event is not produced by the selected action",
-            ));
-        }
+    if let Some(event) = &step.expect_event
+        && event != step.action.event()
+    {
+        return Err(setup_failure(
+            "unsupported_expected_event",
+            "expected event is not produced by the selected action",
+        ));
     }
-    if let Some(message) = &step.expect_message {
-        if !matches!(step.action, ActionKind::Heartbeat) || message != "Heartbeat" {
-            return Err(setup_failure(
-                "unsupported_expected_message",
-                "only the Heartbeat wire message is supported by this scenario version",
-            ));
-        }
+    if let Some(message) = &step.expect_message
+        && (!matches!(step.action, ActionKind::Heartbeat) || message != "Heartbeat")
+    {
+        return Err(setup_failure(
+            "unsupported_expected_message",
+            "only the Heartbeat wire message is supported by this scenario version",
+        ));
     }
     if let Some(fault) = &step.fault {
         if fault.probability_percent == 0 || fault.probability_percent > 100 {

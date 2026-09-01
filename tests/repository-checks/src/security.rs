@@ -89,7 +89,7 @@ fn check_dependency_policy(root: &Path, errors: &mut Vec<String>) {
         return;
     };
     for required in [
-        "RUSTSEC-2026-0009",
+        "ignore = []",
         "unknown-registry = \"deny\"",
         "unknown-git = \"deny\"",
         "allow-git = []",

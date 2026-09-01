@@ -3,7 +3,7 @@ use std::{
     future::Future,
     pin::pin,
     sync::{Arc, Mutex},
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
@@ -290,13 +290,7 @@ impl
 }
 
 fn block_on<F: Future>(future: F) -> F::Output {
-    struct NoopWake;
-    impl Wake for NoopWake {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let mut context = Context::from_waker(Waker::noop());
     let mut future = pin!(future);
     loop {
         match future.as_mut().poll(&mut context) {

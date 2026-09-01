@@ -176,11 +176,11 @@ impl ScenarioRunner {
                 joined = workers.join_next() => {
                     match joined {
                         Some(Ok(run)) => {
-                            if primary_failure.is_none() {
-                                if let Some(failure) = run.failure.clone() {
-                                    primary_failure = Some(failure);
-                                    stop.cancel();
-                                }
+                            if primary_failure.is_none()
+                                && let Some(failure) = run.failure.clone()
+                            {
+                                primary_failure = Some(failure);
+                                stop.cancel();
                             }
                             runs.push(run);
                         }

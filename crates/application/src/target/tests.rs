@@ -4,7 +4,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 
 use time::OffsetDateTime;
@@ -168,15 +168,8 @@ impl BridgeTargetFactory<(), ()> for FakeFactory {
     }
 }
 
-struct NoopWake;
-
-impl Wake for NoopWake {
-    fn wake(self: Arc<Self>) {}
-}
-
 fn poll_ready(task: &mut TargetTask) -> Poll<Result<(), TargetError>> {
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let mut context = Context::from_waker(Waker::noop());
     task.as_mut().poll(&mut context)
 }
 
@@ -247,9 +240,8 @@ fn validation_schema_and_errors_never_retain_credential_contents() {
         ConfigurationValue::Text(credential.to_owned()),
     );
 
-    let error = match factory.validate(&invalid) {
-        Ok(_) => panic!("wrong credential type must fail validation"),
-        Err(error) => error,
+    let Err(error) = factory.validate(&invalid) else {
+        panic!("wrong credential type must fail validation");
     };
     let diagnostic = format!("{:?} {error:?} {error}", factory.configuration_schema());
 

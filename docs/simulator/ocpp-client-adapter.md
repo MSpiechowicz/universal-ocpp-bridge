@@ -14,8 +14,8 @@ response.
 
 ## Proven limitations
 
-- The dependency is pre-1.0 and its 0.4.0 public API requires Rust 1.87. The workspace toolchain
-  floor and fallback verification image therefore move together to 1.87.
+- The dependency is pre-1.0 and its 0.4.0 public API requires Rust 1.87. The workspace deliberately
+  sets a higher Rust 1.98 floor, and the fallback verification image moves with that workspace pin.
 - WebSocket/WSS is the only production-ready transport in this release. The upstream embedded
   transport is experimental and is not enabled by `uob-sim`.
 - The client owns transport and OCPP request routing, not charger state or scenario behavior.

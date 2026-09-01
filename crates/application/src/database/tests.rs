@@ -6,7 +6,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 
 use time::OffsetDateTime;
@@ -239,15 +239,8 @@ impl DatabaseProviderFactory for FakeFactory {
     }
 }
 
-struct NoopWake;
-
-impl Wake for NoopWake {
-    fn wake(self: Arc<Self>) {}
-}
-
 fn poll_ready(task: &mut DatabaseTask) -> Poll<Result<(), DatabaseError>> {
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let mut context = Context::from_waker(Waker::noop());
     task.as_mut().poll(&mut context)
 }
 
@@ -303,9 +296,8 @@ fn validation_is_network_free_and_never_reveals_connection_or_credential_text() 
     let secret = "driver://admin:secret@external.internal/bridge";
     let invalid = DatabaseConfiguration::new(destination("analytics"), 1)
         .with_setting("credentials", ConfigurationValue::Text(secret.to_owned()));
-    let error = match factory.validate(&invalid) {
-        Ok(_) => panic!("wrong credential type must fail"),
-        Err(error) => error,
+    let Err(error) = factory.validate(&invalid) else {
+        panic!("wrong credential type must fail");
     };
     let diagnostic = format!("{:?} {error:?} {error}", factory.configuration_schema());
 

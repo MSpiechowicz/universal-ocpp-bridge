@@ -45,13 +45,13 @@ impl BridgeTargetFactory<(), ()> for FixtureFactory {
         if self.reject {
             return Err(ConfigurationError::new(ConfigurationErrorCode::Unsupported));
         }
-        if let Some(ConfigurationValue::Text(profile)) = configuration.setting("profile") {
-            if profile != "ems-scada" {
-                return Err(ConfigurationError::field(
-                    ConfigurationErrorCode::InvalidField,
-                    "profile",
-                ));
-            }
+        if let Some(ConfigurationValue::Text(profile)) = configuration.setting("profile")
+            && profile != "ems-scada"
+        {
+            return Err(ConfigurationError::field(
+                ConfigurationErrorCode::InvalidField,
+                "profile",
+            ));
         }
         Ok(ValidatedTargetConfiguration::new(configuration.clone()))
     }

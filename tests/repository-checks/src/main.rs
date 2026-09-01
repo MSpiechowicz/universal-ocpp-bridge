@@ -396,14 +396,13 @@ fn check_graph_excludes(
         if !visited.insert(id) {
             continue;
         }
-        if id != root.id {
-            if let Some(name) = names_by_id.get(id) {
-                if forbidden.contains(name) {
-                    errors.push(format!(
-                        "{root_name} dependency graph contains forbidden package {name}"
-                    ));
-                }
-            }
+        if id != root.id
+            && let Some(name) = names_by_id.get(id)
+            && forbidden.contains(name)
+        {
+            errors.push(format!(
+                "{root_name} dependency graph contains forbidden package {name}"
+            ));
         }
         if let Some(dependencies) = edges.get(id) {
             pending.extend(dependencies.iter().map(String::as_str));

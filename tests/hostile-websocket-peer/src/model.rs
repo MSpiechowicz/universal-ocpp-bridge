@@ -153,38 +153,36 @@ fn validate(scenario: &Scenario) -> Result<(), ScenarioError> {
                 "step fields do not match the selected action",
             ));
         }
-        if let Some(Payload::RepeatedText { byte, bytes }) = &step.payload {
-            if !byte.is_ascii() || *bytes == 0 {
-                return Err(error(
-                    "invalid_repeated_payload",
-                    "repeated text requires one ASCII byte and a nonzero size",
-                ));
-            }
+        if let Some(Payload::RepeatedText { byte, bytes }) = &step.payload
+            && (!byte.is_ascii() || *bytes == 0)
+        {
+            return Err(error(
+                "invalid_repeated_payload",
+                "repeated text requires one ASCII byte and a nonzero size",
+            ));
         }
-        if let Some(Payload::BinaryHex { value }) = &step.payload {
-            if value.len() % 2 != 0 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                return Err(error(
-                    "invalid_hex_payload",
-                    "binary payload must be even-length hex",
-                ));
-            }
+        if let Some(Payload::BinaryHex { value }) = &step.payload
+            && (value.len() % 2 != 0 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        {
+            return Err(error(
+                "invalid_hex_payload",
+                "binary payload must be even-length hex",
+            ));
         }
         if let Some(ExpectedFrame::Text {
             json_pointer,
             equals,
             ..
         }) = &step.expect
-        {
-            if json_pointer.is_some() != equals.is_some()
+            && (json_pointer.is_some() != equals.is_some()
                 || json_pointer
                     .as_ref()
-                    .is_some_and(|path| !path.starts_with('/'))
-            {
-                return Err(error(
-                    "invalid_json_expectation",
-                    "JSON expectations require a pointer beginning with / and an equals value",
-                ));
-            }
+                    .is_some_and(|path| !path.starts_with('/')))
+        {
+            return Err(error(
+                "invalid_json_expectation",
+                "JSON expectations require a pointer beginning with / and an equals value",
+            ));
         }
     }
     Ok(())

@@ -8,9 +8,7 @@ targets = [
 [advisories]
 unmaintained = "workspace"
 unsound = "all"
-ignore = [
-    { id = "RUSTSEC-2026-0009", reason = "Only RFC 3339 parsing is used; remove after the workspace MSRV reaches 1.88 and time can be upgraded to 0.3.47 or newer" },
-]
+ignore = []
 
 [bans]
 multiple-versions = "allow"

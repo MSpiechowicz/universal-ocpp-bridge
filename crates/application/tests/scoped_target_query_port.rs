@@ -6,7 +6,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
@@ -259,9 +259,8 @@ fn cross_station_queries_status_and_subscriptions_are_rejected() {
         .expect_err("cross-station command result must fail");
     assert_eq!(error.code(), TargetPortErrorCode::Unauthorized);
 
-    let error = match block_on(port.subscribe_retained_events(event_query(forbidden, 10))) {
-        Ok(_) => panic!("cross-station subscription must fail"),
-        Err(error) => error,
+    let Err(error) = block_on(port.subscribe_retained_events(event_query(forbidden, 10))) else {
+        panic!("cross-station subscription must fail");
     };
     assert_eq!(error.code(), TargetPortErrorCode::Unauthorized);
     assert_eq!(source.subscription_calls.load(Ordering::SeqCst), 0);
@@ -303,9 +302,8 @@ fn query_permissions_and_bounds_fail_closed() {
         source,
         authorization(&station, vec![TargetQueryPermission::RetainedEvents]),
     );
-    let error = match block_on(event_port.subscribe_retained_events(event_query(station, 1))) {
-        Ok(_) => panic!("oversized source buffer must fail"),
-        Err(error) => error,
+    let Err(error) = block_on(event_port.subscribe_retained_events(event_query(station, 1))) else {
+        panic!("oversized source buffer must fail");
     };
     assert_eq!(error.code(), TargetPortErrorCode::InvalidRequest);
 }
@@ -464,15 +462,8 @@ fn text<T, E: std::fmt::Debug>(
     constructor(value.into()).expect("valid identity")
 }
 
-struct NoopWake;
-
-impl Wake for NoopWake {
-    fn wake(self: Arc<Self>) {}
-}
-
 fn block_on<T>(future: impl Future<Output = T>) -> T {
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let mut context = Context::from_waker(Waker::noop());
     let mut future = pin!(future);
     loop {
         match future.as_mut().poll(&mut context) {
@@ -485,7 +476,6 @@ fn block_on<T>(future: impl Future<Output = T>) -> T {
 fn poll_stream<E>(
     stream: &mut TargetRetainedEventStream<E>,
 ) -> Poll<Option<Result<EventEnvelope<E>, TargetPortError>>> {
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let mut context = Context::from_waker(Waker::noop());
     stream.as_mut().poll_event(&mut context)
 }

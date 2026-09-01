@@ -123,13 +123,13 @@ impl ConfigurationSchema {
                     &field.name,
                 ));
             }
-            if let Some(value) = value {
-                if !field.kind.accepts(value) {
-                    return Err(ConfigurationError::field(
-                        ConfigurationErrorCode::InvalidField,
-                        &field.name,
-                    ));
-                }
+            if let Some(value) = value
+                && !field.kind.accepts(value)
+            {
+                return Err(ConfigurationError::field(
+                    ConfigurationErrorCode::InvalidField,
+                    &field.name,
+                ));
             }
         }
 

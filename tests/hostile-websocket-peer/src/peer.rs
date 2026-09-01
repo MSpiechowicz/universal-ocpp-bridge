@@ -223,9 +223,21 @@ impl Peer {
             direction,
             kind,
             bytes: payload.len(),
-            sha256: (!payload.is_empty()).then(|| format!("{:x}", Sha256::digest(payload))),
+            sha256: (!payload.is_empty()).then(|| sha256_hex(payload)),
         });
     }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    const LOWER_HEX: &[u8; 16] = b"0123456789abcdef";
+
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for &byte in &digest {
+        encoded.push(char::from(LOWER_HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(LOWER_HEX[usize::from(byte & 0x0f)]));
+    }
+    encoded
 }
 
 fn message_summary(message: &Message) -> (ObservationKind, &[u8]) {

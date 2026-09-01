@@ -32,7 +32,7 @@ Run the current foundation checks with:
 
 The command uses a local Cargo toolchain when Cargo, rustfmt, and Clippy are
 available. Otherwise it automatically runs the checks in the pinned
-`rust:1.87.0-bookworm` Docker image. Install Rust with rustup or ensure Docker is
+`rust:1.98.0-bookworm` Docker image. Install Rust with rustup or ensure Docker is
 installed and running.
 
 Contributions use pinned, Rust-native Conventional Commit and pull request title checks. See the

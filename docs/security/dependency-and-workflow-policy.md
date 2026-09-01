@@ -12,16 +12,13 @@ registries, and every Git source. The license allowlist is the reviewed set curr
 `Cargo.lock`; a new license or source requires an explicit policy change in the same review as the
 dependency. Unmaintained packages are denied when they are direct workspace dependencies.
 
-One reviewed advisory exception is recorded for RUSTSEC-2026-0009. The vulnerable `time` path is
-RFC 2822 parsing; this repository parses timestamps only with `Rfc3339`. The patched `time` release
-requires Rust 1.88 while the application toolchain is pinned to Rust 1.87. Remove the exception and
-upgrade to `time` 0.3.47 or newer when the workspace MSRV moves to 1.88. Any future exception must
-likewise name the advisory, demonstrate that the vulnerable path is unreachable, and state a
-removal condition.
+The workspace pins patched `time` 0.3.47 and carries no advisory exceptions. Any future exception
+must name the advisory, demonstrate that the vulnerable path is unreachable, and state a removal
+condition.
 
-The committed lockfile is authoritative for checks and SBOM generation. Dependency updates arrive
-as reviewable weekly Dependabot pull requests. They run the same checks as any other change and are
-never auto-merged or used to silently downgrade a security-sensitive dependency.
+The committed lockfile is authoritative for checks and SBOM generation. Automated Dependabot pull
+requests are disabled; dependency updates are proposed manually, run the same checks as any other
+change, and must never silently downgrade a security-sensitive dependency.
 
 ## Secrets and workflows
 
