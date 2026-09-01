@@ -27,6 +27,7 @@ rust-version = "1.87"
 [workspace.dependencies]
 axum = "=0.8.4"
 ocpp-client = { version = "=0.4.0", default-features = false, features = ["std", "tokio-runtime", "websocket", "ocpp_1_6", "ocpp_2_0_1"] }
+rust-ocpp = { version = "=3.0.4", default-features = false, features = ["v1_6", "v2_0_1"] }
 rusqlite = { version = "=0.39.0", features = ["bundled"] }
 schemars = "=1.0.4"
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -35,6 +36,7 @@ sha2 = "=0.10.9"
 time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 tokio = { version = "=1.49.0", default-features = false }
 uuid = { version = "=1.26.0", features = ["v4"] }
+validator = { version = "=0.20.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

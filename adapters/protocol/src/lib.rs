@@ -1,6 +1,11 @@
 #![doc = "Protocol adapter boundary. Concrete protocol model crates belong here."]
 
+mod error;
 mod station;
+pub mod v16;
+pub mod v201;
+
+pub use error::{DecodeError, DecodeErrorKind, OcppCallError, OcppErrorCode};
 
 pub use station::{
     OrderedStationOutput, SpawnedStation, StationHandle, StationOutputKind, StationOutputReceiver,
@@ -11,4 +16,25 @@ pub use station::{
 pub trait ProtocolAdapter: Send + Sync {
     /// Stable adapter kind used by the composition root.
     fn kind(&self) -> &'static str;
+}
+
+/// A validated charger-originated OCPP CALL converted to an application-owned operation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DecodedCall {
+    /// OCPP unique message identifier used for the corresponding response or error.
+    pub message_id: String,
+    /// Exact OCPP action from the incoming frame.
+    pub action: uob_contracts::ProtocolActionName,
+    /// Target-neutral operation passed into application coordination.
+    pub observation: uob_application::ChargerObservation,
+}
+
+/// Selects one of the only WebSocket subprotocols supported by this release.
+#[must_use]
+pub fn protocol_for_subprotocol(value: &str) -> Option<uob_contracts::ProtocolEdition> {
+    match value {
+        "ocpp1.6" => Some(uob_contracts::ProtocolEdition::Ocpp16j),
+        "ocpp2.0.1" => Some(uob_contracts::ProtocolEdition::Ocpp201),
+        _ => None,
+    }
 }

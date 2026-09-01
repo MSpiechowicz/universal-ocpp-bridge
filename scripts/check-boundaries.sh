@@ -33,7 +33,7 @@ for package in "${protected_packages[@]}"; do
     esac
   done < <(dependencies_in "$manifest")
 
-  if grep -REin --include='*.rs' '(mqtt|topic|node_?id|namespace_?uri|register_?address|opcua|rumqttc|rusqlite|postgres|axum|tokio::net|websocket|http::|react|vite)' "$package_root/src"; then
+  if grep -REin --include='*.rs' '(rust_?ocpp|mqtt|topic|node_?id|namespace_?uri|register_?address|opcua|rumqttc|rusqlite|postgres|axum|tokio::net|websocket|http::|react|vite)' "$package_root/src"; then
     echo "boundary violation: protected package $package contains adapter, transport, industrial mapping, database, or UI details" >&2
     exit 1
   fi
