@@ -1,6 +1,6 @@
 # Simulator OCPP client adapter
 
-`uob-sim` pins `ocpp-client` 0.4.0 as its normal WebSocket transport and keeps it behind the
+`uob-sim` pins `ocpp-client` 0.5.0 as its normal WebSocket transport and keeps it behind the
 simulator-owned `ProtocolClient` interface. The simulator package does not depend on service,
 domain, application, persistence, or protocol-adapter packages, and the production service does
 not link or launch the simulator.
@@ -14,7 +14,7 @@ response.
 
 ## Proven limitations
 
-- The dependency is pre-1.0 and its 0.4.0 public API requires Rust 1.87. The workspace deliberately
+- The dependency is pre-1.0 and its 0.5.0 public API requires Rust 1.87. The workspace deliberately
   sets a higher Rust 1.98 floor, and the fallback verification image moves with that workspace pin.
 - WebSocket/WSS is the only production-ready transport in this release. The upstream embedded
   transport is experimental and is not enabled by `uob-sim`.

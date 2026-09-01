@@ -12,7 +12,7 @@ registries, and every Git source. The license allowlist is the reviewed set curr
 `Cargo.lock`; a new license or source requires an explicit policy change in the same review as the
 dependency. Unmaintained packages are denied when they are direct workspace dependencies.
 
-The workspace pins patched `time` 0.3.47 and carries no advisory exceptions. Any future exception
+The workspace pins patched `time` 0.3.55 and carries no advisory exceptions. Any future exception
 must name the advisory, demonstrate that the vulnerable path is unreachable, and state a removal
 condition.
 

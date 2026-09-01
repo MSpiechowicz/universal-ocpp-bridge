@@ -273,7 +273,10 @@ fn validate_wire(fixture: &Fixture, schema: &Value, wire: &Value, errors: &mut V
             for error in validator.iter_errors(payload) {
                 errors.push(format!(
                     "fixture {} payload fails {} at {}: {}",
-                    fixture.id, fixture.schema, error.instance_path, error
+                    fixture.id,
+                    fixture.schema,
+                    error.instance_path(),
+                    error
                 ));
             }
         }

@@ -96,7 +96,7 @@ fn assert_valid(name: &str, instance: &Value) {
     let validator = jsonschema::draft202012::new(&schema).expect("compile Draft 2020-12 schema");
     let errors = validator
         .iter_errors(instance)
-        .map(|error| format!("{}: {error}", error.instance_path))
+        .map(|error| format!("{}: {error}", error.instance_path()))
         .collect::<Vec<_>>();
     assert!(
         errors.is_empty(),

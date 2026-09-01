@@ -15,7 +15,7 @@ uob-contracts = { path = "../../crates/contracts" }
 
 [dev-dependencies]
 serde_json = "=1.0.151"
-tower = { version = "0.5", features = ["util"] }
+tower = { version = "=0.5.3", features = ["util"] }
 
 [lints]
 workspace = true
