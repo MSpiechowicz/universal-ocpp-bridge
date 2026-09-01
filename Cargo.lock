@@ -2430,6 +2430,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "uob-repository-checks"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "uob-service"
 version = "0.0.0"
 dependencies = [

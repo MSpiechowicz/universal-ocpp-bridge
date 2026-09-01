@@ -32,7 +32,7 @@ Run the current foundation checks with:
 
 The command uses a local Cargo toolchain when Cargo, rustfmt, and Clippy are
 available. Otherwise it automatically runs the checks in the pinned
-`rust:1.85.1-bookworm` Docker image. Install Rust with rustup or ensure Docker is
+`rust:1.87.0-bookworm` Docker image. Install Rust with rustup or ensure Docker is
 installed and running.
 
 Runtime bridge, environment, release, process, and selected-target identity is owned by the

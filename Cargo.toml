@@ -6,6 +6,7 @@ members = [
     "tests/target-conformance",
     "tests/ocpp-fixtures",
     "tests/hostile-websocket-peer",
+    "tests/repository-checks",
     "adapters/protocol",
     "adapters/target",
     "adapters/storage",

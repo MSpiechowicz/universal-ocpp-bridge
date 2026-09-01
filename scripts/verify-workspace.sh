@@ -56,6 +56,9 @@ cargo fmt --all --check
 cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo test --package uob-contracts --test public_schemas
+cargo test --package uob-storage-adapter --test sqlite_operational_store
+cargo test --package uob-release-manager --test release_compatibility
 cargo run --quiet --package uob-ocpp-fixtures
 ./scripts/test-boundaries.sh
 
@@ -66,6 +69,7 @@ packages=(
   uob-target-conformance
   uob-ocpp-fixtures
   uob-hostile-websocket-peer
+  uob-repository-checks
   uob-protocol-adapter
   uob-target-adapter
   uob-storage-adapter
