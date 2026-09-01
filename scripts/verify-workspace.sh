@@ -56,6 +56,7 @@ cargo fmt --all --check
 cargo check --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo run --quiet --package uob-ocpp-fixtures
 ./scripts/test-boundaries.sh
 
 packages=(
@@ -63,6 +64,7 @@ packages=(
   uob-domain
   uob-application
   uob-target-conformance
+  uob-ocpp-fixtures
   uob-protocol-adapter
   uob-target-adapter
   uob-storage-adapter

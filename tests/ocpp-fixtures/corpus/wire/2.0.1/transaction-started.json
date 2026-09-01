@@ -1,0 +1,18 @@
+[
+  2,
+  "fixture-201-transaction-001",
+  "TransactionEvent",
+  {
+    "eventType": "Started",
+    "timestamp": "2026-09-01T00:02:00Z",
+    "triggerReason": "Authorized",
+    "seqNo": 0,
+    "transactionInfo": {
+      "transactionId": "independent-transaction-001"
+    },
+    "evse": {
+      "id": 1,
+      "connectorId": 1
+    }
+  }
+]

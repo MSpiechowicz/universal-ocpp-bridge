@@ -46,3 +46,8 @@ safe-field policy, fail-closed vendor payload handling, and inert-renderer requi
 Normal release promotion is fail-closed on real old-to-new-to-old data evidence. See the
 [reversible release compatibility policy](docs/operations/release-compatibility.md) for schema
 ranges, additive migration rules, configuration projections, and security floors.
+
+OCPP release coverage is tracked separately from implementation claims. See the
+[independent OCPP fixture corpus](docs/testing/ocpp-fixture-corpus.md) for pinned specification
+provenance, hand-authored wire fixtures, the coverage-to-test matrix, and its fail-closed release
+gate.

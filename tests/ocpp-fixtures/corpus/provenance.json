@@ -1,0 +1,21 @@
+{
+  "sources": [
+    {
+      "protocol_version": "1.6",
+      "revision": "OCPP 1.6 Edition 2 with published JSON errata bundle dated 2025-04-29",
+      "download_url": "https://openchargealliance.org/download/7b06ab293c68fb6b4f4ae0960e502579c1c5516aa2b7acf0fdcedba585b9ea7f",
+      "archive_sha256": "2a1d80284ca60449e85951fc55bc0538b5d45bd6f97c6d9228745acacb52c11b",
+      "schema_draft": "draft4",
+      "license": "CC BY-ND 4.0; Copyright Open Charge Alliance"
+    },
+    {
+      "protocol_version": "2.0.1",
+      "revision": "OCPP 2.0.1 Edition 4, Part 3 FINAL schemas, with errata through 2026-06",
+      "download_url": "https://openchargealliance.org/download/caaab79c63336ff203104d9940c8eba29adb7d324c384e0578f7f3b7265e03ac",
+      "archive_sha256": "192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a",
+      "schema_bundle_sha256": "6279c40b74929cce7fca439622194a8890a0d250de5665f3e4d80ef8529c51ce",
+      "schema_draft": "draft6",
+      "license": "CC BY-ND 4.0; Copyright Open Charge Alliance"
+    }
+  ]
+}

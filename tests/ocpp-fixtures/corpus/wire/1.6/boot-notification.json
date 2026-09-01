@@ -1,0 +1,9 @@
+[
+  2,
+  "fixture-16-boot-001",
+  "BootNotification",
+  {
+    "chargePointVendor": "Independent Vendor",
+    "chargePointModel": "IF-16"
+  }
+]
