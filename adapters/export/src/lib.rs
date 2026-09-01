@@ -1,7 +1,17 @@
-#![doc = "External export adapter boundary. Provider drivers remain in this package."]
+#![doc = "External export provider catalog and offline composition validation."]
 
-/// Marker for passive external export implementations.
-pub trait ExternalExportAdapter: Send + Sync {
-    /// Stable provider kind.
-    fn kind(&self) -> &'static str;
-}
+mod catalog;
+mod registry;
+mod security;
+
+pub use catalog::{
+    DatabaseProviderCatalogEntry, DatabaseProviderRegistration, postgresql_configuration_schema,
+};
+pub use registry::{
+    ConfiguredDatabaseProvider, DataExportConfiguration, DataExportSelectionError,
+    DatabaseProviderRegistry, DatabaseRegistrationError, DestinationTransition, ExportBacklogState,
+    POSTGRESQL_PROVIDER_KIND, ValidatedDataExport, ValidatedProviderSelection,
+};
+pub use security::{
+    DatabaseSecurityError, DatabaseTransportSecurity, validate_database_transport_security,
+};
