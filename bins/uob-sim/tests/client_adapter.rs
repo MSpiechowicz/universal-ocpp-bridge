@@ -187,6 +187,9 @@ async fn timeout_cancellation_and_project_buffers_remain_bounded() {
         Err(SimulatorClientError::Protocol(_))
     ));
     assert!(client.traces().len() <= 3);
+    let diagnostics = client.diagnostics();
+    assert_eq!(diagnostics.rejected_commands, 1);
+    assert!(diagnostics.dropped_traces > 0);
     timeout(TEST_BOUND, client.shutdown())
         .await
         .unwrap()
@@ -238,6 +241,43 @@ async fn reconnect_preserves_handlers_and_allows_a_later_call() {
             .unwrap(),
         "2026-09-01T01:00:00Z"
     );
+    timeout(TEST_BOUND, client.shutdown())
+        .await
+        .unwrap()
+        .unwrap();
+    timeout(TEST_BOUND, server).await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn bounded_outstanding_calls_correlate_out_of_order_responses() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = accept(tcp, "ocpp1.6").await;
+        let first = receive_json(&mut socket).await;
+        let second = receive_json(&mut socket).await;
+        socket
+            .send(Message::text(
+                json!([3, second[1], {"currentTime": "2026-09-01T00:00:02Z"}]).to_string(),
+            ))
+            .await
+            .unwrap();
+        socket
+            .send(Message::text(
+                json!([3, first[1], {"currentTime": "2026-09-01T00:00:01Z"}]).to_string(),
+            ))
+            .await
+            .unwrap();
+    });
+    let client =
+        SimulatorProtocolClient::connect(config(format!("ws://{address}"), OcppVersion::V1_6))
+            .await
+            .unwrap();
+
+    let (first, second) = tokio::join!(client.heartbeat(), client.heartbeat());
+    assert_eq!(first.unwrap(), "2026-09-01T00:00:01Z");
+    assert_eq!(second.unwrap(), "2026-09-01T00:00:02Z");
     timeout(TEST_BOUND, client.shutdown())
         .await
         .unwrap()
