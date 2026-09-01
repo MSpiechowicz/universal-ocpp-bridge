@@ -35,6 +35,10 @@ available. Otherwise it automatically runs the checks in the pinned
 `rust:1.87.0-bookworm` Docker image. Install Rust with rustup or ensure Docker is
 installed and running.
 
+Contributions use pinned, Rust-native Conventional Commit and pull request title checks. See the
+[contribution policy](docs/contributing.md) for the accepted format, Cocogitto version, adoption
+baseline, feature-squash policy, and local verification commands.
+
 Runtime bridge, environment, release, process, and selected-target identity is owned by the
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
 for production defaults and isolated staging/demo examples.

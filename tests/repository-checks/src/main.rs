@@ -7,6 +7,8 @@ use std::{
 
 use serde::Deserialize;
 
+mod documentation;
+
 const EXPECTED_PACKAGES: &[&str] = &[
     "uob-application",
     "uob-contracts",
@@ -95,12 +97,12 @@ fn main() -> ExitCode {
 
     match check(&root) {
         Ok(()) => {
-            println!("Cargo metadata dependency boundaries verified");
+            println!("repository documentation and Cargo metadata boundaries verified");
             ExitCode::SUCCESS
         }
         Err(errors) => {
             for error in errors {
-                eprintln!("boundary violation: {error}");
+                eprintln!("repository violation: {error}");
             }
             ExitCode::FAILURE
         }
@@ -127,6 +129,7 @@ fn check(root: &Path) -> Result<(), Vec<String>> {
     check_protected_sources(&packages, &mut errors);
 
     if packages.contains_key("uob-service") {
+        documentation::check(root, &mut errors);
         check_expected_workspace(&packages, &mut errors);
         check_expected_tests(&packages, &mut errors);
         check_runtime_graphs(&metadata, &packages, &mut errors);
