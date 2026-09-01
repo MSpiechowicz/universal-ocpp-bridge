@@ -12,6 +12,7 @@ mod documentation;
 const EXPECTED_PACKAGES: &[&str] = &[
     "uob-application",
     "uob-contracts",
+    "uob-database-conformance",
     "uob-domain",
     "uob-external-export-adapter",
     "uob-hostile-websocket-peer",

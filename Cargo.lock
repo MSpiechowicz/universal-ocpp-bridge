@@ -2353,6 +2353,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "uob-database-conformance"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "time",
+ "tokio",
+ "uob-application",
+ "uob-contracts",
+]
+
+[[package]]
 name = "uob-domain"
 version = "0.0.0"
 dependencies = [

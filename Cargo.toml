@@ -4,6 +4,7 @@ members = [
     "crates/domain",
     "crates/application",
     "tests/target-conformance",
+    "tests/database-conformance",
     "tests/ocpp-fixtures",
     "tests/hostile-websocket-peer",
     "tests/repository-checks",

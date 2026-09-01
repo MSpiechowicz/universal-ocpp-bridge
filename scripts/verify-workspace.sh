@@ -64,6 +64,7 @@ cargo run --quiet --package uob-ocpp-fixtures
 
 packages=(
   uob-contracts
+  uob-database-conformance
   uob-domain
   uob-application
   uob-target-conformance
