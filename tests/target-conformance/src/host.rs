@@ -11,10 +11,11 @@ use std::{
 
 use tokio::sync::{mpsc, oneshot};
 use uob_application::{
-    DeliveryReport, DiagnosticDrop, TargetCommandPort, TargetContext, TargetDelivery,
-    TargetDeliveryReceiver, TargetDiagnostic, TargetDiagnosticPort, TargetPortError,
-    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryPort, TargetQueryResult,
-    TargetReportPort, TargetRetainedEventStream, TargetRuntimeLimits, TargetShutdown,
+    CommandAdmissionError, CommandAdmissionFuture, CommandAdmissionPort, DeliveryReport,
+    DiagnosticDrop, TargetContext, TargetDelivery, TargetDeliveryReceiver, TargetDiagnostic,
+    TargetDiagnosticPort, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
+    TargetQueryPort, TargetQueryResult, TargetReportPort, TargetRetainedEventStream,
+    TargetRuntimeLimits, TargetShutdown,
 };
 use uob_contracts::{CommandResult, ExternalCommand, UtcTimestamp};
 
@@ -193,20 +194,67 @@ impl<E: Send + Sync> TargetDeliveryReceiver<E> for BoundedDeliveries<E> {
 
 struct CommandPort<P>(mpsc::Sender<CommandSubmission<P>>);
 
-impl<P: Send + 'static> TargetCommandPort<P> for CommandPort<P> {
-    fn submit(&self, command: ExternalCommand<P>) -> TargetPortFuture<'_, CommandResult> {
+impl<P: Send + 'static> CommandAdmissionPort<P> for CommandPort<P> {
+    fn submit(&self, command: ExternalCommand<P>) -> CommandAdmissionFuture<'_, CommandResult> {
         let sender = self.0.clone();
         Box::pin(async move {
             let (response, receiver) = oneshot::channel();
             sender
                 .send(CommandSubmission { command, response })
                 .await
-                .map_err(|_| closed("command.host_closed"))?;
+                .map_err(|_| {
+                    CommandAdmissionError::new(
+                        uob_application::CommandAdmissionErrorCode::Unavailable,
+                        "command.host_closed",
+                    )
+                })?;
             receiver
                 .await
-                .map_err(|_| closed("command.response_dropped"))?
+                .map_err(|_| {
+                    CommandAdmissionError::new(
+                        uob_application::CommandAdmissionErrorCode::Unavailable,
+                        "command.response_dropped",
+                    )
+                })?
+                .map_err(|error| {
+                    CommandAdmissionError::new(map_port_error(error.code()), error.context())
+                })
         })
     }
+}
+
+const fn map_port_error(
+    code: uob_application::TargetPortErrorCode,
+) -> uob_application::CommandAdmissionErrorCode {
+    use uob_application::{CommandAdmissionErrorCode as Admission, TargetPortErrorCode as Target};
+
+    match code {
+        Target::Unauthorized => Admission::Unauthorized,
+        Target::Unsupported => Admission::Unsupported,
+        Target::Expired => Admission::Expired,
+        Target::Busy => Admission::Busy,
+        Target::Unavailable | Target::CursorExpired => Admission::Unavailable,
+        Target::InvalidRequest => Admission::InvalidRequest,
+    }
+}
+
+/// Maps common admission failures back to the target-facing scoped-port contract.
+#[must_use]
+pub fn target_port_error_from_admission(error: &CommandAdmissionError) -> TargetPortError {
+    let code = match error.code() {
+        uob_application::CommandAdmissionErrorCode::Unauthorized => {
+            TargetPortErrorCode::Unauthorized
+        }
+        uob_application::CommandAdmissionErrorCode::Expired => TargetPortErrorCode::Expired,
+        uob_application::CommandAdmissionErrorCode::Unsupported => TargetPortErrorCode::Unsupported,
+        uob_application::CommandAdmissionErrorCode::Busy => TargetPortErrorCode::Busy,
+        uob_application::CommandAdmissionErrorCode::Unavailable => TargetPortErrorCode::Unavailable,
+        uob_application::CommandAdmissionErrorCode::PolicyRejected
+        | uob_application::CommandAdmissionErrorCode::InvalidRequest => {
+            TargetPortErrorCode::InvalidRequest
+        }
+    };
+    TargetPortError::new(code, error.context())
 }
 
 struct ReportPort(mpsc::Sender<DeliveryReport>);

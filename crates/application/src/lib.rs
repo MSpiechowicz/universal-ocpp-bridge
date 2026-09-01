@@ -1,7 +1,9 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
+mod admission;
 mod database;
 mod diagnostic;
+mod payment;
 mod protocol;
 mod query;
 mod resource;
@@ -10,6 +12,9 @@ mod station;
 mod storage;
 mod target;
 
+pub use admission::{
+    CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture, CommandAdmissionPort,
+};
 pub use database::{
     DatabaseAcknowledgementScope, DatabaseBatchReceiver, DatabaseConfiguration, DatabaseDiagnostic,
     DatabaseDiagnosticDrop, DatabaseDiagnosticPort, DatabaseError, DatabaseErrorCode,
@@ -25,6 +30,12 @@ pub use diagnostic::{
     SafeDiagnosticField, SafeEndpointLabel, SafeEndpointLabelError, SanitizedDiagnostic,
     SensitiveDataClass, SensitiveDiagnosticValue, UnknownVendorPayload,
 };
+pub use payment::{
+    CheckoutIntent, CheckoutIntentId, CheckoutPresentation, CheckoutRequest, PaymentAuditPort,
+    PaymentAuthorizationAudit, PaymentAuthorizationInput, PaymentError, PaymentErrorCode,
+    PaymentFuture, PaymentIntentStore, PaymentOrchestrator, PaymentProvider, PaymentProviderEvent,
+    PaymentProviderId, PaymentVerificationReference, SensitivePaymentData, VerifiedPaymentEvent,
+};
 pub use protocol::{ChargerObservation, RegistrationObservation, TransactionStartObservation};
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
@@ -37,11 +48,7 @@ pub use resource::{
     RuntimeQueueLimits, RuntimeReservation, RuntimeResourceBudget, RuntimeResourceLimits,
     RuntimeResourceSnapshot, StationAdmission, TelemetryReplaceOutcome, WorkClass,
 };
-pub use security::{
-    IsolatedControl, PaymentAuthorizationEvidence, ProviderAuthorizationReference,
-    ProviderAuthorizationReferenceError, RuntimeSecurityPolicy, SecurityPolicyError,
-    VerifiedPaymentAuthorization,
-};
+pub use security::{IsolatedControl, RuntimeSecurityPolicy, SecurityPolicyError};
 pub use station::{SizedStationOutput, StationEffects, StationInput, StationStateMachine};
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
@@ -55,14 +62,13 @@ pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,
     ConfigurationErrorCode, ConfigurationField, ConfigurationFieldKind, ConfigurationSchema,
     ConfigurationValue, CredentialReference, DeliveryOutcome, DeliveryReport, DeliverySemantic,
-    DiagnosticDrop, ErrorRetryClassification, TargetCapability, TargetCommandPort,
-    TargetConfiguration, TargetContext, TargetDelivery, TargetDeliveryClass,
-    TargetDeliveryReceiver, TargetDescriptor, TargetDiagnostic, TargetDiagnosticPort, TargetError,
-    TargetErrorCode, TargetHealth, TargetHealthState, TargetLimits, TargetMessage,
-    TargetMessageClass, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
-    TargetQueryPort, TargetQueryResult, TargetReportPort, TargetRetainedEventStream,
-    TargetRuntimeLimits, TargetShutdown, TargetSubscription, TargetTask,
-    ValidatedTargetConfiguration,
+    DiagnosticDrop, ErrorRetryClassification, TargetCapability, TargetConfiguration, TargetContext,
+    TargetDelivery, TargetDeliveryClass, TargetDeliveryReceiver, TargetDescriptor,
+    TargetDiagnostic, TargetDiagnosticPort, TargetError, TargetErrorCode, TargetHealth,
+    TargetHealthState, TargetLimits, TargetMessage, TargetMessageClass, TargetPortError,
+    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryPort, TargetQueryResult,
+    TargetReportPort, TargetRetainedEventStream, TargetRuntimeLimits, TargetShutdown,
+    TargetSubscription, TargetTask, ValidatedTargetConfiguration,
 };
 
 use uob_contracts::{ContractVersion, RuntimeIdentity, ServiceIdentity};

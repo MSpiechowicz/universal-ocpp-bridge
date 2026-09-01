@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use time::OffsetDateTime;
 use tokio::{sync::mpsc, time::Duration};
 use uob_application::{
     AcknowledgementScope, BridgeTarget, DeliveryOutcome, DeliveryReport, DeliverySemantic,
@@ -24,9 +23,12 @@ use uob_target_conformance::{
     UnsupportedQueryPort, inspect_descriptor,
 };
 
+#[path = "support/helpers.rs"]
+mod helpers;
 #[path = "support/query.rs"]
 mod query_support;
-use query_support::CountingQuerySource;
+use helpers::{text, timeout, timestamp};
+
 enum PeerIngress {
     Command {
         request: CommandRequest<()>,
@@ -36,10 +38,12 @@ enum PeerIngress {
     Observation,
     Query(TargetQuery),
 }
+
 enum PeerResponse {
     Command(Result<CommandResult, TargetPortError>),
     Query(Result<TargetQueryResult<()>, TargetPortError>),
 }
+
 struct FakePeer {
     ingress: mpsc::Sender<PeerIngress>,
     responses: mpsc::Receiver<PeerResponse>,
@@ -112,7 +116,7 @@ impl BridgeTarget<(), ()> for ReferenceTarget {
 #[allow(clippy::too_many_arguments)]
 async fn handle_ingress(
     ingress: PeerIngress,
-    commands: Arc<dyn uob_application::TargetCommandPort<()>>,
+    commands: Arc<dyn uob_application::CommandAdmissionPort<()>>,
     queries: Arc<dyn uob_application::TargetQueryPort<()>>,
     diagnostics: Arc<dyn uob_application::TargetDiagnosticPort>,
     responses: mpsc::Sender<PeerResponse>,
@@ -166,6 +170,9 @@ async fn handle_ingress(
                         },
                     ))
                     .await
+                    .map_err(|error| {
+                        uob_target_conformance::target_port_error_from_admission(&error)
+                    })
             };
             let _ = responses.send(PeerResponse::Command(result)).await;
         }
@@ -344,7 +351,7 @@ async fn capable_target_passes_bounded_bidirectional_and_recovery_scenarios() {
 
 #[tokio::test]
 async fn read_only_target_rejects_commands_and_scoped_queries_explicitly() {
-    let source = Arc::new(CountingQuerySource::default());
+    let source = Arc::new(query_support::CountingQuerySource::default());
     let allowed = station("station-a");
     let query_port = Arc::new(ScopedTargetQueryPort::new(
         source.clone(),
@@ -480,21 +487,4 @@ fn station(id: &str) -> ResourceRef {
         resource: None,
         native_protocol_reference: None,
     }
-}
-
-fn timestamp(minute: i64) -> UtcTimestamp {
-    UtcTimestamp::new(OffsetDateTime::UNIX_EPOCH + time::Duration::minutes(minute))
-}
-
-async fn timeout<T>(future: impl Future<Output = T>) -> T {
-    tokio::time::timeout(Duration::from_secs(1), future)
-        .await
-        .expect("scenario timed out")
-}
-
-fn text<T, E: std::fmt::Debug>(
-    constructor: impl FnOnce(String) -> Result<T, E>,
-    value: impl Into<String>,
-) -> T {
-    constructor(value.into()).expect("valid fixture text")
 }

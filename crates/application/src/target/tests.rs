@@ -8,7 +8,11 @@ use std::{
 };
 
 use time::OffsetDateTime;
-use uob_contracts::{ContractVersion, TargetInstanceId, TargetKind, UtcTimestamp};
+use uob_contracts::{
+    CommandResult, ContractVersion, ExternalCommand, TargetInstanceId, TargetKind, UtcTimestamp,
+};
+
+use crate::{CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture};
 
 use super::*;
 
@@ -56,11 +60,11 @@ impl TargetQueryPort<()> for NoQueries {
     }
 }
 
-impl TargetCommandPort<()> for NoQueries {
-    fn submit(&self, _command: ExternalCommand<()>) -> TargetPortFuture<'_, CommandResult> {
+impl CommandAdmissionPort<()> for NoQueries {
+    fn submit(&self, _command: ExternalCommand<()>) -> CommandAdmissionFuture<'_, CommandResult> {
         Box::pin(async {
-            Err(TargetPortError::new(
-                TargetPortErrorCode::Unsupported,
+            Err(CommandAdmissionError::new(
+                CommandAdmissionErrorCode::Unsupported,
                 "test.no_commands",
             ))
         })
