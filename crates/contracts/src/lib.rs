@@ -1,11 +1,19 @@
 #![doc = "Dependency-light shared contracts for Universal OCPP Bridge."]
 
+mod command;
 mod event;
 mod identity;
 mod point;
 mod snapshot;
 mod timestamp;
 
+pub use command::{
+    AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
+    CommandIdentityError, CommandLifecycle, CommandOperation, CommandRequest, CommandResult,
+    CommandReturnRoute, CommandValidationError, ExternalCommand, ObservedCommandEffect,
+    PayloadSchemaId, PrincipalId, PrivilegedOcppOperation, ProtocolActionName, RequestId,
+    TargetInstanceId,
+};
 pub use event::{
     CorrelationId, EventEnvelope, EventId, EventIdentityError, EventOrigin, EventProvenance,
     EventType, ReplayError,

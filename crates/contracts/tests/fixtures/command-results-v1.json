@@ -1,0 +1,107 @@
+[
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "correlation_id": "workflow-42",
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-admitted",
+      "origin": { "kind": "management", "principal_id": "console-operator" }
+    },
+    "lifecycle": { "stage": "admitted" },
+    "recorded_at": "2026-09-01T14:00:01Z"
+  },
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "correlation_id": "workflow-42",
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-protocol-accepted",
+      "origin": {
+        "kind": "target",
+        "target_instance_id": "main-ems",
+        "principal_id": "ems-operator-4"
+      }
+    },
+    "lifecycle": { "stage": "protocol_response", "accepted": true },
+    "recorded_at": "2026-09-01T14:00:03Z"
+  },
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-expired",
+      "origin": { "kind": "management", "principal_id": "console-operator" }
+    },
+    "lifecycle": {
+      "stage": "rejected",
+      "error": { "code": "expired", "detail": "deadline elapsed before admission" }
+    },
+    "recorded_at": "2026-09-01T14:00:04Z"
+  },
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-unsupported",
+      "origin": { "kind": "management", "principal_id": "console-operator" }
+    },
+    "lifecycle": {
+      "stage": "rejected",
+      "error": { "code": "unsupported_operation" }
+    },
+    "recorded_at": "2026-09-01T14:00:05Z"
+  },
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-uncertain",
+      "origin": {
+        "kind": "target",
+        "target_instance_id": "main-ems",
+        "principal_id": "ems-operator-4"
+      }
+    },
+    "lifecycle": {
+      "stage": "transmission_uncertain",
+      "detail": "connection closed after write"
+    },
+    "recorded_at": "2026-09-01T14:00:06Z"
+  },
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "correlation_id": "workflow-42",
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-effect-observed",
+      "origin": {
+        "kind": "target",
+        "target_instance_id": "main-ems",
+        "principal_id": "ems-operator-4"
+      }
+    },
+    "lifecycle": { "stage": "protocol_response", "accepted": true },
+    "recorded_at": "2026-09-01T14:00:09Z",
+    "observed_effects": [
+      {
+        "event_id": "event-transaction-started-7",
+        "event_type": "transaction.started.v1",
+        "observed_at": "2026-09-01T14:00:08Z"
+      }
+    ]
+  },
+  {
+    "schema_version": { "major": 1, "revision": 0 },
+    "resource": { "bridge_id": "bridge-berlin-1", "station_id": "station-7" },
+    "return_route": {
+      "request_id": "cmd-protocol-rejected",
+      "origin": { "kind": "management", "principal_id": "console-operator" }
+    },
+    "lifecycle": {
+      "stage": "protocol_response",
+      "accepted": false,
+      "error": { "code": "protocol_rejected", "detail": "charger rejected the request" }
+    },
+    "recorded_at": "2026-09-01T14:00:10Z"
+  }
+]
