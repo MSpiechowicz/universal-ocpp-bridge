@@ -1,7 +1,11 @@
 use std::{error::Error, net::SocketAddr};
 
 use uob_contracts::{ArtifactDigest, BridgeId, ReleaseId};
-use uob_service::{StartupIdentityConfiguration, compose};
+use uob_external_export_adapter::{
+    DataExportConfiguration, DatabaseProviderRegistry, DestinationTransition, ExportBacklogState,
+    postgresql_configuration_schema,
+};
+use uob_service::{StartupIdentityConfiguration, compose_with_data_export};
 use uob_target_adapter::TargetRegistry;
 
 #[tokio::main]
@@ -13,7 +17,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
     let mut targets = TargetRegistry::<(), ()>::new();
     targets.declare_first_release_unavailable_targets()?;
-    let service = compose(targets, identity, None)?;
+    let mut database_providers = DatabaseProviderRegistry::new();
+    database_providers.declare_postgresql_unavailable(postgresql_configuration_schema())?;
+    let service = compose_with_data_export(
+        targets,
+        database_providers,
+        identity,
+        None,
+        DataExportConfiguration::disabled(),
+        &ExportBacklogState::default(),
+        DestinationTransition::Preserve,
+    )?;
     let address = SocketAddr::from(([127, 0, 0, 1], 8080));
     uob_management_adapter::serve(address, service.application).await?;
     Ok(())

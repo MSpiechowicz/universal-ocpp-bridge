@@ -2,6 +2,8 @@ use std::{collections::BTreeMap, error::Error, fmt};
 
 use uob_contracts::TargetInstanceId;
 
+use crate::DatabaseConfiguration;
+
 /// Secret material is referenced by name or location and is not embedded in configuration.
 #[derive(Clone, Eq, PartialEq)]
 pub struct CredentialReference(String);
@@ -92,8 +94,29 @@ impl ConfigurationSchema {
         &self,
         configuration: &TargetConfiguration,
     ) -> Result<(), ConfigurationError> {
+        self.validate_settings(|name| configuration.setting(name), configuration.settings())
+    }
+
+    /// Validates the same safe schema against an external database configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns a sanitized field error for the first missing, unknown, or incorrectly typed
+    /// setting.
+    pub fn validate_database_shape(
+        &self,
+        configuration: &DatabaseConfiguration,
+    ) -> Result<(), ConfigurationError> {
+        self.validate_settings(|name| configuration.setting(name), configuration.settings())
+    }
+
+    fn validate_settings<'a>(
+        &self,
+        setting: impl Fn(&str) -> Option<&'a ConfigurationValue>,
+        settings: impl Iterator<Item = (&'a str, &'a ConfigurationValue)>,
+    ) -> Result<(), ConfigurationError> {
         for field in &self.fields {
-            let value = configuration.setting(&field.name);
+            let value = setting(&field.name);
             if field.required && value.is_none() {
                 return Err(ConfigurationError::field(
                     ConfigurationErrorCode::MissingField,
@@ -110,7 +133,7 @@ impl ConfigurationSchema {
             }
         }
 
-        for (name, _) in configuration.settings() {
+        for (name, _) in settings {
             if !self.fields.iter().any(|field| field.name == name) {
                 return Err(ConfigurationError::field(
                     ConfigurationErrorCode::UnknownField,

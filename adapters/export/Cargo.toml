@@ -11,5 +11,8 @@ rust-version.workspace = true
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
 
+[dev-dependencies]
+serde_json.workspace = true
+
 [lints]
 workspace = true

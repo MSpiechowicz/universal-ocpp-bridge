@@ -43,6 +43,10 @@ Runtime bridge, environment, release, process, and selected-target identity is o
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
 for production defaults and isolated staging/demo examples.
 
+Optional external database export is selected independently of the bridge target and remains bound
+to one stable destination revision. See [external export configuration](docs/configuration/external-export.md)
+for disabled behavior, PostgreSQL settings, TLS requirements, and safe destination changes.
+
 Diagnostic observations are centrally redacted and serialized before any downstream sink can see
 them. See [the diagnostic redaction boundary](docs/security/diagnostic-redaction.md) for the typed
 safe-field policy, fail-closed vendor payload handling, and inert-renderer requirement.

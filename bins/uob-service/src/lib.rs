@@ -5,6 +5,10 @@ mod identity;
 use std::{error::Error, fmt};
 
 use uob_application::{Application, IsolatedControl, SecurityPolicyError};
+use uob_external_export_adapter::{
+    DataExportConfiguration, DataExportSelectionError, DatabaseProviderRegistry,
+    DestinationTransition, ExportBacklogState, ValidatedDataExport,
+};
 use uob_target_adapter::{
     BridgeTargetSelection, TargetRegistry, TargetSelectionError, ValidatedTargetSelection,
 };
@@ -15,10 +19,14 @@ pub use identity::{StartupIdentityConfiguration, StartupIdentityError};
 pub struct ServiceComposition<E, P> {
     /// Target kinds available in this service build.
     pub targets: TargetRegistry<E, P>,
+    /// External database kinds available in this service build.
+    pub database_providers: DatabaseProviderRegistry,
     /// Target-neutral application facade.
     pub application: Application,
     /// Explicit selected target after offline registry and configuration validation.
     pub target_selection: Option<ValidatedTargetSelection<E, P>>,
+    /// Optional provider selection after offline validation.
+    pub data_export: ValidatedDataExport,
     /// Test-only controls validated against the trusted runtime environment.
     pub isolated_controls: IsolatedControlConfiguration,
 }
@@ -42,10 +50,40 @@ pub fn compose<E, P>(
     configuration: StartupIdentityConfiguration,
     target_selection: Option<BridgeTargetSelection>,
 ) -> Result<ServiceComposition<E, P>, ServiceCompositionError> {
-    compose_with_isolated_controls(
+    compose_all(
         targets,
+        DatabaseProviderRegistry::new(),
         configuration,
         target_selection,
+        DataExportConfiguration::disabled(),
+        &ExportBacklogState::default(),
+        DestinationTransition::Preserve,
+        IsolatedControlConfiguration::default(),
+    )
+}
+
+/// Creates the service composition with optional external export configuration.
+///
+/// # Errors
+///
+/// Rejects unsafe provider configuration or a destination change that would reroute pending data.
+pub fn compose_with_data_export<E, P>(
+    targets: TargetRegistry<E, P>,
+    database_providers: DatabaseProviderRegistry,
+    configuration: StartupIdentityConfiguration,
+    target_selection: Option<BridgeTargetSelection>,
+    data_export: DataExportConfiguration,
+    export_backlog: &ExportBacklogState,
+    destination_transition: DestinationTransition,
+) -> Result<ServiceComposition<E, P>, ServiceCompositionError> {
+    compose_all(
+        targets,
+        database_providers,
+        configuration,
+        target_selection,
+        data_export,
+        export_backlog,
+        destination_transition,
         IsolatedControlConfiguration::default(),
     )
 }
@@ -61,7 +99,36 @@ pub fn compose_with_isolated_controls<E, P>(
     target_selection: Option<BridgeTargetSelection>,
     isolated_controls: IsolatedControlConfiguration,
 ) -> Result<ServiceComposition<E, P>, ServiceCompositionError> {
+    compose_all(
+        targets,
+        DatabaseProviderRegistry::new(),
+        configuration,
+        target_selection,
+        DataExportConfiguration::disabled(),
+        &ExportBacklogState::default(),
+        DestinationTransition::Preserve,
+        isolated_controls,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compose_all<E, P>(
+    targets: TargetRegistry<E, P>,
+    database_providers: DatabaseProviderRegistry,
+    configuration: StartupIdentityConfiguration,
+    target_selection: Option<BridgeTargetSelection>,
+    data_export: DataExportConfiguration,
+    export_backlog: &ExportBacklogState,
+    destination_transition: DestinationTransition,
+    isolated_controls: IsolatedControlConfiguration,
+) -> Result<ServiceComposition<E, P>, ServiceCompositionError> {
     let identity = identity::construct(configuration, target_selection.as_ref())?;
+    let data_export = database_providers.validate(
+        identity.runtime.environment,
+        data_export,
+        export_backlog,
+        destination_transition,
+    )?;
     let application = Application::new(identity);
     if isolated_controls.simulator {
         application
@@ -78,8 +145,10 @@ pub fn compose_with_isolated_controls<E, P>(
         .transpose()?;
     Ok(ServiceComposition {
         targets,
+        database_providers,
         application,
         target_selection,
+        data_export,
         isolated_controls,
     })
 }
@@ -91,6 +160,8 @@ pub enum ServiceCompositionError {
     Identity(StartupIdentityError),
     /// Selected target failed offline registry or configuration validation.
     Target(TargetSelectionError),
+    /// Optional external provider failed offline registry or destination validation.
+    DataExport(DataExportSelectionError),
     /// Test-only endpoints conflict with the trusted runtime environment.
     Security(SecurityPolicyError),
 }
@@ -100,6 +171,7 @@ impl fmt::Display for ServiceCompositionError {
         match self {
             Self::Identity(source) => source.fmt(formatter),
             Self::Target(source) => source.fmt(formatter),
+            Self::DataExport(source) => source.fmt(formatter),
             Self::Security(source) => source.fmt(formatter),
         }
     }
@@ -110,6 +182,7 @@ impl Error for ServiceCompositionError {
         match self {
             Self::Identity(source) => Some(source),
             Self::Target(source) => Some(source),
+            Self::DataExport(source) => Some(source),
             Self::Security(source) => Some(source),
         }
     }
@@ -124,6 +197,12 @@ impl From<StartupIdentityError> for ServiceCompositionError {
 impl From<TargetSelectionError> for ServiceCompositionError {
     fn from(source: TargetSelectionError) -> Self {
         Self::Target(source)
+    }
+}
+
+impl From<DataExportSelectionError> for ServiceCompositionError {
+    fn from(source: DataExportSelectionError) -> Self {
+        Self::DataExport(source)
     }
 }
 
