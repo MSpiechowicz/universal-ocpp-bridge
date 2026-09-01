@@ -38,3 +38,7 @@ installed and running.
 Runtime bridge, environment, release, process, and selected-target identity is owned by the
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
 for production defaults and isolated staging/demo examples.
+
+Diagnostic observations are centrally redacted and serialized before any downstream sink can see
+them. See [the diagnostic redaction boundary](docs/security/diagnostic-redaction.md) for the typed
+safe-field policy, fail-closed vendor payload handling, and inert-renderer requirement.
