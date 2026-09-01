@@ -62,6 +62,7 @@ packages=(
   uob-contracts
   uob-domain
   uob-application
+  uob-target-conformance
   uob-protocol-adapter
   uob-target-adapter
   uob-storage-adapter

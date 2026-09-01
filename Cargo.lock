@@ -1200,6 +1200,19 @@ dependencies = [
 name = "uob-target-adapter"
 version = "0.0.0"
 dependencies = [
+ "time",
+ "tokio",
+ "uob-application",
+ "uob-contracts",
+ "uob-target-conformance",
+]
+
+[[package]]
+name = "uob-target-conformance"
+version = "0.0.0"
+dependencies = [
+ "time",
+ "tokio",
  "uob-application",
  "uob-contracts",
 ]
