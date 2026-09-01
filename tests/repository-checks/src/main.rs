@@ -8,6 +8,7 @@ use std::{
 use serde::Deserialize;
 
 mod documentation;
+mod security;
 
 const EXPECTED_PACKAGES: &[&str] = &[
     "uob-application",
@@ -132,6 +133,7 @@ fn check(root: &Path) -> Result<(), Vec<String>> {
 
     if packages.contains_key("uob-service") {
         documentation::check(root, &mut errors);
+        security::check(root, &mut errors);
         check_expected_workspace(&packages, &mut errors);
         check_expected_tests(&packages, &mut errors);
         check_runtime_graphs(&metadata, &packages, &mut errors);

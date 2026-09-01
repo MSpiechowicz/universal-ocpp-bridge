@@ -1,0 +1,173 @@
+name: Dependency and workflow security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-policy:
+    name: Rust advisories, licenses, and sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the reviewed cargo-deny release
+        env:
+          CARGO_DENY_SHA256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+          CARGO_DENY_URL: https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+        run: |
+          archive="$RUNNER_TEMP/cargo-deny-0.20.2.tar.gz"
+          tool_directory="$RUNNER_TEMP/cargo-deny-bin"
+          curl --fail --location --proto '=https' --tlsv1.2 "$CARGO_DENY_URL" --output "$archive"
+          printf '%s  %s\n' "$CARGO_DENY_SHA256" "$archive" | sha256sum --check
+          mkdir --parents "$tool_directory"
+          tar --extract --gzip --file "$archive" --directory "$tool_directory" --strip-components=1
+          printf '%s\n' "$tool_directory" >>"$GITHUB_PATH"
+      - name: Confirm the cargo-deny version
+        run: test "$(cargo-deny --version)" = "cargo-deny 0.20.2"
+      - name: Enforce dependency policy
+        run: cargo-deny --locked --all-features check advisories bans licenses sources
+      - name: Reject the vulnerable dependency fixture
+        run: |
+          if cargo-deny --locked \
+            --manifest-path tests/security-fixtures/vulnerable-dependency/Cargo.toml \
+            check advisories; then
+            echo "vulnerable dependency fixture was accepted" >&2
+            exit 1
+          fi
+      - name: Reject the disallowed source fixture
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          if cargo-deny --locked \
+            --manifest-path tests/security-fixtures/disallowed-source/Cargo.toml \
+            check sources; then
+            echo "disallowed Git source fixture was accepted" >&2
+            exit 1
+          fi
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out full reviewed history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the reviewed Gitleaks release
+        env:
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          GITLEAKS_URL: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+        run: |
+          archive="$RUNNER_TEMP/gitleaks-8.30.1.tar.gz"
+          tool_directory="$RUNNER_TEMP/gitleaks-bin"
+          curl --fail --location --proto '=https' --tlsv1.2 "$GITLEAKS_URL" --output "$archive"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" "$archive" | sha256sum --check
+          mkdir --parents "$tool_directory"
+          tar --extract --gzip --file "$archive" --directory "$tool_directory"
+          printf '%s\n' "$tool_directory" >>"$GITHUB_PATH"
+      - name: Confirm the Gitleaks version
+        run: test "$(gitleaks version)" = "8.30.1"
+      - name: Scan repository history with redacted output
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner
+      - name: Exercise the fake-secret fixture
+        run: |
+          if gitleaks dir tests/security-fixtures \
+            --config .gitleaks-fixture.toml --redact --no-banner; then
+            echo "fake-secret fixture was accepted" >&2
+            exit 1
+          fi
+
+  workflow-audit:
+    name: GitHub Actions policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the reviewed zizmor release
+        env:
+          ZIZMOR_SHA256: ec8c95cd800845abb9bbc5f377ec7c57d2eb8e2386a00a201d3a74ee4092e5ed
+          ZIZMOR_URL: https://github.com/zizmorcore/zizmor/releases/download/v1.30.0/zizmor-x86_64-unknown-linux-gnu.tar.gz
+        run: |
+          archive="$RUNNER_TEMP/zizmor-1.30.0.tar.gz"
+          tool_directory="$RUNNER_TEMP/zizmor-bin"
+          curl --fail --location --proto '=https' --tlsv1.2 "$ZIZMOR_URL" --output "$archive"
+          printf '%s  %s\n' "$ZIZMOR_SHA256" "$archive" | sha256sum --check
+          mkdir --parents "$tool_directory"
+          tar --extract --gzip --file "$archive" --directory "$tool_directory"
+          printf '%s\n' "$tool_directory" >>"$GITHUB_PATH"
+      - name: Confirm the zizmor version
+        run: test "$(zizmor --version)" = "zizmor 1.30.0"
+      - name: Audit repository workflows
+        run: zizmor --persona pedantic --offline .github/workflows
+      - name: Exercise the insecure-workflow fixture
+        run: |
+          if zizmor --persona pedantic --offline tests/security-fixtures/insecure-workflow.yml; then
+            echo "insecure workflow fixture was accepted" >&2
+            exit 1
+          fi
+
+  source-sbom:
+    name: Locked source SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the reviewed Syft release
+        env:
+          SYFT_SHA256: 8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3
+          SYFT_URL: https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_amd64.tar.gz
+        run: |
+          archive="$RUNNER_TEMP/syft-1.51.1.tar.gz"
+          tool_directory="$RUNNER_TEMP/syft-bin"
+          curl --fail --location --proto '=https' --tlsv1.2 "$SYFT_URL" --output "$archive"
+          printf '%s  %s\n' "$SYFT_SHA256" "$archive" | sha256sum --check
+          mkdir --parents "$tool_directory"
+          tar --extract --gzip --file "$archive" --directory "$tool_directory"
+          printf '%s\n' "$tool_directory" >>"$GITHUB_PATH"
+      - name: Confirm the Syft version
+        run: test "$(syft version -o json | jq --raw-output .version)" = "1.51.1"
+      - name: Generate a commit-identified CycloneDX SBOM
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+          SYFT_CHECK_FOR_APP_UPDATE: "false"
+        run: |
+          mkdir --parents security-results
+          syft scan dir:. \
+            --source-name universal-ocpp-bridge \
+            --source-version "$SOURCE_REVISION" \
+            --output cyclonedx-json=security-results/source.cdx.json
+      - name: Verify SBOM identity and locked versions
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+        run: ./scripts/check-sbom.sh security-results/source.cdx.json
+      - name: Retain the source SBOM for review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: universal-ocpp-bridge-${{ github.sha }}-cyclonedx
+          path: security-results/source.cdx.json
+          if-no-files-found: error
+          retention-days: 14

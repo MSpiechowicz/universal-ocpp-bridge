@@ -1,0 +1,10 @@
+[package]
+name = "vulnerable-dependency-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+openssl = "=0.10.38"
+
+[workspace]

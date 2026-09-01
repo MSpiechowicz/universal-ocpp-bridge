@@ -1,0 +1,10 @@
+[package]
+name = "disallowed-source-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+itoa = { git = "https://github.com/dtolnay/itoa", rev = "1577ed901354d0d7448ac162328f9dbf5183124c" }
+
+[workspace]

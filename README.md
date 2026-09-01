@@ -55,6 +55,10 @@ Normal release promotion is fail-closed on real old-to-new-to-old data evidence.
 [reversible release compatibility policy](docs/operations/release-compatibility.md) for schema
 ranges, additive migration rules, configuration projections, and security floors.
 
+Dependency, secret, workflow, and source-SBOM checks are fail-closed and use pinned tools. See the
+[dependency and workflow security policy](docs/security/dependency-and-workflow-policy.md) for the
+review rules, fixture evidence, and current source-versus-package SBOM boundary.
+
 OCPP release coverage is tracked separately from implementation claims. See the
 [independent OCPP fixture corpus](docs/testing/ocpp-fixture-corpus.md) for pinned specification
 provenance, hand-authored wire fixtures, the coverage-to-test matrix, and its fail-closed release

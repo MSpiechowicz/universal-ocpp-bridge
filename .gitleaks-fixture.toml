@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "uob-fake-secret"
+description = "Acceptance-only fake secret marker"
+regex = '''UOB_FAKE_SECRET_[A-Z0-9]{16}'''
+keywords = ["UOB_FAKE_SECRET_"]
