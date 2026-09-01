@@ -1,0 +1,36 @@
+{
+  "event_id": "evt-production-42",
+  "schema_version": {
+    "major": 1,
+    "revision": 0
+  },
+  "runtime": {
+    "environment": "production",
+    "release_id": "release-a",
+    "release_digest": "sha256:release-a",
+    "process_instance_id": "process-a"
+  },
+  "resource": {
+    "bridge_id": "bridge-berlin-1",
+    "station_id": "station-7",
+    "resource": {
+      "kind": "evse",
+      "evse_id": "evse-a",
+      "connector_id": "cable-right"
+    },
+    "native_protocol_reference": {
+      "protocol": "ocpp201",
+      "evse_id": 1,
+      "connector_id": 2
+    }
+  },
+  "observed_at": "2026-09-01T10:30:00Z",
+  "event_type": "station.status.changed.v1",
+  "origin": {
+    "kind": "station"
+  },
+  "sequence": 42,
+  "payload": {
+    "status": "available"
+  }
+}

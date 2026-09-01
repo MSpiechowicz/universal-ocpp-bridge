@@ -24,6 +24,8 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 axum = "=0.8.4"
+serde = { version = "=1.0.229", features = ["derive"] }
+time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 tokio = { version = "=1.49.0", default-features = false }
 
 [workspace.lints.rust]

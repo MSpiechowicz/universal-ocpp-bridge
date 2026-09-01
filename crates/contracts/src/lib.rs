@@ -1,7 +1,24 @@
 #![doc = "Dependency-light shared contracts for Universal OCPP Bridge."]
 
+mod event;
+mod identity;
+mod timestamp;
+
+pub use event::{
+    CorrelationId, EventEnvelope, EventId, EventIdentityError, EventOrigin, EventProvenance,
+    EventType, ReplayError,
+};
+pub use identity::{
+    ArtifactDigest, BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource,
+    Environment, IdentityError, NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceRef,
+    RuntimeIdentity, StationId,
+};
+pub use timestamp::UtcTimestamp;
+
+use serde::{Deserialize, Serialize};
+
 /// Identifies the version of an application-owned contract.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ContractVersion {
     /// Major compatibility version.
     pub major: u16,
