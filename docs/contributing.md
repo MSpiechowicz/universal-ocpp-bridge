@@ -4,16 +4,19 @@
 
 The repository uses [Cocogitto](https://github.com/cocogitto/cocogitto) 7.0.0 to validate
 [Conventional Commits](https://www.conventionalcommits.org/). Install exactly the reviewed version
-with the pinned Rust toolchain:
+with Rust 1.88 or newer:
 
 ```text
-cargo install --locked cocogitto --version '=7.0.0'
+rustup toolchain install 1.88.0
+cargo +1.88.0 install --locked cocogitto --version '=7.0.0'
 cog --version
 ```
 
 The reported version must be `cog 7.0.0`. Cocogitto is a development and release tool; it is
 not linked into the bridge, installed on a charging device, or used to publish a release by these
-checks.
+checks. CI instead downloads Cocogitto's official static Linux release archive and verifies the
+reviewed SHA-256 digest before executing it. This keeps the application's Rust 1.87 toolchain pin
+unchanged and avoids resolving a newer tool-only transitive dependency during every check.
 
 Use Conventional Commit messages such as:
 
