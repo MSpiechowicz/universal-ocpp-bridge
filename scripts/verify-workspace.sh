@@ -4,6 +4,8 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"
 
+./scripts/check-file-sizes.sh
+
 container_mode=false
 if [[ "${1:-}" == "--container" ]]; then
   container_mode=true
