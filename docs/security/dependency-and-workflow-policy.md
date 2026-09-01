@@ -34,8 +34,13 @@ human-readable release comment alone is insufficient: review the upstream releas
 SHA and comment together.
 
 Untrusted pull-request jobs have no production, signing, deployment, or publishing credential and
-do not use privileged writable caches. Future privileged release jobs must use separate protected
-environments and cache namespaces and must never execute artifacts produced by untrusted jobs.
+do not use privileged writable caches. The automatic version-release job receives only repository
+contents write permission, runs only after the exact pushed `main` revision passes the Rust job,
+and checks out without persisting its credential. The publication token is exposed to a shell step
+only after all repository-controlled versioning and build commands have finished. The job publishes
+a source commit, tag, and GitHub Release, but no binary or deployable artifact. Future package,
+binary, signing, or deployment jobs must use separate protected environments and cache namespaces
+and must never execute artifacts produced by untrusted jobs.
 
 ## SBOM evidence
 

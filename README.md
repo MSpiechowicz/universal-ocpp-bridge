@@ -9,7 +9,7 @@ protocols, external database export, browser debugging, staging, automatic
 rollback, and CI/release strategy.
 
 Implementation has started with the buildable workspace foundation. Charging
-behavior, simulator scenarios, CI workflows, and release tooling remain planned.
+behavior, simulator scenarios, and production release supervision remain planned.
 
 ## Workspace foundation
 
@@ -37,7 +37,8 @@ installed and running.
 
 Contributions use pinned, Rust-native Conventional Commit and pull request title checks. See the
 [contribution policy](docs/contributing.md) for the accepted format, Cocogitto version, adoption
-baseline, feature-squash policy, and local verification commands.
+baseline, feature-squash policy, automatic semantic-version releases, and local verification
+commands.
 
 Runtime bridge, environment, release, process, and selected-target identity is owned by the
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)

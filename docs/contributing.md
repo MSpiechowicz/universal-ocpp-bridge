@@ -71,5 +71,32 @@ Run all current workspace, architecture, and documentation checks with:
 ./scripts/verify-workspace.sh
 ```
 
-These checks do not calculate a product version, create tags, publish artifacts, comment on pull
-requests, or enable a release.
+Pull request checks do not calculate a product version, create tags, publish artifacts, or comment
+on pull requests. After the Rust workspace workflow succeeds for a push to `main`, its release job
+uses the same reviewed Cocogitto 7.0.0 binary to calculate the next semantic version from commits
+since the latest `v*` tag. A breaking change increments the major version, `feat` increments the
+minor version, and `fix` increments the patch version.
+
+The release job updates `[workspace.package].version`, refreshes `Cargo.lock`, creates a generated
+changelog, verifies that `uob-service` still builds with the new embedded version, and records all
+three files in a `chore(version)` commit tagged with the new version. The commit and tag are pushed
+atomically before a GitHub Release is created. Its `[skip ci]` marker prevents the generated commit
+from starting the workflow again. The job has write permission only after the exact `main` revision
+has passed the complete workspace checks; pull request jobs remain read-only. Commit types that do
+not require a semantic-version increment finish successfully without creating a release.
+
+Preview the next version without modifying the repository:
+
+```text
+cog bump --auto --dry-run
+```
+
+Inspect the source version, latest tag, and identity reported by a running service:
+
+```text
+cargo metadata --locked --no-deps --format-version 1 \
+  | jq --raw-output '.packages[] | select(.name == "uob-service") | .version'
+cog get-version
+curl --silent http://127.0.0.1:8080/api/v1/identity \
+  | jq '.runtime | {release_id, release_digest}'
+```
