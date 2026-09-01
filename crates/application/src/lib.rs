@@ -1,8 +1,10 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
 mod database;
+mod diagnostic;
 mod query;
 mod resource;
+mod security;
 mod storage;
 mod target;
 
@@ -15,6 +17,12 @@ pub use database::{
     DatabaseRetryClassification, DatabaseRuntimeLimits, DatabaseShutdown, DatabaseTask,
     DeduplicationCapability, TransactionCapability, ValidatedDatabaseConfiguration,
 };
+pub use diagnostic::{
+    DiagnosticAttribute, DiagnosticBoundary, DiagnosticDisclosureAudit, DiagnosticObservation,
+    DiagnosticOutcome, DiagnosticSerializationError, DiagnosticSummary, DiagnosticTraceContext,
+    SafeDiagnosticField, SafeEndpointLabel, SafeEndpointLabelError, SanitizedDiagnostic,
+    SensitiveDataClass, SensitiveDiagnosticValue, UnknownVendorPayload,
+};
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
     TargetResourceScope,
@@ -25,6 +33,11 @@ pub use resource::{
     DiagnosticDropReason, LaggingConsumer, LaggingConsumerAction, ReplaceableTelemetrySlot,
     RuntimeQueueLimits, RuntimeReservation, RuntimeResourceBudget, RuntimeResourceLimits,
     RuntimeResourceSnapshot, StationAdmission, TelemetryReplaceOutcome, WorkClass,
+};
+pub use security::{
+    IsolatedControl, PaymentAuthorizationEvidence, ProviderAuthorizationReference,
+    ProviderAuthorizationReferenceError, RuntimeSecurityPolicy, SecurityPolicyError,
+    VerifiedPaymentAuthorization,
 };
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
@@ -79,6 +92,12 @@ impl Application {
     #[must_use]
     pub const fn runtime_identity(&self) -> &RuntimeIdentity {
         &self.identity.runtime
+    }
+
+    /// Returns security gates derived from the trusted runtime environment.
+    #[must_use]
+    pub const fn security_policy(&self) -> RuntimeSecurityPolicy {
+        RuntimeSecurityPolicy::new(self.identity.runtime.environment)
     }
 }
 

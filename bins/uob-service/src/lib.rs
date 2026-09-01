@@ -4,7 +4,7 @@ mod identity;
 
 use std::{error::Error, fmt};
 
-use uob_application::Application;
+use uob_application::{Application, IsolatedControl, SecurityPolicyError};
 use uob_target_adapter::{
     BridgeTargetSelection, TargetRegistry, TargetSelectionError, ValidatedTargetSelection,
 };
@@ -19,6 +19,17 @@ pub struct ServiceComposition<E, P> {
     pub application: Application,
     /// Explicit selected target after offline registry and configuration validation.
     pub target_selection: Option<ValidatedTargetSelection<E, P>>,
+    /// Test-only controls validated against the trusted runtime environment.
+    pub isolated_controls: IsolatedControlConfiguration,
+}
+
+/// Explicit simulator and mock-checkout endpoint configuration.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct IsolatedControlConfiguration {
+    /// Whether simulator scenario and fault-injection endpoints are enabled.
+    pub simulator: bool,
+    /// Whether the local mock-checkout endpoint is enabled.
+    pub mock_checkout: bool,
 }
 
 /// Creates the service composition from trusted startup and optional target configuration.
@@ -31,14 +42,45 @@ pub fn compose<E, P>(
     configuration: StartupIdentityConfiguration,
     target_selection: Option<BridgeTargetSelection>,
 ) -> Result<ServiceComposition<E, P>, ServiceCompositionError> {
+    compose_with_isolated_controls(
+        targets,
+        configuration,
+        target_selection,
+        IsolatedControlConfiguration::default(),
+    )
+}
+
+/// Creates the service composition with explicitly requested isolated controls.
+///
+/// # Errors
+///
+/// Rejects test-only controls in production as well as identity and target conflicts.
+pub fn compose_with_isolated_controls<E, P>(
+    targets: TargetRegistry<E, P>,
+    configuration: StartupIdentityConfiguration,
+    target_selection: Option<BridgeTargetSelection>,
+    isolated_controls: IsolatedControlConfiguration,
+) -> Result<ServiceComposition<E, P>, ServiceCompositionError> {
     let identity = identity::construct(configuration, target_selection.as_ref())?;
+    let application = Application::new(identity);
+    if isolated_controls.simulator {
+        application
+            .security_policy()
+            .authorize_isolated_control(IsolatedControl::Simulator)?;
+    }
+    if isolated_controls.mock_checkout {
+        application
+            .security_policy()
+            .authorize_isolated_control(IsolatedControl::MockCheckout)?;
+    }
     let target_selection = target_selection
         .map(|selection| targets.validate(selection))
         .transpose()?;
     Ok(ServiceComposition {
         targets,
-        application: Application::new(identity),
+        application,
         target_selection,
+        isolated_controls,
     })
 }
 
@@ -49,6 +91,8 @@ pub enum ServiceCompositionError {
     Identity(StartupIdentityError),
     /// Selected target failed offline registry or configuration validation.
     Target(TargetSelectionError),
+    /// Test-only endpoints conflict with the trusted runtime environment.
+    Security(SecurityPolicyError),
 }
 
 impl fmt::Display for ServiceCompositionError {
@@ -56,6 +100,7 @@ impl fmt::Display for ServiceCompositionError {
         match self {
             Self::Identity(source) => source.fmt(formatter),
             Self::Target(source) => source.fmt(formatter),
+            Self::Security(source) => source.fmt(formatter),
         }
     }
 }
@@ -65,6 +110,7 @@ impl Error for ServiceCompositionError {
         match self {
             Self::Identity(source) => Some(source),
             Self::Target(source) => Some(source),
+            Self::Security(source) => Some(source),
         }
     }
 }
@@ -81,13 +127,21 @@ impl From<TargetSelectionError> for ServiceCompositionError {
     }
 }
 
+impl From<SecurityPolicyError> for ServiceCompositionError {
+    fn from(source: SecurityPolicyError) -> Self {
+        Self::Security(source)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use uob_application::{IsolatedControl, SecurityPolicyError};
     use uob_contracts::{ArtifactDigest, BridgeId, Environment, ReleaseId, TargetInstanceId};
     use uob_target_adapter::{BridgeTargetSelection, TargetRegistry};
 
     use super::{
-        ServiceCompositionError, StartupIdentityConfiguration, StartupIdentityError, compose,
+        IsolatedControlConfiguration, ServiceCompositionError, StartupIdentityConfiguration,
+        StartupIdentityError, compose, compose_with_isolated_controls,
     };
 
     fn startup() -> StartupIdentityConfiguration {
@@ -155,5 +209,52 @@ mod tests {
                 StartupIdentityError::EnvironmentMismatch
             ))
         ));
+    }
+
+    #[test]
+    fn production_composition_rejects_simulator_and_mock_checkout_endpoints() {
+        for controls in [
+            IsolatedControlConfiguration {
+                simulator: true,
+                mock_checkout: false,
+            },
+            IsolatedControlConfiguration {
+                simulator: false,
+                mock_checkout: true,
+            },
+        ] {
+            let result = compose_with_isolated_controls(
+                TargetRegistry::<(), ()>::new(),
+                startup(),
+                None,
+                controls,
+            );
+
+            assert!(matches!(
+                result,
+                Err(ServiceCompositionError::Security(
+                    SecurityPolicyError::IsolatedControlInProduction(
+                        IsolatedControl::Simulator | IsolatedControl::MockCheckout
+                    )
+                ))
+            ));
+        }
+    }
+
+    #[test]
+    fn isolated_composition_retains_explicitly_enabled_controls() {
+        let controls = IsolatedControlConfiguration {
+            simulator: true,
+            mock_checkout: true,
+        };
+        let service = compose_with_isolated_controls(
+            TargetRegistry::<(), ()>::new(),
+            startup().in_environment(Environment::Demo),
+            None,
+            controls,
+        )
+        .expect("isolated composition");
+
+        assert_eq!(service.isolated_controls, controls);
     }
 }
