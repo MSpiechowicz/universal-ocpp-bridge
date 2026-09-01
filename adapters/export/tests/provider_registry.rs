@@ -4,9 +4,9 @@ use std::sync::{
 };
 
 use uob_application::{
-    ConfigurationError, ConfigurationErrorCode, ConfigurationValue, CredentialReference,
-    DatabaseConfiguration, DatabaseProvider, DatabaseProviderFactory,
-    ValidatedDatabaseConfiguration,
+    ConfigurationError, ConfigurationErrorCode, ConfigurationField, ConfigurationFieldKind,
+    ConfigurationSchema, ConfigurationValue, CredentialReference, DatabaseConfiguration,
+    DatabaseProvider, DatabaseProviderFactory, ValidatedDatabaseConfiguration,
 };
 use uob_contracts::{Environment, ExportBatch, ExportDestination, ExportDestinationId};
 use uob_external_export_adapter::{
@@ -24,6 +24,38 @@ struct FactoryCalls {
 
 struct PostgresqlFixtureFactory {
     calls: Arc<FactoryCalls>,
+}
+
+struct ArchiveFixtureFactory;
+
+impl DatabaseProviderFactory for ArchiveFixtureFactory {
+    fn kind(&self) -> &'static str {
+        "test.archive"
+    }
+
+    fn configuration_schema(&self) -> ConfigurationSchema {
+        ConfigurationSchema {
+            fields: vec![ConfigurationField {
+                name: "credentials_file".to_owned(),
+                kind: ConfigurationFieldKind::CredentialReference,
+                required: true,
+            }],
+        }
+    }
+
+    fn validate(
+        &self,
+        configuration: &DatabaseConfiguration,
+    ) -> Result<ValidatedDatabaseConfiguration, ConfigurationError> {
+        Ok(ValidatedDatabaseConfiguration::new(configuration.clone()))
+    }
+
+    fn create(
+        &self,
+        _configuration: ValidatedDatabaseConfiguration,
+    ) -> Result<Box<dyn DatabaseProvider>, ConfigurationError> {
+        Err(ConfigurationError::new(ConfigurationErrorCode::Unsupported))
+    }
 }
 
 impl DatabaseProviderFactory for PostgresqlFixtureFactory {
@@ -176,6 +208,44 @@ fn postgresql_is_independent_of_every_first_release_target_mode() {
         assert_eq!(calls.validated.load(Ordering::SeqCst), 1);
         assert_eq!(calls.created.load(Ordering::SeqCst), 0);
     }
+}
+
+#[test]
+fn replacement_provider_is_added_only_through_schema_and_factory_registration() {
+    let calls = Arc::new(FactoryCalls::default());
+    let mut registry = registry(Arc::clone(&calls));
+    registry
+        .register(
+            ArchiveFixtureFactory,
+            DatabaseProviderRegistration {
+                display_name: "Archive fixture".to_owned(),
+            },
+        )
+        .expect("register replacement provider");
+    let replacement = DataExportConfiguration {
+        enabled: true,
+        provider_id: Some(destination("archive")),
+        providers: vec![ConfiguredDatabaseProvider {
+            kind: "test.archive".to_owned(),
+            configuration: DatabaseConfiguration::new(destination("archive"), 3).with_setting(
+                "credentials_file",
+                ConfigurationValue::CredentialReference(credentials()),
+            ),
+            transport_security: secure_transport(),
+        }],
+    };
+
+    let selection = validate(&registry, replacement).expect("replacement validates offline");
+    assert_eq!(registry.len(), 2);
+    assert_eq!(
+        selection.destination(),
+        Some(&ExportDestination {
+            destination_id: destination("archive"),
+            configuration_revision: 3,
+        })
+    );
+    assert_eq!(calls.validated.load(Ordering::SeqCst), 0);
+    assert_eq!(calls.created.load(Ordering::SeqCst), 0);
 }
 
 #[test]
