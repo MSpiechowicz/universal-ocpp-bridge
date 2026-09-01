@@ -29,6 +29,7 @@ schemars = "=1.0.4"
 serde = { version = "=1.0.229", features = ["derive"] }
 time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 tokio = { version = "=1.49.0", default-features = false }
+uuid = { version = "=1.26.0", features = ["v4"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

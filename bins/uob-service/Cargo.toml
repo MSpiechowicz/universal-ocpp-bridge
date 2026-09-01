@@ -9,7 +9,9 @@ rust-version.workspace = true
 
 [dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uuid.workspace = true
 uob-application = { path = "../../crates/application" }
+uob-contracts = { path = "../../crates/contracts" }
 uob-external-export-adapter = { path = "../../adapters/export" }
 uob-management-adapter = { path = "../../adapters/management" }
 uob-protocol-adapter = { path = "../../adapters/protocol" }

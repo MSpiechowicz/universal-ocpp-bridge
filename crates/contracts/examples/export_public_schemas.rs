@@ -5,7 +5,7 @@ use serde_json::Value;
 use uob_contracts::{
     Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExportBatch,
     ExportRecord, ExportReport, ResourceCapabilities, ResourceRef, RuntimeIdentity,
-    StationSnapshot, TraceRecord,
+    ServiceIdentity, StationSnapshot, TraceRecord,
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
@@ -42,6 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     publish::<ResourceRef>(output, "resource-ref")?;
     publish::<ResourceCapabilities>(output, "resource-capabilities")?;
     publish::<RuntimeIdentity>(output, "runtime-identity")?;
+    publish::<ServiceIdentity>(output, "service-identity")?;
     publish::<DataPointDescriptor>(output, "data-point-descriptor")?;
     publish::<DataPointValue>(output, "data-point-value")?;
     publish::<Command<Value>>(output, "command")?;

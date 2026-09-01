@@ -30,7 +30,7 @@ pub use export::{
 pub use identity::{
     ArtifactDigest, BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource,
     Environment, IdentityError, NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceRef,
-    RuntimeIdentity, StationId,
+    RuntimeIdentity, ServiceIdentity, StationId,
 };
 pub use point::{
     AccessMode, DataPointConstraints, DataPointDescriptor, DataPointValue, EngineeringUnit,
