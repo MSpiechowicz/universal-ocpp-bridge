@@ -6,8 +6,8 @@ mod security;
 
 pub use catalog::{TargetCatalogEntry, TargetDisplayFamily, TargetPreset, TargetRegistration};
 pub use registry::{
-    BridgeTargetSelection, ConfiguredTarget, RegistrationError, TargetRegistry,
-    TargetSelectionError, ValidatedTargetSelection,
+    BridgeTargetSelection, ConfiguredTarget, EMS_SCADA_OPCUA_KIND, RegistrationError,
+    TargetRegistry, TargetSelectionError, ValidatedTargetSelection,
 };
 pub use security::{
     EndpointError, NetworkEndpoint, TransportEncryption, TransportPolicy, TransportPolicyError,

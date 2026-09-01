@@ -12,9 +12,12 @@ use uob_application::{
 use uob_contracts::{BridgeId, Environment, TargetInstanceId, TargetKind};
 
 use crate::{
-    TargetCatalogEntry, TargetRegistration, TransportPolicyError, TransportSecurity,
-    validate_transport_security,
+    TargetCatalogEntry, TargetDisplayFamily, TargetRegistration, TransportPolicyError,
+    TransportSecurity, validate_transport_security,
 };
+
+/// Reserved kind for the deferred direct OPC UA EMS/SCADA adapter.
+pub const EMS_SCADA_OPCUA_KIND: &str = "ems-scada.opcua";
 
 /// One configured target. Only the enabled target is validated or constructed.
 #[derive(Clone, Eq, PartialEq)]
@@ -65,6 +68,31 @@ impl<E, P> TargetRegistry<E, P> {
         Self {
             entries: BTreeMap::new(),
         }
+    }
+
+    /// Adds first-release catalog entries that are deliberately unavailable in this executable.
+    ///
+    /// Keeping a deferred kind in the catalog gives configuration clients a precise unavailable
+    /// error without registering a placeholder factory or linking its protocol SDK.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegistrationError::DuplicateKind`] if the composition root already declared or
+    /// implemented the reserved kind.
+    pub fn declare_first_release_unavailable_targets(&mut self) -> Result<(), RegistrationError> {
+        self.declare_unavailable(
+            EMS_SCADA_OPCUA_KIND,
+            ConfigurationSchema::default(),
+            TargetRegistration {
+                display_family: TargetDisplayFamily {
+                    id: "ems-scada".to_owned(),
+                    display_name: "EMS/SCADA".to_owned(),
+                },
+                presets: vec![],
+                capabilities: vec![],
+                transport_policy: None,
+            },
+        )
     }
 
     /// Registers one implemented target factory and its safe catalog metadata.
@@ -275,6 +303,17 @@ pub enum RegistrationError {
     /// Kind was already registered or declared.
     DuplicateKind(String),
 }
+
+impl fmt::Display for RegistrationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidKind => formatter.write_str("target kind cannot be empty"),
+            Self::DuplicateKind(kind) => write!(formatter, "duplicate target kind {kind}"),
+        }
+    }
+}
+
+impl Error for RegistrationError {}
 
 /// Sanitized shared target-selection failures.
 #[derive(Clone, Debug, Eq, PartialEq)]

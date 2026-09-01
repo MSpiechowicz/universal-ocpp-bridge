@@ -60,6 +60,10 @@ The pinned OCPP model crate is isolated behind separate 1.6J and 2.0.1 adapters.
 [OCPP model adapter boundary](docs/architecture/ocpp-model-adapters.md) for supported negotiation,
 validation, application mappings, explicit gaps, and non-goals.
 
+Future industrial drivers remain behind the target registry and canonical data/command ports. See
+the [industrial adapter extension boundary](docs/architecture/industrial-adapter-extension.md) for
+the mapping checklist, unavailable first-release OPC UA kind, and compatibility limits.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
