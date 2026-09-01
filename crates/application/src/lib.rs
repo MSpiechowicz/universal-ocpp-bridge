@@ -1,9 +1,19 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
+mod database;
 mod query;
 mod storage;
 mod target;
 
+pub use database::{
+    DatabaseAcknowledgementScope, DatabaseBatchReceiver, DatabaseConfiguration, DatabaseDiagnostic,
+    DatabaseDiagnosticDrop, DatabaseDiagnosticPort, DatabaseError, DatabaseErrorCode,
+    DatabaseExportContext, DatabaseHealth, DatabaseHealthState, DatabasePortError,
+    DatabasePortErrorCode, DatabasePortFuture, DatabaseProvider, DatabaseProviderDescriptor,
+    DatabaseProviderFactory, DatabaseProviderKind, DatabaseProviderLimits, DatabaseReportPort,
+    DatabaseRetryClassification, DatabaseRuntimeLimits, DatabaseShutdown, DatabaseTask,
+    DeduplicationCapability, TransactionCapability, ValidatedDatabaseConfiguration,
+};
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
     TargetResourceScope,
