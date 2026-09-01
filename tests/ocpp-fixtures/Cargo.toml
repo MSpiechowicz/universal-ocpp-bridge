@@ -1,0 +1,17 @@
+[package]
+name = "uob-ocpp-fixtures"
+description = "Independent OCPP wire-fixture and coverage-matrix verifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+jsonschema = { version = "=0.33.0", default-features = false }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

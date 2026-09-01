@@ -1,0 +1,12 @@
+[
+  2,
+  "fixture-201-boot-001",
+  "BootNotification",
+  {
+    "reason": "PowerUp",
+    "chargingStation": {
+      "model": "IF-201",
+      "vendorName": "Independent Fixture Vendor"
+    }
+  }
+]

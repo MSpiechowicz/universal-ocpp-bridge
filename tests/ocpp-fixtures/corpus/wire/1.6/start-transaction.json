@@ -1,0 +1,11 @@
+[
+  2,
+  "fixture-16-transaction-001",
+  "StartTransaction",
+  {
+    "connectorId": 1,
+    "idTag": "INDEPENDENT-001",
+    "meterStart": 0,
+    "timestamp": "2026-09-01T00:02:00Z"
+  }
+]
