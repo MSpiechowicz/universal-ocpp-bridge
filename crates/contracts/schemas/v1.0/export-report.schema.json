@@ -1,0 +1,314 @@
+{
+  "$defs": {
+    "ExportBatchId": {
+      "description": "Stable identity of one at-least-once export batch.",
+      "type": "string"
+    },
+    "ExportDestination": {
+      "additionalProperties": false,
+      "description": "Immutable external destination identity and configuration revision.",
+      "properties": {
+        "configuration_revision": {
+          "description": "Immutable configuration revision to which this batch is bound.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "destination_id": {
+          "$ref": "#/$defs/ExportDestinationId",
+          "description": "Stable configured provider instance identity."
+        }
+      },
+      "required": [
+        "destination_id",
+        "configuration_revision"
+      ],
+      "type": "object"
+    },
+    "ExportDestinationId": {
+      "description": "Stable configured identity of an external export destination.",
+      "type": "string"
+    },
+    "ExportErrorCode": {
+      "description": "Stable sanitized provider-independent export error code.",
+      "type": "string"
+    },
+    "ExportOutcome": {
+      "description": "Provider report for a whole batch.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The remote destination confirmed one atomic commit for every record.",
+          "properties": {
+            "outcome": {
+              "const": "committed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "No remote commit is known and the complete batch may be retried.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ExportErrorCode"
+            },
+            "outcome": {
+              "const": "retryable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "No remote commit is known and the complete batch is permanently rejected.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ExportErrorCode"
+            },
+            "outcome": {
+              "const": "permanent",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The complete batch has an unknown remote commit outcome.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ExportErrorCode"
+            },
+            "outcome": {
+              "const": "uncertain",
+              "type": "string"
+            },
+            "stage": {
+              "$ref": "#/$defs/ExportUncertainStage"
+            }
+          },
+          "required": [
+            "outcome",
+            "stage",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Complete per-record classification from a non-atomic provider.",
+          "properties": {
+            "outcome": {
+              "const": "partial",
+              "type": "string"
+            },
+            "records": {
+              "items": {
+                "$ref": "#/$defs/ExportRecordOutcome"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "outcome",
+            "records"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExportRecordId": {
+      "description": "Stable identity of one committed canonical export record.",
+      "type": "string"
+    },
+    "ExportRecordIdentity": {
+      "additionalProperties": false,
+      "description": "Stable identity of a root record or one deterministically flattened child.",
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/ExportRecordId",
+          "description": "Parent identity retained across every delivery attempt."
+        },
+        "subrecord_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportSubrecordId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canonical child ordinal, absent for an unflattened root record."
+        }
+      },
+      "required": [
+        "record_id"
+      ],
+      "type": "object"
+    },
+    "ExportRecordOutcome": {
+      "additionalProperties": false,
+      "description": "Explicit outcome for one identity in a non-atomic batch.",
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/ExportRecordIdentity",
+          "description": "Exact root/subrecord identity being classified."
+        },
+        "result": {
+          "$ref": "#/$defs/ExportRecordOutcomeKind",
+          "description": "Confirmed or unconfirmed per-record result."
+        }
+      },
+      "required": [
+        "identity",
+        "result"
+      ],
+      "type": "object"
+    },
+    "ExportRecordOutcomeKind": {
+      "description": "Per-record result required when a provider cannot commit the batch atomically.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The remote destination confirmed commit of this exact record.",
+          "properties": {
+            "outcome": {
+              "const": "committed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The record failed without a known remote commit and may be retried.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ExportErrorCode"
+            },
+            "outcome": {
+              "const": "retryable",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The record was permanently rejected without a remote commit.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ExportErrorCode"
+            },
+            "outcome": {
+              "const": "permanent",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Remote commit is unknown and blind retry may require deduplication.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/ExportErrorCode"
+            },
+            "outcome": {
+              "const": "uncertain",
+              "type": "string"
+            },
+            "stage": {
+              "$ref": "#/$defs/ExportUncertainStage"
+            }
+          },
+          "required": [
+            "outcome",
+            "stage",
+            "error"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExportSubrecordId": {
+      "description": "Deterministic child position within one committed parent record.\n\nProducers assign an ordinal from the parent's canonical traversal order. The pair of parent\nrecord ID and ordinal remains stable across retries without hashing mutable payload bytes.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "ExportUncertainStage": {
+      "description": "Transmission evidence that must never be mistaken for a confirmed remote commit.",
+      "oneOf": [
+        {
+          "const": "bytes_written",
+          "description": "The provider wrote bytes but has no remote commit evidence.",
+          "type": "string"
+        },
+        {
+          "const": "commit_outcome_unknown",
+          "description": "A commit was requested, but its remote outcome could not be determined.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/export-report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Validated provider report bound to the exact batch and destination revision.",
+  "properties": {
+    "batch_id": {
+      "$ref": "#/$defs/ExportBatchId"
+    },
+    "destination": {
+      "$ref": "#/$defs/ExportDestination"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ExportOutcome"
+    },
+    "record_ids": {
+      "items": {
+        "$ref": "#/$defs/ExportRecordIdentity"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "batch_id",
+    "destination",
+    "record_ids",
+    "outcome"
+  ],
+  "title": "ExportReport",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

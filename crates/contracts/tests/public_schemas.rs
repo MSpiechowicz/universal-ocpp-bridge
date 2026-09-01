@@ -3,8 +3,9 @@ use std::collections::BTreeSet;
 use schemars::{JsonSchema, schema_for};
 use serde_json::{Map, Value, json};
 use uob_contracts::{
-    Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope,
-    ResourceCapabilities, ResourceRef, RuntimeIdentity, StationSnapshot, TraceRecord,
+    Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExportBatch,
+    ExportRecord, ExportReport, ResourceCapabilities, ResourceRef, RuntimeIdentity,
+    StationSnapshot, TraceRecord,
 };
 
 const SCHEMAS: &[(&str, &str)] = &[
@@ -47,6 +48,18 @@ const SCHEMAS: &[(&str, &str)] = &[
     (
         "trace-record",
         include_str!("../schemas/v1.0/trace-record.schema.json"),
+    ),
+    (
+        "export-record",
+        include_str!("../schemas/v1.0/export-record.schema.json"),
+    ),
+    (
+        "export-batch",
+        include_str!("../schemas/v1.0/export-batch.schema.json"),
+    ),
+    (
+        "export-report",
+        include_str!("../schemas/v1.0/export-report.schema.json"),
     ),
 ];
 
@@ -127,6 +140,18 @@ fn published_schema_snapshots_match_the_rust_contracts() {
         published("trace-record"),
         generated::<TraceRecord>("trace-record")
     );
+    assert_eq!(
+        published("export-record"),
+        generated::<ExportRecord>("export-record")
+    );
+    assert_eq!(
+        published("export-batch"),
+        generated::<ExportBatch>("export-batch")
+    );
+    assert_eq!(
+        published("export-report"),
+        generated::<ExportReport>("export-report")
+    );
 }
 
 #[test]
@@ -172,6 +197,15 @@ fn canonical_examples_validate_against_their_public_schemas() {
         &serde_json::from_str(include_str!("fixtures/trace-record-v1.json"))
             .expect("trace fixture"),
     );
+    let export_batch: Value = serde_json::from_str(include_str!("fixtures/export-batch-v1.json"))
+        .expect("export batch fixture");
+    assert_valid("export-batch", &export_batch);
+    for record in export_batch["records"]
+        .as_array()
+        .expect("export record fixture array")
+    {
+        assert_valid("export-record", record);
+    }
 }
 
 #[test]

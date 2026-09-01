@@ -2,6 +2,7 @@
 
 mod command;
 mod event;
+mod export;
 mod identity;
 mod point;
 mod snapshot;
@@ -18,6 +19,13 @@ pub use command::{
 pub use event::{
     CorrelationId, EventEnvelope, EventId, EventIdentityError, EventOrigin, EventProvenance,
     EventType, ReplayError,
+};
+pub use export::{
+    ExportBatch, ExportBatchError, ExportBatchId, ExportDestination, ExportDestinationId,
+    ExportErrorCode, ExportIdentityError, ExportOutcome, ExportPayload, ExportPointChange,
+    ExportRecord, ExportRecordId, ExportRecordIdentity, ExportRecordKind, ExportRecordMetadata,
+    ExportRecordOutcome, ExportRecordOutcomeKind, ExportReport, ExportReportError,
+    ExportResourceStatusChange, ExportSubrecordId, ExportUncertainStage,
 };
 pub use identity::{
     ArtifactDigest, BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource,

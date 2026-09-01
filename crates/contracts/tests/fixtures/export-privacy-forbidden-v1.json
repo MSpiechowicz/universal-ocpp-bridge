@@ -1,0 +1,17 @@
+[
+  {
+    "field": "authorization_token",
+    "location": "payload",
+    "value": "Bearer secret-token"
+  },
+  {
+    "field": "payment_details",
+    "location": "record",
+    "value": "4111111111111111"
+  },
+  {
+    "field": "raw_debug_payload",
+    "location": "batch",
+    "value": "unredacted-wire-frame"
+  }
+]
