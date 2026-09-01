@@ -1,0 +1,29 @@
+{
+  "point_id": "station-7.evse-1.power.active",
+  "value": {
+    "type": "decimal",
+    "value": "12.34567890123456789"
+  },
+  "observed_at": "2026-09-01T12:15:00Z",
+  "quality": {
+    "level": "uncertain",
+    "reason": "device_clock_unavailable"
+  },
+  "freshness": {
+    "status": "fresh",
+    "valid_until": "2026-09-01T13:15:00Z"
+  },
+  "measurement": {
+    "original_value": "12345.678901234567890",
+    "original_unit": "W",
+    "measurand": "power.active.import",
+    "phase": "L1-N",
+    "context": "sample.periodic",
+    "location": "outlet",
+    "protocol_reference": {
+      "protocol": "ocpp201",
+      "evse_id": 1,
+      "connector_id": 2
+    }
+  }
+}
