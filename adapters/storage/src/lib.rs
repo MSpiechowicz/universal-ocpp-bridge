@@ -1,7 +1,11 @@
-#![doc = "Operational storage adapter boundary. Driver types remain in this package."]
+#![doc = "Crash-safe SQLite implementation of the application-owned operational store."]
 
-/// Marker for operational storage implementations selected at composition time.
-pub trait OperationalStorageAdapter: Send + Sync {
-    /// Stable implementation kind.
-    fn kind(&self) -> &'static str;
-}
+mod codec;
+mod configuration;
+mod recovery;
+mod schema;
+mod store;
+mod worker;
+
+pub use configuration::{MINIMUM_SQLITE_VERSION, SqliteRuntimeConfiguration};
+pub use store::{DEFAULT_WORK_QUEUE_CAPACITY, SqliteOperationalStore};
