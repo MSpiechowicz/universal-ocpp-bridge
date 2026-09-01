@@ -1,0 +1,123 @@
+{
+  "schema_version": { "major": 1, "revision": 0 },
+  "station": {
+    "bridge_id": "bridge-berlin-1",
+    "station_id": "station-201"
+  },
+  "observed_at": "2026-09-01T14:00:00Z",
+  "connectivity": {
+    "status": "connected",
+    "protocol": "ocpp201",
+    "connected_at": "2026-09-01T13:30:00Z",
+    "last_message_at": "2026-09-01T13:59:59Z"
+  },
+  "capabilities": {
+    "operations": [
+      {
+        "operation": {
+          "kind": "protocol_action",
+          "protocol": "ocpp201",
+          "action": "GetBaseReport"
+        },
+        "parameters": [
+          {
+            "name": "report_base",
+            "value_type": "named_enum",
+            "required": true,
+            "constraints": {
+              "enum_values": ["configuration_inventory", "full_inventory", "summary_inventory"]
+            }
+          }
+        ]
+      }
+    ],
+    "optional": [
+      {
+        "name": "device_model",
+        "value": { "type": "boolean", "value": true }
+      }
+    ],
+    "protocol_details": [
+      {
+        "protocol": "ocpp201",
+        "name": "number_of_evses",
+        "value": { "type": "unsigned_integer", "value": 2 }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "resource": {
+        "bridge_id": "bridge-berlin-1",
+        "station_id": "station-201",
+        "resource": { "kind": "evse", "evse_id": "evse-1", "connector_id": "connector-1" },
+        "native_protocol_reference": { "protocol": "ocpp201", "evse_id": 1, "connector_id": 1 }
+      },
+      "availability": "available",
+      "capabilities": {
+        "operations": [
+          { "operation": { "kind": "start" } },
+          {
+            "operation": { "kind": "set_charging_limit" },
+            "parameters": [
+              {
+                "name": "power_watts",
+                "value_type": "decimal",
+                "required": true,
+                "constraints": {
+                  "minimum": { "type": "decimal", "value": "1400" },
+                  "maximum": { "type": "decimal", "value": "22000" }
+                }
+              },
+              {
+                "name": "phases",
+                "value_type": "unsigned_integer",
+                "required": false,
+                "constraints": {
+                  "minimum": { "type": "unsigned_integer", "value": 1 },
+                  "maximum": { "type": "unsigned_integer", "value": 3 }
+                }
+              }
+            ]
+          }
+        ],
+        "protocol_details": [
+          {
+            "protocol": "ocpp201",
+            "name": "supply_phases",
+            "value": { "type": "unsigned_integer", "value": 3 }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "bridge_id": "bridge-berlin-1",
+        "station_id": "station-201",
+        "resource": { "kind": "evse", "evse_id": "evse-1", "connector_id": "connector-2" },
+        "native_protocol_reference": { "protocol": "ocpp201", "evse_id": 1, "connector_id": 2 }
+      },
+      "availability": "unavailable",
+      "capabilities": {
+        "operations": [
+          { "operation": { "kind": "change_availability" } }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "bridge_id": "bridge-berlin-1",
+        "station_id": "station-201",
+        "resource": { "kind": "evse", "evse_id": "evse-2", "connector_id": "connector-1" },
+        "native_protocol_reference": { "protocol": "ocpp201", "evse_id": 2, "connector_id": 1 }
+      },
+      "availability": "faulted",
+      "capabilities": {
+        "operations": [
+          { "operation": { "kind": "reset" } }
+        ]
+      }
+    }
+  ],
+  "transactions": []
+}
