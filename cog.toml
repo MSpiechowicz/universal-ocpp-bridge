@@ -1,1 +1,12 @@
 ignore_merge_commits = false
+branch_whitelist = ["main"]
+tag_prefix = "v"
+skip_ci = "[skip ci]"
+pre_bump_hooks = ["./scripts/update-workspace-version.sh {{version}}"]
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+owner = "MSpiechowicz"
+repository = "universal-ocpp-bridge"
