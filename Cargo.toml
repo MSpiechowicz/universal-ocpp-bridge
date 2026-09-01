@@ -32,7 +32,7 @@ axum = "=0.8.4"
 ocpp-client = { version = "=0.4.0", default-features = false, features = ["std", "tokio-runtime", "websocket", "ocpp_1_6", "ocpp_2_0_1"] }
 rust-ocpp = { version = "=3.0.4", default-features = false, features = ["v1_6", "v2_0_1"] }
 rusqlite = { version = "=0.39.0", features = ["bundled"] }
-schemars = "=1.0.4"
+schemars = "=1.2.2"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 sha2 = "=0.11.0"
