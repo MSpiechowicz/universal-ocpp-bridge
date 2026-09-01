@@ -1,5 +1,6 @@
 use std::fmt;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 use crate::{ContractVersion, Environment, ResourceRef, RuntimeIdentity, UtcTimestamp};
@@ -7,7 +8,7 @@ use crate::{ContractVersion, Environment, ResourceRef, RuntimeIdentity, UtcTimes
 macro_rules! event_id {
     ($name:ident, $description:literal) => {
         #[doc = $description]
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -64,7 +65,7 @@ impl fmt::Display for EventIdentityError {
 impl std::error::Error for EventIdentityError {}
 
 /// Trusted source class that originated an event.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EventOrigin {
     /// Event derived from a charging station protocol exchange.
@@ -78,7 +79,7 @@ pub enum EventOrigin {
 }
 
 /// Provenance retained when an event is replayed into another environment.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct EventProvenance {
     /// Identity of the original event; never reused as the replay event ID.
     pub original_event_id: EventId,
@@ -87,7 +88,7 @@ pub struct EventProvenance {
 }
 
 /// Durable, versioned event with a statically typed payload.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct EventEnvelope<T> {
     /// Unique identity of this event occurrence.
     pub event_id: EventId,

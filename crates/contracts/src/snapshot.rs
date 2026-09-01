@@ -1,5 +1,6 @@
 use std::{error::Error, fmt};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
 macro_rules! snapshot_text {
     ($name:ident, $description:literal) => {
         #[doc = $description]
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -61,7 +62,7 @@ snapshot_text!(
 );
 
 /// Protocol edition negotiated with a station.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProtocolEdition {
     /// OCPP 1.6J.
@@ -71,7 +72,7 @@ pub enum ProtocolEdition {
 }
 
 /// Current observed station connection state.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Connectivity {
     /// No admitted station connection exists.
@@ -91,7 +92,7 @@ pub enum Connectivity {
 }
 
 /// Current observed operational availability of a charging resource.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AvailabilityState {
     /// Resource is available for use.
@@ -107,7 +108,7 @@ pub enum AvailabilityState {
 }
 
 /// Application-owned operation that a resource may explicitly advertise.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Operation {
     /// Start a charging transaction.
@@ -132,7 +133,7 @@ pub enum Operation {
 }
 
 /// Declared constraint for one operation parameter.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct OperationParameter {
     /// Stable parameter name.
     pub name: ParameterName,
@@ -146,7 +147,7 @@ pub struct OperationParameter {
 }
 
 /// One explicitly supported operation and its accepted parameters.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct SupportedOperation {
     /// Supported operation identity.
     pub operation: Operation,
@@ -156,7 +157,7 @@ pub struct SupportedOperation {
 }
 
 /// Optional capability that is independent of command support.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct OptionalCapability {
     /// Stable capability name.
     pub name: CapabilityName,
@@ -166,7 +167,7 @@ pub struct OptionalCapability {
 }
 
 /// Version-specific capability fact retained without importing an OCPP adapter.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct ProtocolCapabilityDetail {
     /// Protocol edition whose semantics define this fact.
     pub protocol: ProtocolEdition,
@@ -177,7 +178,7 @@ pub struct ProtocolCapabilityDetail {
 }
 
 /// Explicit operation and optional-capability surface of one resource.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct ResourceCapabilities {
     /// Operations the charger is known to support for this resource.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -236,7 +237,7 @@ impl fmt::Display for CapabilityError {
 impl Error for CapabilityError {}
 
 /// Current observed lifecycle state of a charging transaction.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TransactionState {
     /// Transaction has been admitted but charging has not been observed.
@@ -252,7 +253,7 @@ pub enum TransactionState {
 }
 
 /// Observed transaction state associated with a canonical charging resource.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct TransactionSnapshot {
     /// Stable transaction identity.
     pub transaction_id: TransactionId,
@@ -268,7 +269,7 @@ pub struct TransactionSnapshot {
 }
 
 /// Observed state and advertised model of one connector or EVSE resource.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct ChargingResourceSnapshot {
     /// Canonical resource and separately retained native protocol address.
     pub resource: ResourceRef,
@@ -285,7 +286,7 @@ pub struct ChargingResourceSnapshot {
 }
 
 /// Transport-neutral observed station state and advertised capability model.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct StationSnapshot {
     /// Version of this canonical snapshot contract.
     pub schema_version: ContractVersion,

@@ -1,5 +1,6 @@
-use std::{error::Error, fmt, str::FromStr};
+use std::{borrow::Cow, error::Error, fmt, str::FromStr};
 
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 use crate::{NativeProtocolReference, ResourceRef, UtcTimestamp};
@@ -7,7 +8,7 @@ use crate::{NativeProtocolReference, ResourceRef, UtcTimestamp};
 macro_rules! point_text {
     ($name:ident, $description:literal) => {
         #[doc = $description]
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -75,6 +76,23 @@ impl Error for PointIdentityError {}
 pub struct ExactDecimal {
     coefficient: i128,
     scale: u32,
+}
+
+impl JsonSchema for ExactDecimal {
+    fn schema_name() -> Cow<'static, str> {
+        "ExactDecimal".into()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        concat!(module_path!(), "::ExactDecimal").into()
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "pattern": r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$"
+        })
+    }
 }
 
 impl ExactDecimal {
@@ -253,7 +271,7 @@ impl fmt::Display for ExactDecimalError {
 impl Error for ExactDecimalError {}
 
 /// Canonical primitive kind declared by a data point.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ValueType {
     /// Boolean state.
@@ -271,7 +289,7 @@ pub enum ValueType {
 }
 
 /// Typed canonical value; unavailable measurements are represented by absence.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum TypedValue {
     /// Boolean state.
@@ -304,7 +322,7 @@ impl TypedValue {
 }
 
 /// Read/write behavior exposed for a canonical point.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccessMode {
     /// Point can only be observed.
@@ -316,7 +334,7 @@ pub enum AccessMode {
 }
 
 /// Engineering unit with an explicitly supported normalization policy.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EngineeringUnit {
     /// Ampere.
@@ -439,7 +457,7 @@ impl fmt::Display for UnitConversionError {
 impl Error for UnitConversionError {}
 
 /// Optional declared bounds and members for a point.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct DataPointConstraints {
     /// Inclusive lower numeric bound.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -453,7 +471,7 @@ pub struct DataPointConstraints {
 }
 
 /// Stable description of one canonical data point.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct DataPointDescriptor {
     /// Stable point identity.
     pub point_id: PointId,
@@ -480,7 +498,7 @@ impl DataPointConstraints {
 }
 
 /// Data quality classification independent of freshness.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QualityLevel {
     /// Source and bridge consider the value valid.
@@ -492,7 +510,7 @@ pub enum QualityLevel {
 }
 
 /// Quality classification and optional machine-readable reason.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct Quality {
     /// Coarse quality level.
     pub level: QualityLevel,
@@ -502,7 +520,7 @@ pub struct Quality {
 }
 
 /// Freshness state tracked independently from data quality.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum Freshness {
     /// Value is within its declared freshness interval.
@@ -518,7 +536,7 @@ pub enum Freshness {
 }
 
 /// Protocol semantics retained alongside a normalized measurement.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct MeasurementMetadata {
     /// Exact original textual value before normalization.
     pub original_value: String,
@@ -543,7 +561,7 @@ pub struct MeasurementMetadata {
 }
 
 /// One observed point value with timestamps, quality, and freshness kept together.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct DataPointValue {
     /// Stable identity of the described point.
     pub point_id: PointId,

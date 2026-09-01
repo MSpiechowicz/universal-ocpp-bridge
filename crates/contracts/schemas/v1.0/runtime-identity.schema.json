@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "ArtifactDigest": {
+      "description": "Content digest identifying the immutable release artifact.",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Trusted runtime environment assigned by the process composition root.",
+      "oneOf": [
+        {
+          "const": "production",
+          "description": "Live charging environment.",
+          "type": "string"
+        },
+        {
+          "const": "staging",
+          "description": "Isolated qualification environment.",
+          "type": "string"
+        },
+        {
+          "const": "demo",
+          "description": "Explicit local demonstration or test environment.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessInstanceId": {
+      "description": "Unique identity of one running process instance.",
+      "type": "string"
+    },
+    "ReleaseId": {
+      "description": "Immutable identity of a built release.",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/runtime-identity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Immutable process and release context attached to emitted records.",
+  "properties": {
+    "environment": {
+      "$ref": "#/$defs/Environment",
+      "description": "Trusted environment of this process."
+    },
+    "process_instance_id": {
+      "$ref": "#/$defs/ProcessInstanceId",
+      "description": "Unique identity of this process invocation."
+    },
+    "release_digest": {
+      "$ref": "#/$defs/ArtifactDigest",
+      "description": "Digest of the running release artifact."
+    },
+    "release_id": {
+      "$ref": "#/$defs/ReleaseId",
+      "description": "Immutable release identity."
+    }
+  },
+  "required": [
+    "environment",
+    "release_id",
+    "release_digest",
+    "process_instance_id"
+  ],
+  "title": "RuntimeIdentity",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

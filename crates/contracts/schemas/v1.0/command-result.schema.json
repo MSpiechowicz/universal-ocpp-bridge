@@ -1,0 +1,536 @@
+{
+  "$defs": {
+    "AuthenticatedCommandOrigin": {
+      "description": "Trusted identity established by an adapter's authenticated connection or mapping.",
+      "oneOf": [
+        {
+          "description": "Authenticated caller of the independent management surface.",
+          "properties": {
+            "kind": {
+              "const": "management",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from management credentials."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Authenticated caller routed through one selected target instance.",
+          "properties": {
+            "kind": {
+              "const": "target",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from the target connection or mapping configuration."
+            },
+            "target_instance_id": {
+              "$ref": "#/$defs/TargetInstanceId",
+              "description": "Stable configured target instance used for result routing."
+            }
+          },
+          "required": [
+            "kind",
+            "target_instance_id",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Trusted application or recovery component.",
+          "properties": {
+            "kind": {
+              "const": "bridge",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Stable internal component identity."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CommandError": {
+      "description": "Stable, machine-readable command error.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/CommandErrorCode",
+          "description": "Stable error category for automation and diagnostics."
+        },
+        "detail": {
+          "description": "Sanitized detail that must not contain credentials or untrusted raw payloads.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "CommandErrorCode": {
+      "description": "Stable categories for command admission and execution failures.",
+      "oneOf": [
+        {
+          "const": "unauthorized",
+          "description": "Authenticated principal lacks permission for the operation or resource.",
+          "type": "string"
+        },
+        {
+          "const": "invalid_parameters",
+          "description": "Command parameters failed validation.",
+          "type": "string"
+        },
+        {
+          "const": "expired",
+          "description": "Command expired before admission or dispatch.",
+          "type": "string"
+        },
+        {
+          "const": "unsupported_operation",
+          "description": "Resource does not explicitly advertise the requested operation.",
+          "type": "string"
+        },
+        {
+          "const": "station_disconnected",
+          "description": "Target station is disconnected.",
+          "type": "string"
+        },
+        {
+          "const": "policy_rejected",
+          "description": "Safety or local policy rejected the operation.",
+          "type": "string"
+        },
+        {
+          "const": "protocol_rejected",
+          "description": "Charger returned a protocol-level rejection or error.",
+          "type": "string"
+        }
+      ]
+    },
+    "CommandLifecycle": {
+      "description": "Lifecycle stage and outcome of a command, without conflating later observed effects.",
+      "oneOf": [
+        {
+          "description": "Command was durably accepted for execution.",
+          "properties": {
+            "stage": {
+              "const": "admitted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Command was rejected before durable admission or dispatch.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/CommandError",
+              "description": "Stable rejection reason."
+            },
+            "stage": {
+              "const": "rejected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Command was dispatched to the station and awaits a response.",
+          "properties": {
+            "stage": {
+              "const": "dispatched",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Charger supplied a protocol response; this is not proof of physical effect.",
+          "properties": {
+            "accepted": {
+              "description": "Whether the charger accepted the requested protocol operation.",
+              "type": "boolean"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandError"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable error when the protocol response rejected the operation."
+            },
+            "stage": {
+              "const": "protocol_response",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "accepted"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Transmission may have occurred, but retrying could duplicate a non-idempotent action.",
+          "properties": {
+            "detail": {
+              "description": "Sanitized reason for the uncertain outcome.",
+              "type": "string"
+            },
+            "stage": {
+              "const": "transmission_uncertain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "detail"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CommandReturnRoute": {
+      "description": "Immutable routing context carried by every command result.",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/AuthenticatedCommandOrigin",
+          "description": "Authenticated management or target context, including target instance when applicable."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Request whose origin receives the result."
+        }
+      },
+      "required": [
+        "request_id",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CorrelationId": {
+      "description": "Stable identifier correlating related operations and events.",
+      "type": "string"
+    },
+    "EventId": {
+      "description": "Globally unique identity of one durable event.",
+      "type": "string"
+    },
+    "EventType": {
+      "description": "Versioned semantic name of an event payload.",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ObservedCommandEffect": {
+      "description": "Separately linked evidence of a later observed charging effect.",
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/EventId",
+          "description": "Durable event that records the observed effect."
+        },
+        "event_type": {
+          "$ref": "#/$defs/EventType",
+          "description": "Semantic type of the observed effect."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC instant at which the bridge observed it."
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "PrincipalId": {
+      "description": "Authenticated principal identity assigned by an adapter.",
+      "type": "string"
+    },
+    "RequestId": {
+      "description": "Stable idempotency identity of a command request.",
+      "type": "string"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "TargetInstanceId": {
+      "description": "Stable identity of a configured target instance.",
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/command-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Versioned command result returned to its authenticated origin and available to observers.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Request/result correlation identity."
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/CommandLifecycle",
+      "description": "Latest command lifecycle stage."
+    },
+    "observed_effects": {
+      "description": "Later observed effects, linked independently from charger protocol acceptance.",
+      "items": {
+        "$ref": "#/$defs/ObservedCommandEffect"
+      },
+      "type": "array"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant at which this result state was recorded."
+    },
+    "resource": {
+      "$ref": "#/$defs/ResourceRef",
+      "description": "Canonical charging resource targeted by the request."
+    },
+    "return_route": {
+      "$ref": "#/$defs/CommandReturnRoute",
+      "description": "Immutable route back to the authenticated origin and target instance."
+    },
+    "schema_version": {
+      "$ref": "#/$defs/ContractVersion",
+      "description": "Version of this result contract."
+    }
+  },
+  "required": [
+    "schema_version",
+    "resource",
+    "return_route",
+    "lifecycle",
+    "recorded_at"
+  ],
+  "title": "CommandResult",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

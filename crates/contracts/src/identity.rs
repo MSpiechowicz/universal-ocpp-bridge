@@ -1,11 +1,12 @@
 use std::{error::Error, fmt};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 macro_rules! stable_id {
     ($name:ident, $description:literal) => {
         #[doc = $description]
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -86,7 +87,7 @@ impl fmt::Display for IdentityError {
 impl Error for IdentityError {}
 
 /// Trusted runtime environment assigned by the process composition root.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Environment {
     /// Live charging environment.
@@ -98,7 +99,7 @@ pub enum Environment {
 }
 
 /// Immutable process and release context attached to emitted records.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct RuntimeIdentity {
     /// Trusted environment of this process.
     pub environment: Environment,
@@ -111,7 +112,7 @@ pub struct RuntimeIdentity {
 }
 
 /// Optional canonical charging resource below a station.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CanonicalResource {
     /// OCPP 1.6-style connector resource.
@@ -130,7 +131,7 @@ pub enum CanonicalResource {
 }
 
 /// Original protocol-specific address retained as mapping evidence.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "protocol", rename_all = "snake_case")]
 pub enum NativeProtocolReference {
     /// Native OCPP 1.6 connector number.
@@ -149,7 +150,7 @@ pub enum NativeProtocolReference {
 }
 
 /// Stable canonical resource identity, independent of runtime and transports.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct ResourceRef {
     /// Bridge installation that owns the resource.
     pub bridge_id: BridgeId,

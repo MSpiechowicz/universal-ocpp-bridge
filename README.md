@@ -19,6 +19,11 @@ service, simulator, and release-manager executables. See
 [ADR 0001](docs/architecture/0001-modular-monolith-boundaries.md) for the package
 rules and first-release exclusions.
 
+The canonical HTTP, MQTT, and export JSON contracts are published as versioned Draft 2020-12
+schemas under `crates/contracts/schemas`. See
+[`docs/contracts/json-schema-versioning.md`](docs/contracts/json-schema-versioning.md) for the v1
+compatibility policy and regeneration command.
+
 Run the current foundation checks with:
 
 ```text
