@@ -1200,9 +1200,9 @@ dependencies = [
 
 [[package]]
 name = "ocpp-client"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b870ae652e0dcd7125ac83533571a4ad046b879de29d0bec7ade609b3562df6f"
+checksum = "fbed213749fb4696f1a48850169a376a97b0b40a817ce866a0f8013b0e03b831"
 dependencies = [
  "base64",
  "critical-section",
@@ -1221,9 +1221,9 @@ dependencies = [
 
 [[package]]
 name = "ocpp-types"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7df2834b30a7ce002cabdcf8e4754929f3df616fe9a44db091206fe93e962b9"
+checksum = "54a90bec37abef3d067e869f7e748f9011c47a16436e5d2ae4a7450a6a36b52a"
 dependencies = [
  "heapless 0.8.0",
  "serde",
