@@ -1,0 +1,445 @@
+{
+  "$defs": {
+    "ArtifactDigest": {
+      "description": "Content digest identifying the immutable release artifact.",
+      "type": "string"
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CorrelationId": {
+      "description": "Stable identifier correlating related operations and events.",
+      "type": "string"
+    },
+    "Environment": {
+      "description": "Trusted runtime environment assigned by the process composition root.",
+      "oneOf": [
+        {
+          "const": "production",
+          "description": "Live charging environment.",
+          "type": "string"
+        },
+        {
+          "const": "staging",
+          "description": "Isolated qualification environment.",
+          "type": "string"
+        },
+        {
+          "const": "demo",
+          "description": "Explicit local demonstration or test environment.",
+          "type": "string"
+        }
+      ]
+    },
+    "EventId": {
+      "description": "Globally unique identity of one durable event.",
+      "type": "string"
+    },
+    "EventOrigin": {
+      "description": "Trusted source class that originated an event.",
+      "oneOf": [
+        {
+          "description": "Event derived from a charging station protocol exchange.",
+          "properties": {
+            "kind": {
+              "const": "station",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Event produced by an authorized management command.",
+          "properties": {
+            "kind": {
+              "const": "management",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Event produced by the bridge's internal recovery or policy logic.",
+          "properties": {
+            "kind": {
+              "const": "bridge",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Event replayed into an isolated staging environment.",
+          "properties": {
+            "kind": {
+              "const": "replay",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EventProvenance": {
+      "description": "Provenance retained when an event is replayed into another environment.",
+      "properties": {
+        "original_environment": {
+          "$ref": "#/$defs/Environment",
+          "description": "Trusted environment in which the original event was observed."
+        },
+        "original_event_id": {
+          "$ref": "#/$defs/EventId",
+          "description": "Identity of the original event; never reused as the replay event ID."
+        }
+      },
+      "required": [
+        "original_event_id",
+        "original_environment"
+      ],
+      "type": "object"
+    },
+    "EventType": {
+      "description": "Versioned semantic name of an event payload.",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ProcessInstanceId": {
+      "description": "Unique identity of one running process instance.",
+      "type": "string"
+    },
+    "ReleaseId": {
+      "description": "Immutable identity of a built release.",
+      "type": "string"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeIdentity": {
+      "description": "Immutable process and release context attached to emitted records.",
+      "properties": {
+        "environment": {
+          "$ref": "#/$defs/Environment",
+          "description": "Trusted environment of this process."
+        },
+        "process_instance_id": {
+          "$ref": "#/$defs/ProcessInstanceId",
+          "description": "Unique identity of this process invocation."
+        },
+        "release_digest": {
+          "$ref": "#/$defs/ArtifactDigest",
+          "description": "Digest of the running release artifact."
+        },
+        "release_id": {
+          "$ref": "#/$defs/ReleaseId",
+          "description": "Immutable release identity."
+        }
+      },
+      "required": [
+        "environment",
+        "release_id",
+        "release_digest",
+        "process_instance_id"
+      ],
+      "type": "object"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/event-envelope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Durable, versioned event with a statically typed payload.",
+  "properties": {
+    "causation_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Identity of a directly causal event, when applicable."
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Correlation identity shared with related operations, when known."
+    },
+    "event_id": {
+      "$ref": "#/$defs/EventId",
+      "description": "Unique identity of this event occurrence."
+    },
+    "event_type": {
+      "$ref": "#/$defs/EventType",
+      "description": "Versioned semantic payload type."
+    },
+    "observed_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC timestamp at which the bridge observed the event."
+    },
+    "origin": {
+      "$ref": "#/$defs/EventOrigin",
+      "description": "Trusted class of the event producer."
+    },
+    "payload": {
+      "description": "Statically typed event data; raw target payloads are not part of the envelope."
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventProvenance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Original identity retained only when this event is a replay."
+    },
+    "resource": {
+      "$ref": "#/$defs/ResourceRef",
+      "description": "Stable logical resource, independent of runtime identity."
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeIdentity",
+      "description": "Trusted process and artifact context at observation time."
+    },
+    "schema_version": {
+      "$ref": "#/$defs/ContractVersion",
+      "description": "Version of this envelope and payload contract."
+    },
+    "sequence": {
+      "description": "Monotonic sequence within the resource's durable event stream.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_time": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Device/source timestamp, absent when the source supplied none."
+    }
+  },
+  "required": [
+    "event_id",
+    "schema_version",
+    "runtime",
+    "resource",
+    "observed_at",
+    "event_type",
+    "origin",
+    "sequence",
+    "payload"
+  ],
+  "title": "EventEnvelope",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

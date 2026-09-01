@@ -1,0 +1,593 @@
+{
+  "$defs": {
+    "AuthenticatedCommandOrigin": {
+      "description": "Trusted identity established by an adapter's authenticated connection or mapping.",
+      "oneOf": [
+        {
+          "description": "Authenticated caller of the independent management surface.",
+          "properties": {
+            "kind": {
+              "const": "management",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from management credentials."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Authenticated caller routed through one selected target instance.",
+          "properties": {
+            "kind": {
+              "const": "target",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from the target connection or mapping configuration."
+            },
+            "target_instance_id": {
+              "$ref": "#/$defs/TargetInstanceId",
+              "description": "Stable configured target instance used for result routing."
+            }
+          },
+          "required": [
+            "kind",
+            "target_instance_id",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Trusted application or recovery component.",
+          "properties": {
+            "kind": {
+              "const": "bridge",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Stable internal component identity."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ChargingLimit": {
+      "additionalProperties": false,
+      "description": "Typed charging limit that does not round an exact quantity through floating point.",
+      "properties": {
+        "phases": {
+          "description": "Optional number of AC phases to which the limit applies.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "unit": {
+          "$ref": "#/$defs/EngineeringUnit",
+          "description": "Engineering unit defining the quantity."
+        },
+        "value": {
+          "$ref": "#/$defs/ExactDecimal",
+          "description": "Exact limit quantity."
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "type": "object"
+    },
+    "CommandOperation": {
+      "description": "Typed operation requested through any authorized command ingress.",
+      "oneOf": [
+        {
+          "description": "Start charging, optionally using an authorization reference already known to the bridge.",
+          "properties": {
+            "kind": {
+              "const": "start",
+              "type": "string"
+            },
+            "parameters": {
+              "properties": {
+                "authorization_reference": {
+                  "description": "Opaque reference to locally managed authorization context.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "parameters"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Stop one identified charging transaction.",
+          "properties": {
+            "kind": {
+              "const": "stop",
+              "type": "string"
+            },
+            "parameters": {
+              "properties": {
+                "transaction_id": {
+                  "$ref": "#/$defs/TransactionId",
+                  "description": "Canonical transaction to stop."
+                }
+              },
+              "required": [
+                "transaction_id"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "parameters"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Set an exact charging current or power limit.",
+          "properties": {
+            "kind": {
+              "const": "set_charging_limit",
+              "type": "string"
+            },
+            "parameters": {
+              "$ref": "#/$defs/ChargingLimit"
+            }
+          },
+          "required": [
+            "kind",
+            "parameters"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Execute a privileged, pinned-schema OCPP management action.",
+          "properties": {
+            "kind": {
+              "const": "ocpp",
+              "type": "string"
+            },
+            "parameters": {
+              "$ref": "#/$defs/PrivilegedOcppOperation"
+            }
+          },
+          "required": [
+            "kind",
+            "parameters"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CorrelationId": {
+      "description": "Stable identifier correlating related operations and events.",
+      "type": "string"
+    },
+    "EngineeringUnit": {
+      "description": "Engineering unit with an explicitly supported normalization policy.",
+      "oneOf": [
+        {
+          "const": "ampere",
+          "description": "Ampere.",
+          "type": "string"
+        },
+        {
+          "const": "milliampere",
+          "description": "Milliampere.",
+          "type": "string"
+        },
+        {
+          "const": "volt",
+          "description": "Volt.",
+          "type": "string"
+        },
+        {
+          "const": "millivolt",
+          "description": "Millivolt.",
+          "type": "string"
+        },
+        {
+          "const": "watt",
+          "description": "Watt.",
+          "type": "string"
+        },
+        {
+          "const": "kilowatt",
+          "description": "Kilowatt.",
+          "type": "string"
+        },
+        {
+          "const": "watt_hour",
+          "description": "Watt-hour.",
+          "type": "string"
+        },
+        {
+          "const": "kilowatt_hour",
+          "description": "Kilowatt-hour.",
+          "type": "string"
+        },
+        {
+          "const": "volt_ampere",
+          "description": "Volt-ampere.",
+          "type": "string"
+        },
+        {
+          "const": "kilovolt_ampere",
+          "description": "Kilovolt-ampere.",
+          "type": "string"
+        },
+        {
+          "const": "var",
+          "description": "Volt-ampere VAR.",
+          "type": "string"
+        },
+        {
+          "const": "kilovar",
+          "description": "Kilovolt-ampere VAR.",
+          "type": "string"
+        },
+        {
+          "const": "hertz",
+          "description": "Hertz.",
+          "type": "string"
+        },
+        {
+          "const": "celsius",
+          "description": "Degrees Celsius.",
+          "type": "string"
+        },
+        {
+          "const": "percent",
+          "description": "Percentage.",
+          "type": "string"
+        }
+      ]
+    },
+    "ExactDecimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PayloadSchemaId": {
+      "description": "Stable schema identity for a privileged protocol payload.",
+      "type": "string"
+    },
+    "PrincipalId": {
+      "description": "Authenticated principal identity assigned by an adapter.",
+      "type": "string"
+    },
+    "PrivilegedOcppOperation": {
+      "additionalProperties": false,
+      "description": "An explicitly privileged protocol action whose payload type is chosen by the adapter registry.\n\nThe generic payload prevents the canonical contract from accepting an untyped JSON object.\nAn adapter must select a known action and deserialize its payload against that action's\npinned schema before constructing this value.",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ProtocolActionName",
+          "description": "Exact protocol action name selected from the adapter's supported registry."
+        },
+        "payload": {
+          "description": "Statically typed payload produced by schema-aware deserialization."
+        },
+        "payload_schema": {
+          "$ref": "#/$defs/PayloadSchemaId",
+          "description": "Stable identity of the pinned payload schema used for validation."
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolEdition",
+          "description": "Protocol edition defining the action and payload."
+        }
+      },
+      "required": [
+        "protocol",
+        "action",
+        "payload_schema",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "ProtocolActionName": {
+      "description": "Exact protocol-defined action name.",
+      "type": "string"
+    },
+    "ProtocolEdition": {
+      "description": "Protocol edition negotiated with a station.",
+      "oneOf": [
+        {
+          "const": "ocpp16j",
+          "description": "OCPP 1.6J.",
+          "type": "string"
+        },
+        {
+          "const": "ocpp201",
+          "description": "OCPP 2.0.1.",
+          "type": "string"
+        }
+      ]
+    },
+    "RequestId": {
+      "description": "Stable idempotency identity of a command request.",
+      "type": "string"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "TargetInstanceId": {
+      "description": "Stable identity of a configured target instance.",
+      "type": "string"
+    },
+    "TransactionId": {
+      "description": "Stable canonical identity of a charging transaction.",
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/command.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Durable canonical command admitted through any authorized ingress.",
+  "properties": {
+    "admitted_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant at which durable admission completed."
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Correlation identity shared with related requests, results, and events."
+    },
+    "expires_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant after which the command must not be admitted or dispatched."
+    },
+    "operation": {
+      "$ref": "#/$defs/CommandOperation",
+      "description": "Explicit typed operation and parameters."
+    },
+    "origin": {
+      "$ref": "#/$defs/AuthenticatedCommandOrigin",
+      "description": "Authenticated origin and return-routing context supplied by an adapter port."
+    },
+    "request_id": {
+      "$ref": "#/$defs/RequestId",
+      "description": "Stable idempotency identity."
+    },
+    "resource": {
+      "$ref": "#/$defs/ResourceRef",
+      "description": "Canonical charging resource; never the selected output target identity."
+    },
+    "schema_version": {
+      "$ref": "#/$defs/ContractVersion",
+      "description": "Version of this command contract."
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "resource",
+    "operation",
+    "expires_at",
+    "origin",
+    "admitted_at"
+  ],
+  "title": "Command",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

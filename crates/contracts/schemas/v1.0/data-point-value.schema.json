@@ -1,0 +1,437 @@
+{
+  "$defs": {
+    "ExactDecimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "Freshness": {
+      "description": "Freshness state tracked independently from data quality.",
+      "oneOf": [
+        {
+          "description": "Value is within its declared freshness interval.",
+          "properties": {
+            "status": {
+              "const": "fresh",
+              "type": "string"
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/UtcTimestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UTC instant after which the value becomes stale, when configured."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Value is older than the accepted freshness interval.",
+          "properties": {
+            "status": {
+              "const": "stale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "No freshness policy or evidence is available.",
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "MeasurementContext": {
+      "description": "Original measurement sampling context.",
+      "type": "string"
+    },
+    "MeasurementLocation": {
+      "description": "Original measurement location designation.",
+      "type": "string"
+    },
+    "MeasurementMetadata": {
+      "description": "Protocol semantics retained alongside a normalized measurement.",
+      "properties": {
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original sampling context."
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original measurement location."
+        },
+        "measurand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original measurand name."
+        },
+        "original_unit": {
+          "description": "Original unit token, including tokens not supported for conversion.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original_value": {
+          "description": "Exact original textual value before normalization.",
+          "type": "string"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementPhase"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original phase designation."
+        },
+        "protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original OCPP resource address, independent of canonical identity."
+        }
+      },
+      "required": [
+        "original_value"
+      ],
+      "type": "object"
+    },
+    "MeasurementPhase": {
+      "description": "Original measurement phase designation.",
+      "type": "string"
+    },
+    "NamedEnumValue": {
+      "description": "Named member of a declared enumeration.",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PointId": {
+      "description": "Stable identity of a canonical data point.",
+      "type": "string"
+    },
+    "Quality": {
+      "description": "Quality classification and optional machine-readable reason.",
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/QualityLevel",
+          "description": "Coarse quality level."
+        },
+        "reason": {
+          "description": "Stable reason code supplied when more detail is known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "type": "object"
+    },
+    "QualityLevel": {
+      "description": "Data quality classification independent of freshness.",
+      "oneOf": [
+        {
+          "const": "good",
+          "description": "Source and bridge consider the value valid.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "Value may be usable with a stated qualification.",
+          "type": "string"
+        },
+        {
+          "const": "bad",
+          "description": "Value must not be used as a valid observation.",
+          "type": "string"
+        }
+      ]
+    },
+    "SemanticName": {
+      "description": "Versioned semantic name of a data point.",
+      "type": "string"
+    },
+    "TypedValue": {
+      "description": "Typed canonical value; unavailable measurements are represented by absence.",
+      "oneOf": [
+        {
+          "description": "Boolean state.",
+          "properties": {
+            "type": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Signed integer preserving all `i64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "signed_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unsigned integer preserving all `u64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "unsigned_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Exact decimal serialized as a string.",
+          "properties": {
+            "type": {
+              "const": "decimal",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExactDecimal"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unicode text value.",
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Named member of a descriptor-declared enumeration.",
+          "properties": {
+            "type": {
+              "const": "named_enum",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/NamedEnumValue"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/data-point-value.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "One observed point value with timestamps, quality, and freshness kept together.",
+  "properties": {
+    "freshness": {
+      "$ref": "#/$defs/Freshness",
+      "description": "Freshness metadata, independent of quality."
+    },
+    "measurement": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeasurementMetadata"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Measurement-specific original semantics, when applicable."
+    },
+    "observed_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant at which the bridge observed the value or its unavailability."
+    },
+    "point_id": {
+      "$ref": "#/$defs/PointId",
+      "description": "Stable identity of the described point."
+    },
+    "quality": {
+      "$ref": "#/$defs/Quality",
+      "description": "Quality and its reason, independent of age."
+    },
+    "source_time": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Device/source timestamp, absent when none was provided."
+    },
+    "value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TypedValue"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Typed value; `None` means explicitly unavailable, never numeric zero or false."
+    }
+  },
+  "required": [
+    "point_id",
+    "observed_at",
+    "quality",
+    "freshness"
+  ],
+  "title": "DataPointValue",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

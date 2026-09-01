@@ -1,5 +1,6 @@
 use std::{error::Error, fmt};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
 macro_rules! command_id {
     ($name:ident, $description:literal) => {
         #[doc = $description]
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -79,7 +80,7 @@ impl fmt::Display for CommandIdentityError {
 impl Error for CommandIdentityError {}
 
 /// Typed charging limit that does not round an exact quantity through floating point.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChargingLimit {
     /// Exact limit quantity.
@@ -96,7 +97,7 @@ pub struct ChargingLimit {
 /// The generic payload prevents the canonical contract from accepting an untyped JSON object.
 /// An adapter must select a known action and deserialize its payload against that action's
 /// pinned schema before constructing this value.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PrivilegedOcppOperation<P> {
     /// Protocol edition defining the action and payload.
@@ -110,7 +111,7 @@ pub struct PrivilegedOcppOperation<P> {
 }
 
 /// Typed operation requested through any authorized command ingress.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", content = "parameters", rename_all = "snake_case")]
 pub enum CommandOperation<P> {
     /// Start charging, optionally using an authorization reference already known to the bridge.
@@ -150,7 +151,7 @@ impl<P> CommandOperation<P> {
 ///
 /// Authentication and target-instance context are deliberately absent. Unknown fields and
 /// operation variants fail deserialization instead of being ignored or treated as extensions.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommandRequest<P> {
     /// Caller-supplied idempotency identity.
@@ -167,7 +168,7 @@ pub struct CommandRequest<P> {
 }
 
 /// Trusted identity established by an adapter's authenticated connection or mapping.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AuthenticatedCommandOrigin {
     /// Authenticated caller of the independent management surface.
@@ -226,7 +227,7 @@ impl<P> ExternalCommand<P> {
 }
 
 /// Durable canonical command admitted through any authorized ingress.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct Command<P> {
     /// Version of this command contract.
     pub schema_version: ContractVersion,
@@ -299,7 +300,7 @@ impl fmt::Display for CommandValidationError {
 impl Error for CommandValidationError {}
 
 /// Immutable routing context carried by every command result.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct CommandReturnRoute {
     /// Request whose origin receives the result.
     pub request_id: RequestId,
@@ -308,7 +309,7 @@ pub struct CommandReturnRoute {
 }
 
 /// Stable, machine-readable command error.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct CommandError {
     /// Stable error category for automation and diagnostics.
     pub code: CommandErrorCode,
@@ -318,7 +319,7 @@ pub struct CommandError {
 }
 
 /// Stable categories for command admission and execution failures.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CommandErrorCode {
     /// Authenticated principal lacks permission for the operation or resource.
@@ -338,7 +339,7 @@ pub enum CommandErrorCode {
 }
 
 /// Lifecycle stage and outcome of a command, without conflating later observed effects.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "stage", rename_all = "snake_case")]
 pub enum CommandLifecycle {
     /// Command was durably accepted for execution.
@@ -366,7 +367,7 @@ pub enum CommandLifecycle {
 }
 
 /// Separately linked evidence of a later observed charging effect.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct ObservedCommandEffect {
     /// Durable event that records the observed effect.
     pub event_id: EventId,
@@ -377,7 +378,7 @@ pub struct ObservedCommandEffect {
 }
 
 /// Versioned command result returned to its authenticated origin and available to observers.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct CommandResult {
     /// Version of this result contract.
     pub schema_version: ContractVersion,

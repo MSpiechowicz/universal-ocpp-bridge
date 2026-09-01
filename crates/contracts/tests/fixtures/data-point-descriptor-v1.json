@@ -1,0 +1,17 @@
+{
+  "point_id": "station-7.evse-1.power.active",
+  "resource": {
+    "bridge_id": "bridge-berlin-1",
+    "station_id": "station-7",
+    "resource": { "kind": "evse", "evse_id": "evse-1", "connector_id": "connector-2" },
+    "native_protocol_reference": { "protocol": "ocpp201", "evse_id": 1, "connector_id": 2 }
+  },
+  "semantic_name": "power.active.import",
+  "value_type": "decimal",
+  "unit": "watt",
+  "access": "read_only",
+  "constraints": {
+    "minimum": { "type": "decimal", "value": "-999999999999999999.000000000000000001" },
+    "maximum": { "type": "decimal", "value": "999999999999999999.000000000000000001" }
+  }
+}

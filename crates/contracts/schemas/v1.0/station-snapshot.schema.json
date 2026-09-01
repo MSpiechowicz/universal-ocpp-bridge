@@ -1,0 +1,1296 @@
+{
+  "$defs": {
+    "AccessMode": {
+      "description": "Read/write behavior exposed for a canonical point.",
+      "oneOf": [
+        {
+          "const": "read_only",
+          "description": "Point can only be observed.",
+          "type": "string"
+        },
+        {
+          "const": "write_only",
+          "description": "Point can only be written through an explicit authorized operation.",
+          "type": "string"
+        },
+        {
+          "const": "read_write",
+          "description": "Point can be observed and written through explicit authorized operations.",
+          "type": "string"
+        }
+      ]
+    },
+    "AvailabilityState": {
+      "description": "Current observed operational availability of a charging resource.",
+      "oneOf": [
+        {
+          "const": "available",
+          "description": "Resource is available for use.",
+          "type": "string"
+        },
+        {
+          "const": "occupied",
+          "description": "Resource is occupied by a charging workflow.",
+          "type": "string"
+        },
+        {
+          "const": "unavailable",
+          "description": "Resource is not available for operation.",
+          "type": "string"
+        },
+        {
+          "const": "faulted",
+          "description": "Resource reports a fault.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "No reliable observation is currently available.",
+          "type": "string"
+        }
+      ]
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CapabilityName": {
+      "description": "Stable name of an optional, explicitly advertised capability.",
+      "type": "string"
+    },
+    "ChargingResourceSnapshot": {
+      "description": "Observed state and advertised model of one connector or EVSE resource.",
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/AvailabilityState",
+          "description": "Current observed availability."
+        },
+        "capabilities": {
+          "$ref": "#/$defs/ResourceCapabilities",
+          "description": "Explicit resource-local operation and optional capability surface."
+        },
+        "current_values": {
+          "description": "Latest observed values for resource points.",
+          "items": {
+            "$ref": "#/$defs/DataPointValue"
+          },
+          "type": "array"
+        },
+        "data_points": {
+          "description": "Descriptors for points owned by this resource.",
+          "items": {
+            "$ref": "#/$defs/DataPointDescriptor"
+          },
+          "type": "array"
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef",
+          "description": "Canonical resource and separately retained native protocol address."
+        }
+      },
+      "required": [
+        "resource",
+        "availability",
+        "capabilities"
+      ],
+      "type": "object"
+    },
+    "Connectivity": {
+      "description": "Current observed station connection state.",
+      "oneOf": [
+        {
+          "description": "No admitted station connection exists.",
+          "properties": {
+            "status": {
+              "const": "disconnected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A transport is being authenticated or negotiated.",
+          "properties": {
+            "status": {
+              "const": "connecting",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The station has an admitted connection using the stated protocol edition.",
+          "properties": {
+            "connected_at": {
+              "$ref": "#/$defs/UtcTimestamp",
+              "description": "Time at which the current connection was admitted."
+            },
+            "last_message_at": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/UtcTimestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Most recent observed station activity, when known."
+            },
+            "protocol": {
+              "$ref": "#/$defs/ProtocolEdition",
+              "description": "Negotiated protocol edition."
+            },
+            "status": {
+              "const": "connected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "protocol",
+            "connected_at"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "DataPointConstraints": {
+      "description": "Optional declared bounds and members for a point.",
+      "properties": {
+        "enum_values": {
+          "description": "Allowed members for a named enumeration.",
+          "items": {
+            "$ref": "#/$defs/NamedEnumValue"
+          },
+          "type": "array"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inclusive upper numeric bound."
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inclusive lower numeric bound."
+        }
+      },
+      "type": "object"
+    },
+    "DataPointDescriptor": {
+      "description": "Stable description of one canonical data point.",
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/AccessMode",
+          "description": "Declared observation/control access."
+        },
+        "constraints": {
+          "$ref": "#/$defs/DataPointConstraints",
+          "description": "Optional range or enumeration declaration."
+        },
+        "point_id": {
+          "$ref": "#/$defs/PointId",
+          "description": "Stable point identity."
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef",
+          "description": "Canonical charging resource that owns the point."
+        },
+        "semantic_name": {
+          "$ref": "#/$defs/SemanticName",
+          "description": "Versioned semantic meaning, independent of target naming."
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EngineeringUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canonical engineering unit, when the value is a quantity."
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType",
+          "description": "Primitive type accepted by the point."
+        }
+      },
+      "required": [
+        "point_id",
+        "resource",
+        "semantic_name",
+        "value_type",
+        "access"
+      ],
+      "type": "object"
+    },
+    "DataPointValue": {
+      "description": "One observed point value with timestamps, quality, and freshness kept together.",
+      "properties": {
+        "freshness": {
+          "$ref": "#/$defs/Freshness",
+          "description": "Freshness metadata, independent of quality."
+        },
+        "measurement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Measurement-specific original semantics, when applicable."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC instant at which the bridge observed the value or its unavailability."
+        },
+        "point_id": {
+          "$ref": "#/$defs/PointId",
+          "description": "Stable identity of the described point."
+        },
+        "quality": {
+          "$ref": "#/$defs/Quality",
+          "description": "Quality and its reason, independent of age."
+        },
+        "source_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Device/source timestamp, absent when none was provided."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Typed value; `None` means explicitly unavailable, never numeric zero or false."
+        }
+      },
+      "required": [
+        "point_id",
+        "observed_at",
+        "quality",
+        "freshness"
+      ],
+      "type": "object"
+    },
+    "EngineeringUnit": {
+      "description": "Engineering unit with an explicitly supported normalization policy.",
+      "oneOf": [
+        {
+          "const": "ampere",
+          "description": "Ampere.",
+          "type": "string"
+        },
+        {
+          "const": "milliampere",
+          "description": "Milliampere.",
+          "type": "string"
+        },
+        {
+          "const": "volt",
+          "description": "Volt.",
+          "type": "string"
+        },
+        {
+          "const": "millivolt",
+          "description": "Millivolt.",
+          "type": "string"
+        },
+        {
+          "const": "watt",
+          "description": "Watt.",
+          "type": "string"
+        },
+        {
+          "const": "kilowatt",
+          "description": "Kilowatt.",
+          "type": "string"
+        },
+        {
+          "const": "watt_hour",
+          "description": "Watt-hour.",
+          "type": "string"
+        },
+        {
+          "const": "kilowatt_hour",
+          "description": "Kilowatt-hour.",
+          "type": "string"
+        },
+        {
+          "const": "volt_ampere",
+          "description": "Volt-ampere.",
+          "type": "string"
+        },
+        {
+          "const": "kilovolt_ampere",
+          "description": "Kilovolt-ampere.",
+          "type": "string"
+        },
+        {
+          "const": "var",
+          "description": "Volt-ampere VAR.",
+          "type": "string"
+        },
+        {
+          "const": "kilovar",
+          "description": "Kilovolt-ampere VAR.",
+          "type": "string"
+        },
+        {
+          "const": "hertz",
+          "description": "Hertz.",
+          "type": "string"
+        },
+        {
+          "const": "celsius",
+          "description": "Degrees Celsius.",
+          "type": "string"
+        },
+        {
+          "const": "percent",
+          "description": "Percentage.",
+          "type": "string"
+        }
+      ]
+    },
+    "ExactDecimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "Freshness": {
+      "description": "Freshness state tracked independently from data quality.",
+      "oneOf": [
+        {
+          "description": "Value is within its declared freshness interval.",
+          "properties": {
+            "status": {
+              "const": "fresh",
+              "type": "string"
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/UtcTimestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UTC instant after which the value becomes stale, when configured."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Value is older than the accepted freshness interval.",
+          "properties": {
+            "status": {
+              "const": "stale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "No freshness policy or evidence is available.",
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "MeasurementContext": {
+      "description": "Original measurement sampling context.",
+      "type": "string"
+    },
+    "MeasurementLocation": {
+      "description": "Original measurement location designation.",
+      "type": "string"
+    },
+    "MeasurementMetadata": {
+      "description": "Protocol semantics retained alongside a normalized measurement.",
+      "properties": {
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original sampling context."
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original measurement location."
+        },
+        "measurand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original measurand name."
+        },
+        "original_unit": {
+          "description": "Original unit token, including tokens not supported for conversion.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original_value": {
+          "description": "Exact original textual value before normalization.",
+          "type": "string"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementPhase"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original phase designation."
+        },
+        "protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original OCPP resource address, independent of canonical identity."
+        }
+      },
+      "required": [
+        "original_value"
+      ],
+      "type": "object"
+    },
+    "MeasurementPhase": {
+      "description": "Original measurement phase designation.",
+      "type": "string"
+    },
+    "NamedEnumValue": {
+      "description": "Named member of a declared enumeration.",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Operation": {
+      "description": "Application-owned operation that a resource may explicitly advertise.",
+      "oneOf": [
+        {
+          "description": "Start a charging transaction.",
+          "properties": {
+            "kind": {
+              "const": "start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Stop an identified charging transaction.",
+          "properties": {
+            "kind": {
+              "const": "stop",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Set a charging current or power limit.",
+          "properties": {
+            "kind": {
+              "const": "set_charging_limit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Change operational availability.",
+          "properties": {
+            "kind": {
+              "const": "change_availability",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Reset a station or charging resource.",
+          "properties": {
+            "kind": {
+              "const": "reset",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unlock a connector.",
+          "properties": {
+            "kind": {
+              "const": "unlock_connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "A schema-validated protocol-specific management action.",
+          "properties": {
+            "action": {
+              "description": "Exact protocol action name.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "protocol_action",
+              "type": "string"
+            },
+            "protocol": {
+              "$ref": "#/$defs/ProtocolEdition",
+              "description": "Protocol edition that defines the action."
+            }
+          },
+          "required": [
+            "kind",
+            "protocol",
+            "action"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "OperationParameter": {
+      "description": "Declared constraint for one operation parameter.",
+      "properties": {
+        "constraints": {
+          "$ref": "#/$defs/DataPointConstraints",
+          "description": "Optional bounds or named enumeration members."
+        },
+        "name": {
+          "$ref": "#/$defs/ParameterName",
+          "description": "Stable parameter name."
+        },
+        "required": {
+          "description": "Whether callers must supply the parameter.",
+          "type": "boolean"
+        },
+        "value_type": {
+          "$ref": "#/$defs/ValueType",
+          "description": "Primitive value type accepted by the parameter."
+        }
+      },
+      "required": [
+        "name",
+        "value_type",
+        "required"
+      ],
+      "type": "object"
+    },
+    "OptionalCapability": {
+      "description": "Optional capability that is independent of command support.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/CapabilityName",
+          "description": "Stable capability name."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional typed capability value; absence means advertised presence only."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "ParameterName": {
+      "description": "Stable name of a parameter accepted by a supported operation.",
+      "type": "string"
+    },
+    "PointId": {
+      "description": "Stable identity of a canonical data point.",
+      "type": "string"
+    },
+    "ProtocolCapabilityDetail": {
+      "description": "Version-specific capability fact retained without importing an OCPP adapter.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/CapabilityName",
+          "description": "Stable protocol-defined or bridge-defined fact name."
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolEdition",
+          "description": "Protocol edition whose semantics define this fact."
+        },
+        "value": {
+          "$ref": "#/$defs/TypedValue",
+          "description": "Typed value of the advertised fact."
+        }
+      },
+      "required": [
+        "protocol",
+        "name",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ProtocolEdition": {
+      "description": "Protocol edition negotiated with a station.",
+      "oneOf": [
+        {
+          "const": "ocpp16j",
+          "description": "OCPP 1.6J.",
+          "type": "string"
+        },
+        {
+          "const": "ocpp201",
+          "description": "OCPP 2.0.1.",
+          "type": "string"
+        }
+      ]
+    },
+    "Quality": {
+      "description": "Quality classification and optional machine-readable reason.",
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/QualityLevel",
+          "description": "Coarse quality level."
+        },
+        "reason": {
+          "description": "Stable reason code supplied when more detail is known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "type": "object"
+    },
+    "QualityLevel": {
+      "description": "Data quality classification independent of freshness.",
+      "oneOf": [
+        {
+          "const": "good",
+          "description": "Source and bridge consider the value valid.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "Value may be usable with a stated qualification.",
+          "type": "string"
+        },
+        {
+          "const": "bad",
+          "description": "Value must not be used as a valid observation.",
+          "type": "string"
+        }
+      ]
+    },
+    "ResourceCapabilities": {
+      "description": "Explicit operation and optional-capability surface of one resource.",
+      "properties": {
+        "operations": {
+          "description": "Operations the charger is known to support for this resource.",
+          "items": {
+            "$ref": "#/$defs/SupportedOperation"
+          },
+          "type": "array"
+        },
+        "optional": {
+          "description": "Independent optional features advertised by the station.",
+          "items": {
+            "$ref": "#/$defs/OptionalCapability"
+          },
+          "type": "array"
+        },
+        "protocol_details": {
+          "description": "Protocol-specific facts needed to preserve the advertised meaning.",
+          "items": {
+            "$ref": "#/$defs/ProtocolCapabilityDetail"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "SemanticName": {
+      "description": "Versioned semantic name of a data point.",
+      "type": "string"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "SupportedOperation": {
+      "description": "One explicitly supported operation and its accepted parameters.",
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/Operation",
+          "description": "Supported operation identity."
+        },
+        "parameters": {
+          "description": "Complete declared parameter surface for the operation.",
+          "items": {
+            "$ref": "#/$defs/OperationParameter"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "type": "object"
+    },
+    "TransactionId": {
+      "description": "Stable canonical identity of a charging transaction.",
+      "type": "string"
+    },
+    "TransactionSnapshot": {
+      "description": "Observed transaction state associated with a canonical charging resource.",
+      "properties": {
+        "ended_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Observed end time, when the transaction has ended."
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef",
+          "description": "Resource associated with the transaction."
+        },
+        "started_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "Source-reported or bridge-observed start time."
+        },
+        "state": {
+          "$ref": "#/$defs/TransactionState",
+          "description": "Current observed lifecycle state."
+        },
+        "transaction_id": {
+          "$ref": "#/$defs/TransactionId",
+          "description": "Stable transaction identity."
+        }
+      },
+      "required": [
+        "transaction_id",
+        "resource",
+        "state",
+        "started_at"
+      ],
+      "type": "object"
+    },
+    "TransactionState": {
+      "description": "Current observed lifecycle state of a charging transaction.",
+      "oneOf": [
+        {
+          "const": "pending",
+          "description": "Transaction has been admitted but charging has not been observed.",
+          "type": "string"
+        },
+        {
+          "const": "active",
+          "description": "Charging activity is currently observed.",
+          "type": "string"
+        },
+        {
+          "const": "suspended",
+          "description": "Transaction is temporarily suspended.",
+          "type": "string"
+        },
+        {
+          "const": "ended",
+          "description": "Transaction has ended.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "Final outcome cannot yet be reconciled.",
+          "type": "string"
+        }
+      ]
+    },
+    "TypedValue": {
+      "description": "Typed canonical value; unavailable measurements are represented by absence.",
+      "oneOf": [
+        {
+          "description": "Boolean state.",
+          "properties": {
+            "type": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Signed integer preserving all `i64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "signed_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unsigned integer preserving all `u64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "unsigned_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Exact decimal serialized as a string.",
+          "properties": {
+            "type": {
+              "const": "decimal",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExactDecimal"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unicode text value.",
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Named member of a descriptor-declared enumeration.",
+          "properties": {
+            "type": {
+              "const": "named_enum",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/NamedEnumValue"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    },
+    "ValueType": {
+      "description": "Canonical primitive kind declared by a data point.",
+      "oneOf": [
+        {
+          "const": "boolean",
+          "description": "Boolean state.",
+          "type": "string"
+        },
+        {
+          "const": "signed_integer",
+          "description": "Signed 64-bit integer.",
+          "type": "string"
+        },
+        {
+          "const": "unsigned_integer",
+          "description": "Unsigned 64-bit integer.",
+          "type": "string"
+        },
+        {
+          "const": "decimal",
+          "description": "Exact base-ten quantity.",
+          "type": "string"
+        },
+        {
+          "const": "text",
+          "description": "Unicode text.",
+          "type": "string"
+        },
+        {
+          "const": "named_enum",
+          "description": "Member of a declared named enumeration.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/station-snapshot.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Transport-neutral observed station state and advertised capability model.",
+  "properties": {
+    "capabilities": {
+      "$ref": "#/$defs/ResourceCapabilities",
+      "description": "Explicit operations and optional capabilities applying to the station."
+    },
+    "connectivity": {
+      "$ref": "#/$defs/Connectivity",
+      "description": "Current observed connectivity."
+    },
+    "current_values": {
+      "description": "Latest station-level point values.",
+      "items": {
+        "$ref": "#/$defs/DataPointValue"
+      },
+      "type": "array"
+    },
+    "observed_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant at which the bridge assembled this snapshot."
+    },
+    "resources": {
+      "description": "Version-preserving connector or EVSE topology.",
+      "items": {
+        "$ref": "#/$defs/ChargingResourceSnapshot"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "$ref": "#/$defs/ContractVersion",
+      "description": "Version of this canonical snapshot contract."
+    },
+    "station": {
+      "$ref": "#/$defs/ResourceRef",
+      "description": "Station-level canonical reference."
+    },
+    "transactions": {
+      "description": "Current and recently ended transactions represented canonically.",
+      "items": {
+        "$ref": "#/$defs/TransactionSnapshot"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "station",
+    "observed_at",
+    "connectivity",
+    "capabilities"
+  ],
+  "title": "StationSnapshot",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

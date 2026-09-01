@@ -1,0 +1,25 @@
+{
+  "schema_version": { "major": 1, "revision": 0 },
+  "trace_id": "trace-9001",
+  "process_instance_id": "process-production-7",
+  "trace_sequence": 9001,
+  "target": {
+    "instance_id": "main-ems",
+    "kind": "ems-scada.http"
+  },
+  "correlation_id": "workflow-42",
+  "parent_trace_id": "trace-9000",
+  "stage": "target.delivery",
+  "direction": "outbound",
+  "observed_at": "2026-09-01T14:00:01Z",
+  "duration_micros": 12500,
+  "outcome": { "status": "succeeded" },
+  "redacted_details": {
+    "summary": "canonical event exposed to authenticated peer",
+    "fields": {
+      "message_class": "event",
+      "payload": "[REDACTED]"
+    },
+    "truncated": true
+  }
+}

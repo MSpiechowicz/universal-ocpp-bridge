@@ -23,7 +23,7 @@ for package in "${protected_packages[@]}"; do
   manifest="$package_root/Cargo.toml"
   while IFS= read -r dependency; do
     case "$package:$dependency" in
-      crates/contracts:serde | crates/contracts:serde_json | crates/contracts:time) ;;
+      crates/contracts:jsonschema | crates/contracts:schemars | crates/contracts:serde | crates/contracts:serde_json | crates/contracts:time) ;;
       crates/domain:uob-contracts) ;;
       crates/application:uob-contracts | crates/application:uob-domain) ;;
       *)

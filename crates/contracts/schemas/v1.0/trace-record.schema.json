@@ -1,0 +1,309 @@
+{
+  "$defs": {
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CorrelationId": {
+      "description": "Stable identifier correlating related operations and events.",
+      "type": "string"
+    },
+    "ProcessInstanceId": {
+      "description": "Unique identity of one running process instance.",
+      "type": "string"
+    },
+    "RedactedTraceDetails": {
+      "description": "Optional payload details after mandatory redaction and bounding.",
+      "properties": {
+        "fields": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Bounded sanitized scalar fields; arbitrary nested payloads are not accepted.",
+          "type": "object"
+        },
+        "summary": {
+          "description": "Short sanitized description of the payload or state change.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "truncated": {
+          "description": "Whether source details were omitted to enforce capture limits.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "TargetInstanceId": {
+      "description": "Stable identity of a configured target instance.",
+      "type": "string"
+    },
+    "TargetKind": {
+      "description": "Stable registered kind of a target adapter.",
+      "type": "string"
+    },
+    "TraceDirection": {
+      "description": "Direction of data or control at the named diagnostic stage.",
+      "oneOf": [
+        {
+          "const": "inbound",
+          "description": "Entering the bridge or current stage.",
+          "type": "string"
+        },
+        {
+          "const": "outbound",
+          "description": "Leaving the bridge or current stage.",
+          "type": "string"
+        },
+        {
+          "const": "internal",
+          "description": "Internal decision or state transition without an external direction.",
+          "type": "string"
+        }
+      ]
+    },
+    "TraceId": {
+      "description": "Unique identity of one best-effort diagnostic trace record.",
+      "type": "string"
+    },
+    "TraceOutcome": {
+      "description": "Sanitized diagnostic outcome; it is not a durable business result.",
+      "oneOf": [
+        {
+          "description": "The traced stage completed as expected.",
+          "properties": {
+            "status": {
+              "const": "succeeded",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The stage failed with an optional stable, sanitized reason code.",
+          "properties": {
+            "reason": {
+              "description": "Stable reason code, never a raw external error or credential.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "const": "failed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Completion or delivery could not be established conclusively.",
+          "properties": {
+            "reason": {
+              "description": "Stable reason code, never a raw external error or credential.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "const": "uncertain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Best-effort diagnostic data was intentionally shed or expired.",
+          "properties": {
+            "reason": {
+              "description": "Stable reason code, never a raw external error or credential.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "const": "dropped",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "TraceSequence": {
+      "description": "Monotonic best-effort trace sequence within one process instance.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "TraceStage": {
+      "description": "Stable name of the diagnostic pipeline stage.",
+      "type": "string"
+    },
+    "TraceTarget": {
+      "description": "Selected target identity attached only when a trace crosses a target boundary.",
+      "properties": {
+        "instance_id": {
+          "$ref": "#/$defs/TargetInstanceId",
+          "description": "Stable configured target instance."
+        },
+        "kind": {
+          "$ref": "#/$defs/TargetKind",
+          "description": "Stable registered target adapter kind."
+        }
+      },
+      "required": [
+        "instance_id",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/trace-record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Versioned best-effort diagnostic metadata, separate from durable events and audit records.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Correlation shared with related commands, events, and deliveries."
+    },
+    "direction": {
+      "$ref": "#/$defs/TraceDirection",
+      "description": "Direction at the named stage."
+    },
+    "duration_micros": {
+      "description": "Elapsed duration in microseconds, when a bounded operation completed.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "observed_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant at which the bridge observed this stage."
+    },
+    "outcome": {
+      "$ref": "#/$defs/TraceOutcome",
+      "description": "Sanitized diagnostic outcome."
+    },
+    "parent_trace_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TraceId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Directly causal trace record, when known."
+    },
+    "process_instance_id": {
+      "$ref": "#/$defs/ProcessInstanceId",
+      "description": "Process that emitted this record."
+    },
+    "redacted_details": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RedactedTraceDetails"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional details that were redacted before entering the diagnostic buffer."
+    },
+    "schema_version": {
+      "$ref": "#/$defs/ContractVersion",
+      "description": "Version of this diagnostic contract."
+    },
+    "stage": {
+      "$ref": "#/$defs/TraceStage",
+      "description": "Stable pipeline stage name."
+    },
+    "target": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TraceTarget"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Selected target identity, only for target-related stages."
+    },
+    "trace_id": {
+      "$ref": "#/$defs/TraceId",
+      "description": "Unique identity of this trace record."
+    },
+    "trace_sequence": {
+      "$ref": "#/$defs/TraceSequence",
+      "description": "Monotonic sequence within the process instance."
+    }
+  },
+  "required": [
+    "schema_version",
+    "trace_id",
+    "process_instance_id",
+    "trace_sequence",
+    "stage",
+    "direction",
+    "observed_at",
+    "outcome"
+  ],
+  "title": "TraceRecord",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

@@ -6,6 +6,7 @@ mod identity;
 mod point;
 mod snapshot;
 mod timestamp;
+mod trace;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -36,11 +37,16 @@ pub use snapshot::{
     TransactionSnapshot, TransactionState,
 };
 pub use timestamp::UtcTimestamp;
+pub use trace::{
+    RedactedTraceDetails, TargetKind, TraceDirection, TraceId, TraceIdentityError, TraceOutcome,
+    TraceRecord, TraceSequence, TraceStage, TraceTarget,
+};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Identifies the version of an application-owned contract.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct ContractVersion {
     /// Major compatibility version.
     pub major: u16,

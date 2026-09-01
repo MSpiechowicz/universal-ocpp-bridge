@@ -1,11 +1,30 @@
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use time::{OffsetDateTime, UtcOffset, format_description::well_known::Rfc3339};
 
 /// UTC timestamp that serializes as an RFC 3339 string ending in `Z`.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct UtcTimestamp(OffsetDateTime);
+
+impl JsonSchema for UtcTimestamp {
+    fn schema_name() -> Cow<'static, str> {
+        "UtcTimestamp".into()
+    }
+
+    fn schema_id() -> Cow<'static, str> {
+        concat!(module_path!(), "::UtcTimestamp").into()
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "format": "date-time",
+            "pattern": r"Z$"
+        })
+    }
+}
 
 impl UtcTimestamp {
     /// Creates a timestamp normalized to UTC.

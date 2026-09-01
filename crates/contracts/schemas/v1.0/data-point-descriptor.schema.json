@@ -1,0 +1,515 @@
+{
+  "$defs": {
+    "AccessMode": {
+      "description": "Read/write behavior exposed for a canonical point.",
+      "oneOf": [
+        {
+          "const": "read_only",
+          "description": "Point can only be observed.",
+          "type": "string"
+        },
+        {
+          "const": "write_only",
+          "description": "Point can only be written through an explicit authorized operation.",
+          "type": "string"
+        },
+        {
+          "const": "read_write",
+          "description": "Point can be observed and written through explicit authorized operations.",
+          "type": "string"
+        }
+      ]
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DataPointConstraints": {
+      "description": "Optional declared bounds and members for a point.",
+      "properties": {
+        "enum_values": {
+          "description": "Allowed members for a named enumeration.",
+          "items": {
+            "$ref": "#/$defs/NamedEnumValue"
+          },
+          "type": "array"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inclusive upper numeric bound."
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inclusive lower numeric bound."
+        }
+      },
+      "type": "object"
+    },
+    "EngineeringUnit": {
+      "description": "Engineering unit with an explicitly supported normalization policy.",
+      "oneOf": [
+        {
+          "const": "ampere",
+          "description": "Ampere.",
+          "type": "string"
+        },
+        {
+          "const": "milliampere",
+          "description": "Milliampere.",
+          "type": "string"
+        },
+        {
+          "const": "volt",
+          "description": "Volt.",
+          "type": "string"
+        },
+        {
+          "const": "millivolt",
+          "description": "Millivolt.",
+          "type": "string"
+        },
+        {
+          "const": "watt",
+          "description": "Watt.",
+          "type": "string"
+        },
+        {
+          "const": "kilowatt",
+          "description": "Kilowatt.",
+          "type": "string"
+        },
+        {
+          "const": "watt_hour",
+          "description": "Watt-hour.",
+          "type": "string"
+        },
+        {
+          "const": "kilowatt_hour",
+          "description": "Kilowatt-hour.",
+          "type": "string"
+        },
+        {
+          "const": "volt_ampere",
+          "description": "Volt-ampere.",
+          "type": "string"
+        },
+        {
+          "const": "kilovolt_ampere",
+          "description": "Kilovolt-ampere.",
+          "type": "string"
+        },
+        {
+          "const": "var",
+          "description": "Volt-ampere VAR.",
+          "type": "string"
+        },
+        {
+          "const": "kilovar",
+          "description": "Kilovolt-ampere VAR.",
+          "type": "string"
+        },
+        {
+          "const": "hertz",
+          "description": "Hertz.",
+          "type": "string"
+        },
+        {
+          "const": "celsius",
+          "description": "Degrees Celsius.",
+          "type": "string"
+        },
+        {
+          "const": "percent",
+          "description": "Percentage.",
+          "type": "string"
+        }
+      ]
+    },
+    "ExactDecimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "NamedEnumValue": {
+      "description": "Named member of a declared enumeration.",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PointId": {
+      "description": "Stable identity of a canonical data point.",
+      "type": "string"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "SemanticName": {
+      "description": "Versioned semantic name of a data point.",
+      "type": "string"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "TypedValue": {
+      "description": "Typed canonical value; unavailable measurements are represented by absence.",
+      "oneOf": [
+        {
+          "description": "Boolean state.",
+          "properties": {
+            "type": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Signed integer preserving all `i64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "signed_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unsigned integer preserving all `u64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "unsigned_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Exact decimal serialized as a string.",
+          "properties": {
+            "type": {
+              "const": "decimal",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExactDecimal"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unicode text value.",
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Named member of a descriptor-declared enumeration.",
+          "properties": {
+            "type": {
+              "const": "named_enum",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/NamedEnumValue"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ValueType": {
+      "description": "Canonical primitive kind declared by a data point.",
+      "oneOf": [
+        {
+          "const": "boolean",
+          "description": "Boolean state.",
+          "type": "string"
+        },
+        {
+          "const": "signed_integer",
+          "description": "Signed 64-bit integer.",
+          "type": "string"
+        },
+        {
+          "const": "unsigned_integer",
+          "description": "Unsigned 64-bit integer.",
+          "type": "string"
+        },
+        {
+          "const": "decimal",
+          "description": "Exact base-ten quantity.",
+          "type": "string"
+        },
+        {
+          "const": "text",
+          "description": "Unicode text.",
+          "type": "string"
+        },
+        {
+          "const": "named_enum",
+          "description": "Member of a declared named enumeration.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/data-point-descriptor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Stable description of one canonical data point.",
+  "properties": {
+    "access": {
+      "$ref": "#/$defs/AccessMode",
+      "description": "Declared observation/control access."
+    },
+    "constraints": {
+      "$ref": "#/$defs/DataPointConstraints",
+      "description": "Optional range or enumeration declaration."
+    },
+    "point_id": {
+      "$ref": "#/$defs/PointId",
+      "description": "Stable point identity."
+    },
+    "resource": {
+      "$ref": "#/$defs/ResourceRef",
+      "description": "Canonical charging resource that owns the point."
+    },
+    "semantic_name": {
+      "$ref": "#/$defs/SemanticName",
+      "description": "Versioned semantic meaning, independent of target naming."
+    },
+    "unit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EngineeringUnit"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Canonical engineering unit, when the value is a quantity."
+    },
+    "value_type": {
+      "$ref": "#/$defs/ValueType",
+      "description": "Primitive type accepted by the point."
+    }
+  },
+  "required": [
+    "point_id",
+    "resource",
+    "semantic_name",
+    "value_type",
+    "access"
+  ],
+  "title": "DataPointDescriptor",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}
