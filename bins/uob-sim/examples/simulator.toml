@@ -1,0 +1,10 @@
+schema_version = 1
+
+[[stations]]
+id = "station-01"
+endpoint = "ws://127.0.0.1:8080/ocpp/station-01"
+ocpp_version = "1.6"
+request_timeout_ms = 5000
+reconnect = false
+command_capacity = 8
+trace_capacity = 64
