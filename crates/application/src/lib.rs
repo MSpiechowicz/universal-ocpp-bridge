@@ -1,5 +1,16 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
+mod storage;
+
+pub use storage::{
+    AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
+    AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
+    CommittedRecordId, CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page,
+    PageLimit, PageLimitError, PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor,
+    RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode,
+    StorageFuture,
+};
+
 use uob_contracts::ContractVersion;
 
 /// Composition-independent application facade.
