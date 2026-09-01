@@ -1,0 +1,1375 @@
+{
+  "$defs": {
+    "ArtifactDigest": {
+      "description": "Content digest identifying the immutable release artifact.",
+      "type": "string"
+    },
+    "AuthenticatedCommandOrigin": {
+      "description": "Trusted identity established by an adapter's authenticated connection or mapping.",
+      "oneOf": [
+        {
+          "description": "Authenticated caller of the independent management surface.",
+          "properties": {
+            "kind": {
+              "const": "management",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from management credentials."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Authenticated caller routed through one selected target instance.",
+          "properties": {
+            "kind": {
+              "const": "target",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from the target connection or mapping configuration."
+            },
+            "target_instance_id": {
+              "$ref": "#/$defs/TargetInstanceId",
+              "description": "Stable configured target instance used for result routing."
+            }
+          },
+          "required": [
+            "kind",
+            "target_instance_id",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Trusted application or recovery component.",
+          "properties": {
+            "kind": {
+              "const": "bridge",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Stable internal component identity."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AvailabilityState": {
+      "description": "Current observed operational availability of a charging resource.",
+      "oneOf": [
+        {
+          "const": "available",
+          "description": "Resource is available for use.",
+          "type": "string"
+        },
+        {
+          "const": "occupied",
+          "description": "Resource is occupied by a charging workflow.",
+          "type": "string"
+        },
+        {
+          "const": "unavailable",
+          "description": "Resource is not available for operation.",
+          "type": "string"
+        },
+        {
+          "const": "faulted",
+          "description": "Resource reports a fault.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "No reliable observation is currently available.",
+          "type": "string"
+        }
+      ]
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CommandError": {
+      "description": "Stable, machine-readable command error.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/CommandErrorCode",
+          "description": "Stable error category for automation and diagnostics."
+        },
+        "detail": {
+          "description": "Sanitized detail that must not contain credentials or untrusted raw payloads.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "CommandErrorCode": {
+      "description": "Stable categories for command admission and execution failures.",
+      "oneOf": [
+        {
+          "const": "unauthorized",
+          "description": "Authenticated principal lacks permission for the operation or resource.",
+          "type": "string"
+        },
+        {
+          "const": "invalid_parameters",
+          "description": "Command parameters failed validation.",
+          "type": "string"
+        },
+        {
+          "const": "expired",
+          "description": "Command expired before admission or dispatch.",
+          "type": "string"
+        },
+        {
+          "const": "unsupported_operation",
+          "description": "Resource does not explicitly advertise the requested operation.",
+          "type": "string"
+        },
+        {
+          "const": "station_disconnected",
+          "description": "Target station is disconnected.",
+          "type": "string"
+        },
+        {
+          "const": "policy_rejected",
+          "description": "Safety or local policy rejected the operation.",
+          "type": "string"
+        },
+        {
+          "const": "protocol_rejected",
+          "description": "Charger returned a protocol-level rejection or error.",
+          "type": "string"
+        }
+      ]
+    },
+    "CommandLifecycle": {
+      "description": "Lifecycle stage and outcome of a command, without conflating later observed effects.",
+      "oneOf": [
+        {
+          "description": "Command was durably accepted for execution.",
+          "properties": {
+            "stage": {
+              "const": "admitted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Command was rejected before durable admission or dispatch.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/CommandError",
+              "description": "Stable rejection reason."
+            },
+            "stage": {
+              "const": "rejected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Command was dispatched to the station and awaits a response.",
+          "properties": {
+            "stage": {
+              "const": "dispatched",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Charger supplied a protocol response; this is not proof of physical effect.",
+          "properties": {
+            "accepted": {
+              "description": "Whether the charger accepted the requested protocol operation.",
+              "type": "boolean"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandError"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable error when the protocol response rejected the operation."
+            },
+            "stage": {
+              "const": "protocol_response",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "accepted"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Transmission may have occurred, but retrying could duplicate a non-idempotent action.",
+          "properties": {
+            "detail": {
+              "description": "Sanitized reason for the uncertain outcome.",
+              "type": "string"
+            },
+            "stage": {
+              "const": "transmission_uncertain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "detail"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CommandResult": {
+      "description": "Versioned command result returned to its authenticated origin and available to observers.",
+      "properties": {
+        "correlation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorrelationId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Request/result correlation identity."
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/CommandLifecycle",
+          "description": "Latest command lifecycle stage."
+        },
+        "observed_effects": {
+          "description": "Later observed effects, linked independently from charger protocol acceptance.",
+          "items": {
+            "$ref": "#/$defs/ObservedCommandEffect"
+          },
+          "type": "array"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC instant at which this result state was recorded."
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef",
+          "description": "Canonical charging resource targeted by the request."
+        },
+        "return_route": {
+          "$ref": "#/$defs/CommandReturnRoute",
+          "description": "Immutable route back to the authenticated origin and target instance."
+        },
+        "schema_version": {
+          "$ref": "#/$defs/ContractVersion",
+          "description": "Version of this result contract."
+        }
+      },
+      "required": [
+        "schema_version",
+        "resource",
+        "return_route",
+        "lifecycle",
+        "recorded_at"
+      ],
+      "type": "object"
+    },
+    "CommandReturnRoute": {
+      "description": "Immutable routing context carried by every command result.",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/AuthenticatedCommandOrigin",
+          "description": "Authenticated management or target context, including target instance when applicable."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Request whose origin receives the result."
+        }
+      },
+      "required": [
+        "request_id",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CorrelationId": {
+      "description": "Stable identifier correlating related operations and events.",
+      "type": "string"
+    },
+    "DataPointValue": {
+      "description": "One observed point value with timestamps, quality, and freshness kept together.",
+      "properties": {
+        "freshness": {
+          "$ref": "#/$defs/Freshness",
+          "description": "Freshness metadata, independent of quality."
+        },
+        "measurement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Measurement-specific original semantics, when applicable."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC instant at which the bridge observed the value or its unavailability."
+        },
+        "point_id": {
+          "$ref": "#/$defs/PointId",
+          "description": "Stable identity of the described point."
+        },
+        "quality": {
+          "$ref": "#/$defs/Quality",
+          "description": "Quality and its reason, independent of age."
+        },
+        "source_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Device/source timestamp, absent when none was provided."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Typed value; `None` means explicitly unavailable, never numeric zero or false."
+        }
+      },
+      "required": [
+        "point_id",
+        "observed_at",
+        "quality",
+        "freshness"
+      ],
+      "type": "object"
+    },
+    "Environment": {
+      "description": "Trusted runtime environment assigned by the process composition root.",
+      "oneOf": [
+        {
+          "const": "production",
+          "description": "Live charging environment.",
+          "type": "string"
+        },
+        {
+          "const": "staging",
+          "description": "Isolated qualification environment.",
+          "type": "string"
+        },
+        {
+          "const": "demo",
+          "description": "Explicit local demonstration or test environment.",
+          "type": "string"
+        }
+      ]
+    },
+    "EventId": {
+      "description": "Globally unique identity of one durable event.",
+      "type": "string"
+    },
+    "EventType": {
+      "description": "Versioned semantic name of an event payload.",
+      "type": "string"
+    },
+    "ExactDecimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "ExportBatchId": {
+      "description": "Stable identity of one at-least-once export batch.",
+      "type": "string"
+    },
+    "ExportDestination": {
+      "additionalProperties": false,
+      "description": "Immutable external destination identity and configuration revision.",
+      "properties": {
+        "configuration_revision": {
+          "description": "Immutable configuration revision to which this batch is bound.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "destination_id": {
+          "$ref": "#/$defs/ExportDestinationId",
+          "description": "Stable configured provider instance identity."
+        }
+      },
+      "required": [
+        "destination_id",
+        "configuration_revision"
+      ],
+      "type": "object"
+    },
+    "ExportDestinationId": {
+      "description": "Stable configured identity of an external export destination.",
+      "type": "string"
+    },
+    "ExportPayload": {
+      "description": "Closed privacy-filtered payload surface accepted by external export buffering.\n\nIt deliberately contains no arbitrary JSON, credentials, authorization tokens, payment data,\nor raw diagnostic payload variant. Producers must convert committed application state into one\nof these canonical types before constructing an [`ExportRecord`].",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Canonical measurement preserving source semantics and exact precision.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/DataPointValue"
+            },
+            "kind": {
+              "const": "measurement",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Canonical transaction lifecycle observation.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/TransactionSnapshot"
+            },
+            "kind": {
+              "const": "transaction_lifecycle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Charging-resource availability transition.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ExportResourceStatusChange"
+            },
+            "kind": {
+              "const": "resource_status_change",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Canonical point-value transition.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/ExportPointChange"
+            },
+            "kind": {
+              "const": "point_change",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Sanitized command lifecycle result and separately linked observed effects.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/CommandResult"
+            },
+            "kind": {
+              "const": "command_result",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExportPointChange": {
+      "additionalProperties": false,
+      "description": "Canonical point change without any target- or provider-specific fields.",
+      "properties": {
+        "current": {
+          "$ref": "#/$defs/DataPointValue",
+          "description": "Current value with exact quantity, unit, phase, context, quality, and timestamps."
+        },
+        "previous_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypedValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Previous typed value, absent when no prior observation was available."
+        }
+      },
+      "required": [
+        "current"
+      ],
+      "type": "object"
+    },
+    "ExportRecord": {
+      "additionalProperties": false,
+      "description": "Privacy-filtered committed data eligible for an external provider batch.",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/ExportRecordMetadata"
+        },
+        "payload": {
+          "$ref": "#/$defs/ExportPayload"
+        }
+      },
+      "required": [
+        "metadata",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "ExportRecordId": {
+      "description": "Stable identity of one committed canonical export record.",
+      "type": "string"
+    },
+    "ExportRecordIdentity": {
+      "additionalProperties": false,
+      "description": "Stable identity of a root record or one deterministically flattened child.",
+      "properties": {
+        "record_id": {
+          "$ref": "#/$defs/ExportRecordId",
+          "description": "Parent identity retained across every delivery attempt."
+        },
+        "subrecord_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportSubrecordId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canonical child ordinal, absent for an unflattened root record."
+        }
+      },
+      "required": [
+        "record_id"
+      ],
+      "type": "object"
+    },
+    "ExportRecordMetadata": {
+      "additionalProperties": false,
+      "description": "Trusted metadata common to every privacy-filtered export record.",
+      "properties": {
+        "correlation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorrelationId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Correlation identity shared with related records, when known."
+        },
+        "identity": {
+          "$ref": "#/$defs/ExportRecordIdentity",
+          "description": "Stable root or deterministic child identity."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC timestamp at which the bridge observed the record."
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef",
+          "description": "Canonical resource independent of the external destination."
+        },
+        "runtime": {
+          "$ref": "#/$defs/RuntimeIdentity",
+          "description": "Trusted process and artifact context at observation time."
+        },
+        "schema_version": {
+          "$ref": "#/$defs/ContractVersion",
+          "description": "Version of the export envelope and its closed payload surface."
+        },
+        "sequence": {
+          "description": "Monotonic sequence in the owning resource stream.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_time": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Source timestamp, absent when the source supplied none."
+        }
+      },
+      "required": [
+        "identity",
+        "schema_version",
+        "runtime",
+        "resource",
+        "observed_at",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "ExportResourceStatusChange": {
+      "additionalProperties": false,
+      "description": "Canonical charging-resource availability transition.",
+      "properties": {
+        "current": {
+          "$ref": "#/$defs/AvailabilityState",
+          "description": "Current observed state."
+        },
+        "previous": {
+          "$ref": "#/$defs/AvailabilityState",
+          "description": "Previous observed state."
+        }
+      },
+      "required": [
+        "previous",
+        "current"
+      ],
+      "type": "object"
+    },
+    "ExportSubrecordId": {
+      "description": "Deterministic child position within one committed parent record.\n\nProducers assign an ordinal from the parent's canonical traversal order. The pair of parent\nrecord ID and ordinal remains stable across retries without hashing mutable payload bytes.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "Freshness": {
+      "description": "Freshness state tracked independently from data quality.",
+      "oneOf": [
+        {
+          "description": "Value is within its declared freshness interval.",
+          "properties": {
+            "status": {
+              "const": "fresh",
+              "type": "string"
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/UtcTimestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UTC instant after which the value becomes stale, when configured."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Value is older than the accepted freshness interval.",
+          "properties": {
+            "status": {
+              "const": "stale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "No freshness policy or evidence is available.",
+          "properties": {
+            "status": {
+              "const": "unknown",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "MeasurementContext": {
+      "description": "Original measurement sampling context.",
+      "type": "string"
+    },
+    "MeasurementLocation": {
+      "description": "Original measurement location designation.",
+      "type": "string"
+    },
+    "MeasurementMetadata": {
+      "description": "Protocol semantics retained alongside a normalized measurement.",
+      "properties": {
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementContext"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original sampling context."
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original measurement location."
+        },
+        "measurand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SemanticName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original measurand name."
+        },
+        "original_unit": {
+          "description": "Original unit token, including tokens not supported for conversion.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "original_value": {
+          "description": "Exact original textual value before normalization.",
+          "type": "string"
+        },
+        "phase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasurementPhase"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original phase designation."
+        },
+        "protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Original OCPP resource address, independent of canonical identity."
+        }
+      },
+      "required": [
+        "original_value"
+      ],
+      "type": "object"
+    },
+    "MeasurementPhase": {
+      "description": "Original measurement phase designation.",
+      "type": "string"
+    },
+    "NamedEnumValue": {
+      "description": "Named member of a declared enumeration.",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ObservedCommandEffect": {
+      "description": "Separately linked evidence of a later observed charging effect.",
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/EventId",
+          "description": "Durable event that records the observed effect."
+        },
+        "event_type": {
+          "$ref": "#/$defs/EventType",
+          "description": "Semantic type of the observed effect."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC instant at which the bridge observed it."
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "PointId": {
+      "description": "Stable identity of a canonical data point.",
+      "type": "string"
+    },
+    "PrincipalId": {
+      "description": "Authenticated principal identity assigned by an adapter.",
+      "type": "string"
+    },
+    "ProcessInstanceId": {
+      "description": "Unique identity of one running process instance.",
+      "type": "string"
+    },
+    "Quality": {
+      "description": "Quality classification and optional machine-readable reason.",
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/QualityLevel",
+          "description": "Coarse quality level."
+        },
+        "reason": {
+          "description": "Stable reason code supplied when more detail is known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "type": "object"
+    },
+    "QualityLevel": {
+      "description": "Data quality classification independent of freshness.",
+      "oneOf": [
+        {
+          "const": "good",
+          "description": "Source and bridge consider the value valid.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "Value may be usable with a stated qualification.",
+          "type": "string"
+        },
+        {
+          "const": "bad",
+          "description": "Value must not be used as a valid observation.",
+          "type": "string"
+        }
+      ]
+    },
+    "ReleaseId": {
+      "description": "Immutable identity of a built release.",
+      "type": "string"
+    },
+    "RequestId": {
+      "description": "Stable idempotency identity of a command request.",
+      "type": "string"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "RuntimeIdentity": {
+      "description": "Immutable process and release context attached to emitted records.",
+      "properties": {
+        "environment": {
+          "$ref": "#/$defs/Environment",
+          "description": "Trusted environment of this process."
+        },
+        "process_instance_id": {
+          "$ref": "#/$defs/ProcessInstanceId",
+          "description": "Unique identity of this process invocation."
+        },
+        "release_digest": {
+          "$ref": "#/$defs/ArtifactDigest",
+          "description": "Digest of the running release artifact."
+        },
+        "release_id": {
+          "$ref": "#/$defs/ReleaseId",
+          "description": "Immutable release identity."
+        }
+      },
+      "required": [
+        "environment",
+        "release_id",
+        "release_digest",
+        "process_instance_id"
+      ],
+      "type": "object"
+    },
+    "SemanticName": {
+      "description": "Versioned semantic name of a data point.",
+      "type": "string"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "TargetInstanceId": {
+      "description": "Stable identity of a configured target instance.",
+      "type": "string"
+    },
+    "TransactionId": {
+      "description": "Stable canonical identity of a charging transaction.",
+      "type": "string"
+    },
+    "TransactionSnapshot": {
+      "description": "Observed transaction state associated with a canonical charging resource.",
+      "properties": {
+        "ended_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Observed end time, when the transaction has ended."
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceRef",
+          "description": "Resource associated with the transaction."
+        },
+        "started_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "Source-reported or bridge-observed start time."
+        },
+        "state": {
+          "$ref": "#/$defs/TransactionState",
+          "description": "Current observed lifecycle state."
+        },
+        "transaction_id": {
+          "$ref": "#/$defs/TransactionId",
+          "description": "Stable transaction identity."
+        }
+      },
+      "required": [
+        "transaction_id",
+        "resource",
+        "state",
+        "started_at"
+      ],
+      "type": "object"
+    },
+    "TransactionState": {
+      "description": "Current observed lifecycle state of a charging transaction.",
+      "oneOf": [
+        {
+          "const": "pending",
+          "description": "Transaction has been admitted but charging has not been observed.",
+          "type": "string"
+        },
+        {
+          "const": "active",
+          "description": "Charging activity is currently observed.",
+          "type": "string"
+        },
+        {
+          "const": "suspended",
+          "description": "Transaction is temporarily suspended.",
+          "type": "string"
+        },
+        {
+          "const": "ended",
+          "description": "Transaction has ended.",
+          "type": "string"
+        },
+        {
+          "const": "uncertain",
+          "description": "Final outcome cannot yet be reconciled.",
+          "type": "string"
+        }
+      ]
+    },
+    "TypedValue": {
+      "description": "Typed canonical value; unavailable measurements are represented by absence.",
+      "oneOf": [
+        {
+          "description": "Boolean state.",
+          "properties": {
+            "type": {
+              "const": "boolean",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Signed integer preserving all `i64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "signed_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unsigned integer preserving all `u64` boundary values.",
+          "properties": {
+            "type": {
+              "const": "unsigned_integer",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Exact decimal serialized as a string.",
+          "properties": {
+            "type": {
+              "const": "decimal",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/ExactDecimal"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Unicode text value.",
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Named member of a descriptor-declared enumeration.",
+          "properties": {
+            "type": {
+              "const": "named_enum",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/NamedEnumValue"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/export-batch.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A non-empty at-least-once batch bound to one immutable destination revision.",
+  "properties": {
+    "batch_id": {
+      "$ref": "#/$defs/ExportBatchId"
+    },
+    "destination": {
+      "$ref": "#/$defs/ExportDestination"
+    },
+    "records": {
+      "items": {
+        "$ref": "#/$defs/ExportRecord"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "batch_id",
+    "destination",
+    "records"
+  ],
+  "title": "ExportBatch",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

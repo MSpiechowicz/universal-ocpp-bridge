@@ -3,8 +3,9 @@ use std::{env, error::Error, fs, path::Path};
 use schemars::{JsonSchema, schema_for};
 use serde_json::Value;
 use uob_contracts::{
-    Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope,
-    ResourceCapabilities, ResourceRef, RuntimeIdentity, StationSnapshot, TraceRecord,
+    Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExportBatch,
+    ExportRecord, ExportReport, ResourceCapabilities, ResourceRef, RuntimeIdentity,
+    StationSnapshot, TraceRecord,
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
@@ -47,5 +48,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     publish::<CommandResult>(output, "command-result")?;
     publish::<EventEnvelope<Value>>(output, "event-envelope")?;
     publish::<TraceRecord>(output, "trace-record")?;
+    publish::<ExportRecord>(output, "export-record")?;
+    publish::<ExportBatch>(output, "export-batch")?;
+    publish::<ExportReport>(output, "export-report")?;
     Ok(())
 }
