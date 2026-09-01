@@ -1,0 +1,21 @@
+[package]
+name = "uob-service"
+description = "Universal OCPP Bridge production service composition root"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uob-application = { path = "../../crates/application" }
+uob-external-export-adapter = { path = "../../adapters/export" }
+uob-management-adapter = { path = "../../adapters/management" }
+uob-protocol-adapter = { path = "../../adapters/protocol" }
+uob-provider-adapter = { path = "../../adapters/providers" }
+uob-storage-adapter = { path = "../../adapters/storage" }
+uob-target-adapter = { path = "../../adapters/target" }
+
+[lints]
+workspace = true

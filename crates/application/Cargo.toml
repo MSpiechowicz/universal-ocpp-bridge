@@ -1,0 +1,15 @@
+[package]
+name = "uob-application"
+description = "Target-neutral Universal OCPP Bridge application services"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+uob-contracts = { path = "../contracts" }
+uob-domain = { path = "../domain" }
+
+[lints]
+workspace = true

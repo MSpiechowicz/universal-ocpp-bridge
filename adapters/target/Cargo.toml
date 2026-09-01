@@ -1,0 +1,15 @@
+[package]
+name = "uob-target-adapter"
+description = "Target adapter extension seam and registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+uob-application = { path = "../../crates/application" }
+uob-contracts = { path = "../../crates/contracts" }
+
+[lints]
+workspace = true

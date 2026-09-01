@@ -1,0 +1,19 @@
+[package]
+name = "uob-management-adapter"
+description = "HTTP management adapter for Universal OCPP Bridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum.workspace = true
+tokio = { workspace = true, features = ["net"] }
+uob-application = { path = "../../crates/application" }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true
