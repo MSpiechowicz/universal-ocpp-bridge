@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.2.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/b56e5020197bb7566f123ec9f0bfacf9df5873da..v0.2.0) - 2026-09-01
+#### Features
+- (**target**) guard destination changes - ([b56e502](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b56e5020197bb7566f123ec9f0bfacf9df5873da)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.1.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/1f30044b40cb4e8d022526d26c89db6923ac65b1..v0.1.0) - 2026-09-01
 #### Features
 - (**application**) centralize diagnostic redaction - ([ebb93bb](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ebb93bb516d9c3eb882fbf1dcc918cf451d37c8c)) - Maciej Spiechowicz
