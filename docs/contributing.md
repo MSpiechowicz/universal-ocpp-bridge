@@ -16,7 +16,9 @@ The reported version must be `cog 7.0.0`. Cocogitto is a development and release
 not linked into the bridge, installed on a charging device, or used to publish a release by these
 checks. CI instead downloads Cocogitto's official static Linux release archive and verifies the
 reviewed SHA-256 digest before executing it. This keeps the application's Rust 1.87 toolchain pin
-unchanged and avoids resolving a newer tool-only transitive dependency during every check.
+unchanged and avoids resolving a newer tool-only transitive dependency during every check. The
+workflow also supplies the checkout-local author identity that Cocogitto 7.0.0 requires when
+rendering verification results; it does not create a commit or grant write permissions.
 
 Use Conventional Commit messages such as:
 

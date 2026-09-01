@@ -38,6 +38,10 @@ jobs:
           printf '%s\n' "$tool_directory" >>"$GITHUB_PATH"
       - name: Confirm the Cocogitto version
         run: test "$(cog --version)" = "cog 7.0.0"
+      - name: Configure the checkout-local identity required by Cocogitto
+        run: |
+          git config --local user.name "Conventional Check"
+          git config --local user.email "conventional-check@example.invalid"
       - name: Verify the pull request title as literal data
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
