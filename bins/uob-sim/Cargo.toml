@@ -8,7 +8,14 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+ocpp-client.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+
+[dev-dependencies]
+futures = "=0.3.31"
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }
+tokio-tungstenite = "=0.28.0"
 
 [lints]
 workspace = true

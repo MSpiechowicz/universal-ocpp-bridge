@@ -21,10 +21,11 @@ version = "0.0.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/MSpiechowicz/universal-ocpp-bridge"
-rust-version = "1.85"
+rust-version = "1.87"
 
 [workspace.dependencies]
 axum = "=0.8.4"
+ocpp-client = { version = "=0.4.0", default-features = false, features = ["std", "tokio-runtime", "websocket", "ocpp_1_6", "ocpp_2_0_1"] }
 rusqlite = { version = "=0.39.0", features = ["bundled"] }
 schemars = "=1.0.4"
 serde = { version = "=1.0.229", features = ["derive"] }
