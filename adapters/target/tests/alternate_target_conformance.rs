@@ -27,13 +27,13 @@ use uob_target_conformance::{
     FakeTargetHost, HostCapacities, UnsupportedQueryPort, inspect_descriptor,
 };
 
-struct AlternateFactory {
+struct FakeIndustrialFactory {
     runs: Arc<AtomicUsize>,
 }
 
-impl BridgeTargetFactory<(), ()> for AlternateFactory {
+impl BridgeTargetFactory<(), ()> for FakeIndustrialFactory {
     fn kind(&self) -> &'static str {
-        "future.memory-map"
+        "ems-scada.fake"
     }
 
     fn configuration_schema(&self) -> ConfigurationSchema {
@@ -51,22 +51,22 @@ impl BridgeTargetFactory<(), ()> for AlternateFactory {
         &self,
         configuration: ValidatedTargetConfiguration,
     ) -> Result<Box<dyn BridgeTarget<(), ()>>, ConfigurationError> {
-        Ok(Box::new(AlternateTarget {
+        Ok(Box::new(FakeIndustrialTarget {
             instance_id: configuration.configuration().target_instance_id.clone(),
             runs: Arc::clone(&self.runs),
         }))
     }
 }
 
-struct AlternateTarget {
+struct FakeIndustrialTarget {
     instance_id: TargetInstanceId,
     runs: Arc<AtomicUsize>,
 }
 
-impl BridgeTarget<(), ()> for AlternateTarget {
+impl BridgeTarget<(), ()> for FakeIndustrialTarget {
     fn descriptor(&self) -> TargetDescriptor {
         TargetDescriptor {
-            kind: text(TargetKind::new, "future.memory-map"),
+            kind: text(TargetKind::new, "ems-scada.fake"),
             instance_id: self.instance_id.clone(),
             contract_version: ContractVersion::V1_INITIAL,
             outbound_message_classes: vec![TargetMessageClass::StationSnapshot],
@@ -123,18 +123,18 @@ impl TargetQueryPort<()> for CountingQueries {
 }
 
 #[tokio::test]
-async fn alternate_target_registers_queries_and_shuts_down_through_shared_contracts() {
+async fn fake_industrial_target_needs_only_canonical_target_and_query_contracts() {
     let runs = Arc::new(AtomicUsize::new(0));
     let mut registry = TargetRegistry::new();
     registry
         .register(
-            AlternateFactory {
+            FakeIndustrialFactory {
                 runs: Arc::clone(&runs),
             },
             TargetRegistration {
                 display_family: TargetDisplayFamily {
-                    id: "future".to_owned(),
-                    display_name: "Future target".to_owned(),
+                    id: "ems-scada".to_owned(),
+                    display_name: "EMS/SCADA".to_owned(),
                 },
                 presets: vec![],
                 capabilities: vec![],
@@ -150,7 +150,7 @@ async fn alternate_target_registers_queries_and_shuts_down_through_shared_contra
             environment: Environment::Demo,
             target_id: target_id.clone(),
             targets: vec![ConfiguredTarget {
-                kind: "future.memory-map".to_owned(),
+                kind: "ems-scada.fake".to_owned(),
                 enabled: true,
                 configuration: TargetConfiguration::new(target_id, 1),
                 transport_security: None,

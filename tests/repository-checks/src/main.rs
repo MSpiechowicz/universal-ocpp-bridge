@@ -126,6 +126,7 @@ fn check(root: &Path) -> Result<(), Vec<String>> {
 
     check_protected_dependencies(&packages, &mut errors);
     check_owned_dependencies(&packages, &mut errors);
+    check_deferred_industrial_dependencies(&packages, &mut errors);
     check_protected_sources(&packages, &mut errors);
 
     if packages.contains_key("uob-service") {
@@ -221,6 +222,27 @@ fn check_owned_dependencies(packages: &BTreeMap<&str, &Package>, errors: &mut Ve
             }
         }
     }
+}
+
+fn check_deferred_industrial_dependencies(
+    packages: &BTreeMap<&str, &Package>,
+    errors: &mut Vec<String>,
+) {
+    for (package_name, package) in packages {
+        for dependency in &package.dependencies {
+            if is_opcua_sdk(&dependency.name) {
+                errors.push(format!(
+                    "{package_name} declares deferred OPC UA dependency {}",
+                    dependency.name
+                ));
+            }
+        }
+    }
+}
+
+fn is_opcua_sdk(name: &str) -> bool {
+    let normalized = name.to_ascii_lowercase().replace(['-', '_'], "");
+    normalized.contains("opcua") || normalized.contains("open62541")
 }
 
 fn check_protected_sources(packages: &BTreeMap<&str, &Package>, errors: &mut Vec<String>) {
@@ -383,5 +405,19 @@ fn check_graph_excludes(
         if let Some(dependencies) = edges.get(id) {
             pending.extend(dependencies.iter().map(String::as_str));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_opcua_sdk;
+
+    #[test]
+    fn deferred_opcua_sdk_names_are_recognized() {
+        for name in ["opcua", "async-opcua", "opcua_client", "open62541-sys"] {
+            assert!(is_opcua_sdk(name), "{name}");
+        }
+        assert!(!is_opcua_sdk("uob-target-adapter"));
+        assert!(!is_opcua_sdk("rumqttc"));
     }
 }

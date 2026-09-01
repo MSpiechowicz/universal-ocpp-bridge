@@ -11,7 +11,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ReleaseId::new(env!("CARGO_PKG_VERSION"))?,
         ArtifactDigest::new(option_env!("UOB_RELEASE_DIGEST").unwrap_or("sha256:development"))?,
     );
-    let service = compose(TargetRegistry::<(), ()>::new(), identity, None)?;
+    let mut targets = TargetRegistry::<(), ()>::new();
+    targets.declare_first_release_unavailable_targets()?;
+    let service = compose(targets, identity, None)?;
     let address = SocketAddr::from(([127, 0, 0, 1], 8080));
     uob_management_adapter::serve(address, service.application).await?;
     Ok(())

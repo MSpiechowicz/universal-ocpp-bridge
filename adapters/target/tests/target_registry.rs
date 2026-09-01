@@ -10,9 +10,9 @@ use uob_application::{
 };
 use uob_contracts::{BridgeId, Environment, TargetInstanceId};
 use uob_target_adapter::{
-    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TargetDisplayFamily, TargetPreset,
-    TargetRegistration, TargetRegistry, TargetSelectionError, TransportEncryption, TransportPolicy,
-    TransportPolicyError, TransportSecurity,
+    BridgeTargetSelection, ConfiguredTarget, EMS_SCADA_OPCUA_KIND, NetworkEndpoint,
+    TargetDisplayFamily, TargetPreset, TargetRegistration, TargetRegistry, TargetSelectionError,
+    TransportEncryption, TransportPolicy, TransportPolicyError, TransportSecurity,
 };
 
 #[derive(Default)]
@@ -361,30 +361,27 @@ fn selection_rejects_unknown_unavailable_missing_and_duplicate_targets() {
         false,
     );
     registry
-        .declare_unavailable(
-            "future.opcua",
-            ConfigurationSchema::default(),
-            TargetRegistration {
-                display_family: TargetDisplayFamily {
-                    id: "ems-scada".to_owned(),
-                    display_name: "EMS/SCADA".to_owned(),
-                },
-                presets: vec![],
-                capabilities: vec![],
-                transport_policy: None,
-            },
-        )
-        .expect("declare unavailable target");
+        .declare_first_release_unavailable_targets()
+        .expect("declare unavailable first-release targets");
+
+    let opcua = registry
+        .catalog()
+        .into_iter()
+        .find(|entry| entry.kind.as_str() == EMS_SCADA_OPCUA_KIND)
+        .expect("reserved OPC UA catalog entry");
+    assert_eq!(opcua.display_family.id, "ems-scada");
+    assert!(!opcua.available);
+    assert!(!registry.contains(EMS_SCADA_OPCUA_KIND));
 
     let unknown = configured_target("main", "unknown", true, &[], None);
     assert!(matches!(
         registry.validate(selection(Environment::Demo, "main", vec![unknown])),
         Err(TargetSelectionError::UnknownKind(kind)) if kind == "unknown"
     ));
-    let unavailable = configured_target("main", "future.opcua", true, &[], None);
+    let unavailable = configured_target("main", EMS_SCADA_OPCUA_KIND, true, &[], None);
     assert!(matches!(
         registry.validate(selection(Environment::Demo, "main", vec![unavailable])),
-        Err(TargetSelectionError::UnavailableKind(kind)) if kind == "future.opcua"
+        Err(TargetSelectionError::UnavailableKind(kind)) if kind == EMS_SCADA_OPCUA_KIND
     ));
     assert!(matches!(
         registry.validate(selection(Environment::Demo, "main", vec![])),
