@@ -45,6 +45,12 @@ if command -v cargo >/dev/null 2>&1 && [[ -f "$repository_root/Cargo.toml" ]]; t
     echo "boundary violation: production service graph contains simulator or release-manager code" >&2
     exit 1
   fi
+
+  hostile_peer_graph="$(cd "$repository_root" && cargo tree -p uob-hostile-websocket-peer --prefix none)"
+  if grep -Eiq '(ocpp-client|rust-ocpp|uob-(service|protocol-adapter|application|domain|contracts))' <<<"$hostile_peer_graph"; then
+    echo "boundary violation: hostile WebSocket peer contains OCPP models or service code" >&2
+    exit 1
+  fi
 fi
 
 echo "dependency boundaries verified"
