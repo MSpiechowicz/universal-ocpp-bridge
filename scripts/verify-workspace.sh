@@ -65,6 +65,7 @@ packages=(
   uob-application
   uob-target-conformance
   uob-ocpp-fixtures
+  uob-hostile-websocket-peer
   uob-protocol-adapter
   uob-target-adapter
   uob-storage-adapter

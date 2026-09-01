@@ -5,6 +5,7 @@ members = [
     "crates/application",
     "tests/target-conformance",
     "tests/ocpp-fixtures",
+    "tests/hostile-websocket-peer",
     "adapters/protocol",
     "adapters/target",
     "adapters/storage",
@@ -35,6 +36,7 @@ serde_json = "=1.0.151"
 sha2 = "=0.10.9"
 time = { version = "=0.3.45", features = ["formatting", "parsing"] }
 tokio = { version = "=1.49.0", default-features = false }
+tokio-tungstenite = { version = "=0.28.0", features = ["rustls-tls-webpki-roots"] }
 toml = "=0.9.8"
 uuid = { version = "=1.26.0", features = ["v4"] }
 validator = { version = "=0.20.0", default-features = false }

@@ -1,0 +1,34 @@
+schema_version = 1
+endpoint = "ws://127.0.0.1:9000/hostile-01"
+subprotocol = "ocpp1.6"
+max_outbound_bytes = 2097152
+max_inbound_bytes = 262144
+observation_capacity = 128
+
+[[steps]]
+id = "connect"
+action = "connect"
+
+[[steps]]
+id = "malformed-json"
+action = "send"
+[steps.payload]
+kind = "text"
+value = '[2,"broken"'
+
+[[steps]]
+id = "malformed-error"
+action = "receive"
+[steps.expect]
+kind = "text"
+json_pointer = "/4/path"
+equals = "/"
+
+[[steps]]
+id = "delayed-follow-up"
+action = "delay"
+delay_ms = 25
+
+[[steps]]
+id = "disconnect"
+action = "disconnect"
