@@ -28,6 +28,9 @@ pub type TargetPortFuture<'a, T> =
 /// another boxed task.
 pub type TargetTask = Pin<Box<dyn Future<Output = Result<(), TargetError>> + Send + 'static>>;
 
+/// Boxed bounded subscription to retained durable events.
+pub type TargetRetainedEventStream<E> = Pin<Box<dyn TargetSubscription<E>>>;
+
 /// Object-safe lifecycle implemented by every bidirectional target adapter.
 ///
 /// `E` is the application-owned domain-event payload and `P` is the statically typed payload
@@ -557,6 +560,8 @@ pub enum TargetPortErrorCode {
     Unavailable,
     /// The request or cursor is invalid.
     InvalidRequest,
+    /// A retained-event cursor is outside the available retention window.
+    CursorExpired,
 }
 
 /// Sanitized scoped-port error with no database, socket, or driver source chain.
@@ -649,6 +654,30 @@ pub enum TargetQueryResult<E> {
 pub trait TargetQueryPort<E>: Send + Sync {
     /// Executes one target-neutral canonical query.
     fn query(&self, query: TargetQuery) -> TargetPortFuture<'_, TargetQueryResult<E>>;
+
+    /// Opens a bounded stream of retained durable events from an optional cursor.
+    fn subscribe_retained_events(
+        &self,
+        query: RetainedEventQuery,
+    ) -> TargetPortFuture<'_, TargetRetainedEventStream<E>>;
+}
+
+/// Poll-based retained-event subscription supplied to a target adapter.
+///
+/// This surface carries only durable [`EventEnvelope`] records. Best-effort telemetry uses a
+/// separate diagnostic/delivery surface and cannot be mistaken for resumable history.
+pub trait TargetSubscription<E>: Send {
+    /// Polls the next retained event. Stream failures remain structured and sanitized.
+    fn poll_event(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Option<Result<EventEnvelope<E>, TargetPortError>>>;
+
+    /// Maximum number of events the subscription may buffer.
+    fn capacity(&self) -> usize;
+
+    /// Current buffered event count used for bounded diagnostics.
+    fn backlog(&self) -> usize;
 }
 
 /// Host-owned command ingress that reapplies authorization, capability, safety and idempotency.
@@ -791,6 +820,18 @@ mod tests {
                 Err(TargetPortError::new(
                     TargetPortErrorCode::Unsupported,
                     "test.no_queries",
+                ))
+            })
+        }
+
+        fn subscribe_retained_events(
+            &self,
+            _query: RetainedEventQuery,
+        ) -> TargetPortFuture<'_, TargetRetainedEventStream<()>> {
+            Box::pin(async {
+                Err(TargetPortError::new(
+                    TargetPortErrorCode::Unsupported,
+                    "test.no_event_subscriptions",
                 ))
             })
         }

@@ -1,8 +1,13 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
+mod query;
 mod storage;
 mod target;
 
+pub use query::{
+    CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
+    TargetResourceScope,
+};
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
     AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
@@ -20,8 +25,9 @@ pub use target::{
     TargetDeliveryReceiver, TargetDescriptor, TargetDiagnostic, TargetDiagnosticPort, TargetError,
     TargetErrorCode, TargetHealth, TargetHealthState, TargetLimits, TargetMessage,
     TargetMessageClass, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
-    TargetQueryPort, TargetQueryResult, TargetReportPort, TargetRuntimeLimits, TargetShutdown,
-    TargetTask, ValidatedTargetConfiguration,
+    TargetQueryPort, TargetQueryResult, TargetReportPort, TargetRetainedEventStream,
+    TargetRuntimeLimits, TargetShutdown, TargetSubscription, TargetTask,
+    ValidatedTargetConfiguration,
 };
 
 use uob_contracts::ContractVersion;
