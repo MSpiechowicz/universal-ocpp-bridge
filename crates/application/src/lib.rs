@@ -2,6 +2,7 @@
 
 mod database;
 mod query;
+mod resource;
 mod storage;
 mod target;
 
@@ -17,6 +18,13 @@ pub use database::{
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
     TargetResourceScope,
+};
+pub use resource::{
+    AdmissionError, AdmissionLimit, DEFAULT_AGGREGATE_QUEUED_PAYLOAD_BYTES,
+    DEFAULT_MAX_CONNECTED_STATIONS, DEFAULT_MAX_OCPP_MESSAGE_BYTES, DEFAULT_TRACE_RING_BYTES,
+    DiagnosticDropReason, LaggingConsumer, LaggingConsumerAction, ReplaceableTelemetrySlot,
+    RuntimeQueueLimits, RuntimeReservation, RuntimeResourceBudget, RuntimeResourceLimits,
+    RuntimeResourceSnapshot, StationAdmission, TelemetryReplaceOutcome, WorkClass,
 };
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
