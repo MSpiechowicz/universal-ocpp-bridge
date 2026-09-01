@@ -8,8 +8,12 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

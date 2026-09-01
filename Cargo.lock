@@ -1305,6 +1305,7 @@ dependencies = [
 name = "uob-protocol-adapter"
 version = "0.0.0"
 dependencies = [
+ "tokio",
  "uob-application",
  "uob-contracts",
 ]

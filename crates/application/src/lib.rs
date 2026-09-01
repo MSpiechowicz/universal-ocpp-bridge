@@ -5,6 +5,7 @@ mod diagnostic;
 mod query;
 mod resource;
 mod security;
+mod station;
 mod storage;
 mod target;
 
@@ -39,6 +40,7 @@ pub use security::{
     ProviderAuthorizationReferenceError, RuntimeSecurityPolicy, SecurityPolicyError,
     VerifiedPaymentAuthorization,
 };
+pub use station::{SizedStationOutput, StationEffects, StationInput, StationStateMachine};
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
     AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
