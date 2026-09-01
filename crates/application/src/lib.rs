@@ -2,6 +2,7 @@
 
 mod database;
 mod diagnostic;
+mod protocol;
 mod query;
 mod resource;
 mod security;
@@ -24,6 +25,7 @@ pub use diagnostic::{
     SafeDiagnosticField, SafeEndpointLabel, SafeEndpointLabelError, SanitizedDiagnostic,
     SensitiveDataClass, SensitiveDiagnosticValue, UnknownVendorPayload,
 };
+pub use protocol::{ChargerObservation, RegistrationObservation, TransactionStartObservation};
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
     TargetResourceScope,

@@ -51,3 +51,7 @@ OCPP release coverage is tracked separately from implementation claims. See the
 [independent OCPP fixture corpus](docs/testing/ocpp-fixture-corpus.md) for pinned specification
 provenance, hand-authored wire fixtures, the coverage-to-test matrix, and its fail-closed release
 gate.
+
+The pinned OCPP model crate is isolated behind separate 1.6J and 2.0.1 adapters. See the
+[OCPP model adapter boundary](docs/architecture/ocpp-model-adapters.md) for supported negotiation,
+validation, application mappings, explicit gaps, and non-goals.
