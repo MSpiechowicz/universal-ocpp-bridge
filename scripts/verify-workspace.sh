@@ -22,7 +22,7 @@ elif ! command -v cargo >/dev/null 2>&1 \
     exit 127
   fi
 
-  readonly rust_image="rust:1.85.1-bookworm"
+  readonly rust_image="rust:1.87.0-bookworm"
   readonly cargo_cache="uob-verify-cargo-home"
   readonly target_cache="uob-verify-target"
   readonly host_uid="$(id -u)"

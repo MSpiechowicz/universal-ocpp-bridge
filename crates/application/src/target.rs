@@ -360,6 +360,8 @@ pub trait TargetReportPort: Send + Sync {
 }
 
 /// Low-priority target diagnostics sent separately from critical delivery reports.
+// Keep the public typed payload contract intact; these values cross an already-bounded channel.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TargetDiagnostic {
     /// Structured target lifecycle and resource state.
