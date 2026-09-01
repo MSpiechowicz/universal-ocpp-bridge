@@ -3,6 +3,7 @@ members = [
     "crates/contracts",
     "crates/domain",
     "crates/application",
+    "tests/target-conformance",
     "adapters/protocol",
     "adapters/target",
     "adapters/storage",

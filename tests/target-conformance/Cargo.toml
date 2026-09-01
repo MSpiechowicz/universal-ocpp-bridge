@@ -1,6 +1,6 @@
 [package]
-name = "uob-target-adapter"
-description = "Target adapter extension seam and registry"
+name = "uob-target-conformance"
+description = "Reusable fake-host conformance harness for Universal OCPP Bridge targets"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,13 +8,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+tokio = { workspace = true, features = ["sync"] }
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
 
 [dev-dependencies]
 time.workspace = true
 tokio = { workspace = true, features = ["macros", "rt", "time"] }
-uob-target-conformance = { path = "../../tests/target-conformance" }
 
 [lints]
 workspace = true
