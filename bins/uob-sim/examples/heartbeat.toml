@@ -1,0 +1,35 @@
+schema_version = 1
+seed = 42
+
+[[steps]]
+id = "connect"
+station = "station-01"
+action = "connect"
+timeout_ms = 5000
+expect_event = "connected"
+expect_detail = "ocpp1.6"
+
+[[steps]]
+id = "heartbeat"
+station = "station-01"
+action = "heartbeat"
+timeout_ms = 5000
+expect_message = "Heartbeat"
+expect_event = "heartbeat_result"
+
+[[steps]]
+id = "settle"
+station = "station-01"
+action = "wait"
+timeout_ms = 1000
+duration_ms = 100
+expect_event = "delay_elapsed"
+expect_detail = "100ms"
+
+[[steps]]
+id = "disconnect"
+station = "station-01"
+action = "disconnect"
+timeout_ms = 5000
+expect_event = "disconnected"
+expect_detail = "stopped"

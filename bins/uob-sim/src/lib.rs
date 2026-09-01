@@ -20,6 +20,8 @@ use ocpp_client::{
 };
 use tokio::sync::{mpsc, oneshot};
 
+pub mod scenario;
+
 pub const PINNED_OCPP_CLIENT_VERSION: &str = "0.4.0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,6 +97,8 @@ pub trait ProtocolClient: Send + Sync {
     fn version(&self) -> OcppVersion;
     fn heartbeat(&self) -> ClientFuture<'_, String>;
     fn shutdown(&self) -> ClientFuture<'_, ()>;
+    fn force_shutdown(&self) -> ClientFuture<'_, ()>;
+    fn abort(&self);
     fn traces(&self) -> Vec<TraceEvent>;
 }
 
@@ -103,11 +107,34 @@ pub struct SimulatorProtocolClient {
     version: OcppVersion,
     commands: mpsc::Sender<Command>,
     traces: TraceBuffer,
+    worker: tokio::task::AbortHandle,
+    emergency_client: EmergencyClient,
 }
 
 enum Command {
     Heartbeat(oneshot::Sender<Result<String, SimulatorClientError>>),
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
+}
+
+#[derive(Clone)]
+enum EmergencyClient {
+    V1_6(ocpp_client::ocpp_1_6::OCPP1_6Client),
+    V2_0_1(ocpp_client::ocpp_2_0_1::OCPP2_0_1Client),
+}
+
+impl EmergencyClient {
+    async fn disconnect(&self) -> Result<(), SimulatorClientError> {
+        match self {
+            Self::V1_6(client) => client
+                .disconnect()
+                .await
+                .map_err(|error| SimulatorClientError::Protocol(error.to_string())),
+            Self::V2_0_1(client) => client
+                .disconnect()
+                .await
+                .map_err(|error| SimulatorClientError::Protocol(error.to_string())),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -173,7 +200,7 @@ impl SimulatorProtocolClient {
         };
         let (commands, receiver) = mpsc::channel(config.command_capacity);
 
-        match config.version {
+        let (worker, emergency_client) = match config.version {
             OcppVersion::V1_6 => {
                 let client = connect_1_6(&config.endpoint, Some(options))
                     .await
@@ -181,7 +208,9 @@ impl SimulatorProtocolClient {
                 register_1_6_handlers(&client, &traces).await;
                 register_1_6_reconnect(&client, &traces).await;
                 traces.push(TraceKind::Connected, OcppVersion::V1_6.websocket_protocol());
-                tokio::spawn(run_1_6(client, receiver, traces.clone()));
+                let emergency_client = EmergencyClient::V1_6(client.clone());
+                let worker = tokio::spawn(run_1_6(client, receiver, traces.clone())).abort_handle();
+                (worker, emergency_client)
             }
             OcppVersion::V2_0_1 => {
                 let client = connect_2_0_1(&config.endpoint, Some(options))
@@ -193,14 +222,19 @@ impl SimulatorProtocolClient {
                     TraceKind::Connected,
                     OcppVersion::V2_0_1.websocket_protocol(),
                 );
-                tokio::spawn(run_2_0_1(client, receiver, traces.clone()));
+                let emergency_client = EmergencyClient::V2_0_1(client.clone());
+                let worker =
+                    tokio::spawn(run_2_0_1(client, receiver, traces.clone())).abort_handle();
+                (worker, emergency_client)
             }
-        }
+        };
 
         Ok(Self {
             version: config.version,
             commands,
             traces,
+            worker,
+            emergency_client,
         })
     }
 
@@ -230,6 +264,16 @@ impl ProtocolClient for SimulatorProtocolClient {
 
     fn shutdown(&self) -> ClientFuture<'_, ()> {
         Box::pin(async move { self.send_command(Command::Shutdown).await })
+    }
+
+    fn force_shutdown(&self) -> ClientFuture<'_, ()> {
+        Box::pin(async move { self.emergency_client.disconnect().await })
+    }
+
+    fn abort(&self) {
+        self.traces
+            .push(TraceKind::Stopped, "client task force-stopped");
+        self.worker.abort();
     }
 
     fn traces(&self) -> Vec<TraceEvent> {
