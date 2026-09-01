@@ -11,5 +11,8 @@ rust-version.workspace = true
 uob-contracts = { path = "../contracts" }
 uob-domain = { path = "../domain" }
 
+[dev-dependencies]
+time.workspace = true
+
 [lints]
 workspace = true
