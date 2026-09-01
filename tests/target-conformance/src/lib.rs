@@ -11,6 +11,7 @@ mod recovery;
 
 pub use descriptor::{DescriptorViolation, inspect_descriptor};
 pub use host::{
-    CommandSubmission, FakeTargetHost, HostCapacities, HostContext, HostError, UnsupportedQueryPort,
+    CommandSubmission, FakeTargetHost, HostCapacities, HostContext, HostError,
+    UnsupportedQueryPort, target_port_error_from_admission,
 };
 pub use recovery::{DeliveryRecoveryLedger, RecoveryDisposition};

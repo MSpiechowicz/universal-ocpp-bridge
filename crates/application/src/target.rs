@@ -8,11 +8,14 @@ use std::{
 };
 
 use uob_contracts::{
-    CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExternalCommand, PointId,
-    RequestId, ResourceCapabilities, ResourceRef, StationSnapshot, TraceRecord, UtcTimestamp,
+    CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, PointId, RequestId,
+    ResourceCapabilities, ResourceRef, StationSnapshot, TraceRecord, UtcTimestamp,
 };
 
-use crate::{Page, RetainedEventCursor, RetainedEventQuery, SnapshotCursor, SnapshotQuery};
+use crate::{
+    CommandAdmissionPort, Page, RetainedEventCursor, RetainedEventQuery, SnapshotCursor,
+    SnapshotQuery,
+};
 
 mod configuration;
 mod delivery;
@@ -332,12 +335,6 @@ pub trait TargetSubscription<E>: Send {
     fn backlog(&self) -> usize;
 }
 
-/// Host-owned command ingress that reapplies authorization, capability, safety and idempotency.
-pub trait TargetCommandPort<P>: Send + Sync {
-    /// Submits an authenticated target-originated command through the ordinary application path.
-    fn submit(&self, command: ExternalCommand<P>) -> TargetPortFuture<'_, CommandResult>;
-}
-
 /// Poll-based bounded delivery receiver; it exposes no queue implementation or storage handle.
 pub trait TargetDeliveryReceiver<E>: Send {
     /// Polls the next host-owned delivery without allocating a boxed future per message.
@@ -418,7 +415,7 @@ pub struct TargetContext<E, P> {
     /// Scoped canonical queries.
     pub queries: Arc<dyn TargetQueryPort<E>>,
     /// Authorized canonical command ingress.
-    pub commands: Arc<dyn TargetCommandPort<P>>,
+    pub commands: Arc<dyn CommandAdmissionPort<P>>,
     /// Critical delivery reports, separate from diagnostics.
     pub critical_reports: Arc<dyn TargetReportPort>,
     /// Low-priority health and tracing channel.
