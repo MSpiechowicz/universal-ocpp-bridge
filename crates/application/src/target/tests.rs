@@ -259,6 +259,42 @@ fn validation_schema_and_errors_never_retain_credential_contents() {
 }
 
 #[test]
+fn shared_schema_validation_rejects_missing_mistyped_and_unknown_settings() {
+    let schema = FakeFactory {
+        runtime_connections: Arc::new(AtomicUsize::new(0)),
+        runs: Arc::new(AtomicUsize::new(0)),
+    }
+    .configuration_schema();
+    let empty = TargetConfiguration::new(
+        TargetInstanceId::new("target-main").expect("target instance"),
+        1,
+    );
+    let missing = schema.validate_shape(&empty).expect_err("required setting");
+    assert_eq!(missing.code(), ConfigurationErrorCode::MissingField);
+
+    let mistyped = empty.clone().with_setting(
+        "credentials",
+        ConfigurationValue::Text("not-a-reference".to_owned()),
+    );
+    let invalid = schema.validate_shape(&mistyped).expect_err("typed setting");
+    assert_eq!(invalid.code(), ConfigurationErrorCode::InvalidField);
+
+    let unknown = empty
+        .with_setting(
+            "credentials",
+            ConfigurationValue::CredentialReference(
+                CredentialReference::new("vault://target/main").expect("credential reference"),
+            ),
+        )
+        .with_setting("password", ConfigurationValue::Text("secret".to_owned()));
+    let unknown_error = schema
+        .validate_shape(&unknown)
+        .expect_err("unknown setting");
+    assert_eq!(unknown_error.code(), ConfigurationErrorCode::UnknownField);
+    assert_eq!(unknown_error.field_name(), Some("password"));
+}
+
+#[test]
 fn delivery_outcomes_preserve_distinct_acknowledgement_meanings() {
     let local = DeliveryOutcome::LocallyExposed {
         surface: "scada.point_model".to_owned(),
