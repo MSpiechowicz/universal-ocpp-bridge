@@ -8,5 +8,24 @@ Rust service and simulator architecture, selectable MQTT and EMS/SCADA targets
 protocols, external database export, browser debugging, staging, automatic
 rollback, and CI/release strategy.
 
-This repository currently contains documentation only. The service, simulator,
-CI workflows, and release tooling are planned but not implemented.
+Implementation has started with the buildable workspace foundation. Charging
+behavior, simulator scenarios, CI workflows, and release tooling remain planned.
+
+## Workspace foundation
+
+The initial Rust modular-monolith workspace is organized into protected
+contracts/domain/application crates, outward-facing adapter crates, and separate
+service, simulator, and release-manager executables. See
+[ADR 0001](docs/architecture/0001-modular-monolith-boundaries.md) for the package
+rules and first-release exclusions.
+
+Run the current foundation checks with:
+
+```text
+./scripts/verify-workspace.sh
+```
+
+The command uses a local Cargo toolchain when Cargo, rustfmt, and Clippy are
+available. Otherwise it automatically runs the checks in the pinned
+`rust:1.85.1-bookworm` Docker image. Install Rust with rustup or ensure Docker is
+installed and running.

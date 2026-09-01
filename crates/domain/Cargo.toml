@@ -1,0 +1,14 @@
+[package]
+name = "uob-domain"
+description = "Network- and persistence-independent charging domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+uob-contracts = { path = "../contracts" }
+
+[lints]
+workspace = true
