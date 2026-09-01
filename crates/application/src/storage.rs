@@ -1,7 +1,7 @@
 use std::{error::Error, fmt, future::Future, pin::Pin};
 
 use uob_contracts::{
-    Command, CommandResult, EventEnvelope, RequestId, ResourceRef, StationSnapshot,
+    Command, CommandResult, EventEnvelope, EventId, RequestId, ResourceRef, StationSnapshot,
     TargetInstanceId, UtcTimestamp,
 };
 
@@ -163,6 +163,8 @@ pub struct AuthorizationChange {
 pub struct PendingDelivery<D> {
     /// Stable delivery identity used for retry and acknowledgement.
     pub delivery_id: DeliveryId,
+    /// Durable event whose delivery state this row represents.
+    pub event_id: EventId,
     /// Configured target that owns this delivery.
     pub target_instance_id: TargetInstanceId,
     /// Immutable revision of the selected target configuration.

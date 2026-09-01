@@ -404,6 +404,7 @@ fn populated_write()
         journal_events: vec![event()],
         required_deliveries: vec![PendingDelivery {
             delivery_id: text(DeliveryId::new, "delivery-1"),
+            event_id: text(EventId::new, "event-1"),
             target_instance_id: text(TargetInstanceId::new, "target-main"),
             target_configuration_revision: 4,
             ordering_key: resource(),
