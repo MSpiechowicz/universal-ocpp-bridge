@@ -284,8 +284,8 @@ impl<E: 'static, P: 'static> ValidatedTargetSelection<E, P> {
     ///
     /// Returns a sanitized factory construction error. Construction remains network-free by the
     /// factory contract; starting the returned adapter is a separate operation.
-    pub fn create(self) -> Result<Box<dyn BridgeTarget<E, P>>, ConfigurationError> {
-        self.factory.create(self.configuration)
+    pub fn create(&self) -> Result<Box<dyn BridgeTarget<E, P>>, ConfigurationError> {
+        self.factory.create(self.configuration.clone())
     }
 
     /// Returns the validated driver configuration without exposing rejected values.
