@@ -1,5 +1,6 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
+mod access;
 mod admission;
 mod command;
 mod database;
@@ -13,6 +14,10 @@ mod station;
 mod storage;
 mod target;
 
+pub use access::{
+    AccessGrant, AccessPermission, AccessPolicy, AccessPolicyError, AccessResourceScope,
+    ScopedCommandAdmissionPort,
+};
 pub use admission::{
     CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture, CommandAdmissionPort,
 };

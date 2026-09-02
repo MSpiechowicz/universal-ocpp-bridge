@@ -7,7 +7,7 @@ use tokio::{
     time::timeout,
 };
 use uob_application::{
-    AdmissionError, BridgeTarget, CommandAdmissionPort, ConfigurationError,
+    AccessPolicy, AdmissionError, BridgeTarget, CommandAdmissionPort, ConfigurationError,
     ErrorRetryClassification, RuntimeResourceBudget, TargetContext, TargetDelivery,
     TargetDiagnostic, TargetDiagnosticPort, TargetError, TargetHealth, TargetHealthState,
     TargetQueryPort, TargetReportPort, TargetRuntimeLimits, WorkClass,
@@ -28,6 +28,8 @@ pub struct TargetSessionPorts<E, P> {
     pub queries: Arc<dyn TargetQueryPort<E>>,
     /// Common application command admission path.
     pub commands: Arc<dyn CommandAdmissionPort<P>>,
+    /// Authenticated principal, permissions, and canonical resources granted to this target.
+    pub command_authorization: AccessPolicy,
     /// Durable host delivery policy receiving exact target outcomes.
     pub critical_reports: Arc<dyn TargetReportPort>,
     /// Best-effort diagnostics, independent from critical reports.
@@ -238,6 +240,7 @@ where
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let commands = guarded_commands(
         ports.commands,
+        ports.command_authorization,
         destination.target_instance_id.clone(),
         descriptor.inbound_operations,
         options.runtime_limits,

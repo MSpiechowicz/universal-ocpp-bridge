@@ -9,13 +9,14 @@ use std::{
 
 use tokio::sync::{Notify, mpsc};
 use uob_application::{
-    BridgeTarget, BridgeTargetFactory, CommandAdmissionError, CommandAdmissionErrorCode,
-    CommandAdmissionFuture, CommandAdmissionPort, ConfigurationError, ConfigurationSchema,
-    DeliveryId, DeliveryReport, DeliverySemantic, DiagnosticDrop, ErrorRetryClassification,
-    RuntimeResourceBudget, RuntimeResourceLimits, TargetConfiguration, TargetDescriptor,
-    TargetDiagnostic, TargetDiagnosticPort, TargetLimits, TargetMessageClass, TargetPortError,
-    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryPort, TargetQueryResult,
-    TargetReportPort, TargetRetainedEventStream, TargetRuntimeLimits, ValidatedTargetConfiguration,
+    AccessGrant, AccessPermission, AccessPolicy, AccessResourceScope, BridgeTarget,
+    BridgeTargetFactory, CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture,
+    CommandAdmissionPort, ConfigurationError, ConfigurationSchema, DeliveryId, DeliveryReport,
+    DeliverySemantic, DiagnosticDrop, ErrorRetryClassification, RuntimeResourceBudget,
+    RuntimeResourceLimits, TargetConfiguration, TargetDescriptor, TargetDiagnostic,
+    TargetDiagnosticPort, TargetLimits, TargetMessageClass, TargetPortError, TargetPortErrorCode,
+    TargetPortFuture, TargetQuery, TargetQueryPort, TargetQueryResult, TargetReportPort,
+    TargetRetainedEventStream, TargetRuntimeLimits, ValidatedTargetConfiguration,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, CommandOperation, ContractVersion, Environment,
@@ -243,9 +244,27 @@ fn ports(
     TargetSessionPorts {
         queries: Arc::new(NoQueries),
         commands,
+        command_authorization: AccessPolicy::single(target_command_grant(vec![
+            AccessPermission::Control,
+        ])),
         critical_reports: reports,
         diagnostics,
     }
+}
+
+fn target_command_grant(permissions: Vec<AccessPermission>) -> AccessGrant {
+    AccessGrant::new(
+        AuthenticatedCommandOrigin::Target {
+            target_instance_id: target_id("target-main"),
+            principal_id: principal(),
+        },
+        permissions,
+        vec![AccessResourceScope::Station {
+            bridge_id: BridgeId::new("bridge-test").expect("bridge"),
+            station_id: uob_contracts::StationId::new("station-a").expect("station"),
+        }],
+    )
+    .expect("target access grant")
 }
 
 fn options() -> TargetSessionOptions {
@@ -410,6 +429,42 @@ async fn command_origin_capability_and_concurrency_are_enforced_before_admission
         Some("command:InvalidRequest")
     );
     assert_eq!(commands.0.load(Ordering::SeqCst), 1);
+    task.shutdown(Duration::from_secs(1))
+        .await
+        .expect("shutdown");
+}
+
+#[tokio::test]
+async fn authenticated_target_without_control_permission_cannot_execute_a_command() {
+    let mut fixture = fixture(vec![TargetBehavior::Run]);
+    let commands = Arc::new(RejectingCommands::default());
+    let diagnostics = Arc::new(SaturatedDiagnostics::default());
+    let reports: Arc<dyn TargetReportPort> = Arc::new(NoReports);
+    let mut session_ports = ports(Arc::clone(&commands), reports, diagnostics);
+    session_ports.command_authorization =
+        AccessPolicy::single(target_command_grant(vec![AccessPermission::Read]));
+    let (_ingress, task) =
+        spawn_target_session(&fixture.selection, session_ports, budget(), options())
+            .expect("session");
+
+    fixture.peer_senders[0]
+        .send(PeerInput::Command(Box::new(command(
+            CommandOperation::Start {
+                authorization_reference: None,
+            },
+            AuthenticatedCommandOrigin::Target {
+                target_instance_id: target_id("target-main"),
+                principal_id: principal(),
+            },
+        ))))
+        .await
+        .expect("read-only command");
+
+    assert_eq!(
+        fixture.observations.recv().await.as_deref(),
+        Some("command:Unauthorized")
+    );
+    assert_eq!(commands.0.load(Ordering::SeqCst), 0);
     task.shutdown(Duration::from_secs(1))
         .await
         .expect("shutdown");

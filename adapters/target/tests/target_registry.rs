@@ -4,11 +4,14 @@ use std::sync::{
 };
 
 use uob_application::{
-    BridgeTarget, BridgeTargetFactory, ConfigurationError, ConfigurationErrorCode,
-    ConfigurationField, ConfigurationFieldKind, ConfigurationSchema, ConfigurationValue,
-    CredentialReference, TargetCapability, TargetConfiguration, ValidatedTargetConfiguration,
+    AccessGrant, AccessPermission, AccessPolicy, AccessResourceScope, BridgeTarget,
+    BridgeTargetFactory, ConfigurationError, ConfigurationErrorCode, ConfigurationField,
+    ConfigurationFieldKind, ConfigurationSchema, ConfigurationValue, CredentialReference,
+    TargetCapability, TargetConfiguration, ValidatedTargetConfiguration,
 };
-use uob_contracts::{BridgeId, Environment, TargetInstanceId};
+use uob_contracts::{
+    AuthenticatedCommandOrigin, BridgeId, Environment, PrincipalId, StationId, TargetInstanceId,
+};
 use uob_target_adapter::{
     BridgeTargetSelection, ConfiguredTarget, EMS_SCADA_OPCUA_KIND, NetworkEndpoint,
     TargetDisplayFamily, TargetPreset, TargetRegistration, TargetRegistry, TargetSelectionError,
@@ -162,12 +165,30 @@ fn credential() -> CredentialReference {
     CredentialReference::new("/etc/uob/secrets/target.toml").expect("credential reference")
 }
 
+fn access_policy() -> AccessPolicy {
+    AccessPolicy::single(
+        AccessGrant::new(
+            AuthenticatedCommandOrigin::Target {
+                target_instance_id: text(TargetInstanceId::new, "main"),
+                principal_id: text(PrincipalId::new, "operator"),
+            },
+            vec![AccessPermission::Read, AccessPermission::Control],
+            vec![AccessResourceScope::Station {
+                bridge_id: text(BridgeId::new, "bridge-1"),
+                station_id: text(StationId::new, "station-1"),
+            }],
+        )
+        .expect("scoped access grant"),
+    )
+}
+
 fn tls(endpoint: &str) -> TransportSecurity {
     TransportSecurity {
         endpoint: NetworkEndpoint::parse(endpoint).expect("valid endpoint"),
         encryption: TransportEncryption::Tls,
         certificate_verification: true,
         credentials: Some(credential()),
+        access_policy: Some(access_policy()),
         explicitly_isolated: false,
     }
 }
@@ -178,6 +199,7 @@ fn plaintext_demo(endpoint: &str) -> TransportSecurity {
         encryption: TransportEncryption::Plaintext,
         certificate_verification: false,
         credentials: None,
+        access_policy: None,
         explicitly_isolated: true,
     }
 }
@@ -445,6 +467,7 @@ fn invalid_settings_and_production_transports_are_rejected_offline() {
         encryption: TransportEncryption::Plaintext,
         certificate_verification: false,
         credentials: None,
+        access_policy: None,
         explicitly_isolated: false,
     };
     assert!(matches!(
