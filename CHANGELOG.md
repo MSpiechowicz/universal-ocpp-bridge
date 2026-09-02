@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.5.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/0a1602e71f0fa860bb688801d9a1ec20c986d3c7..v0.5.0) - 2026-09-02
+#### Features
+- (**storage**) deduplicate commands for seven days - ([0a1602e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/0a1602e71f0fa860bb688801d9a1ec20c986d3c7)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.4.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/165fa7e18026a0ddaf975d22c79b64611b0e53e3..v0.4.0) - 2026-09-02
 #### Features
 - (**target**) dispatch durable deliveries - ([165fa7e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/165fa7e18026a0ddaf975d22c79b64611b0e53e3)) - Maciej Spiechowicz
