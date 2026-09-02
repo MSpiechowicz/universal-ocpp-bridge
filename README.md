@@ -82,6 +82,11 @@ critical reporting, and deadline-enforced shutdown. See
 [target session supervision](docs/architecture/target-session-supervision.md) for lifecycle,
 recovery, and durable-delivery boundaries.
 
+Required target deliveries are scheduled from the target-neutral durable outbox without blocking
+local charging on target availability. See
+[durable target delivery](docs/architecture/durable-target-delivery.md) for ordering, retry,
+acknowledgement, recovery, and at-least-once semantics.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 use uob_application::StorageError;
 
 use crate::configuration::unavailable;
@@ -31,14 +31,56 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
                      CHECK (target_revision >= 0),\n\
                  event_id TEXT NOT NULL, delivery_id TEXT NOT NULL, ordering_key TEXT NOT NULL,\n\
                  deadline TEXT NOT NULL, durability INTEGER NOT NULL, payload TEXT NOT NULL,\n\
+                 attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),\n\
+                 next_attempt_at TEXT,\n\
                  PRIMARY KEY(target_instance_id, target_revision, event_id),\n\
                  UNIQUE(delivery_id)\n\
              );\n\
+             CREATE TABLE IF NOT EXISTS target_delivery_attempts (\n\
+                 row_id INTEGER PRIMARY KEY AUTOINCREMENT, delivery_id TEXT NOT NULL,\n\
+                 outcome TEXT NOT NULL, reported_at TEXT NOT NULL, resolution INTEGER NOT NULL,\n\
+                 retry_at TEXT\n\
+             );\n\
+             CREATE INDEX IF NOT EXISTS target_delivery_attempts_delivery_row\n\
+                 ON target_delivery_attempts(delivery_id, row_id);\n\
              CREATE TABLE IF NOT EXISTS committed_records (\n\
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, record_id TEXT NOT NULL UNIQUE,\n\
                  durability INTEGER NOT NULL, committed_at TEXT NOT NULL, payload TEXT NOT NULL\n\
              );\n\
-             PRAGMA user_version = 1;",
+             PRAGMA user_version = 2;",
         )
-        .map_err(unavailable)
+        .map_err(unavailable)?;
+    add_column_if_missing(
+        connection,
+        "target_deliveries",
+        "attempt_count",
+        "ALTER TABLE target_deliveries ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0)",
+    )?;
+    add_column_if_missing(
+        connection,
+        "target_deliveries",
+        "next_attempt_at",
+        "ALTER TABLE target_deliveries ADD COLUMN next_attempt_at TEXT",
+    )
+}
+
+fn add_column_if_missing(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    statement: &str,
+) -> Result<(), StorageError> {
+    let exists = connection
+        .query_row(
+            "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2",
+            [table, column],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(unavailable)?
+        .is_some();
+    if !exists {
+        connection.execute_batch(statement).map_err(unavailable)?;
+    }
+    Ok(())
 }

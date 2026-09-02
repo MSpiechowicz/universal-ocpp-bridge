@@ -53,10 +53,11 @@ pub use station::{SizedStationOutput, StationEffects, StationInput, StationState
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
     AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordId, CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page,
-    PageLimit, PageLimitError, PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor,
-    RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode,
-    StorageFuture,
+    CommittedRecordId, CommittedRecordQuery, DeliveryAttempt, DeliveryAttemptResolution,
+    DeliveryId, Durability, OperationalStore, Page, PageLimit, PageLimitError, PendingDelivery,
+    PendingDeliveryQuery, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
+    RetainedEventCursor, RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery,
+    StorageError, StorageErrorCode, StorageFuture, TargetDeliveryStore,
 };
 pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,

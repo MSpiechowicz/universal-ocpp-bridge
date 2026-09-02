@@ -9,9 +9,10 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordQuery, OperationalStore, Page, RecoveryBatch, RecoveryQuery,
-    RetainedEventCursor, RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError,
-    StorageErrorCode, StorageFuture,
+    CommittedRecordQuery, DeliveryAttempt, DeliveryId, OperationalStore, Page,
+    PendingDeliveryQuery, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
+    RetainedEventCursor, RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery,
+    StorageError, StorageErrorCode, StorageFuture, TargetDeliveryStore,
 };
 use uob_contracts::{Command, EventEnvelope, RequestId, StationSnapshot};
 
@@ -194,6 +195,61 @@ where
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<Command<C>>> {
         self.request(|reply| Request::Command(request_id.as_str().to_owned(), reply))
+    }
+}
+
+impl<C, E, D, R> TargetDeliveryStore<D> for SqliteOperationalStore<C, E, D, R>
+where
+    C: Serialize + DeserializeOwned + Send + Sync + 'static,
+    E: Serialize + DeserializeOwned + Send + Sync + 'static,
+    D: Serialize + DeserializeOwned + Send + Sync + 'static,
+    R: Serialize + DeserializeOwned + Send + Sync + 'static,
+{
+    fn read_pending_deliveries(
+        &self,
+        query: PendingDeliveryQuery,
+    ) -> StorageFuture<'_, Vec<ScheduledDelivery<D>>> {
+        let Ok(revision) = i64::try_from(query.target_configuration_revision) else {
+            return ready_error(
+                StorageErrorCode::InvalidRequest,
+                "target revision exceeds SQLite integer range",
+            );
+        };
+        let ready_at = match codec::timestamp_key(&query.ready_at) {
+            Ok(ready_at) => ready_at,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        self.request(|reply| {
+            Request::PendingDeliveries(
+                query.target_instance_id.as_str().to_owned(),
+                revision,
+                ready_at,
+                usize::from(query.limit.get()),
+                reply,
+            )
+        })
+    }
+
+    fn record_delivery_attempt(&self, attempt: DeliveryAttempt) -> StorageFuture<'_, ()> {
+        let attempt = match codec::encode_delivery_attempt(&attempt) {
+            Ok(attempt) => attempt,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        self.request(|reply| Request::RecordDeliveryAttempt(attempt, reply))
+    }
+
+    fn delivery_attempts(
+        &self,
+        delivery_id: DeliveryId,
+        limit: uob_application::PageLimit,
+    ) -> StorageFuture<'_, Vec<RecordedDeliveryAttempt>> {
+        self.request(|reply| {
+            Request::DeliveryAttempts(
+                delivery_id.as_str().to_owned(),
+                usize::from(limit.get()),
+                reply,
+            )
+        })
     }
 }
 

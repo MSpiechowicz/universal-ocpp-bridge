@@ -5,16 +5,18 @@ use serde::de::DeserializeOwned;
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor, Page,
-    RecoveryBatch, RetainedEventCursor, SnapshotCursor, StorageError, StorageErrorCode,
+    RecordedDeliveryAttempt, RecoveryBatch, RetainedEventCursor, ScheduledDelivery, SnapshotCursor,
+    StorageError, StorageErrorCode,
 };
 use uob_contracts::{Command, EventEnvelope, StationSnapshot};
 
 use crate::{
     codec::{
-        self, EncodedAuthorization, EncodedDelivery, EncodedEvent, EncodedRecord, EncodedWrite,
+        self, EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent,
+        EncodedRecord, EncodedWrite,
     },
     configuration::unavailable,
-    recovery,
+    delivery, recovery,
 };
 
 pub(crate) enum Request<C, E, D, R> {
@@ -38,6 +40,9 @@ pub(crate) enum Request<C, E, D, R> {
     ),
     Recover(usize, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
+    PendingDeliveries(String, i64, String, usize, Reply<Vec<ScheduledDelivery<D>>>),
+    RecordDeliveryAttempt(EncodedDeliveryAttempt, Reply<()>),
+    DeliveryAttempts(String, usize, Reply<Vec<RecordedDeliveryAttempt>>),
 }
 
 pub(crate) type Reply<T> = oneshot::Sender<Result<T, StorageError>>;
@@ -69,6 +74,17 @@ pub(crate) fn run<C, E, D, R>(
             Request::Command(request_id, reply) => {
                 respond(reply, recovery::command(&connection, &request_id));
             }
+            Request::PendingDeliveries(target, revision, ready_at, limit, reply) => respond(
+                reply,
+                delivery::read_pending(&connection, &target, revision, &ready_at, limit),
+            ),
+            Request::RecordDeliveryAttempt(attempt, reply) => {
+                respond(reply, delivery::record_attempt(&mut connection, &attempt));
+            }
+            Request::DeliveryAttempts(delivery_id, limit, reply) => respond(
+                reply,
+                delivery::read_attempts(&connection, &delivery_id, limit),
+            ),
         }
     }
 }
