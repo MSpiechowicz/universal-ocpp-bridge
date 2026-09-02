@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.12.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/d12bf51bfc773151f79a2282535981fad98212ae..v0.12.0) - 2026-09-02
+#### Features
+- (**protocol**) admit authenticated OCPP WebSockets - ([d12bf51](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/d12bf51bfc773151f79a2282535981fad98212ae)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.11.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/12c9be96edb5ef061ee59c9a21e3b3ebbcaf5d36..v0.11.0) - 2026-09-02
 #### Features
 - (**operations**) expose core readiness and resource metrics - ([12c9be9](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/12c9be96edb5ef061ee59c9a21e3b3ebbcaf5d36)) - Maciej Spiechowicz
