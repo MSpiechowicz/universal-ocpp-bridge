@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+mod metrics;
 mod policy;
 
+pub use metrics::RuntimeQueueSnapshot;
 pub use policy::{
     LaggingConsumer, LaggingConsumerAction, ReplaceableTelemetrySlot, TelemetryReplaceOutcome,
 };
@@ -151,6 +153,7 @@ pub struct RuntimeResourceSnapshot {
     pub queued_payload_bytes: usize,
     pub trace_ring_bytes: usize,
     pub dropped_diagnostics: u64,
+    pub queues: RuntimeQueueSnapshot,
 }
 
 #[derive(Debug)]
@@ -266,6 +269,20 @@ impl RuntimeResourceBudget {
             queued_payload_bytes: usage.queued_payload_bytes,
             trace_ring_bytes: usage.trace_ring_bytes,
             dropped_diagnostics: usage.dropped_diagnostics,
+            queues: RuntimeQueueSnapshot {
+                charger_requests: usage.items[WorkClass::ChargerRequest.index()],
+                database_work: usage.items[WorkClass::DatabaseWork.index()],
+                subscribers: usage.items[WorkClass::Subscriber.index()],
+                pending_requests: usage.items[WorkClass::PendingRequest.index()],
+                multipart_assemblies: usage.items[WorkClass::MultipartAssembly.index()],
+                target_ingress: usage.items[WorkClass::TargetIngress.index()],
+                target_egress: usage.items[WorkClass::TargetEgress.index()],
+                target_retries: usage.items[WorkClass::TargetRetry.index()],
+                critical_reports: usage.items[WorkClass::CriticalReport.index()],
+                diagnostics: usage.items[WorkClass::Diagnostic.index()],
+                exporter_batches: usage.items[WorkClass::ExporterBatch.index()],
+                capture_records: usage.items[WorkClass::CaptureTrace.index()],
+            },
         }
     }
 }
