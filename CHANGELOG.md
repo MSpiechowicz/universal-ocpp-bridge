@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.10.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/0d495b9fb93b4742fad8f11dc0e58c7406e9543c..v0.10.0) - 2026-09-02
+#### Features
+- (**management**) enforce scoped remote access - ([0d495b9](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/0d495b9fb93b4742fad8f11dc0e58c7406e9543c)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.9.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/7d55a2223c68a29c4d875de8b833cf279f1add40..v0.9.0) - 2026-09-02
 #### Features
 - (**protocol**) authenticate station transports - ([7d55a22](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/7d55a2223c68a29c4d875de8b833cf279f1add40)) - Maciej Spiechowicz
