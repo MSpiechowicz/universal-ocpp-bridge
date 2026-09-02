@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.13.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/417a1b9b82b8f68821abe9c4941b05e4215fa321..v0.13.0) - 2026-09-02
+#### Features
+- (**protocol**) correlate OCPP call lifecycles - ([417a1b9](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/417a1b9b82b8f68821abe9c4941b05e4215fa321)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.12.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/d12bf51bfc773151f79a2282535981fad98212ae..v0.12.0) - 2026-09-02
 #### Features
 - (**protocol**) admit authenticated OCPP WebSockets - ([d12bf51](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/d12bf51bfc773151f79a2282535981fad98212ae)) - Maciej Spiechowicz
