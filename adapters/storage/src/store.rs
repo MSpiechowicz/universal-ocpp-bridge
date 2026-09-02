@@ -197,6 +197,13 @@ where
         self.request(|reply| Request::Command(request_id.as_str().to_owned(), reply))
     }
 
+    fn command_result_by_request_id(
+        &self,
+        request_id: RequestId,
+    ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
+        self.request(|reply| Request::CommandResult(request_id.as_str().to_owned(), reply))
+    }
+
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
         self.request(|reply| Request::PruneCommands(now.into_inner().unix_timestamp(), reply))
     }

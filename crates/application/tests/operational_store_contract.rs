@@ -229,6 +229,23 @@ impl
         })
     }
 
+    fn command_result_by_request_id(
+        &self,
+        request_id: RequestId,
+    ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
+        Box::pin(async move {
+            Ok(self
+                .state
+                .lock()
+                .expect("memory state")
+                .command_results
+                .iter()
+                .rev()
+                .find(|result| result.return_route.request_id == request_id)
+                .cloned())
+        })
+    }
+
     fn prune_command_deduplication(&self, _now: UtcTimestamp) -> StorageFuture<'_, u64> {
         Box::pin(async { Ok(0) })
     }
@@ -290,6 +307,13 @@ impl
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<Command<TestCommandPayload>>> {
         self.0.command_by_request_id(request_id)
+    }
+
+    fn command_result_by_request_id(
+        &self,
+        request_id: RequestId,
+    ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
+        self.0.command_result_by_request_id(request_id)
     }
 
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {

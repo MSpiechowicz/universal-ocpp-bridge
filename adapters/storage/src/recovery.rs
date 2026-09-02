@@ -21,7 +21,7 @@ pub(crate) fn recover<C: DeserializeOwned, D: DeserializeOwned>(
     let authorization = read_authorization(connection)?;
     let active_commands = query_json_limit(
         connection,
-        "SELECT payload FROM commands ORDER BY request_id LIMIT ?1",
+        "SELECT payload FROM commands WHERE unresolved = 1 ORDER BY request_id LIMIT ?1",
         limit,
     )?
     .iter()
@@ -29,7 +29,9 @@ pub(crate) fn recover<C: DeserializeOwned, D: DeserializeOwned>(
     .collect::<Result<_, _>>()?;
     let command_results = query_json_limit(
         connection,
-        "SELECT payload FROM command_results ORDER BY request_id LIMIT ?1",
+        "SELECT command_results.payload FROM command_results\n\
+         JOIN commands USING(request_id) WHERE commands.unresolved = 1\n\
+         ORDER BY command_results.request_id LIMIT ?1",
         limit,
     )?
     .iter()
@@ -42,9 +44,26 @@ pub(crate) fn recover<C: DeserializeOwned, D: DeserializeOwned>(
         active_commands,
         command_results,
         pending_deliveries,
-        has_more: count(connection, "commands")? > limit
+        has_more: count_unresolved_commands(connection)? > limit
             || count(connection, "target_deliveries")? > limit,
     })
+}
+
+pub(crate) fn command_result(
+    connection: &Connection,
+    request_id: &str,
+) -> Result<Option<uob_contracts::CommandResult>, StorageError> {
+    let value = connection
+        .query_row(
+            "SELECT payload FROM command_results WHERE request_id = ?1",
+            [request_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(unavailable)?;
+    value
+        .map(|payload| codec::decode_result(&payload))
+        .transpose()
 }
 
 pub(crate) fn command<C: DeserializeOwned>(
@@ -149,6 +168,18 @@ fn count(connection: &Connection, table: &str) -> Result<usize, StorageError> {
     let sql = format!("SELECT COUNT(*) FROM {table}");
     let count: i64 = connection
         .query_row(&sql, [], |row| row.get(0))
+        .map_err(unavailable)?;
+    usize::try_from(count)
+        .map_err(|_| StorageError::new(StorageErrorCode::IntegrityFailure, "negative row count"))
+}
+
+fn count_unresolved_commands(connection: &Connection) -> Result<usize, StorageError> {
+    let count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM commands WHERE unresolved = 1",
+            [],
+            |row| row.get(0),
+        )
         .map_err(unavailable)?;
     usize::try_from(count)
         .map_err(|_| StorageError::new(StorageErrorCode::IntegrityFailure, "negative row count"))

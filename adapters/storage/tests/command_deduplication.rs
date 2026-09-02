@@ -199,6 +199,42 @@ fn seven_day_pruning_removes_only_resolved_command_identities() {
 }
 
 #[test]
+fn recovery_returns_only_unresolved_commands_and_latest_results() {
+    let database = TestDatabase::new();
+    let store = Store::open(database.path(), 8).expect("open SQLite store");
+    let resolved = command("request-resolved", "station-a", start(None), 0);
+    let uncertain = command("request-uncertain", "station-a", start(None), 0);
+    for command in [&resolved, &uncertain] {
+        block_on(store.write_atomic(command_write(command.clone()))).expect("admit command");
+    }
+    let resolved_result = result(&resolved, accepted(), 1);
+    let uncertain_result = result(
+        &uncertain,
+        CommandLifecycle::TransmissionUncertain {
+            detail: "connection closed after transmission".to_owned(),
+        },
+        1,
+    );
+    for result in [&resolved_result, &uncertain_result] {
+        let mut write = AtomicStoreWrite::empty();
+        write.command_result = Some(result.clone());
+        block_on(store.write_atomic(write)).expect("persist lifecycle result");
+    }
+
+    let recovery = block_on(store.recover(uob_application::RecoveryQuery {
+        limit: uob_application::PageLimit::new(10).expect("recovery limit"),
+    }))
+    .expect("recover unresolved commands");
+    assert_eq!(recovery.active_commands, vec![uncertain.clone()]);
+    assert_eq!(recovery.command_results, vec![uncertain_result]);
+    assert_eq!(
+        block_on(store.command_result_by_request_id(resolved.request_id.clone()))
+            .expect("read resolved result"),
+        Some(resolved_result)
+    );
+}
+
+#[test]
 fn legacy_command_rows_are_backfilled_before_retention_pruning() {
     let database = TestDatabase::new();
     let command = command("request-legacy", "station-a", start(None), 0);

@@ -1,6 +1,7 @@
 #![doc = "Target-neutral application coordination for Universal OCPP Bridge."]
 
 mod admission;
+mod command;
 mod database;
 mod diagnostic;
 mod payment;
@@ -14,6 +15,11 @@ mod target;
 
 pub use admission::{
     CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture, CommandAdmissionPort,
+};
+pub use command::{
+    CommandClock, CommandCoordinator, CommandDispatchOutcome, CommandRecoveryBatch,
+    RecoveredCommand, StationCommandContext, StationCommandError, StationCommandFuture,
+    StationCommandPort,
 };
 pub use database::{
     DatabaseAcknowledgementScope, DatabaseBatchReceiver, DatabaseConfiguration, DatabaseDiagnostic,
