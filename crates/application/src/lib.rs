@@ -61,10 +61,10 @@ pub use storage::{
     AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommandAdmissionOutcome,
     CommittedRecord, CommittedRecordCursor, CommittedRecordId, CommittedRecordQuery,
     DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, Durability, OperationalStore, Page,
-    PageLimit, PageLimitError, PendingDelivery, PendingDeliveryQuery, RecordedDeliveryAttempt,
-    RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventQuery, ScheduledDelivery,
-    SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
-    TargetDeliveryStore,
+    PageLimit, PageLimitError, PendingDelivery, PendingDeliveryQuery, RETAINED_EVENT_CURSOR_PREFIX,
+    RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventPage,
+    RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageError,
+    StorageErrorCode, StorageFuture, TargetDeliveryStore,
 };
 pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,

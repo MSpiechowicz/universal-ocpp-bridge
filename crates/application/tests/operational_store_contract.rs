@@ -12,8 +12,8 @@ use uob_application::{
     AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
     CommittedRecordId, CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page,
     PageLimit, PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor,
-    RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode,
-    StorageFuture,
+    RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError,
+    StorageErrorCode, StorageFuture,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandOperation, CommandRequest, Connectivity,
@@ -145,7 +145,7 @@ impl
     fn read_retained_events(
         &self,
         query: RetainedEventQuery,
-    ) -> StorageFuture<'_, Page<EventEnvelope<TestEventPayload>, RetainedEventCursor>> {
+    ) -> StorageFuture<'_, RetainedEventPage<TestEventPayload>> {
         Box::pin(async move {
             if query.after.is_some() {
                 return Err(StorageError::new(
@@ -161,9 +161,10 @@ impl
                 .take(usize::from(query.limit.get()))
                 .cloned()
                 .collect();
-            Ok(Page {
-                items,
-                next_cursor: None,
+            Ok(RetainedEventPage {
+                events: items,
+                resume_cursor: None,
+                has_more: false,
             })
         })
     }
@@ -284,7 +285,7 @@ impl
     fn read_retained_events(
         &self,
         query: RetainedEventQuery,
-    ) -> StorageFuture<'_, Page<EventEnvelope<TestEventPayload>, RetainedEventCursor>> {
+    ) -> StorageFuture<'_, RetainedEventPage<TestEventPayload>> {
         self.0.read_retained_events(query)
     }
 

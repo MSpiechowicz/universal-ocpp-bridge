@@ -11,15 +11,15 @@ use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionOutcome, CommandAdmissionPort,
     CommandClock, CommandCoordinator, CommandDispatchOutcome, CommittedRecord,
     CommittedRecordCursor, CommittedRecordQuery, OperationalStore, Page, PageLimit, RecoveryBatch,
-    RecoveryQuery, RetainedEventCursor, RetainedEventQuery, SnapshotCursor, SnapshotQuery,
+    RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery,
     StationCommandContext, StationCommandFuture, StationCommandPort, StorageFuture,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandError, CommandErrorCode,
     CommandLifecycle, CommandOperation, CommandRequest, CommandResult, Connectivity,
-    ContractVersion, EventEnvelope, EventId, EventType, ExternalCommand, ObservedCommandEffect,
-    Operation, PrincipalId, RequestId, ResourceCapabilities, ResourceRef, StationId,
-    StationSnapshot, SupportedOperation, UtcTimestamp,
+    ContractVersion, EventId, EventType, ExternalCommand, ObservedCommandEffect, Operation,
+    PrincipalId, RequestId, ResourceCapabilities, ResourceRef, StationId, StationSnapshot,
+    SupportedOperation, UtcTimestamp,
 };
 
 type Coordinator = CommandCoordinator<String, String, String, String>;
@@ -84,11 +84,12 @@ impl OperationalStore<String, String, String, String> for MemoryStore {
     fn read_retained_events(
         &self,
         _query: RetainedEventQuery,
-    ) -> StorageFuture<'_, Page<EventEnvelope<String>, RetainedEventCursor>> {
+    ) -> StorageFuture<'_, RetainedEventPage<String>> {
         Box::pin(async {
-            Ok(Page {
-                items: Vec::new(),
-                next_cursor: None,
+            Ok(RetainedEventPage {
+                events: Vec::new(),
+                resume_cursor: None,
+                has_more: false,
             })
         })
     }

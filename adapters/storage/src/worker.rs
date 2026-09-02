@@ -5,10 +5,10 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor, Page,
-    RecordedDeliveryAttempt, RecoveryBatch, RetainedEventCursor, ScheduledDelivery, SnapshotCursor,
-    StorageError, StorageErrorCode,
+    RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RetainedEventCursor,
+    RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError, StorageErrorCode,
 };
-use uob_contracts::{Command, EventEnvelope, StationSnapshot};
+use uob_contracts::{Command, StationSnapshot};
 
 use crate::{
     codec::{
@@ -27,12 +27,7 @@ pub(crate) enum Request<C, E, D, R> {
         usize,
         Reply<Page<StationSnapshot, SnapshotCursor>>,
     ),
-    Events(
-        String,
-        Option<i64>,
-        usize,
-        Reply<Page<EventEnvelope<E>, RetainedEventCursor>>,
-    ),
+    Events(String, Option<i64>, usize, Reply<RetainedEventPage<E>>),
     Records(
         Option<i64>,
         usize,
@@ -283,7 +278,22 @@ fn read_events<E: DeserializeOwned>(
     resource: &str,
     after: Option<i64>,
     limit: usize,
-) -> Result<Page<EventEnvelope<E>, RetainedEventCursor>, StorageError> {
+) -> Result<RetainedEventPage<E>, StorageError> {
+    if let Some(cursor) = after {
+        let retained = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM journal_events WHERE resource = ?1 AND row_id = ?2)",
+                params![resource, cursor],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(unavailable)?;
+        if !retained {
+            return Err(StorageError::new(
+                StorageErrorCode::CursorExpired,
+                "durable event cursor expired; fetch a fresh snapshot",
+            ));
+        }
+    }
     let mut statement = connection
         .prepare(
             "SELECT row_id, payload FROM journal_events WHERE resource = ?1 AND row_id > ?2\n\
@@ -299,19 +309,21 @@ fn read_events<E: DeserializeOwned>(
     let mut values = collect_rows(rows)?;
     let has_more = values.len() > limit;
     values.truncate(limit);
-    let next_cursor = has_more
-        .then(|| {
-            values
-                .last()
-                .map(|value| RetainedEventCursor::new(value.0.to_string()))
+    let resume_position = values.last().map_or(after, |value| Some(value.0));
+    let resume_cursor = resume_position
+        .map(|position| {
+            RetainedEventCursor::new(format!("{RETAINED_EVENT_CURSOR_PREFIX}{position}"))
         })
-        .flatten()
         .transpose()?;
-    let items = values
+    let events = values
         .into_iter()
         .map(|(_, payload)| codec::decode_event(&payload))
         .collect::<Result<_, _>>()?;
-    Ok(Page { items, next_cursor })
+    Ok(RetainedEventPage {
+        events,
+        resume_cursor,
+        has_more,
+    })
 }
 
 fn read_records<R: DeserializeOwned>(

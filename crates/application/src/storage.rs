@@ -66,13 +66,51 @@ storage_id!(
 );
 storage_id!(SnapshotCursor, "Opaque cursor for station snapshot pages.");
 storage_id!(
-    RetainedEventCursor,
-    "Opaque cursor for a retained durable event stream."
-);
-storage_id!(
     CommittedRecordCursor,
     "Opaque cursor for incrementally committed records."
 );
+
+/// Namespace required for durable business-event cursors.
+pub const RETAINED_EVENT_CURSOR_PREFIX: &str = "uob:event:";
+
+/// Opaque cursor for a retained durable business-event stream.
+///
+/// The namespace deliberately prevents telemetry or diagnostic sequence numbers from being
+/// accepted as durable event cursors. The remaining position is owned by the storage adapter and
+/// must not be interpreted by consumers.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RetainedEventCursor(String);
+
+impl RetainedEventCursor {
+    /// Creates a namespaced durable event cursor.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageError`] when the cursor is empty, belongs to another sequence namespace,
+    /// or has no opaque storage position.
+    pub fn new(value: impl Into<String>) -> Result<Self, StorageError> {
+        let value = value.into();
+        let Some(position) = value.strip_prefix(RETAINED_EVENT_CURSOR_PREFIX) else {
+            return Err(StorageError::new(
+                StorageErrorCode::InvalidRequest,
+                "durable event cursor has the wrong namespace",
+            ));
+        };
+        if position.trim().is_empty() {
+            return Err(StorageError::new(
+                StorageErrorCode::InvalidRequest,
+                "durable event cursor position cannot be empty",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    /// Returns the stable opaque representation.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 /// Validated non-zero bound for one storage read.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -319,6 +357,21 @@ pub struct Page<T, C> {
     pub items: Vec<T>,
     /// Cursor for the next page, or `None` when the current end was reached.
     pub next_cursor: Option<C>,
+}
+
+/// Bounded page from one retained, append-only durable event stream.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RetainedEventPage<E> {
+    /// Events after the requested cursor in stable commit order.
+    pub events: Vec<EventEnvelope<E>>,
+    /// Durable checkpoint after the last returned event.
+    ///
+    /// At the current live end this remains present so a consumer can persist it and resume when
+    /// more events are committed. An empty initial stream has no checkpoint; an empty resumed
+    /// read returns the validated input checkpoint unchanged.
+    pub resume_cursor: Option<RetainedEventCursor>,
+    /// Whether another retained page was already available when this read completed.
+    pub has_more: bool,
 }
 
 /// Bounded station snapshot query.
