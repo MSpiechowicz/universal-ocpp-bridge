@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.8.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/5a59ef6549d06265d810aaf70272898e931d6b51..v0.8.0) - 2026-09-02
+#### Features
+- (**storage**) reserve journal capacity for active sessions - ([5a59ef6](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/5a59ef6549d06265d810aaf70272898e931d6b51)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.7.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ef34843841c3d7e940f66c07bb8c00f643dcbae1..v0.7.0) - 2026-09-02
 #### Features
 - (**storage**) resume durable event streams by cursor - ([ef34843](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ef34843841c3d7e940f66c07bb8c00f643dcbae1)) - Maciej Spiechowicz
