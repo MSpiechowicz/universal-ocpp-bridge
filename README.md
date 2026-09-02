@@ -77,6 +77,11 @@ Critical target deliveries remain owned by their original target instance and co
 revision across restarts. See [target destination changes](docs/configuration/target-destination-changes.md)
 for offline previews, restart-required state, audited archive/discard handling, and dispatch guards.
 
+The selected adapter runs in a bounded host-owned session with guarded command ingress, isolated
+critical reporting, and deadline-enforced shutdown. See
+[target session supervision](docs/architecture/target-session-supervision.md) for lifecycle,
+recovery, and durable-delivery boundaries.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
