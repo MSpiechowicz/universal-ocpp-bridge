@@ -1,4 +1,6 @@
+mod action;
 mod cli;
+mod execution;
 mod fault;
 mod model;
 mod report;
@@ -6,11 +8,11 @@ mod runner;
 mod scheduling;
 mod state;
 
+pub use action::ActionKind;
 pub use cli::{CliResult, execute};
 pub use model::{
-    ActionKind, ConfiguredOcppVersion, EvseDefinition, FaultDefinition, FaultKind,
-    ScenarioDefinition, SimulatorConfiguration, StationDefinition, StepDefinition,
-    parse_configuration, parse_scenario,
+    ConfiguredOcppVersion, EvseDefinition, FaultDefinition, FaultKind, ScenarioDefinition,
+    SimulatorConfiguration, StationDefinition, StepDefinition, parse_configuration, parse_scenario,
 };
 pub use report::{DiagnosticCounts, FailureCategory, RunEvent, RunFailure, RunReport};
 pub use runner::{

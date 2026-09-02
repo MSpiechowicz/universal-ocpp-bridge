@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::{ConfiguredOcppVersion, StationDefinition};
 use crate::OcppVersion;
@@ -19,7 +19,9 @@ pub struct StationState {
     pub station_id: String,
     pub version: OcppVersion,
     pub connected: bool,
+    pub registered: bool,
     resources: HashMap<StationResource, ResourceState>,
+    authorized_tags: HashSet<String>,
 }
 
 impl StationState {
@@ -47,8 +49,26 @@ impl StationState {
             station_id: definition.id.clone(),
             version: definition.ocpp_version.into(),
             connected: false,
+            registered: false,
             resources,
+            authorized_tags: HashSet::new(),
         }
+    }
+
+    pub fn authorize(&mut self, id_tag: impl Into<String>) {
+        self.authorized_tags.insert(id_tag.into());
+    }
+
+    #[must_use]
+    pub fn is_authorized(&self, id_tag: &str) -> bool {
+        self.authorized_tags.contains(id_tag)
+    }
+
+    #[must_use]
+    pub fn resource_for_transaction(&self, transaction_id: &str) -> Option<StationResource> {
+        self.resources.iter().find_map(|(resource, state)| {
+            (state.transaction_id.as_deref() == Some(transaction_id)).then_some(*resource)
+        })
     }
 
     #[must_use]
