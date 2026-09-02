@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.7.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ef34843841c3d7e940f66c07bb8c00f643dcbae1..v0.7.0) - 2026-09-02
+#### Features
+- (**storage**) resume durable event streams by cursor - ([ef34843](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ef34843841c3d7e940f66c07bb8c00f643dcbae1)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.6.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ad82b2b10e1c4106c44f9c82b72da8add91f348c..v0.6.0) - 2026-09-02
 #### Features
 - (**application**) preserve uncertain command outcomes - ([ad82b2b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ad82b2b10e1c4106c44f9c82b72da8add91f348c)) - Maciej Spiechowicz
