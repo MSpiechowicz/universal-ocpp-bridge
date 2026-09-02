@@ -8,11 +8,12 @@ use std::{
 
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_application::{
-    AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionOutcome, CommandAdmissionPort,
-    CommandClock, CommandCoordinator, CommandDispatchOutcome, CommittedRecord,
-    CommittedRecordCursor, CommittedRecordQuery, OperationalStore, Page, PageLimit, RecoveryBatch,
-    RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery,
-    StationCommandContext, StationCommandFuture, StationCommandPort, StorageFuture,
+    AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionErrorCode, CommandAdmissionOutcome,
+    CommandAdmissionPort, CommandClock, CommandCoordinator, CommandDispatchOutcome,
+    CommittedRecord, CommittedRecordCursor, CommittedRecordQuery, OperationalStore, Page,
+    PageLimit, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor,
+    SnapshotQuery, StationCommandContext, StationCommandFuture, StationCommandPort,
+    StorageAdmissionState, StorageFuture, StorageRetentionStatus,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandError, CommandErrorCode,
@@ -28,6 +29,7 @@ type Coordinator = CommandCoordinator<String, String, String, String>;
 struct State {
     commands: BTreeMap<String, Command<String>>,
     results: BTreeMap<String, CommandResult>,
+    reject_new_starts: bool,
 }
 
 #[derive(Default)]
@@ -40,6 +42,14 @@ impl OperationalStore<String, String, String, String> for MemoryStore {
     ) -> StorageFuture<'_, AtomicWriteOutcome> {
         Box::pin(async move {
             let mut state = self.0.lock().expect("store state");
+            if state.reject_new_starts
+                && write.purpose == uob_application::StorageWritePurpose::NewSessionStart
+            {
+                return Err(uob_application::StorageError::new(
+                    uob_application::StorageErrorCode::CapacityExhausted,
+                    "critical operational storage capacity cannot be maintained",
+                ));
+            }
             let outcome = if let Some(command) = write.command {
                 if let Some(existing) = state.commands.get(command.request_id.as_str()) {
                     assert_eq!(existing, &command, "test does not submit ID conflicts");
@@ -176,6 +186,30 @@ impl OperationalStore<String, String, String, String> for MemoryStore {
     fn prune_command_deduplication(&self, _now: UtcTimestamp) -> StorageFuture<'_, u64> {
         Box::pin(async { Ok(0) })
     }
+
+    fn maintain_storage_retention(
+        &self,
+        _now: UtcTimestamp,
+    ) -> StorageFuture<'_, StorageRetentionStatus> {
+        self.storage_retention_status()
+    }
+
+    fn storage_retention_status(&self) -> StorageFuture<'_, StorageRetentionStatus> {
+        Box::pin(async {
+            Ok(StorageRetentionStatus {
+                budget_bytes: 1024,
+                active_session_reserve_bytes: 128,
+                used_bytes: 0,
+                new_session_admission: StorageAdmissionState::Available,
+                retained_critical_events: 0,
+                retained_required_deliveries: 0,
+                dropped_best_effort_telemetry: 0,
+                dropped_best_effort_deliveries: 0,
+                pruned_expired_events: 0,
+                pruned_expired_delivery_attempts: 0,
+            })
+        })
+    }
 }
 
 struct FixedClock(UtcTimestamp);
@@ -263,6 +297,27 @@ fn offline_command_is_rejected_without_persistence_or_later_dispatch() {
             .expect("context")
             .connectivity = connected();
         assert_eq!(*stations.dispatches.lock().expect("dispatch count"), 0);
+    });
+}
+
+#[test]
+fn storage_pressure_rejects_every_start_ingress_before_dispatch() {
+    block_on(async {
+        let store = Arc::new(MemoryStore::default());
+        store.0.lock().expect("store state").reject_new_starts = true;
+        let stations = Arc::new(Stations::new(connected(), accepted_outcome()));
+        let command_coordinator = coordinator(Arc::clone(&store), Arc::clone(&stations));
+
+        let error = command_coordinator
+            .submit(external())
+            .await
+            .expect_err("storage pressure rejects start");
+        assert_eq!(
+            error.code(),
+            CommandAdmissionErrorCode::StorageCapacityExhausted
+        );
+        assert_eq!(*stations.dispatches.lock().expect("dispatch count"), 0);
+        assert!(store.0.lock().expect("store state").commands.is_empty());
     });
 }
 

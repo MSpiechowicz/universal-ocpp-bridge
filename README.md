@@ -101,6 +101,11 @@ Critical business-event consumers resume from resource-scoped durable checkpoint
 the current live end. See [durable event cursors](docs/architecture/durable-event-cursors.md) for
 restart behavior, expired-cursor snapshot recovery, and separation from telemetry and traces.
 
+Operational history uses a bounded seven-day journal/outbox policy with capacity protected for
+active-session completion. See
+[storage retention and start admission](docs/architecture/storage-retention-admission.md) for
+pressure ordering, safe pending-delivery retention, shared start refusal, and recovery counters.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

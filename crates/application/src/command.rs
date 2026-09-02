@@ -9,7 +9,7 @@ use uob_contracts::{
 use crate::{
     AtomicStoreWrite, CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture,
     CommandAdmissionOutcome, CommandAdmissionPort, OperationalStore, PageLimit, RecoveryQuery,
-    StorageError,
+    StorageError, StorageWritePurpose,
 };
 
 /// Future returned by the station command boundary.
@@ -242,6 +242,13 @@ where
         }
         let admitted = command_result(&command, CommandLifecycle::Admitted, now);
         let mut write = AtomicStoreWrite::empty();
+        write.purpose = match command.operation {
+            uob_contracts::CommandOperation::Start { .. } => StorageWritePurpose::NewSessionStart,
+            uob_contracts::CommandOperation::Stop { .. } => {
+                StorageWritePurpose::ActiveSessionCompletion
+            }
+            _ => StorageWritePurpose::Routine,
+        };
         write.command = Some(command.clone());
         write.command_result = Some(admitted.clone());
         let outcome = self
@@ -290,6 +297,7 @@ where
 
     async fn persist_result(&self, result: CommandResult) -> Result<(), CommandAdmissionError> {
         let mut write: AtomicStoreWrite<P, E, D, R> = AtomicStoreWrite::empty();
+        write.purpose = StorageWritePurpose::ActiveSessionCompletion;
         write.command_result = Some(result);
         self.store
             .write_atomic(write)
@@ -379,8 +387,9 @@ fn map_storage_error(error: &StorageError) -> CommandAdmissionError {
         crate::StorageErrorCode::Conflict | crate::StorageErrorCode::InvalidRequest => {
             CommandAdmissionErrorCode::InvalidRequest
         }
-        crate::StorageErrorCode::Busy | crate::StorageErrorCode::CapacityExhausted => {
-            CommandAdmissionErrorCode::Busy
+        crate::StorageErrorCode::Busy => CommandAdmissionErrorCode::Busy,
+        crate::StorageErrorCode::CapacityExhausted => {
+            CommandAdmissionErrorCode::StorageCapacityExhausted
         }
         _ => CommandAdmissionErrorCode::Unavailable,
     };

@@ -13,12 +13,12 @@ use uob_application::{
     PendingDeliveryQuery, RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch,
     RecoveryQuery, RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery,
     SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
-    TargetDeliveryStore,
+    StorageRetentionStatus, TargetDeliveryStore,
 };
 use uob_contracts::{Command, RequestId, StationSnapshot, UtcTimestamp};
 
 use crate::{
-    SqliteRuntimeConfiguration, codec,
+    SqliteRetentionPolicy, SqliteRuntimeConfiguration, codec,
     configuration::{configure, unavailable},
     worker::{self, Reply, Request},
 };
@@ -32,6 +32,7 @@ type StoreTypes<C, E, D, R> = fn() -> (C, E, D, R);
 pub struct SqliteOperationalStore<C, E, D, R> {
     sender: SyncSender<Request<C, E, D, R>>,
     configuration: SqliteRuntimeConfiguration,
+    retention_policy: SqliteRetentionPolicy,
     marker: PhantomData<StoreTypes<C, E, D, R>>,
 }
 
@@ -40,6 +41,7 @@ impl<C, E, D, R> Clone for SqliteOperationalStore<C, E, D, R> {
         Self {
             sender: self.sender.clone(),
             configuration: self.configuration.clone(),
+            retention_policy: self.retention_policy,
             marker: PhantomData,
         }
     }
@@ -60,7 +62,22 @@ where
     /// opened, required PRAGMAs do not take effect, or the bundled `SQLite` is too old.
     pub fn open(path: impl AsRef<Path>, queue_capacity: usize) -> Result<Self, StorageError> {
         let connection = Connection::open(path).map_err(unavailable)?;
-        Self::from_connection(connection, queue_capacity)
+        Self::from_connection(connection, queue_capacity, SqliteRetentionPolicy::default())
+    }
+
+    /// Opens a store with explicit logical journal/outbox and completion-reserve limits.
+    ///
+    /// # Errors
+    ///
+    /// Returns a sanitized storage error for invalid limits or when the database cannot be
+    /// opened, configured, migrated, or assigned a worker thread.
+    pub fn open_with_retention_policy(
+        path: impl AsRef<Path>,
+        queue_capacity: usize,
+        retention_policy: SqliteRetentionPolicy,
+    ) -> Result<Self, StorageError> {
+        let connection = Connection::open(path).map_err(unavailable)?;
+        Self::from_connection(connection, queue_capacity, retention_policy)
     }
 
     /// Returns settings verified before the storage worker accepted any operation.
@@ -72,6 +89,7 @@ where
     fn from_connection(
         connection: Connection,
         queue_capacity: usize,
+        retention_policy: SqliteRetentionPolicy,
     ) -> Result<Self, StorageError> {
         if queue_capacity == 0 {
             return Err(StorageError::new(
@@ -79,11 +97,15 @@ where
                 "storage worker queue capacity must be greater than zero",
             ));
         }
+        let retention_policy = SqliteRetentionPolicy::new(
+            retention_policy.budget_bytes,
+            retention_policy.active_session_reserve_bytes,
+        )?;
         let configuration = configure(&connection)?;
         let (sender, receiver) = mpsc::sync_channel(queue_capacity);
         std::thread::Builder::new()
             .name("uob-sqlite-operational-store".to_owned())
-            .spawn(move || worker::run(connection, receiver))
+            .spawn(move || worker::run(connection, receiver, retention_policy))
             .map_err(|_| {
                 StorageError::new(
                     StorageErrorCode::Unavailable,
@@ -93,6 +115,7 @@ where
         Ok(Self {
             sender,
             configuration,
+            retention_policy,
             marker: PhantomData,
         })
     }
@@ -207,6 +230,17 @@ where
 
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
         self.request(|reply| Request::PruneCommands(now.into_inner().unix_timestamp(), reply))
+    }
+
+    fn maintain_storage_retention(
+        &self,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, StorageRetentionStatus> {
+        self.request(|reply| Request::MaintainRetention(now.into_inner().unix_timestamp(), reply))
+    }
+
+    fn storage_retention_status(&self) -> StorageFuture<'_, StorageRetentionStatus> {
+        self.request(Request::RetentionStatus)
     }
 }
 

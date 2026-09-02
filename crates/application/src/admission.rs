@@ -19,6 +19,8 @@ pub enum CommandAdmissionErrorCode {
     PolicyRejected,
     /// The bounded admission queue cannot currently accept work.
     Busy,
+    /// Authoritative storage cannot safely admit another charging session.
+    StorageCapacityExhausted,
     /// Authoritative state is temporarily unavailable.
     Unavailable,
     /// The request is malformed or conflicts with an existing request identity.

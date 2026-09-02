@@ -248,6 +248,9 @@ pub fn target_port_error_from_admission(error: &CommandAdmissionError) -> Target
         uob_application::CommandAdmissionErrorCode::Expired => TargetPortErrorCode::Expired,
         uob_application::CommandAdmissionErrorCode::Unsupported => TargetPortErrorCode::Unsupported,
         uob_application::CommandAdmissionErrorCode::Busy => TargetPortErrorCode::Busy,
+        uob_application::CommandAdmissionErrorCode::StorageCapacityExhausted => {
+            TargetPortErrorCode::Busy
+        }
         uob_application::CommandAdmissionErrorCode::Unavailable => TargetPortErrorCode::Unavailable,
         uob_application::CommandAdmissionErrorCode::PolicyRejected
         | uob_application::CommandAdmissionErrorCode::InvalidRequest => {

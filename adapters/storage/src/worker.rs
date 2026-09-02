@@ -7,9 +7,11 @@ use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor, Page,
     RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RetainedEventCursor,
     RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError, StorageErrorCode,
+    StorageRetentionStatus,
 };
 use uob_contracts::{Command, StationSnapshot};
 
+use crate::retention::SqliteRetentionPolicy;
 use crate::{
     codec::{
         self, EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent,
@@ -17,7 +19,7 @@ use crate::{
     },
     command,
     configuration::unavailable,
-    delivery, recovery,
+    delivery, recovery, retention,
 };
 
 pub(crate) enum Request<C, E, D, R> {
@@ -38,6 +40,8 @@ pub(crate) enum Request<C, E, D, R> {
     Command(String, Reply<Option<Command<C>>>),
     CommandResult(String, Reply<Option<uob_contracts::CommandResult>>),
     PruneCommands(i64, Reply<u64>),
+    MaintainRetention(i64, Reply<StorageRetentionStatus>),
+    RetentionStatus(Reply<StorageRetentionStatus>),
     PendingDeliveries(String, i64, String, usize, Reply<Vec<ScheduledDelivery<D>>>),
     RecordDeliveryAttempt(EncodedDeliveryAttempt, Reply<()>),
     DeliveryAttempts(String, usize, Reply<Vec<RecordedDeliveryAttempt>>),
@@ -48,6 +52,7 @@ pub(crate) type Reply<T> = oneshot::Sender<Result<T, StorageError>>;
 pub(crate) fn run<C, E, D, R>(
     mut connection: Connection,
     requests: mpsc::Receiver<Request<C, E, D, R>>,
+    retention_policy: SqliteRetentionPolicy,
 ) where
     C: DeserializeOwned + Serialize,
     E: DeserializeOwned,
@@ -56,7 +61,10 @@ pub(crate) fn run<C, E, D, R>(
 {
     for request in requests {
         match request {
-            Request::Write(write, reply) => respond(reply, write_atomic(&mut connection, write)),
+            Request::Write(write, reply) => respond(
+                reply,
+                write_atomic(&mut connection, retention_policy, write),
+            ),
             Request::Snapshots(after, limit, reply) => {
                 respond(reply, read_snapshots(&connection, after, limit));
             }
@@ -77,6 +85,13 @@ pub(crate) fn run<C, E, D, R>(
             }
             Request::PruneCommands(now, reply) => {
                 respond(reply, command::prune::<C>(&mut connection, now));
+            }
+            Request::MaintainRetention(now, reply) => respond(
+                reply,
+                retention::maintain(&mut connection, retention_policy, now),
+            ),
+            Request::RetentionStatus(reply) => {
+                respond(reply, retention::status(&connection, retention_policy));
             }
             Request::PendingDeliveries(target, revision, ready_at, limit, reply) => respond(
                 reply,
@@ -99,7 +114,8 @@ fn respond<T>(reply: Reply<T>, result: Result<T, StorageError>) {
 
 fn write_atomic(
     connection: &mut Connection,
-    write: EncodedWrite,
+    retention_policy: SqliteRetentionPolicy,
+    mut write: EncodedWrite,
 ) -> Result<AtomicWriteOutcome, StorageError> {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -111,6 +127,7 @@ fn write_atomic(
     ) {
         return Ok(AtomicWriteOutcome { command });
     }
+    retention::prepare_write(&transaction, retention_policy, &mut write)?;
     if let Some((station, payload)) = write.snapshot {
         transaction
             .execute(
@@ -184,13 +201,14 @@ fn write_authorization(
 fn write_event(transaction: &Transaction<'_>, value: &EncodedEvent) -> Result<(), StorageError> {
     transaction
         .execute(
-            "INSERT INTO journal_events(event_id, resource, sequence, payload)\n\
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO journal_events(event_id, resource, sequence, payload, retain_until)\n\
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 value.event_id,
                 value.resource,
                 value.sequence,
-                value.payload
+                value.payload,
+                value.retain_until
             ],
         )
         .map(|_| ())
@@ -225,13 +243,15 @@ fn write_delivery(
 fn write_record(transaction: &Transaction<'_>, value: &EncodedRecord) -> Result<(), StorageError> {
     transaction
         .execute(
-            "INSERT INTO committed_records(record_id, durability, committed_at, payload)\n\
-             VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO committed_records(\n\
+                 record_id, durability, committed_at, payload, retain_until\n\
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![
                 value.record_id,
                 value.durability,
                 value.committed_at,
-                value.payload
+                value.payload,
+                value.retain_until
             ],
         )
         .map(|_| ())
