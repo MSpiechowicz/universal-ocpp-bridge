@@ -10,8 +10,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::{sleep, timeout};
 use tokio_tungstenite::tungstenite::Message;
 use uob_sim::{
-    OcppVersion, ProtocolClient, SimulatorClientConfig, SimulatorClientError,
-    SimulatorProtocolClient, TraceKind,
+    OcppVersion, ProtocolClient, RemoteCommandKind, SimulatorAction, SimulatorCall,
+    SimulatorClientConfig, SimulatorClientError, SimulatorProtocolClient, TraceKind,
 };
 
 const TEST_BOUND: Duration = Duration::from_secs(4);
@@ -24,6 +24,7 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         reconnect: false,
         command_capacity: 2,
         trace_capacity: 16,
+        connectors: vec![1],
     }
 }
 
@@ -135,6 +136,175 @@ async fn wait_for_trace(client: &SimulatorProtocolClient, expected: TraceKind) {
     })
     .await
     .unwrap();
+}
+
+fn fixture(source: &str, action: SimulatorAction) -> SimulatorCall {
+    let frame: Value = serde_json::from_str(source).unwrap();
+    assert_eq!(frame[2], action.name());
+    SimulatorCall {
+        action,
+        payload: frame[3].clone(),
+    }
+}
+
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
+async fn ocpp_1_6_charging_calls_preserve_fixtures_and_remote_acceptance() {
+    let calls = [
+        fixture(
+            include_str!("fixtures/ocpp16/boot.json"),
+            SimulatorAction::BootNotification,
+        ),
+        fixture(
+            include_str!("fixtures/ocpp16/authorize.json"),
+            SimulatorAction::Authorize,
+        ),
+        fixture(
+            include_str!("fixtures/ocpp16/status.json"),
+            SimulatorAction::StatusNotification,
+        ),
+        fixture(
+            include_str!("fixtures/ocpp16/start.json"),
+            SimulatorAction::StartTransaction,
+        ),
+        fixture(
+            include_str!("fixtures/ocpp16/meter.json"),
+            SimulatorAction::MeterValues,
+        ),
+        fixture(
+            include_str!("fixtures/ocpp16/stop.json"),
+            SimulatorAction::StopTransaction,
+        ),
+    ];
+    let expected = calls.clone();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = accept(tcp, "ocpp1.6").await;
+        for expected_call in expected.iter().take(5) {
+            let observed = receive_json(&mut socket).await;
+            assert_eq!(observed[2], expected_call.action.name());
+            assert_eq!(observed[3], expected_call.payload);
+            let response = match expected_call.action {
+                SimulatorAction::BootNotification => json!({
+                    "currentTime": "2026-09-01T00:00:00Z",
+                    "interval": 60,
+                    "status": "Accepted"
+                }),
+                SimulatorAction::Authorize => {
+                    json!({"idTagInfo": {"status": "Accepted"}})
+                }
+                SimulatorAction::StartTransaction => json!({
+                    "idTagInfo": {"status": "Accepted"},
+                    "transactionId": 42
+                }),
+                SimulatorAction::StatusNotification | SimulatorAction::MeterValues => json!({}),
+                SimulatorAction::StopTransaction => unreachable!(),
+            };
+            socket
+                .send(Message::text(json!([3, observed[1], response]).to_string()))
+                .await
+                .unwrap();
+        }
+
+        socket
+            .send(Message::text(
+                json!([2, "remote-stop", "RemoteStopTransaction", {"transactionId": 42}])
+                    .to_string(),
+            ))
+            .await
+            .unwrap();
+        let stopped = receive_json(&mut socket).await;
+        assert_eq!(stopped[2]["status"], "Accepted");
+
+        let expected_stop = &expected[5];
+        let observed = receive_json(&mut socket).await;
+        assert_eq!(observed[2], expected_stop.action.name());
+        assert_eq!(observed[3], expected_stop.payload);
+        socket
+            .send(Message::text(json!([3, observed[1], {}]).to_string()))
+            .await
+            .unwrap();
+
+        socket
+            .send(Message::text(
+                json!([2, "remote-bad", "RemoteStartTransaction", {
+                    "connectorId": 99,
+                    "idTag": "LOCAL-USER-1"
+                }])
+                .to_string(),
+            ))
+            .await
+            .unwrap();
+        let rejected = receive_json(&mut socket).await;
+        assert_eq!(rejected[2]["status"], "Rejected");
+
+        socket
+            .send(Message::text(
+                json!([2, "remote-start", "RemoteStartTransaction", {
+                    "connectorId": 1,
+                    "idTag": "LOCAL-USER-1"
+                }])
+                .to_string(),
+            ))
+            .await
+            .unwrap();
+        let accepted = receive_json(&mut socket).await;
+        assert_eq!(accepted[2]["status"], "Accepted");
+
+        socket
+            .send(Message::text(
+                json!([2, "remote-stale", "RemoteStopTransaction", {"transactionId": 42}])
+                    .to_string(),
+            ))
+            .await
+            .unwrap();
+        let stale = receive_json(&mut socket).await;
+        assert_eq!(stale[2]["status"], "Rejected");
+    });
+    let mut client_config = config(format!("ws://{address}"), OcppVersion::V1_6);
+    client_config.command_capacity = 8;
+    let client = SimulatorProtocolClient::connect(client_config)
+        .await
+        .unwrap();
+
+    for call in calls.iter().take(5).cloned() {
+        timeout(TEST_BOUND, client.call(call))
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    let stopped = timeout(TEST_BOUND, client.next_remote_command())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stopped.kind, RemoteCommandKind::StopTransaction);
+    assert!(stopped.accepted);
+    timeout(TEST_BOUND, client.call(calls[5].clone()))
+        .await
+        .unwrap()
+        .unwrap();
+    let rejected = timeout(TEST_BOUND, client.next_remote_command())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(rejected.kind, RemoteCommandKind::StartTransaction);
+    assert!(!rejected.accepted);
+    let started = timeout(TEST_BOUND, client.next_remote_command())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(started.kind, RemoteCommandKind::StartTransaction);
+    assert!(started.accepted);
+    let stale = timeout(TEST_BOUND, client.next_remote_command())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stale.kind, RemoteCommandKind::StopTransaction);
+    assert!(!stale.accepted);
+    timeout(TEST_BOUND, server).await.unwrap().unwrap();
+    client.shutdown().await.unwrap();
 }
 
 #[tokio::test]

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use super::{FailureCategory, RunFailure, SCHEMA_VERSION};
+use super::{ActionKind, FailureCategory, RunFailure, SCHEMA_VERSION};
 use crate::{OcppVersion, SimulatorClientConfig};
 
 #[derive(Clone, Debug, Deserialize)]
@@ -72,6 +72,7 @@ impl StationDefinition {
             reconnect: self.reconnect,
             command_capacity: self.command_capacity,
             trace_capacity: self.trace_capacity,
+            connectors: self.connector_ids(),
         }
     }
 
@@ -125,6 +126,9 @@ pub struct StepDefinition {
     pub expect_message: Option<String>,
     pub expect_event: Option<String>,
     pub expect_detail: Option<String>,
+    pub payload: Option<serde_json::Value>,
+    pub expect_response: Option<serde_json::Value>,
+    pub fixture_id: Option<String>,
 }
 
 impl StepDefinition {
@@ -172,37 +176,6 @@ impl FaultKind {
             Self::ResponseDelay => "response_delay",
             Self::MissingResponse => "missing_response",
             Self::OutOfOrderResponse => "out_of_order_response",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActionKind {
-    Connect,
-    Heartbeat,
-    Wait,
-    Disconnect,
-}
-
-impl ActionKind {
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Connect => "connect",
-            Self::Heartbeat => "heartbeat",
-            Self::Wait => "wait",
-            Self::Disconnect => "disconnect",
-        }
-    }
-
-    #[must_use]
-    pub const fn event(self) -> &'static str {
-        match self {
-            Self::Connect => "connected",
-            Self::Heartbeat => "heartbeat_result",
-            Self::Wait => "delay_elapsed",
-            Self::Disconnect => "disconnected",
         }
     }
 }
@@ -328,6 +301,45 @@ fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             "only wait actions require duration_ms",
         ));
     }
+    let is_charging_call = matches!(
+        step.action,
+        ActionKind::Boot
+            | ActionKind::Authorize
+            | ActionKind::Status
+            | ActionKind::StartTransaction
+            | ActionKind::MeterValues
+            | ActionKind::StopTransaction
+    );
+    if is_charging_call != step.payload.is_some() {
+        return Err(setup_failure(
+            "invalid_action_payload",
+            "charging calls require payload and other actions do not accept it",
+        ));
+    }
+    if is_charging_call != step.fixture_id.is_some() {
+        return Err(setup_failure(
+            "missing_wire_fixture",
+            "charging calls require an independently authored fixture_id",
+        ));
+    }
+    if step.expect_response.is_some()
+        && !matches!(
+            step.action,
+            ActionKind::Boot
+                | ActionKind::Authorize
+                | ActionKind::Status
+                | ActionKind::StartTransaction
+                | ActionKind::MeterValues
+                | ActionKind::StopTransaction
+                | ActionKind::AwaitRemoteStart
+                | ActionKind::AwaitRemoteStop
+        )
+    {
+        return Err(setup_failure(
+            "invalid_expected_response",
+            "only protocol actions accept expect_response",
+        ));
+    }
     if let Some(event) = &step.expect_event
         && event != step.action.event()
     {
@@ -337,11 +349,11 @@ fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
         ));
     }
     if let Some(message) = &step.expect_message
-        && (!matches!(step.action, ActionKind::Heartbeat) || message != "Heartbeat")
+        && step.action.message_name() != Some(message.as_str())
     {
         return Err(setup_failure(
             "unsupported_expected_message",
-            "only the Heartbeat wire message is supported by this scenario version",
+            "expected message does not match the selected action",
         ));
     }
     if let Some(fault) = &step.fault {

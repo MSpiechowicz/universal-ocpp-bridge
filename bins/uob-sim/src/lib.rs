@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::future::Future;
@@ -7,24 +7,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ocpp_client::ocpp_types::v16::common::ResetResponseStatus;
-use ocpp_client::ocpp_types::v16::{
-    HeartbeatRequest as HeartbeatRequest16, ResetResponse as ResetResponse16,
-};
-use ocpp_client::ocpp_types::v201::common::ResetStatusEnum;
-use ocpp_client::ocpp_types::v201::{
-    HeartbeatRequest as HeartbeatRequest201, ResetResponse as ResetResponse201,
-};
 use ocpp_client::{
     ConnectOptions, KeepaliveBehavior, ReconnectBehavior, ReconnectPolicy, connect_1_6,
     connect_2_0_1,
 };
 use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinSet;
 
+mod client_runtime;
 pub mod scenario;
 
-pub const PINNED_OCPP_CLIENT_VERSION: &str = "0.4.0";
+pub const PINNED_OCPP_CLIENT_VERSION: &str = "0.5.0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OcppVersion {
@@ -48,6 +40,10 @@ pub enum TraceKind {
     HeartbeatSent,
     HeartbeatResult,
     ResetReceived,
+    RemoteStartReceived,
+    RemoteStopReceived,
+    ChargingCallSent,
+    ChargingCallResult,
     Reconnected,
     Failed,
     Stopped,
@@ -90,6 +86,51 @@ pub struct SimulatorClientConfig {
     pub reconnect: bool,
     pub command_capacity: usize,
     pub trace_capacity: usize,
+    pub connectors: Vec<u16>,
+}
+
+/// A simulator-owned OCPP call that retains exact native JSON field values.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SimulatorCall {
+    pub action: SimulatorAction,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SimulatorAction {
+    BootNotification,
+    Authorize,
+    StatusNotification,
+    StartTransaction,
+    MeterValues,
+    StopTransaction,
+}
+
+impl SimulatorAction {
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::BootNotification => "BootNotification",
+            Self::Authorize => "Authorize",
+            Self::StatusNotification => "StatusNotification",
+            Self::StartTransaction => "StartTransaction",
+            Self::MeterValues => "MeterValues",
+            Self::StopTransaction => "StopTransaction",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RemoteCommandKind {
+    StartTransaction,
+    StopTransaction,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RemoteCommand {
+    pub kind: RemoteCommandKind,
+    pub payload: serde_json::Value,
+    pub accepted: bool,
 }
 
 pub type ClientFuture<'a, T> =
@@ -98,6 +139,20 @@ pub type ClientFuture<'a, T> =
 pub trait ProtocolClient: Send + Sync {
     fn version(&self) -> OcppVersion;
     fn heartbeat(&self) -> ClientFuture<'_, String>;
+    fn call(&self, _call: SimulatorCall) -> ClientFuture<'_, serde_json::Value> {
+        Box::pin(async {
+            Err(SimulatorClientError::Protocol(
+                "charging calls are unsupported by this client".to_owned(),
+            ))
+        })
+    }
+    fn next_remote_command(&self) -> ClientFuture<'_, RemoteCommand> {
+        Box::pin(async {
+            Err(SimulatorClientError::Protocol(
+                "remote commands are unsupported by this client".to_owned(),
+            ))
+        })
+    }
     fn shutdown(&self) -> ClientFuture<'_, ()>;
     fn force_shutdown(&self) -> ClientFuture<'_, ()>;
     fn abort(&self);
@@ -125,6 +180,11 @@ pub struct SimulatorProtocolClient {
 
 enum Command {
     Heartbeat(oneshot::Sender<Result<String, SimulatorClientError>>),
+    Call(
+        SimulatorCall,
+        oneshot::Sender<Result<serde_json::Value, SimulatorClientError>>,
+    ),
+    NextRemote(oneshot::Sender<Result<RemoteCommand, SimulatorClientError>>),
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
 }
 
@@ -154,6 +214,11 @@ struct TraceBuffer {
     capacity: usize,
     events: Arc<Mutex<VecDeque<TraceEvent>>>,
     dropped: Arc<AtomicU64>,
+}
+
+#[derive(Default)]
+struct Ocpp16State {
+    active_transactions: HashMap<i64, u16>,
 }
 
 impl TraceBuffer {
@@ -196,8 +261,7 @@ impl SimulatorProtocolClient {
     ///
     /// # Errors
     ///
-    /// Returns an error when either capacity is zero or the initial WebSocket connection and
-    /// OCPP subprotocol negotiation fails.
+    /// Returns an error when capacities are zero or WebSocket/OCPP negotiation fails.
     pub async fn connect(config: SimulatorClientConfig) -> Result<Self, SimulatorClientError> {
         if config.command_capacity == 0 {
             return Err(SimulatorClientError::InvalidCapacity("command_capacity"));
@@ -218,22 +282,33 @@ impl SimulatorProtocolClient {
             ..ConnectOptions::default()
         };
         let (commands, receiver) = mpsc::channel(config.command_capacity);
+        let (remote_commands, remote_receiver) = mpsc::channel(config.command_capacity);
         let rejected_commands = Arc::new(AtomicU64::new(0));
+        let state = Arc::new(Mutex::new(Ocpp16State::default()));
 
         let (worker, emergency_client) = match config.version {
             OcppVersion::V1_6 => {
                 let client = connect_1_6(&config.endpoint, Some(options))
                     .await
                     .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
-                register_1_6_handlers(&client, &traces).await;
-                register_1_6_reconnect(&client, &traces).await;
+                client_runtime::register_1_6_handlers(
+                    &client,
+                    &traces,
+                    remote_commands,
+                    config.connectors.clone(),
+                    Arc::clone(&state),
+                )
+                .await;
+                client_runtime::register_1_6_reconnect(&client, &traces).await;
                 traces.push(TraceKind::Connected, OcppVersion::V1_6.websocket_protocol());
                 let emergency_client = EmergencyClient::V1_6(client.clone());
-                let worker = tokio::spawn(run_1_6(
+                let worker = tokio::spawn(client_runtime::run_1_6(
                     client,
                     receiver,
                     traces.clone(),
                     config.command_capacity,
+                    remote_receiver,
+                    state,
                 ))
                 .abort_handle();
                 (worker, emergency_client)
@@ -242,14 +317,14 @@ impl SimulatorProtocolClient {
                 let client = connect_2_0_1(&config.endpoint, Some(options))
                     .await
                     .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
-                register_2_0_1_handlers(&client, &traces).await;
-                register_2_0_1_reconnect(&client, &traces).await;
+                client_runtime::register_2_0_1_handlers(&client, &traces).await;
+                client_runtime::register_2_0_1_reconnect(&client, &traces).await;
                 traces.push(
                     TraceKind::Connected,
                     OcppVersion::V2_0_1.websocket_protocol(),
                 );
                 let emergency_client = EmergencyClient::V2_0_1(client.clone());
-                let worker = tokio::spawn(run_2_0_1(
+                let worker = tokio::spawn(client_runtime::run_2_0_1(
                     client,
                     receiver,
                     traces.clone(),
@@ -295,6 +370,17 @@ impl ProtocolClient for SimulatorProtocolClient {
         Box::pin(async move { self.send_command(Command::Heartbeat).await })
     }
 
+    fn call(&self, call: SimulatorCall) -> ClientFuture<'_, serde_json::Value> {
+        Box::pin(async move {
+            self.send_command(|result| Command::Call(call, result))
+                .await
+        })
+    }
+
+    fn next_remote_command(&self) -> ClientFuture<'_, RemoteCommand> {
+        Box::pin(async move { self.send_command(Command::NextRemote).await })
+    }
+
     fn shutdown(&self) -> ClientFuture<'_, ()> {
         Box::pin(async move { self.send_command(Command::Shutdown).await })
     }
@@ -318,162 +404,5 @@ impl ProtocolClient for SimulatorProtocolClient {
             rejected_commands: self.rejected_commands.load(Ordering::Relaxed),
             dropped_traces: self.traces.dropped(),
         }
-    }
-}
-
-async fn register_1_6_handlers(
-    client: &ocpp_client::ocpp_1_6::OCPP1_6Client,
-    traces: &TraceBuffer,
-) {
-    let traces = traces.clone();
-    client
-        .on_reset(move |_request, _client| {
-            traces.push(TraceKind::ResetReceived, "accepted");
-            async move {
-                Ok(ResetResponse16 {
-                    status: ResetResponseStatus::Accepted,
-                })
-            }
-        })
-        .await;
-}
-
-async fn register_2_0_1_handlers(
-    client: &ocpp_client::ocpp_2_0_1::OCPP2_0_1Client,
-    traces: &TraceBuffer,
-) {
-    let traces = traces.clone();
-    client
-        .on_reset(move |_request, _client| {
-            traces.push(TraceKind::ResetReceived, "accepted");
-            async move {
-                Ok(ResetResponse201 {
-                    custom_data: None,
-                    status: ResetStatusEnum::Accepted,
-                    status_info: None,
-                })
-            }
-        })
-        .await;
-}
-
-async fn register_1_6_reconnect(
-    client: &ocpp_client::ocpp_1_6::OCPP1_6Client,
-    traces: &TraceBuffer,
-) {
-    let traces = traces.clone();
-    client
-        .on_reconnect(move |_| {
-            traces.push(TraceKind::Reconnected, "ocpp1.6");
-            async {}
-        })
-        .await;
-}
-
-async fn register_2_0_1_reconnect(
-    client: &ocpp_client::ocpp_2_0_1::OCPP2_0_1Client,
-    traces: &TraceBuffer,
-) {
-    let traces = traces.clone();
-    client
-        .on_reconnect(move |_| {
-            traces.push(TraceKind::Reconnected, "ocpp2.0.1");
-            async {}
-        })
-        .await;
-}
-
-async fn run_1_6(
-    client: ocpp_client::ocpp_1_6::OCPP1_6Client,
-    mut commands: mpsc::Receiver<Command>,
-    traces: TraceBuffer,
-    outstanding_capacity: usize,
-) {
-    let mut requests = JoinSet::new();
-    loop {
-        tokio::select! {
-            _ = requests.join_next(), if !requests.is_empty() => {}
-            command = commands.recv(), if requests.len() < outstanding_capacity => match command {
-                Some(Command::Heartbeat(result)) => {
-                    let client = client.clone();
-                    let traces = traces.clone();
-                    requests.spawn(async move {
-                        traces.push(TraceKind::HeartbeatSent, "Heartbeat");
-                        let response = client
-                            .send_heartbeat(HeartbeatRequest16 {})
-                            .await
-                            .map(|response| response.current_time.to_string())
-                            .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
-                        record_result(&traces, &response);
-                        let _ = result.send(response);
-                    });
-                }
-                Some(Command::Shutdown(result)) => {
-                    requests.shutdown().await;
-                    let response = client
-                        .disconnect()
-                        .await
-                        .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
-                    traces.push(TraceKind::Stopped, "client disconnected");
-                    let _ = result.send(response);
-                    break;
-                }
-                None => {
-                    requests.shutdown().await;
-                    break;
-                }
-            }
-        }
-    }
-}
-
-async fn run_2_0_1(
-    client: ocpp_client::ocpp_2_0_1::OCPP2_0_1Client,
-    mut commands: mpsc::Receiver<Command>,
-    traces: TraceBuffer,
-    outstanding_capacity: usize,
-) {
-    let mut requests = JoinSet::new();
-    loop {
-        tokio::select! {
-            _ = requests.join_next(), if !requests.is_empty() => {}
-            command = commands.recv(), if requests.len() < outstanding_capacity => match command {
-                Some(Command::Heartbeat(result)) => {
-                    let client = client.clone();
-                    let traces = traces.clone();
-                    requests.spawn(async move {
-                        traces.push(TraceKind::HeartbeatSent, "Heartbeat");
-                        let response = client
-                            .send_heartbeat(HeartbeatRequest201 { custom_data: None })
-                            .await
-                            .map(|response| response.current_time.to_string())
-                            .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
-                        record_result(&traces, &response);
-                        let _ = result.send(response);
-                    });
-                }
-                Some(Command::Shutdown(result)) => {
-                    requests.shutdown().await;
-                    let response = client
-                        .disconnect()
-                        .await
-                        .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
-                    traces.push(TraceKind::Stopped, "client disconnected");
-                    let _ = result.send(response);
-                    break;
-                }
-                None => {
-                    requests.shutdown().await;
-                    break;
-                }
-            }
-        }
-    }
-}
-
-fn record_result(traces: &TraceBuffer, response: &Result<String, SimulatorClientError>) {
-    match response {
-        Ok(timestamp) => traces.push(TraceKind::HeartbeatResult, timestamp),
-        Err(error) => traces.push(TraceKind::Failed, error.to_string()),
     }
 }

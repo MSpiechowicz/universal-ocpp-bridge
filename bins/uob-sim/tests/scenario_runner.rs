@@ -13,7 +13,10 @@ use uob_sim::scenario::{
     CancellationToken, ConnectFuture, FailureCategory, ScenarioClock, ScenarioConnector,
     ScenarioRunner, SleepFuture, cancellation_pair, parse_configuration, parse_scenario,
 };
-use uob_sim::{ClientFuture, OcppVersion, ProtocolClient, SimulatorClientConfig};
+use uob_sim::{
+    ClientFuture, OcppVersion, ProtocolClient, SimulatorAction, SimulatorCall,
+    SimulatorClientConfig,
+};
 
 const CONFIGURATION: &str = r#"
 schema_version = 1
@@ -97,6 +100,33 @@ impl ProtocolClient for FakeClient {
         Box::pin(async { Ok("2026-09-01T00:00:00Z".to_owned()) })
     }
 
+    fn call(&self, call: SimulatorCall) -> ClientFuture<'_, serde_json::Value> {
+        Box::pin(async move {
+            Ok(match call.action {
+                SimulatorAction::BootNotification => serde_json::json!({
+                    "currentTime": "2026-09-01T00:00:00Z",
+                    "interval": 60,
+                    "status": "Accepted"
+                }),
+                SimulatorAction::Authorize => {
+                    let status = if call.payload["idTag"] == "DENIED" {
+                        "Invalid"
+                    } else {
+                        "Accepted"
+                    };
+                    serde_json::json!({"idTagInfo": { "status": status }})
+                }
+                SimulatorAction::StatusNotification
+                | SimulatorAction::MeterValues
+                | SimulatorAction::StopTransaction => serde_json::json!({}),
+                SimulatorAction::StartTransaction => serde_json::json!({
+                    "idTagInfo": { "status": "Accepted" },
+                    "transactionId": 42
+                }),
+            })
+        })
+    }
+
     fn shutdown(&self) -> ClientFuture<'_, ()> {
         self.shutdowns.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok(()) })
@@ -113,6 +143,82 @@ impl ProtocolClient for FakeClient {
     fn traces(&self) -> Vec<uob_sim::TraceEvent> {
         Vec::new()
     }
+}
+
+#[tokio::test]
+async fn ocpp16_charging_scenario_tracks_accepted_transaction_state() {
+    let configuration = parse_configuration(CONFIGURATION).unwrap();
+    let scenario = parse_scenario(include_str!("../examples/charging-1.6.toml")).unwrap();
+    let report = runner(
+        Arc::new(RecordingClock::default()),
+        Arc::new(AtomicUsize::new(0)),
+    )
+    .run(&configuration, &scenario, scenario.seed, token())
+    .await;
+
+    assert!(report.failure.is_none(), "{:?}", report.failure);
+    for action in [
+        "boot",
+        "authorize",
+        "status",
+        "start_transaction",
+        "meter_values",
+        "stop_transaction",
+    ] {
+        assert!(
+            report
+                .events
+                .iter()
+                .any(|event| { event.event == "step_passed" && event.action == Some(action) })
+        );
+    }
+}
+
+#[tokio::test]
+async fn rejected_authorization_cannot_fabricate_a_successful_start() {
+    let configuration = parse_configuration(CONFIGURATION).unwrap();
+    let scenario = parse_scenario(
+        r#"
+schema_version = 1
+seed = 47
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 100
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 100
+fixture_id = "sim.ocpp16.boot.accepted"
+payload = { chargePointVendor = "UOB", chargePointModel = "Simulator" }
+[[steps]]
+id = "deny"
+station = "alpha"
+action = "authorize"
+timeout_ms = 100
+fixture_id = "sim.ocpp16.authorize.rejected"
+payload = { idTag = "DENIED" }
+expect_response = { idTagInfo = { status = "Invalid" } }
+[[steps]]
+id = "invalid-start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 100
+fixture_id = "sim.ocpp16.transaction.start"
+payload = { connectorId = 1, idTag = "DENIED", meterStart = 0, timestamp = "2026-09-01T00:00:02Z" }
+"#,
+    )
+    .unwrap();
+    let report = runner(
+        Arc::new(RecordingClock::default()),
+        Arc::new(AtomicUsize::new(0)),
+    )
+    .run(&configuration, &scenario, scenario.seed, token())
+    .await;
+
+    assert_eq!(report.failure.unwrap().code, "not_authorized");
 }
 
 #[derive(Default)]

@@ -1,0 +1,100 @@
+schema_version = 1
+seed = 46
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 1000
+expect_event = "connected"
+expect_detail = "ocpp1.6"
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.boot.accepted"
+expect_message = "BootNotification"
+expect_event = "boot_result"
+payload = { chargePointVendor = "UOB", chargePointModel = "Simulator" }
+expect_response = { currentTime = "2026-09-01T00:00:00Z", interval = 60, status = "Accepted" }
+
+[[steps]]
+id = "authorize"
+station = "alpha"
+action = "authorize"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.authorize.accepted"
+expect_message = "Authorize"
+expect_event = "authorization_result"
+payload = { idTag = "LOCAL-USER-1" }
+expect_response = { idTagInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "available"
+station = "alpha"
+action = "status"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.status.available"
+expect_message = "StatusNotification"
+expect_event = "status_result"
+payload = { connectorId = 1, errorCode = "NoError", status = "Available", timestamp = "2026-09-01T00:00:01Z" }
+expect_response = {}
+
+[[steps]]
+id = "start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.start"
+expect_message = "StartTransaction"
+expect_event = "transaction_started"
+payload = { connectorId = 1, idTag = "LOCAL-USER-1", meterStart = 1000, timestamp = "2026-09-01T00:00:02Z" }
+expect_response = { idTagInfo = { status = "Accepted" }, transactionId = 42 }
+
+[[steps]]
+id = "meter"
+station = "alpha"
+action = "meter_values"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.meter"
+expect_message = "MeterValues"
+expect_event = "meter_values_result"
+payload = { connectorId = 1, transactionId = 42, meterValue = [{ timestamp = "2026-09-01T00:05:02Z", sampledValue = [{ value = "1250", context = "Sample.Periodic", format = "Raw", measurand = "Energy.Active.Import.Register", location = "Outlet", unit = "Wh" }] }] }
+expect_response = {}
+
+[[steps]]
+id = "disconnect-active"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 1000
+expect_event = "disconnected"
+expect_detail = "stopped"
+
+[[steps]]
+id = "reconnect"
+station = "alpha"
+action = "connect"
+timeout_ms = 1000
+expect_event = "connected"
+expect_detail = "ocpp1.6"
+
+[[steps]]
+id = "stop"
+station = "alpha"
+action = "stop_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.stop"
+expect_message = "StopTransaction"
+expect_event = "transaction_stopped"
+payload = { transactionId = 42, idTag = "LOCAL-USER-1", meterStop = 1500, timestamp = "2026-09-01T00:10:02Z", reason = "Local" }
+expect_response = {}
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 1000
+expect_event = "disconnected"
+expect_detail = "stopped"

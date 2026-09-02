@@ -7,11 +7,12 @@ use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 
+use super::execution::execute_action;
 use super::fault::complete_heartbeat_pair_out_of_order;
 use super::scheduling::{StepWork, deterministic_jitter, fault_selected, validate_and_group_steps};
 use super::{
-    ActionKind, DiagnosticCounts, FailureCategory, FaultKind, RunFailure, RunReport,
-    ScenarioDefinition, SimulatorConfiguration, StationDefinition, StationState, StepDefinition,
+    DiagnosticCounts, FailureCategory, FaultKind, RunFailure, RunReport, ScenarioDefinition,
+    SimulatorConfiguration, StationDefinition, StationState, StepDefinition,
 };
 use crate::{ClientDiagnostics, ProtocolClient, SimulatorClientConfig, SimulatorProtocolClient};
 
@@ -357,65 +358,6 @@ async fn execute_step(
     }
     step.assert_detail(&result)?;
     Ok(result)
-}
-
-async fn execute_action(
-    connector: &Arc<dyn ScenarioConnector>,
-    clock: &Arc<dyn ScenarioClock>,
-    station: &StationDefinition,
-    step: &StepDefinition,
-    client: &mut Option<Box<dyn ProtocolClient>>,
-    state: &mut StationState,
-) -> Result<String, RunFailure> {
-    match step.action {
-        ActionKind::Connect => {
-            if client.is_some() {
-                return Err(assertion_failure(
-                    "already_connected",
-                    "station is already connected",
-                ));
-            }
-            let connected = connector
-                .connect(station.client_config())
-                .await
-                .map_err(|_| {
-                    RunFailure::new(
-                        FailureCategory::Setup,
-                        "peer_unavailable",
-                        "station peer is unavailable or rejected the connection",
-                    )
-                })?;
-            let detail = connected.version().websocket_protocol().to_owned();
-            *client = Some(connected);
-            state.connected = true;
-            Ok(detail)
-        }
-        ActionKind::Heartbeat => client
-            .as_deref()
-            .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?
-            .heartbeat()
-            .await
-            .map_err(|_| assertion_failure("heartbeat_failed", "Heartbeat exchange failed")),
-        ActionKind::Wait => {
-            let duration_ms = step.duration_ms.expect("validated wait duration");
-            clock.sleep(Duration::from_millis(duration_ms)).await;
-            Ok(format!("{duration_ms}ms"))
-        }
-        ActionKind::Disconnect => {
-            let Some(connected) = client.take() else {
-                return Err(assertion_failure(
-                    "not_connected",
-                    "station is not connected",
-                ));
-            };
-            connected
-                .shutdown()
-                .await
-                .map_err(|_| assertion_failure("disconnect_failed", "station disconnect failed"))?;
-            state.connected = false;
-            Ok("stopped".to_owned())
-        }
-    }
 }
 
 async fn cleanup_client(

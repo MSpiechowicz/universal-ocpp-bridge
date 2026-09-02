@@ -134,6 +134,10 @@ The standalone simulator has a versioned deterministic TOML scenario contract an
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
 
+The simulator's OCPP 1.6 charging example exercises registration, authorization, status,
+transaction start/meter/stop, active-transaction reconnect, exact wire fixtures, and separate
+remote-command acceptance without importing bridge state-machine code.
+
 Core readiness, new-session admission, component degradation, and resource counters are exposed
 separately. See [health and metrics](docs/operations/health-readiness-metrics.md) for endpoint and
 failure semantics.
