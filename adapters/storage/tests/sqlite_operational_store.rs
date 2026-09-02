@@ -83,7 +83,7 @@ fn upgrades_existing_outbox_schema_without_losing_pending_rows() {
     let version: i64 = reopened
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("schema version");
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
 }
 
 #[test]
@@ -404,6 +404,9 @@ fn version_at_least(actual: &str, minimum: &str) -> bool {
 
 #[path = "sqlite_operational_store/durable_event_cursors.rs"]
 mod durable_event_cursors;
+
+#[path = "sqlite_operational_store/local_authorization.rs"]
+mod local_authorization;
 
 #[path = "sqlite_operational_store/storage_retention.rs"]
 mod storage_retention;

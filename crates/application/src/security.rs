@@ -4,6 +4,8 @@ use std::{error::Error, fmt};
 
 use uob_contracts::Environment;
 
+use crate::AuthorizationProviderDescriptor;
+
 /// Controls that are valid only in an explicitly isolated environment.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IsolatedControl {
@@ -11,6 +13,8 @@ pub enum IsolatedControl {
     Simulator,
     /// Local mock-checkout endpoint.
     MockCheckout,
+    /// Authorization provider that accepts test credentials.
+    TestAuthorizationProvider,
 }
 
 /// Security policy derived only from trusted runtime identity.
@@ -40,6 +44,24 @@ impl RuntimeSecurityPolicy {
         }
         Ok(())
     }
+
+    /// Rejects test-only authorization providers from trusted production composition.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SecurityPolicyError::IsolatedControlInProduction`] when a test-only provider is
+    /// selected in production.
+    pub const fn authorize_authorization_provider(
+        self,
+        provider: AuthorizationProviderDescriptor,
+    ) -> Result<(), SecurityPolicyError> {
+        if provider.test_only && matches!(self.environment, Environment::Production) {
+            return Err(SecurityPolicyError::IsolatedControlInProduction(
+                IsolatedControl::TestAuthorizationProvider,
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Stable policy rejection safe for diagnostics and API errors.
@@ -58,6 +80,9 @@ impl fmt::Display for SecurityPolicyError {
             Self::IsolatedControlInProduction(IsolatedControl::MockCheckout) => {
                 formatter.write_str("mock checkout is unavailable in production")
             }
+            Self::IsolatedControlInProduction(IsolatedControl::TestAuthorizationProvider) => {
+                formatter.write_str("test authorization providers are unavailable in production")
+            }
         }
     }
 }
@@ -74,7 +99,11 @@ mod tests {
     fn production_rejects_every_isolated_control() {
         let policy = RuntimeSecurityPolicy::new(Environment::Production);
 
-        for control in [IsolatedControl::Simulator, IsolatedControl::MockCheckout] {
+        for control in [
+            IsolatedControl::Simulator,
+            IsolatedControl::MockCheckout,
+            IsolatedControl::TestAuthorizationProvider,
+        ] {
             assert_eq!(
                 policy.authorize_isolated_control(control),
                 Err(SecurityPolicyError::IsolatedControlInProduction(control))
@@ -97,5 +126,29 @@ mod tests {
                     .is_ok()
             );
         }
+    }
+
+    #[test]
+    fn production_rejects_test_authorization_provider_but_accepts_local_provider() {
+        use crate::AuthorizationProviderDescriptor;
+
+        let policy = RuntimeSecurityPolicy::new(Environment::Production);
+        assert!(
+            policy
+                .authorize_authorization_provider(AuthorizationProviderDescriptor {
+                    kind: "local.sha256",
+                    test_only: false,
+                })
+                .is_ok()
+        );
+        assert_eq!(
+            policy.authorize_authorization_provider(AuthorizationProviderDescriptor {
+                kind: "test.accept-all",
+                test_only: true,
+            }),
+            Err(SecurityPolicyError::IsolatedControlInProduction(
+                IsolatedControl::TestAuthorizationProvider
+            ))
+        );
     }
 }

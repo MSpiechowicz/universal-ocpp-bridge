@@ -209,6 +209,8 @@ pub struct AuthorizationChange {
     pub revision: u64,
     /// Trusted observation time of this change.
     pub changed_at: UtcTimestamp,
+    /// Optional instant after which this reference must be denied.
+    pub expires_at: Option<UtcTimestamp>,
 }
 
 /// Required target delivery stored alongside the state that produced it.

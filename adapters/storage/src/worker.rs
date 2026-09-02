@@ -174,18 +174,24 @@ fn write_authorization(
 ) -> Result<(), StorageError> {
     let changed = transaction
         .execute(
-            "INSERT INTO authorization_changes(reference, resource, state, revision, changed_at)\n\
-             VALUES (?1, ?2, ?3, ?4, ?5)\n\
+            "INSERT INTO authorization_changes(reference, resource, state, revision, changed_at, expires_at)\n\
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)\n\
              ON CONFLICT(reference) DO UPDATE SET resource = excluded.resource,\n\
                  state = excluded.state, revision = excluded.revision,\n\
-                 changed_at = excluded.changed_at\n\
-             WHERE excluded.revision >= authorization_changes.revision",
+                 changed_at = excluded.changed_at, expires_at = excluded.expires_at\n\
+             WHERE excluded.revision > authorization_changes.revision\n\
+                OR (excluded.revision = authorization_changes.revision\n\
+                    AND excluded.resource = authorization_changes.resource\n\
+                    AND excluded.state = authorization_changes.state\n\
+                    AND excluded.changed_at = authorization_changes.changed_at\n\
+                    AND excluded.expires_at IS authorization_changes.expires_at)",
             params![
                 value.reference,
                 value.resource,
                 value.state,
                 value.revision,
-                value.changed_at
+                value.changed_at,
+                value.expires_at
             ],
         )
         .map_err(unavailable)?;

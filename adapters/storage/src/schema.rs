@@ -7,7 +7,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     create_schema(connection)?;
     upgrade_columns(connection)?;
     connection
-        .execute_batch("PRAGMA user_version = 4;")
+        .execute_batch("PRAGMA user_version = 5;")
         .map_err(unavailable)
 }
 
@@ -19,7 +19,8 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
              );\n\
              CREATE TABLE IF NOT EXISTS authorization_changes (\n\
                  reference TEXT PRIMARY KEY, resource TEXT NOT NULL, state INTEGER NOT NULL,\n\
-                 revision INTEGER NOT NULL CHECK (revision >= 0), changed_at TEXT NOT NULL\n\
+                 revision INTEGER NOT NULL CHECK (revision >= 0), changed_at TEXT NOT NULL,\n\
+                 expires_at TEXT\n\
              );\n\
              CREATE TABLE IF NOT EXISTS commands (\n\
                  request_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL,\n\
@@ -63,12 +64,18 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
                  category TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0\n\
                      CHECK (count >= 0)\n\
              );\n\
-             PRAGMA user_version = 4;",
+             PRAGMA user_version = 5;",
         )
         .map_err(unavailable)
 }
 
 fn upgrade_columns(connection: &Connection) -> Result<(), StorageError> {
+    add_column_if_missing(
+        connection,
+        "authorization_changes",
+        "expires_at",
+        "ALTER TABLE authorization_changes ADD COLUMN expires_at TEXT",
+    )?;
     add_column_if_missing(
         connection,
         "target_deliveries",
