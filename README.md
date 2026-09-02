@@ -92,6 +92,11 @@ conflicts, known-result replay, and protected unresolved outcomes. See
 [durable command deduplication](docs/architecture/command-deduplication.md) for fingerprint and
 seven-day retention semantics.
 
+Commands for offline stations are rejected before durable queue admission, while in-flight
+commands with ambiguous transmission remain unresolved and are never replayed after restart. See
+[uncertain command recovery](docs/architecture/uncertain-command-recovery.md) for live-session
+dispatch classification and observed-state reconciliation.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

@@ -41,6 +41,7 @@ pub(crate) enum Request<C, E, D, R> {
     ),
     Recover(usize, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
+    CommandResult(String, Reply<Option<uob_contracts::CommandResult>>),
     PruneCommands(i64, Reply<u64>),
     PendingDeliveries(String, i64, String, usize, Reply<Vec<ScheduledDelivery<D>>>),
     RecordDeliveryAttempt(EncodedDeliveryAttempt, Reply<()>),
@@ -75,6 +76,9 @@ pub(crate) fn run<C, E, D, R>(
             }
             Request::Command(request_id, reply) => {
                 respond(reply, recovery::command(&connection, &request_id));
+            }
+            Request::CommandResult(request_id, reply) => {
+                respond(reply, recovery::command_result(&connection, &request_id));
             }
             Request::PruneCommands(now, reply) => {
                 respond(reply, command::prune::<C>(&mut connection, now));
