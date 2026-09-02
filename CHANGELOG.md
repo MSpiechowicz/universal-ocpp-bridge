@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.6.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ad82b2b10e1c4106c44f9c82b72da8add91f348c..v0.6.0) - 2026-09-02
+#### Features
+- (**application**) preserve uncertain command outcomes - ([ad82b2b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ad82b2b10e1c4106c44f9c82b72da8add91f348c)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.5.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/0a1602e71f0fa860bb688801d9a1ec20c986d3c7..v0.5.0) - 2026-09-02
 #### Features
 - (**storage**) deduplicate commands for seven days - ([0a1602e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/0a1602e71f0fa860bb688801d9a1ec20c986d3c7)) - Maciej Spiechowicz
