@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.4.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/165fa7e18026a0ddaf975d22c79b64611b0e53e3..v0.4.0) - 2026-09-02
+#### Features
+- (**target**) dispatch durable deliveries - ([165fa7e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/165fa7e18026a0ddaf975d22c79b64611b0e53e3)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.3.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e47de341fb4151daa823216027d62e7bebab63e0..v0.3.0) - 2026-09-02
 #### Features
 - (**target**) supervise bounded target sessions - ([e47de34](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/e47de341fb4151daa823216027d62e7bebab63e0)) - Maciej Spiechowicz
