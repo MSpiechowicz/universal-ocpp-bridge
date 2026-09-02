@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.11.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/12c9be96edb5ef061ee59c9a21e3b3ebbcaf5d36..v0.11.0) - 2026-09-02
+#### Features
+- (**operations**) expose core readiness and resource metrics - ([12c9be9](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/12c9be96edb5ef061ee59c9a21e3b3ebbcaf5d36)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.10.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/0d495b9fb93b4742fad8f11dc0e58c7406e9543c..v0.10.0) - 2026-09-02
 #### Features
 - (**management**) enforce scoped remote access - ([0d495b9](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/0d495b9fb93b4742fad8f11dc0e58c7406e9543c)) - Maciej Spiechowicz
