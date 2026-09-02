@@ -106,6 +106,11 @@ active-session completion. See
 [storage retention and start admission](docs/architecture/storage-retention-admission.md) for
 pressure ordering, safe pending-delivery retention, shared start refusal, and recovery counters.
 
+OCPP station admission defaults to a preconfigured identity allowlist, TLS, and a unique
+high-entropy credential per station, with certificate-bound mutual TLS available as the stronger
+mode. See [station transport authentication](docs/security/station-transport-authentication.md) for
+offline validation, secret resolution, handshake ordering, safe failures, and WSS test evidence.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

@@ -1,11 +1,21 @@
 #![doc = "Protocol adapter boundary. Concrete protocol model crates belong here."]
 
 mod error;
+mod security;
 mod station;
 pub mod v16;
 pub mod v201;
 
 pub use error::{DecodeError, DecodeErrorKind, OcppCallError, OcppErrorCode};
+pub use security::{
+    AuthenticatedStation, ResolvedStationCredential, StationAuthenticationMode,
+    StationAuthenticator, StationCertificateFingerprint, StationCredential, StationRegistration,
+    StationSecurityConfiguration, StationSecurityConfigurationError,
+    StationSecurityConfigurationErrorCode, StationTlsAcceptor, StationTlsHandshakeError,
+    StationTlsMaterial, StationTlsReferences, StationTransportAdmissionError,
+    StationTransportAdmissionRequest, ValidatedStationSecurityConfiguration,
+    build_station_tls_acceptor,
+};
 
 pub use station::{
     OrderedStationOutput, SpawnedStation, StationHandle, StationOutputKind, StationOutputReceiver,
