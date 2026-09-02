@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.15.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/4ae4c3b57d1440fdd3dff54b061b79e043653487..v0.15.0) - 2026-09-02
+#### Features
+- (**sim**) add OCPP 1.6 charging scenarios - ([4ae4c3b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/4ae4c3b57d1440fdd3dff54b061b79e043653487)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.14.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/199b93a2db33d31189923970735b870d1c203864..v0.14.0) - 2026-09-02
 #### Features
 - (**auth**) add durable local authorization policy - ([199b93a](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/199b93a2db33d31189923970735b870d1c203864)) - Maciej Spiechowicz
