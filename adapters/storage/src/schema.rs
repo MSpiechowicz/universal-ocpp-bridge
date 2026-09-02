@@ -4,6 +4,14 @@ use uob_application::StorageError;
 use crate::configuration::unavailable;
 
 pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
+    create_schema(connection)?;
+    upgrade_columns(connection)?;
+    connection
+        .execute_batch("PRAGMA user_version = 4;")
+        .map_err(unavailable)
+}
+
+fn create_schema(connection: &Connection) -> Result<(), StorageError> {
     connection
         .execute_batch(
             "CREATE TABLE IF NOT EXISTS station_snapshots (\n\
@@ -25,7 +33,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
              CREATE TABLE IF NOT EXISTS journal_events (\n\
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,\n\
                  resource TEXT NOT NULL, sequence INTEGER NOT NULL CHECK (sequence >= 0),\n\
-                 payload TEXT NOT NULL, UNIQUE(resource, sequence)\n\
+                 payload TEXT NOT NULL, retain_until INTEGER, UNIQUE(resource, sequence)\n\
              );\n\
              CREATE INDEX IF NOT EXISTS journal_events_resource_row\n\
                  ON journal_events(resource, row_id);\n\
@@ -42,17 +50,25 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
              CREATE TABLE IF NOT EXISTS target_delivery_attempts (\n\
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, delivery_id TEXT NOT NULL,\n\
                  outcome TEXT NOT NULL, reported_at TEXT NOT NULL, resolution INTEGER NOT NULL,\n\
-                 retry_at TEXT\n\
+                 retry_at TEXT, retain_until INTEGER\n\
              );\n\
              CREATE INDEX IF NOT EXISTS target_delivery_attempts_delivery_row\n\
                  ON target_delivery_attempts(delivery_id, row_id);\n\
              CREATE TABLE IF NOT EXISTS committed_records (\n\
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, record_id TEXT NOT NULL UNIQUE,\n\
-                 durability INTEGER NOT NULL, committed_at TEXT NOT NULL, payload TEXT NOT NULL\n\
+                 durability INTEGER NOT NULL, committed_at TEXT NOT NULL, payload TEXT NOT NULL,\n\
+                 retain_until INTEGER\n\
              );\n\
-             PRAGMA user_version = 3;",
+             CREATE TABLE IF NOT EXISTS storage_retention_stats (\n\
+                 category TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0\n\
+                     CHECK (count >= 0)\n\
+             );\n\
+             PRAGMA user_version = 4;",
         )
-        .map_err(unavailable)?;
+        .map_err(unavailable)
+}
+
+fn upgrade_columns(connection: &Connection) -> Result<(), StorageError> {
     add_column_if_missing(
         connection,
         "target_deliveries",
@@ -89,9 +105,25 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         "unresolved",
         "ALTER TABLE commands ADD COLUMN unresolved INTEGER NOT NULL DEFAULT 1 CHECK (unresolved IN (0, 1))",
     )?;
-    connection
-        .execute_batch("PRAGMA user_version = 3;")
-        .map_err(unavailable)
+    add_column_if_missing(
+        connection,
+        "journal_events",
+        "retain_until",
+        "ALTER TABLE journal_events ADD COLUMN retain_until INTEGER",
+    )?;
+    add_column_if_missing(
+        connection,
+        "target_delivery_attempts",
+        "retain_until",
+        "ALTER TABLE target_delivery_attempts ADD COLUMN retain_until INTEGER",
+    )?;
+    add_column_if_missing(
+        connection,
+        "committed_records",
+        "retain_until",
+        "ALTER TABLE committed_records ADD COLUMN retain_until INTEGER",
+    )?;
+    Ok(())
 }
 
 fn add_column_if_missing(

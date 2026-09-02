@@ -4,7 +4,7 @@ use super::{
     AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
     CommittedRecordQuery, DeliveryAttempt, DeliveryId, Page, PageLimit, PendingDeliveryQuery,
     RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
-    ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageFuture,
+    ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageFuture, StorageRetentionStatus,
 };
 
 /// Application-owned authoritative persistence and committed-record read ports.
@@ -63,6 +63,17 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
     /// Commands without a terminal result, including transmission-uncertain commands, must be
     /// retained regardless of age. The returned count is the number of removed identities.
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64>;
+
+    /// Applies bounded history retention and returns current admission/retention counters.
+    ///
+    /// Pending required deliveries and their journal events must survive regardless of age.
+    fn maintain_storage_retention(
+        &self,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, StorageRetentionStatus>;
+
+    /// Returns the current storage-pressure decision and retained/dropped category counters.
+    fn storage_retention_status(&self) -> StorageFuture<'_, StorageRetentionStatus>;
 }
 
 /// Narrow durable outbox surface used by target delivery supervision.

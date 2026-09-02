@@ -4,7 +4,8 @@ use uob_application::{
     AcknowledgementScope, AtomicStoreWrite, AuthorizationChange, AuthorizationReference,
     AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommittedRecord,
     CommittedRecordId, DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, DeliveryOutcome,
-    Durability, PendingDelivery, RecordedDeliveryAttempt, StorageError, StorageErrorCode,
+    Durability, OPERATIONAL_HISTORY_RETENTION_SECONDS, PendingDelivery, RecordedDeliveryAttempt,
+    StorageError, StorageErrorCode, StorageWritePurpose,
 };
 use uob_contracts::{
     Command, CommandLifecycle, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot,
@@ -13,6 +14,7 @@ use uob_contracts::{
 
 #[derive(Debug)]
 pub(crate) struct EncodedWrite {
+    pub purpose: StorageWritePurpose,
     pub snapshot: Option<(String, String)>,
     pub authorization: Vec<EncodedAuthorization>,
     pub command: Option<EncodedCommand>,
@@ -53,6 +55,7 @@ pub(crate) struct EncodedEvent {
     pub resource: String,
     pub sequence: i64,
     pub payload: String,
+    pub retain_until: i64,
 }
 
 #[derive(Debug)]
@@ -73,6 +76,7 @@ pub(crate) struct EncodedRecord {
     pub durability: i64,
     pub committed_at: String,
     pub payload: String,
+    pub retain_until: i64,
 }
 
 #[derive(Debug)]
@@ -82,6 +86,7 @@ pub(crate) struct EncodedDeliveryAttempt {
     pub reported_at: String,
     pub resolution: i64,
     pub retry_at: Option<String>,
+    pub retain_until: i64,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -139,11 +144,13 @@ where
         .journal_events
         .into_iter()
         .map(|value| {
+            let retain_until = retention_boundary(value.observed_at)?;
             Ok(EncodedEvent {
                 event_id: value.event_id.as_str().to_owned(),
                 resource: json(&value.resource)?,
                 sequence: unsigned(value.sequence, "event sequence")?,
                 payload: json(&value)?,
+                retain_until,
             })
         })
         .collect::<Result<_, StorageError>>()?;
@@ -167,15 +174,18 @@ where
         .committed_records
         .into_iter()
         .map(|value| {
+            let retain_until = retention_boundary(value.committed_at)?;
             Ok(EncodedRecord {
                 record_id: value.record_id.as_str().to_owned(),
                 durability: durability(value.durability),
                 committed_at: json(&value.committed_at)?,
                 payload: json(&value.record)?,
+                retain_until,
             })
         })
         .collect::<Result<_, StorageError>>()?;
     Ok(EncodedWrite {
+        purpose: write.purpose,
         snapshot,
         authorization,
         command,
@@ -316,6 +326,7 @@ pub(crate) fn encode_delivery_attempt(
         reported_at: json(&attempt.report.reported_at)?,
         resolution,
         retry_at,
+        retain_until: retention_boundary(attempt.report.reported_at)?,
     })
 }
 
@@ -427,6 +438,19 @@ fn unsigned(value: u64, label: &str) -> Result<i64, StorageError> {
 
 fn signed(value: i64, label: &str) -> Result<u64, StorageError> {
     u64::try_from(value).map_err(|_| corrupt(&format!("negative {label}")))
+}
+
+fn retention_boundary(value: uob_contracts::UtcTimestamp) -> Result<i64, StorageError> {
+    value
+        .into_inner()
+        .unix_timestamp()
+        .checked_add(OPERATIONAL_HISTORY_RETENTION_SECONDS)
+        .ok_or_else(|| {
+            StorageError::new(
+                StorageErrorCode::InvalidRequest,
+                "operational retention timestamp exceeds supported range",
+            )
+        })
 }
 
 const fn durability(value: Durability) -> i64 {

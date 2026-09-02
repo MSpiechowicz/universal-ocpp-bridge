@@ -96,14 +96,15 @@ pub(crate) fn record_attempt(
     transaction
         .execute(
             "INSERT INTO target_delivery_attempts(\n\
-                 delivery_id, outcome, reported_at, resolution, retry_at\n\
-             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+                 delivery_id, outcome, reported_at, resolution, retry_at, retain_until\n\
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 attempt.delivery_id,
                 attempt.outcome,
                 attempt.reported_at,
                 attempt.resolution,
-                attempt.retry_at
+                attempt.retry_at,
+                attempt.retain_until
             ],
         )
         .map_err(unavailable)?;

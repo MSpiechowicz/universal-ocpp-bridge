@@ -12,8 +12,8 @@ use uob_application::{
     AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
     CommittedRecordId, CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page,
     PageLimit, PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor,
-    RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageError,
-    StorageErrorCode, StorageFuture,
+    RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageAdmissionState,
+    StorageError, StorageErrorCode, StorageFuture, StorageRetentionStatus,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandOperation, CommandRequest, Connectivity,
@@ -250,75 +250,35 @@ impl
     fn prune_command_deduplication(&self, _now: UtcTimestamp) -> StorageFuture<'_, u64> {
         Box::pin(async { Ok(0) })
     }
+
+    fn maintain_storage_retention(
+        &self,
+        _now: UtcTimestamp,
+    ) -> StorageFuture<'_, StorageRetentionStatus> {
+        Box::pin(async { Ok(empty_retention_status()) })
+    }
+
+    fn storage_retention_status(&self) -> StorageFuture<'_, StorageRetentionStatus> {
+        Box::pin(async { Ok(empty_retention_status()) })
+    }
 }
 
-#[derive(Clone, Default)]
-struct ReplacementMemoryStore(MemoryStore);
+#[path = "operational_store_contract/replacement.rs"]
+mod replacement;
+use replacement::ReplacementMemoryStore;
 
-impl
-    OperationalStore<
-        TestCommandPayload,
-        TestEventPayload,
-        TestDeliveryPayload,
-        TestCommittedPayload,
-    > for ReplacementMemoryStore
-{
-    fn write_atomic(
-        &self,
-        write: AtomicStoreWrite<
-            TestCommandPayload,
-            TestEventPayload,
-            TestDeliveryPayload,
-            TestCommittedPayload,
-        >,
-    ) -> StorageFuture<'_, AtomicWriteOutcome> {
-        self.0.write_atomic(write)
-    }
-
-    fn read_snapshots(
-        &self,
-        query: SnapshotQuery,
-    ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
-        self.0.read_snapshots(query)
-    }
-
-    fn read_retained_events(
-        &self,
-        query: RetainedEventQuery,
-    ) -> StorageFuture<'_, RetainedEventPage<TestEventPayload>> {
-        self.0.read_retained_events(query)
-    }
-
-    fn read_committed_records(
-        &self,
-        query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<TestCommittedPayload>, CommittedRecordCursor>> {
-        self.0.read_committed_records(query)
-    }
-
-    fn recover(
-        &self,
-        query: RecoveryQuery,
-    ) -> StorageFuture<'_, RecoveryBatch<TestCommandPayload, TestDeliveryPayload>> {
-        self.0.recover(query)
-    }
-
-    fn command_by_request_id(
-        &self,
-        request_id: RequestId,
-    ) -> StorageFuture<'_, Option<Command<TestCommandPayload>>> {
-        self.0.command_by_request_id(request_id)
-    }
-
-    fn command_result_by_request_id(
-        &self,
-        request_id: RequestId,
-    ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
-        self.0.command_result_by_request_id(request_id)
-    }
-
-    fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
-        self.0.prune_command_deduplication(now)
+fn empty_retention_status() -> StorageRetentionStatus {
+    StorageRetentionStatus {
+        budget_bytes: 1024,
+        active_session_reserve_bytes: 128,
+        used_bytes: 0,
+        new_session_admission: StorageAdmissionState::Available,
+        retained_critical_events: 0,
+        retained_required_deliveries: 0,
+        dropped_best_effort_telemetry: 0,
+        dropped_best_effort_deliveries: 0,
+        pruned_expired_events: 0,
+        pruned_expired_delivery_attempts: 0,
     }
 }
 
@@ -418,6 +378,7 @@ fn populated_write()
 -> AtomicStoreWrite<TestCommandPayload, TestEventPayload, TestDeliveryPayload, TestCommittedPayload>
 {
     AtomicStoreWrite {
+        purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: Some(snapshot()),
         authorization_changes: vec![AuthorizationChange {
             reference: text(AuthorizationReference::new, "local-auth-1"),

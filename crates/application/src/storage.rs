@@ -8,8 +8,14 @@ use uob_contracts::{
 use crate::{DeliveryOutcome, DeliveryReport};
 
 mod ports;
+mod retention;
 
 pub use ports::{OperationalStore, TargetDeliveryStore};
+pub use retention::{
+    DEFAULT_ACTIVE_SESSION_RESERVE_BYTES, DEFAULT_OPERATIONAL_STORAGE_BUDGET_BYTES,
+    OPERATIONAL_HISTORY_RETENTION_SECONDS, StorageAdmissionState, StorageRetentionStatus,
+    StorageWritePurpose,
+};
 
 /// Largest page a caller may request from an operational read port.
 pub const MAX_PAGE_SIZE: u16 = 100;
@@ -299,6 +305,8 @@ pub struct CommittedRecord<R> {
 /// deliveries cannot be observed independently.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AtomicStoreWrite<C, E, D, R> {
+    /// Capacity class used to preserve room for active-session completion.
+    pub purpose: StorageWritePurpose,
     /// Latest charging state produced by the operation, when it changed.
     pub station_snapshot: Option<StationSnapshot>,
     /// Local authorization mutations owned by this operation.
@@ -320,6 +328,7 @@ impl<C, E, D, R> AtomicStoreWrite<C, E, D, R> {
     #[must_use]
     pub const fn empty() -> Self {
         Self {
+            purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: Vec::new(),
             command: None,

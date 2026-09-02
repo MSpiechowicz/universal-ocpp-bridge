@@ -83,7 +83,7 @@ fn upgrades_existing_outbox_schema_without_losing_pending_rows() {
     let version: i64 = reopened
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("schema version");
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
 }
 
 #[test]
@@ -266,6 +266,7 @@ fn delivery_write(
     delivery_id: &str,
 ) -> AtomicStoreWrite<String, String, String, String> {
     AtomicStoreWrite {
+        purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
         command: None,
@@ -298,6 +299,7 @@ fn write_with(
     deliveries: Vec<PendingDelivery<String>>,
 ) -> AtomicStoreWrite<String, String, String, String> {
     AtomicStoreWrite {
+        purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
         command: None,
@@ -402,3 +404,6 @@ fn version_at_least(actual: &str, minimum: &str) -> bool {
 
 #[path = "sqlite_operational_store/durable_event_cursors.rs"]
 mod durable_event_cursors;
+
+#[path = "sqlite_operational_store/storage_retention.rs"]
+mod storage_retention;
