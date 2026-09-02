@@ -73,6 +73,11 @@ Authenticated charger sockets terminate at the bounded Axum OCPP endpoint before
 state. See the [OCPP WebSocket endpoint](docs/architecture/ocpp-websocket-endpoint.md) for routes,
 subprotocol negotiation, credential and mTLS admission, duplicate handling, and transport limits.
 
+Bidirectional OCPP calls use a bounded socket-owning lifecycle with correlated replies, explicit
+timeouts and conservative uncertain-transmission outcomes. See
+[OCPP call lifecycle](docs/architecture/ocpp-call-lifecycle.md) for validation, duplicate and late
+response behavior, application response control, and hostile-peer evidence.
+
 Future industrial drivers remain behind the target registry and canonical data/command ports. See
 the [industrial adapter extension boundary](docs/architecture/industrial-adapter-extension.md) for
 the mapping checklist, unavailable first-release OPC UA kind, and compatibility limits.

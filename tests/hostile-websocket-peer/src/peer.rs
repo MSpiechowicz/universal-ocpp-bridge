@@ -6,6 +6,7 @@ use futures::{SinkExt, StreamExt};
 use sha2::{Digest, Sha256};
 use tokio::net::TcpStream;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::header::AUTHORIZATION;
 use tokio_tungstenite::tungstenite::http::header::SEC_WEBSOCKET_PROTOCOL;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::tungstenite::{Bytes, Message, Utf8Bytes};
@@ -18,6 +19,8 @@ pub struct PeerConfig {
     pub max_outbound_bytes: usize,
     pub max_inbound_bytes: usize,
     pub observation_capacity: usize,
+    /// Optional prebuilt authorization value for authenticated system-under-test endpoints.
+    pub authorization: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,6 +114,14 @@ impl Peer {
                 .parse()
                 .map_err(|_| PeerError::InvalidConfiguration("invalid WebSocket subprotocol"))?,
         );
+        if let Some(authorization) = config.authorization {
+            request.headers_mut().insert(
+                AUTHORIZATION,
+                authorization
+                    .parse()
+                    .map_err(|_| PeerError::InvalidConfiguration("invalid authorization header"))?,
+            );
+        }
         let mut websocket_config = WebSocketConfig::default();
         websocket_config.max_message_size = Some(config.max_inbound_bytes);
         websocket_config.max_frame_size = Some(config.max_inbound_bytes);

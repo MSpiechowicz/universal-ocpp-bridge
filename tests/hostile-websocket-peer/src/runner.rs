@@ -90,6 +90,7 @@ async fn execute(
                     max_outbound_bytes: scenario.max_outbound_bytes,
                     max_inbound_bytes: scenario.max_inbound_bytes,
                     observation_capacity: scenario.observation_capacity,
+                    authorization: None,
                 })
                 .await
                 .map_err(|_| ("connection_failed", "bare WebSocket connection failed"))?,

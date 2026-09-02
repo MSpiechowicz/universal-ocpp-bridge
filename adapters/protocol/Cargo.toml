@@ -27,6 +27,7 @@ futures = "=0.3.34"
 rcgen.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-tungstenite.workspace = true
+uob-hostile-websocket-peer = { path = "../../tests/hostile-websocket-peer" }
 
 [lints]
 workspace = true

@@ -52,6 +52,10 @@ impl DecodeError {
             protocol: self.protocol,
             code,
             description,
+            field_path: match self.kind {
+                DecodeErrorKind::InvalidPayload => Some("/"),
+                _ => None,
+            },
         }
     }
 }
@@ -68,8 +72,11 @@ impl Error for DecodeError {}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OcppErrorCode {
     FormationViolation,
+    InternalError,
     NotImplemented,
+    OccurrenceConstraintViolation,
     PropertyConstraintViolation,
+    ProtocolError,
 }
 
 impl OcppErrorCode {
@@ -78,8 +85,11 @@ impl OcppErrorCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::FormationViolation => "FormationViolation",
+            Self::InternalError => "InternalError",
             Self::NotImplemented => "NotImplemented",
+            Self::OccurrenceConstraintViolation => "OccurrenceConstraintViolation",
             Self::PropertyConstraintViolation => "PropertyConstraintViolation",
+            Self::ProtocolError => "ProtocolError",
         }
     }
 }
@@ -90,6 +100,8 @@ pub struct OcppCallError {
     pub protocol: ProtocolEdition,
     pub code: OcppErrorCode,
     pub description: &'static str,
+    /// JSON Pointer to the rejected field, when validation can identify one safely.
+    pub field_path: Option<&'static str>,
 }
 
 impl fmt::Display for OcppCallError {
