@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.3.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e47de341fb4151daa823216027d62e7bebab63e0..v0.3.0) - 2026-09-02
+#### Features
+- (**target**) supervise bounded target sessions - ([e47de34](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/e47de341fb4151daa823216027d62e7bebab63e0)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.2.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/b56e5020197bb7566f123ec9f0bfacf9df5873da..v0.2.0) - 2026-09-01
 #### Features
 - (**target**) guard destination changes - ([b56e502](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b56e5020197bb7566f123ec9f0bfacf9df5873da)) - Maciej Spiechowicz
