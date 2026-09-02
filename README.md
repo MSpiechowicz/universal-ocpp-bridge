@@ -69,6 +69,10 @@ The pinned OCPP model crate is isolated behind separate 1.6J and 2.0.1 adapters.
 [OCPP model adapter boundary](docs/architecture/ocpp-model-adapters.md) for supported negotiation,
 validation, application mappings, explicit gaps, and non-goals.
 
+Authenticated charger sockets terminate at the bounded Axum OCPP endpoint before entering station
+state. See the [OCPP WebSocket endpoint](docs/architecture/ocpp-websocket-endpoint.md) for routes,
+subprotocol negotiation, credential and mTLS admission, duplicate handling, and transport limits.
+
 Future industrial drivers remain behind the target registry and canonical data/command ports. See
 the [industrial adapter extension boundary](docs/architecture/industrial-adapter-extension.md) for
 the mapping checklist, unavailable first-release OPC UA kind, and compatibility limits.
