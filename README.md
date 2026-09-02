@@ -111,6 +111,11 @@ high-entropy credential per station, with certificate-bound mutual TLS available
 mode. See [station transport authentication](docs/security/station-transport-authentication.md) for
 offline validation, secret resolution, handshake ordering, safe failures, and WSS test evidence.
 
+Management and direct EMS/SCADA listeners default to loopback, while any remote listener requires
+explicit enablement, TLS, and resource-scoped credentials. See
+[management and integration access policy](docs/security/management-and-integration-access.md) for
+the shared read/control/privileged command guard and equivalent MQTT ACL classes.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

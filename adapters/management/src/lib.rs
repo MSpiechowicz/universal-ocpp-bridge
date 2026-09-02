@@ -1,9 +1,16 @@
 #![doc = "Axum-based management adapter."]
 
+mod security;
+
 use std::{io, net::SocketAddr};
 
 use axum::{Json, Router, extract::State, routing::get};
 use uob_application::Application;
+
+pub use security::{
+    DEFAULT_MANAGEMENT_LISTEN_ADDRESS, ManagementCredentialConfiguration,
+    ManagementListenerConfiguration, ManagementListenerPolicyError, ManagementTlsConfiguration,
+};
 
 /// Builds the management router while keeping framework types out of the application.
 pub fn router(application: Application) -> Router {
@@ -28,6 +35,12 @@ async fn identity(State(application): State<Application>) -> Json<uob_contracts:
 ///
 /// Returns an I/O error when the listener cannot bind or the server fails.
 pub async fn serve(address: SocketAddr, application: Application) -> io::Result<()> {
+    if !address.ip().is_loopback() {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "management listener requires validated remote TLS configuration",
+        ));
+    }
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, router(application)).await
 }
@@ -95,5 +108,14 @@ mod tests {
         assert_eq!(value["bridge_id"], "bridge-api");
         assert_eq!(value["runtime"]["environment"], "production");
         assert!(value.get("selected_target_id").is_none());
+    }
+
+    #[tokio::test]
+    async fn low_level_server_cannot_bypass_remote_listener_policy() {
+        let error = super::serve(std::net::SocketAddr::from(([0, 0, 0, 0], 0)), application())
+            .await
+            .expect_err("unvalidated remote listener");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
     }
 }

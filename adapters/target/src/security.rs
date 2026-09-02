@@ -1,7 +1,11 @@
 use std::{error::Error, fmt, net::IpAddr};
 
-use uob_application::CredentialReference;
+use uob_application::{AccessPolicy, CredentialReference};
 use uob_contracts::Environment;
+
+/// Default direct EMS/SCADA HTTP listener. Concrete factory configuration may override it only
+/// through the shared listener policy.
+pub const DEFAULT_EMS_SCADA_HTTP_LISTEN_ADDRESS: &str = "127.0.0.1:9080";
 
 /// Parsed network authority used only for offline policy validation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -75,6 +79,8 @@ pub struct TransportSecurity {
     pub certificate_verification: bool,
     /// Runtime credential reference, never credential contents.
     pub credentials: Option<CredentialReference>,
+    /// Principal, permission, and resource grants resolved from the referenced credential file.
+    pub access_policy: Option<AccessPolicy>,
     /// Explicitly isolated demo/test profile required for plaintext.
     pub explicitly_isolated: bool,
 }
@@ -115,6 +121,12 @@ pub fn validate_transport_security(
     {
         return Err(TransportPolicyError::NonLoopbackListenerRequiresTlsAndCredentials);
     }
+    if policy == TransportPolicy::Listener
+        && !security.endpoint.is_loopback()
+        && security.access_policy.is_none()
+    {
+        return Err(TransportPolicyError::NonLoopbackListenerRequiresScopedCredentials);
+    }
     Ok(())
 }
 
@@ -140,6 +152,8 @@ pub enum TransportPolicyError {
     CredentialsRequired,
     /// A public integration listener requires TLS and credentials.
     NonLoopbackListenerRequiresTlsAndCredentials,
+    /// A public integration listener requires explicit resource and operation grants.
+    NonLoopbackListenerRequiresScopedCredentials,
 }
 
 impl fmt::Display for TransportPolicyError {
@@ -152,12 +166,16 @@ impl Error for TransportPolicyError {}
 
 #[cfg(test)]
 mod tests {
-    use uob_application::CredentialReference;
-    use uob_contracts::Environment;
+    use uob_application::{
+        AccessGrant, AccessPermission, AccessPolicy, AccessResourceScope, CredentialReference,
+    };
+    use uob_contracts::{
+        AuthenticatedCommandOrigin, BridgeId, Environment, PrincipalId, StationId, TargetInstanceId,
+    };
 
     use super::{
-        EndpointError, NetworkEndpoint, TransportEncryption, TransportPolicy, TransportPolicyError,
-        TransportSecurity, validate_transport_security,
+        DEFAULT_EMS_SCADA_HTTP_LISTEN_ADDRESS, EndpointError, NetworkEndpoint, TransportEncryption,
+        TransportPolicy, TransportPolicyError, TransportSecurity, validate_transport_security,
     };
 
     fn security(
@@ -174,12 +192,35 @@ mod tests {
             credentials: credentials.then(|| {
                 CredentialReference::new("/run/secrets/target").expect("credential reference")
             }),
+            access_policy: credentials.then(access_policy),
             explicitly_isolated: isolated,
         }
     }
 
+    fn access_policy() -> AccessPolicy {
+        AccessPolicy::single(
+            AccessGrant::new(
+                AuthenticatedCommandOrigin::Target {
+                    target_instance_id: TargetInstanceId::new("main").unwrap(),
+                    principal_id: PrincipalId::new("operator").unwrap(),
+                },
+                vec![AccessPermission::Read, AccessPermission::Control],
+                vec![AccessResourceScope::Station {
+                    bridge_id: BridgeId::new("bridge").unwrap(),
+                    station_id: StationId::new("station").unwrap(),
+                }],
+            )
+            .unwrap(),
+        )
+    }
+
     #[test]
     fn endpoint_parsing_is_literal_and_rejects_embedded_credentials() {
+        assert!(
+            NetworkEndpoint::parse(DEFAULT_EMS_SCADA_HTTP_LISTEN_ADDRESS)
+                .unwrap()
+                .is_loopback()
+        );
         assert!(
             NetworkEndpoint::parse("mqtt://localhost:1883")
                 .unwrap()
@@ -220,6 +261,20 @@ mod tests {
         assert_eq!(
             validate_transport_security(Environment::Demo, TransportPolicy::Listener, &listener),
             Err(TransportPolicyError::NonLoopbackListenerRequiresTlsAndCredentials)
+        );
+    }
+
+    #[test]
+    fn public_listener_rejects_credentials_without_scoped_access_policy() {
+        let mut listener = security("0.0.0.0:9080", TransportEncryption::Tls, true, true, false);
+        listener.access_policy = None;
+        assert_eq!(
+            validate_transport_security(
+                Environment::Production,
+                TransportPolicy::Listener,
+                &listener
+            ),
+            Err(TransportPolicyError::NonLoopbackListenerRequiresScopedCredentials)
         );
     }
 

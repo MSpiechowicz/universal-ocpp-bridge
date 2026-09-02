@@ -9,10 +9,11 @@ use std::{
 use serde::Serialize;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 use uob_application::{
-    CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture, CommandAdmissionPort,
-    DeliveryOutcome, DeliveryReport, RuntimeReservation, RuntimeResourceBudget, TargetDelivery,
-    TargetDeliveryReceiver, TargetPortError, TargetPortErrorCode, TargetPortFuture,
-    TargetReportPort, TargetRuntimeLimits, TargetShutdown, WorkClass,
+    AccessPolicy, CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture,
+    CommandAdmissionPort, DeliveryOutcome, DeliveryReport, RuntimeReservation,
+    RuntimeResourceBudget, ScopedCommandAdmissionPort, TargetDelivery, TargetDeliveryReceiver,
+    TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetReportPort, TargetRuntimeLimits,
+    TargetShutdown, WorkClass,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, CommandResult, ExternalCommand, Operation, TargetInstanceId,
@@ -55,6 +56,7 @@ impl TargetShutdown for ShutdownSignal {
 
 pub(super) fn guarded_commands<P>(
     inner: Arc<dyn CommandAdmissionPort<P>>,
+    authorization: AccessPolicy,
     target_instance_id: TargetInstanceId,
     supported_operations: Vec<Operation>,
     limits: TargetRuntimeLimits,
@@ -62,6 +64,8 @@ pub(super) fn guarded_commands<P>(
 where
     P: Serialize + Send + 'static,
 {
+    let inner: Arc<dyn CommandAdmissionPort<P>> =
+        Arc::new(ScopedCommandAdmissionPort::new(inner, authorization));
     Arc::new(GuardedCommandPort {
         inner,
         target_instance_id,
