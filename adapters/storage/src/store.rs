@@ -14,7 +14,7 @@ use uob_application::{
     RetainedEventCursor, RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery,
     StorageError, StorageErrorCode, StorageFuture, TargetDeliveryStore,
 };
-use uob_contracts::{Command, EventEnvelope, RequestId, StationSnapshot};
+use uob_contracts::{Command, EventEnvelope, RequestId, StationSnapshot, UtcTimestamp};
 
 use crate::{
     SqliteRuntimeConfiguration, codec,
@@ -46,7 +46,7 @@ impl<C, E, D, R> Clone for SqliteOperationalStore<C, E, D, R> {
 
 impl<C, E, D, R> SqliteOperationalStore<C, E, D, R>
 where
-    C: DeserializeOwned + Send + 'static,
+    C: Serialize + DeserializeOwned + Send + 'static,
     E: DeserializeOwned + Send + 'static,
     D: DeserializeOwned + Send + 'static,
     R: DeserializeOwned + Send + 'static,
@@ -195,6 +195,10 @@ where
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<Command<C>>> {
         self.request(|reply| Request::Command(request_id.as_str().to_owned(), reply))
+    }
+
+    fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
+        self.request(|reply| Request::PruneCommands(now.into_inner().unix_timestamp(), reply))
     }
 }
 

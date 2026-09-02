@@ -14,7 +14,10 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
                  revision INTEGER NOT NULL CHECK (revision >= 0), changed_at TEXT NOT NULL\n\
              );\n\
              CREATE TABLE IF NOT EXISTS commands (\n\
-                 request_id TEXT PRIMARY KEY, payload TEXT NOT NULL\n\
+                 request_id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL,\n\
+                 admitted_at INTEGER NOT NULL, retain_until INTEGER NOT NULL,\n\
+                 unresolved INTEGER NOT NULL DEFAULT 1 CHECK (unresolved IN (0, 1)),\n\
+                 payload TEXT NOT NULL\n\
              );\n\
              CREATE TABLE IF NOT EXISTS command_results (\n\
                  request_id TEXT PRIMARY KEY, payload TEXT NOT NULL\n\
@@ -47,7 +50,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, record_id TEXT NOT NULL UNIQUE,\n\
                  durability INTEGER NOT NULL, committed_at TEXT NOT NULL, payload TEXT NOT NULL\n\
              );\n\
-             PRAGMA user_version = 2;",
+             PRAGMA user_version = 3;",
         )
         .map_err(unavailable)?;
     add_column_if_missing(
@@ -61,7 +64,34 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         "target_deliveries",
         "next_attempt_at",
         "ALTER TABLE target_deliveries ADD COLUMN next_attempt_at TEXT",
-    )
+    )?;
+    add_column_if_missing(
+        connection,
+        "commands",
+        "fingerprint",
+        "ALTER TABLE commands ADD COLUMN fingerprint TEXT",
+    )?;
+    add_column_if_missing(
+        connection,
+        "commands",
+        "admitted_at",
+        "ALTER TABLE commands ADD COLUMN admitted_at INTEGER",
+    )?;
+    add_column_if_missing(
+        connection,
+        "commands",
+        "retain_until",
+        "ALTER TABLE commands ADD COLUMN retain_until INTEGER",
+    )?;
+    add_column_if_missing(
+        connection,
+        "commands",
+        "unresolved",
+        "ALTER TABLE commands ADD COLUMN unresolved INTEGER NOT NULL DEFAULT 1 CHECK (unresolved IN (0, 1))",
+    )?;
+    connection
+        .execute_batch("PRAGMA user_version = 3;")
+        .map_err(unavailable)
 }
 
 fn add_column_if_missing(

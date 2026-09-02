@@ -1,7 +1,7 @@
 use std::sync::mpsc;
 
-use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
-use serde::de::DeserializeOwned;
+use rusqlite::{Connection, Transaction, TransactionBehavior, params};
+use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor, Page,
@@ -15,6 +15,7 @@ use crate::{
         self, EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent,
         EncodedRecord, EncodedWrite,
     },
+    command,
     configuration::unavailable,
     delivery, recovery,
 };
@@ -40,6 +41,7 @@ pub(crate) enum Request<C, E, D, R> {
     ),
     Recover(usize, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
+    PruneCommands(i64, Reply<u64>),
     PendingDeliveries(String, i64, String, usize, Reply<Vec<ScheduledDelivery<D>>>),
     RecordDeliveryAttempt(EncodedDeliveryAttempt, Reply<()>),
     DeliveryAttempts(String, usize, Reply<Vec<RecordedDeliveryAttempt>>),
@@ -51,7 +53,7 @@ pub(crate) fn run<C, E, D, R>(
     mut connection: Connection,
     requests: mpsc::Receiver<Request<C, E, D, R>>,
 ) where
-    C: DeserializeOwned,
+    C: DeserializeOwned + Serialize,
     E: DeserializeOwned,
     D: DeserializeOwned,
     R: DeserializeOwned,
@@ -73,6 +75,9 @@ pub(crate) fn run<C, E, D, R>(
             }
             Request::Command(request_id, reply) => {
                 respond(reply, recovery::command(&connection, &request_id));
+            }
+            Request::PruneCommands(now, reply) => {
+                respond(reply, command::prune::<C>(&mut connection, now));
             }
             Request::PendingDeliveries(target, revision, ready_at, limit, reply) => respond(
                 reply,
@@ -100,8 +105,11 @@ fn write_atomic(
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(unavailable)?;
-    let command = admit_command(&transaction, write.command.as_ref())?;
-    if command == Some(CommandAdmissionOutcome::Duplicate) {
+    let command = command::admit(&transaction, write.command.as_ref())?;
+    if matches!(
+        command.as_ref(),
+        Some(CommandAdmissionOutcome::Duplicate { .. })
+    ) {
         return Ok(AtomicWriteOutcome { command });
     }
     if let Some((station, payload)) = write.snapshot {
@@ -116,12 +124,18 @@ fn write_atomic(
     for change in write.authorization {
         write_authorization(&transaction, &change)?;
     }
-    if let Some((request_id, payload)) = write.command_result {
+    if let Some(result) = write.command_result {
         transaction
             .execute(
                 "INSERT INTO command_results(request_id, payload) VALUES (?1, ?2)\n\
                  ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload",
-                params![request_id, payload],
+                params![result.request_id, result.payload],
+            )
+            .map_err(unavailable)?;
+        transaction
+            .execute(
+                "UPDATE commands SET unresolved = ?2 WHERE request_id = ?1",
+                params![result.request_id, i64::from(result.unresolved)],
             )
             .map_err(unavailable)?;
     }
@@ -136,40 +150,6 @@ fn write_atomic(
     }
     transaction.commit().map_err(unavailable)?;
     Ok(AtomicWriteOutcome { command })
-}
-
-fn admit_command(
-    transaction: &Transaction<'_>,
-    command: Option<&(String, String)>,
-) -> Result<Option<CommandAdmissionOutcome>, StorageError> {
-    let Some((request_id, payload)) = command else {
-        return Ok(None);
-    };
-    let existing = transaction
-        .query_row(
-            "SELECT payload FROM commands WHERE request_id = ?1",
-            [request_id],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(unavailable)?;
-    if let Some(existing) = existing {
-        return if existing == *payload {
-            Ok(Some(CommandAdmissionOutcome::Duplicate))
-        } else {
-            Err(StorageError::new(
-                StorageErrorCode::Conflict,
-                "request ID is already associated with another command",
-            ))
-        };
-    }
-    transaction
-        .execute(
-            "INSERT INTO commands(request_id, payload) VALUES (?1, ?2)",
-            params![request_id, payload],
-        )
-        .map_err(unavailable)?;
-    Ok(Some(CommandAdmissionOutcome::Admitted))
 }
 
 fn write_authorization(

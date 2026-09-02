@@ -1,6 +1,7 @@
 #![doc = "Crash-safe SQLite implementation of the application-owned operational store."]
 
 mod codec;
+mod command;
 mod configuration;
 mod delivery;
 mod recovery;

@@ -52,12 +52,13 @@ pub use security::{IsolatedControl, RuntimeSecurityPolicy, SecurityPolicyError};
 pub use station::{SizedStationOutput, StationEffects, StationInput, StationStateMachine};
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordId, CommittedRecordQuery, DeliveryAttempt, DeliveryAttemptResolution,
-    DeliveryId, Durability, OperationalStore, Page, PageLimit, PageLimitError, PendingDelivery,
-    PendingDeliveryQuery, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
-    RetainedEventCursor, RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery,
-    StorageError, StorageErrorCode, StorageFuture, TargetDeliveryStore,
+    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommandAdmissionOutcome,
+    CommittedRecord, CommittedRecordCursor, CommittedRecordId, CommittedRecordQuery,
+    DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, Durability, OperationalStore, Page,
+    PageLimit, PageLimitError, PendingDelivery, PendingDeliveryQuery, RecordedDeliveryAttempt,
+    RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventQuery, ScheduledDelivery,
+    SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
+    TargetDeliveryStore,
 };
 pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,

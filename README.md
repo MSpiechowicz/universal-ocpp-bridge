@@ -87,6 +87,11 @@ local charging on target availability. See
 [durable target delivery](docs/architecture/durable-target-delivery.md) for ordering, retry,
 acknowledgement, recovery, and at-least-once semantics.
 
+Command retries are deduplicated atomically across concurrent submissions and restarts, with safe
+conflicts, known-result replay, and protected unresolved outcomes. See
+[durable command deduplication](docs/architecture/command-deduplication.md) for fingerprint and
+seven-day retention semantics.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
