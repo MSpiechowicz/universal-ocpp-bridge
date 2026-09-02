@@ -28,7 +28,8 @@ repository = "https://github.com/MSpiechowicz/universal-ocpp-bridge"
 rust-version = "1.98"
 
 [workspace.dependencies]
-axum = "=0.8.9"
+axum = { version = "=0.8.9", features = ["ws"] }
+base64 = "=0.22.1"
 ocpp-client = { version = "=0.5.0", default-features = false, features = ["std", "tokio-runtime", "websocket", "ocpp_1_6", "ocpp_2_0_1"] }
 rcgen = "=0.14.5"
 rust-ocpp = { version = "=3.0.4", default-features = false, features = ["v1_6", "v2_0_1"] }
