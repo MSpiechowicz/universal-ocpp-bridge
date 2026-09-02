@@ -97,6 +97,10 @@ commands with ambiguous transmission remain unresolved and are never replayed af
 [uncertain command recovery](docs/architecture/uncertain-command-recovery.md) for live-session
 dispatch classification and observed-state reconciliation.
 
+Critical business-event consumers resume from resource-scoped durable checkpoints, including at
+the current live end. See [durable event cursors](docs/architecture/durable-event-cursors.md) for
+restart behavior, expired-cursor snapshot recovery, and separation from telemetry and traces.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

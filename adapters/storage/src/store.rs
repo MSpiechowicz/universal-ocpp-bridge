@@ -10,11 +10,12 @@ use tokio::sync::oneshot;
 use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
     CommittedRecordQuery, DeliveryAttempt, DeliveryId, OperationalStore, Page,
-    PendingDeliveryQuery, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
-    RetainedEventCursor, RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery,
-    StorageError, StorageErrorCode, StorageFuture, TargetDeliveryStore,
+    PendingDeliveryQuery, RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch,
+    RecoveryQuery, RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery,
+    SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
+    TargetDeliveryStore,
 };
-use uob_contracts::{Command, EventEnvelope, RequestId, StationSnapshot, UtcTimestamp};
+use uob_contracts::{Command, RequestId, StationSnapshot, UtcTimestamp};
 
 use crate::{
     SqliteRuntimeConfiguration, codec,
@@ -154,12 +155,12 @@ where
     fn read_retained_events(
         &self,
         query: RetainedEventQuery,
-    ) -> StorageFuture<'_, Page<EventEnvelope<E>, RetainedEventCursor>> {
+    ) -> StorageFuture<'_, RetainedEventPage<E>> {
         let resource = match codec::resource_key(&query.resource) {
             Ok(resource) => resource,
             Err(error) => return Box::pin(async move { Err(error) }),
         };
-        let after = match numeric_cursor(query.after.as_ref().map(RetainedEventCursor::as_str)) {
+        let after = match event_cursor(query.after.as_ref()) {
             Ok(after) => after,
             Err(error) => return Box::pin(async move { Err(error) }),
         };
@@ -262,6 +263,24 @@ where
             )
         })
     }
+}
+
+fn event_cursor(value: Option<&RetainedEventCursor>) -> Result<Option<i64>, StorageError> {
+    value
+        .map(|value| {
+            value
+                .as_str()
+                .strip_prefix(RETAINED_EVENT_CURSOR_PREFIX)
+                .and_then(|position| position.parse::<i64>().ok())
+                .filter(|position| *position > 0)
+                .ok_or_else(|| {
+                    StorageError::new(
+                        StorageErrorCode::CursorExpired,
+                        "durable event cursor expired; fetch a fresh snapshot",
+                    )
+                })
+        })
+        .transpose()
 }
 
 fn numeric_cursor(value: Option<&str>) -> Result<Option<i64>, StorageError> {

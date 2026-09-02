@@ -1,11 +1,9 @@
-use uob_contracts::{
-    Command, CommandResult, EventEnvelope, RequestId, StationSnapshot, UtcTimestamp,
-};
+use uob_contracts::{Command, CommandResult, RequestId, StationSnapshot, UtcTimestamp};
 
 use super::{
     AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
     CommittedRecordQuery, DeliveryAttempt, DeliveryId, Page, PageLimit, PendingDeliveryQuery,
-    RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventQuery,
+    RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
     ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageFuture,
 };
 
@@ -30,11 +28,16 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
         query: SnapshotQuery,
     ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>>;
 
-    /// Reads a bounded page from one retained durable event stream.
+    /// Reads a bounded page from one retained durable business-event stream.
+    ///
+    /// A supplied cursor must still identify a retained position in this exact resource stream.
+    /// Implementations return `StorageErrorCode::CursorExpired` instead of moving the caller to a
+    /// newer position when that proof is unavailable. Telemetry and diagnostic sequence values
+    /// are not cursors for this port.
     fn read_retained_events(
         &self,
         query: RetainedEventQuery,
-    ) -> StorageFuture<'_, Page<EventEnvelope<E>, RetainedEventCursor>>;
+    ) -> StorageFuture<'_, RetainedEventPage<E>>;
 
     /// Reads records that became visible through completed atomic writes.
     fn read_committed_records(

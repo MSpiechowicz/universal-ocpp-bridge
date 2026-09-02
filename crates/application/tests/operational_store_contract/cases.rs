@@ -19,7 +19,7 @@ fn atomic_failure_exposes_no_command_event_delivery_or_committed_record() {
             limit: PageLimit::new(10).expect("bounded page"),
         }))
         .expect("event read")
-        .items
+        .events
         .is_empty()
     );
     assert!(
@@ -96,13 +96,26 @@ fn bounded_reads_cursor_expiry_and_sanitized_error_mapping_are_explicit() {
 
     let expired = block_on(store.read_retained_events(RetainedEventQuery {
         resource: resource(),
-        after: Some(text(RetainedEventCursor::new, "expired")),
+        after: Some(text(RetainedEventCursor::new, "uob:event:expired")),
         limit: PageLimit::new(1).expect("bounded page"),
     }))
     .expect_err("expired cursor");
     assert_eq!(expired.code(), StorageErrorCode::CursorExpired);
     assert_eq!(expired.detail(), "event cursor expired after retention");
     assert!(std::error::Error::source(&expired).is_none());
+}
+
+#[test]
+fn telemetry_and_trace_sequences_are_not_durable_event_cursors() {
+    let committed_cursor = text(CommittedRecordCursor::new, "7");
+    let committed_error = RetainedEventCursor::new(committed_cursor.as_str().to_owned())
+        .expect_err("committed telemetry cursor must have a different namespace");
+    assert_eq!(committed_error.code(), StorageErrorCode::InvalidRequest);
+
+    let trace_sequence = uob_contracts::TraceSequence(7);
+    let trace_error = RetainedEventCursor::new(trace_sequence.0.to_string())
+        .expect_err("best-effort trace sequence must not become a durable cursor");
+    assert_eq!(trace_error.code(), StorageErrorCode::InvalidRequest);
 }
 
 #[test]

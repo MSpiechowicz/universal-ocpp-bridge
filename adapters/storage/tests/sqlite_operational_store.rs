@@ -112,7 +112,7 @@ fn failed_delivery_insert_rolls_back_event_after_reopen() {
     }))
     .expect("read journal after reopen");
     assert!(
-        events.items.is_empty(),
+        events.events.is_empty(),
         "journal insert must have rolled back"
     );
 
@@ -399,3 +399,6 @@ fn version_at_least(actual: &str, minimum: &str) -> bool {
     };
     components(actual) >= components(minimum)
 }
+
+#[path = "sqlite_operational_store/durable_event_cursors.rs"]
+mod durable_event_cursors;
