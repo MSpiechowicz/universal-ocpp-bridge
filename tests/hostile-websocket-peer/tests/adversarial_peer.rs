@@ -261,6 +261,7 @@ async fn observations_are_bounded_and_store_digests_instead_of_payloads() {
         max_outbound_bytes: 128,
         max_inbound_bytes: 128,
         observation_capacity: 2,
+        authorization: None,
     })
     .await
     .unwrap();

@@ -1,5 +1,6 @@
 #![doc = "Protocol adapter boundary. Concrete protocol model crates belong here."]
 
+mod call;
 mod endpoint;
 mod error;
 mod security;
@@ -7,6 +8,12 @@ mod station;
 pub mod v16;
 pub mod v201;
 
+pub use call::{
+    CallSessionConfiguration, CallSessionConfigurationError, CallSessionDiagnostic,
+    CallSessionHandle, CallSessionOutputs, CallSessionTask, IncomingCall, IncomingCallReceiver,
+    IncomingCallResponder, OutboundCall, PendingCall, RemoteCallError, SessionCallOutcome,
+    SessionSubmitError, TransmissionUncertainReason, spawn_call_session,
+};
 pub use endpoint::{
     OcppEndpoint, StationConnection, StationConnectionReceiver, StationEndpointConfigurationError,
     StationEndpointServeError,
