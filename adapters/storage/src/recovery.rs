@@ -85,7 +85,7 @@ pub(crate) fn command<C: DeserializeOwned>(
 
 fn read_authorization(connection: &Connection) -> Result<Vec<AuthorizationChange>, StorageError> {
     let mut statement = connection.prepare(
-        "SELECT reference, resource, state, revision, changed_at FROM authorization_changes ORDER BY reference",
+        "SELECT reference, resource, state, revision, changed_at, expires_at FROM authorization_changes ORDER BY reference",
     ).map_err(unavailable)?;
     let rows = statement
         .query_map([], |row| {
@@ -95,12 +95,13 @@ fn read_authorization(connection: &Connection) -> Result<Vec<AuthorizationChange
                 row.get::<_, i64>(2)?,
                 row.get::<_, i64>(3)?,
                 row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
             ))
         })
         .map_err(unavailable)?;
     collect_rows(rows)?
         .into_iter()
-        .map(|(a, b, c, d, e)| codec::decode_authorization(a, &b, c, d, &e))
+        .map(|(a, b, c, d, e, f)| codec::decode_authorization(a, &b, c, d, &e, f.as_deref()))
         .collect()
 }
 

@@ -125,6 +125,11 @@ explicit enablement, TLS, and resource-scoped credentials. See
 [management and integration access policy](docs/security/management-and-integration-access.md) for
 the shared read/control/privileged command guard and equivalent MQTT ACL classes.
 
+Charging identities are resolved to opaque SHA-256 references and decided from a persisted local
+allowlist, so target and internet outages do not disable authorized charging. See
+[local authorization policy](docs/security/local-authorization.md) for expiry, revocation, resource
+scope, restart recovery, command-ingress enforcement, and production test-provider guards.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

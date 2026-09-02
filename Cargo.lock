@@ -2705,6 +2705,7 @@ dependencies = [
 name = "uob-provider-adapter"
 version = "0.13.0"
 dependencies = [
+ "sha2",
  "uob-application",
 ]
 

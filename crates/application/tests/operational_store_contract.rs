@@ -386,6 +386,7 @@ fn populated_write()
             state: AuthorizationState::Active,
             revision: 1,
             changed_at: timestamp(0),
+            expires_at: None,
         }],
         command: Some(command()),
         command_result: None,

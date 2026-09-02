@@ -2,6 +2,7 @@
 
 mod access;
 mod admission;
+mod authorization;
 mod command;
 mod database;
 mod diagnostic;
@@ -21,6 +22,12 @@ pub use access::{
 };
 pub use admission::{
     CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture, CommandAdmissionPort,
+};
+pub use authorization::{
+    AuthorizationDecision, AuthorizationDenialReason, AuthorizationGuardedCommandPort,
+    AuthorizationPolicyError, AuthorizationProvider, AuthorizationProviderDescriptor,
+    AuthorizationProviderError, AuthorizationProviderFuture, LocalAuthorizationPolicy,
+    LocalAuthorizationService, SensitiveAuthorizationToken,
 };
 pub use command::{
     CommandClock, CommandCoordinator, CommandDispatchOutcome, CommandRecoveryBatch,

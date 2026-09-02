@@ -47,6 +47,7 @@ pub(crate) struct EncodedAuthorization {
     pub state: i64,
     pub revision: i64,
     pub changed_at: String,
+    pub expires_at: Option<String>,
 }
 
 #[derive(Debug)]
@@ -121,6 +122,7 @@ where
                 state: durability_or_state(value.state),
                 revision: unsigned(value.revision, "authorization revision")?,
                 changed_at: json(&value.changed_at)?,
+                expires_at: value.expires_at.map(|value| json(&value)).transpose()?,
             })
         })
         .collect::<Result<_, StorageError>>()?;
@@ -269,6 +271,7 @@ pub(crate) fn decode_authorization(
     state: i64,
     revision: i64,
     changed_at: &str,
+    expires_at: Option<&str>,
 ) -> Result<AuthorizationChange, StorageError> {
     Ok(AuthorizationChange {
         reference: AuthorizationReference::new(reference).map_err(integrity)?,
@@ -280,6 +283,7 @@ pub(crate) fn decode_authorization(
         },
         revision: signed(revision, "authorization revision")?,
         changed_at: from_json(changed_at)?,
+        expires_at: expires_at.map(from_json).transpose()?,
     })
 }
 
