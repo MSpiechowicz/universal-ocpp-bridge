@@ -1,8 +1,9 @@
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uob_application::{
-    AtomicStoreWrite, AuthorizationChange, AuthorizationReference, AuthorizationState,
-    CommittedRecord, CommittedRecordId, DeliveryId, Durability, PendingDelivery, StorageError,
-    StorageErrorCode,
+    AcknowledgementScope, AtomicStoreWrite, AuthorizationChange, AuthorizationReference,
+    AuthorizationState, CommittedRecord, CommittedRecordId, DeliveryAttempt,
+    DeliveryAttemptResolution, DeliveryId, DeliveryOutcome, Durability, PendingDelivery,
+    RecordedDeliveryAttempt, StorageError, StorageErrorCode,
 };
 use uob_contracts::{
     Command, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot, TargetInstanceId,
@@ -54,6 +55,24 @@ pub(crate) struct EncodedRecord {
     pub durability: i64,
     pub committed_at: String,
     pub payload: String,
+}
+
+#[derive(Debug)]
+pub(crate) struct EncodedDeliveryAttempt {
+    pub delivery_id: String,
+    pub outcome: String,
+    pub reported_at: String,
+    pub resolution: i64,
+    pub retry_at: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+enum StoredDeliveryOutcome {
+    LocallyExposed { surface: String },
+    Acknowledged { peer: String, scope: String },
+    RetryableFailure { reason: String },
+    PermanentFailure { reason: String },
+    Uncertain { reason: String },
 }
 
 pub(crate) fn encode_write<C, E, D, R>(
@@ -196,6 +215,80 @@ pub(crate) fn decode_record<R: DeserializeOwned>(
     })
 }
 
+pub(crate) fn encode_delivery_attempt(
+    attempt: &DeliveryAttempt,
+) -> Result<EncodedDeliveryAttempt, StorageError> {
+    let (resolution, retry_at) = match attempt.resolution {
+        DeliveryAttemptResolution::RetryAt(at) => (0, Some(json(&at)?)),
+        DeliveryAttemptResolution::Final => (1, None),
+    };
+    Ok(EncodedDeliveryAttempt {
+        delivery_id: attempt.report.delivery_id.as_str().to_owned(),
+        outcome: json(&StoredDeliveryOutcome::from(&attempt.report.outcome))?,
+        reported_at: json(&attempt.report.reported_at)?,
+        resolution,
+        retry_at,
+    })
+}
+
+pub(crate) fn decode_delivery_attempt(
+    delivery_id: String,
+    outcome: &str,
+    reported_at: &str,
+    resolution: i64,
+    retry_at: Option<&str>,
+) -> Result<RecordedDeliveryAttempt, StorageError> {
+    let resolution = match (resolution, retry_at) {
+        (0, Some(retry_at)) => DeliveryAttemptResolution::RetryAt(from_json(retry_at)?),
+        (1, None) => DeliveryAttemptResolution::Final,
+        _ => return Err(corrupt("invalid delivery attempt resolution")),
+    };
+    Ok(RecordedDeliveryAttempt {
+        delivery_id: DeliveryId::new(delivery_id).map_err(integrity)?,
+        outcome: StoredDeliveryOutcome::into_application(from_json(outcome)?),
+        reported_at: from_json(reported_at)?,
+        resolution,
+    })
+}
+
+impl From<&DeliveryOutcome> for StoredDeliveryOutcome {
+    fn from(value: &DeliveryOutcome) -> Self {
+        match value {
+            DeliveryOutcome::LocallyExposed { surface } => Self::LocallyExposed {
+                surface: surface.clone(),
+            },
+            DeliveryOutcome::Acknowledged { peer, scope } => Self::Acknowledged {
+                peer: peer.clone(),
+                scope: scope.0.clone(),
+            },
+            DeliveryOutcome::RetryableFailure { reason } => Self::RetryableFailure {
+                reason: reason.clone(),
+            },
+            DeliveryOutcome::PermanentFailure { reason } => Self::PermanentFailure {
+                reason: reason.clone(),
+            },
+            DeliveryOutcome::Uncertain { reason } => Self::Uncertain {
+                reason: reason.clone(),
+            },
+        }
+    }
+}
+
+impl StoredDeliveryOutcome {
+    fn into_application(self) -> DeliveryOutcome {
+        match self {
+            Self::LocallyExposed { surface } => DeliveryOutcome::LocallyExposed { surface },
+            Self::Acknowledged { peer, scope } => DeliveryOutcome::Acknowledged {
+                peer,
+                scope: AcknowledgementScope(scope),
+            },
+            Self::RetryableFailure { reason } => DeliveryOutcome::RetryableFailure { reason },
+            Self::PermanentFailure { reason } => DeliveryOutcome::PermanentFailure { reason },
+            Self::Uncertain { reason } => DeliveryOutcome::Uncertain { reason },
+        }
+    }
+}
+
 pub(crate) fn decode_snapshot(value: &str) -> Result<StationSnapshot, StorageError> {
     from_json(value)
 }
@@ -215,6 +308,10 @@ pub(crate) fn decode_result(value: &str) -> Result<CommandResult, StorageError> 
 }
 
 pub(crate) fn resource_key(value: &ResourceRef) -> Result<String, StorageError> {
+    json(value)
+}
+
+pub(crate) fn timestamp_key(value: &uob_contracts::UtcTimestamp) -> Result<String, StorageError> {
     json(value)
 }
 

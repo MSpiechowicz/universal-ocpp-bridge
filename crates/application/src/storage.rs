@@ -5,6 +5,8 @@ use uob_contracts::{
     TargetInstanceId, UtcTimestamp,
 };
 
+use crate::{DeliveryOutcome, DeliveryReport};
+
 /// Largest page a caller may request from an operational read port.
 pub const MAX_PAGE_SIZE: u16 = 100;
 
@@ -177,6 +179,59 @@ pub struct PendingDelivery<D> {
     pub durability: Durability,
     /// Typed, target-neutral payload.
     pub payload: D,
+}
+
+/// Bounded query for target work whose persisted retry delay has elapsed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingDeliveryQuery {
+    /// Only work owned by this configured target is returned.
+    pub target_instance_id: TargetInstanceId,
+    /// Only work created by this immutable configuration revision is returned.
+    pub target_configuration_revision: u64,
+    /// Trusted host time used to exclude delayed retry work.
+    pub ready_at: UtcTimestamp,
+    /// Maximum number of deliveries returned.
+    pub limit: PageLimit,
+}
+
+/// One ready outbox entry together with its durable attempt count.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScheduledDelivery<D> {
+    /// Stable target-neutral work recovered from the outbox.
+    pub delivery: PendingDelivery<D>,
+    /// Reports already recorded for this delivery, retained across restarts.
+    pub attempt_count: u32,
+}
+
+/// Host policy decision persisted atomically with an exact delivery report.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeliveryAttemptResolution {
+    /// Keep the outbox row and make it eligible again at this instant.
+    RetryAt(UtcTimestamp),
+    /// Remove the outbox row after preserving the exact final report.
+    Final,
+}
+
+/// Exact target report and host policy decision for one attempt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeliveryAttempt {
+    /// Exact non-boolean outcome emitted by the target adapter.
+    pub report: DeliveryReport,
+    /// Whether policy retries or finalizes the pending work.
+    pub resolution: DeliveryAttemptResolution,
+}
+
+/// Durable audit view of one target delivery attempt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordedDeliveryAttempt {
+    /// Stable delivery identity shared by every retry.
+    pub delivery_id: DeliveryId,
+    /// Exact outcome, without collapsing local exposure into peer acknowledgement.
+    pub outcome: DeliveryOutcome,
+    /// Target-reported time for the attempt.
+    pub reported_at: UtcTimestamp,
+    /// Persisted host policy decision.
+    pub resolution: DeliveryAttemptResolution,
 }
 
 /// Record exposed only after the atomic write that produced it commits.
@@ -407,4 +462,27 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
     /// Reads one durably admitted command by idempotency identity.
     fn command_by_request_id(&self, request_id: RequestId)
     -> StorageFuture<'_, Option<Command<C>>>;
+}
+
+/// Narrow durable outbox surface used by target delivery supervision.
+///
+/// Keeping this separate from [`OperationalStore`] prevents the target worker from gaining
+/// command, authorization, snapshot, journal, or external-export access.
+pub trait TargetDeliveryStore<D>: Send + Sync {
+    /// Reads ready work in stable insertion order while preserving head-of-line ordering for each
+    /// canonical resource key.
+    fn read_pending_deliveries(
+        &self,
+        query: PendingDeliveryQuery,
+    ) -> StorageFuture<'_, Vec<ScheduledDelivery<D>>>;
+
+    /// Persists the exact report and its retry/final decision in one transaction.
+    fn record_delivery_attempt(&self, attempt: DeliveryAttempt) -> StorageFuture<'_, ()>;
+
+    /// Reads the bounded audit history for one stable delivery identity, newest first.
+    fn delivery_attempts(
+        &self,
+        delivery_id: DeliveryId,
+        limit: PageLimit,
+    ) -> StorageFuture<'_, Vec<RecordedDeliveryAttempt>>;
 }

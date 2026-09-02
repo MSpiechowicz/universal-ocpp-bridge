@@ -2,6 +2,7 @@
 
 mod codec;
 mod configuration;
+mod delivery;
 mod recovery;
 mod schema;
 mod store;
