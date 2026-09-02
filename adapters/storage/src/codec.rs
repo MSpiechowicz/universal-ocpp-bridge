@@ -1,23 +1,41 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sha2::{Digest, Sha256};
 use uob_application::{
     AcknowledgementScope, AtomicStoreWrite, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, CommittedRecord, CommittedRecordId, DeliveryAttempt,
-    DeliveryAttemptResolution, DeliveryId, DeliveryOutcome, Durability, PendingDelivery,
-    RecordedDeliveryAttempt, StorageError, StorageErrorCode,
+    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommittedRecord,
+    CommittedRecordId, DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, DeliveryOutcome,
+    Durability, PendingDelivery, RecordedDeliveryAttempt, StorageError, StorageErrorCode,
 };
 use uob_contracts::{
-    Command, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot, TargetInstanceId,
+    Command, CommandLifecycle, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot,
+    TargetInstanceId,
 };
 
 #[derive(Debug)]
 pub(crate) struct EncodedWrite {
     pub snapshot: Option<(String, String)>,
     pub authorization: Vec<EncodedAuthorization>,
-    pub command: Option<(String, String)>,
-    pub command_result: Option<(String, String)>,
+    pub command: Option<EncodedCommand>,
+    pub command_result: Option<EncodedCommandResult>,
     pub events: Vec<EncodedEvent>,
     pub deliveries: Vec<EncodedDelivery>,
     pub records: Vec<EncodedRecord>,
+}
+
+#[derive(Debug)]
+pub(crate) struct EncodedCommand {
+    pub request_id: String,
+    pub fingerprint: String,
+    pub admitted_at: i64,
+    pub retain_until: i64,
+    pub payload: String,
+}
+
+#[derive(Debug)]
+pub(crate) struct EncodedCommandResult {
+    pub request_id: String,
+    pub unresolved: bool,
+    pub payload: String,
 }
 
 #[derive(Debug)]
@@ -101,17 +119,20 @@ where
             })
         })
         .collect::<Result<_, StorageError>>()?;
-    let command = write
-        .command
-        .map(|value| Ok((value.request_id.as_str().to_owned(), json(&value)?)))
-        .transpose()?;
+    let command = write.command.as_ref().map(encode_command).transpose()?;
     let command_result = write
         .command_result
         .map(|value| {
-            Ok((
-                value.return_route.request_id.as_str().to_owned(),
-                json(&value)?,
-            ))
+            Ok(EncodedCommandResult {
+                request_id: value.return_route.request_id.as_str().to_owned(),
+                unresolved: matches!(
+                    value.lifecycle,
+                    CommandLifecycle::Admitted
+                        | CommandLifecycle::Dispatched
+                        | CommandLifecycle::TransmissionUncertain { .. }
+                ),
+                payload: json(&value)?,
+            })
         })
         .transpose()?;
     let events = write
@@ -163,6 +184,73 @@ where
         deliveries,
         records,
     })
+}
+
+pub(crate) fn encode_command<P: Serialize>(
+    value: &Command<P>,
+) -> Result<EncodedCommand, StorageError> {
+    let admitted_at = value.admitted_at.into_inner().unix_timestamp();
+    let retain_until = admitted_at
+        .checked_add(COMMAND_DEDUPLICATION_RETENTION_SECONDS)
+        .ok_or_else(|| {
+            StorageError::new(
+                StorageErrorCode::InvalidRequest,
+                "command retention timestamp exceeds supported range",
+            )
+        })?;
+    let request_id = value.request_id.as_str().to_owned();
+    let payload = json(&value)?;
+    let fingerprint = command_fingerprint(&payload)?;
+    Ok(EncodedCommand {
+        request_id,
+        fingerprint,
+        admitted_at,
+        retain_until,
+        payload,
+    })
+}
+
+pub(crate) fn command_fingerprint(payload: &str) -> Result<String, StorageError> {
+    let mut value: serde_json::Value = from_json(payload)?;
+    let object = value.as_object_mut().ok_or_else(|| {
+        StorageError::new(
+            StorageErrorCode::IntegrityFailure,
+            "stored command is not a JSON object",
+        )
+    })?;
+    object.remove("request_id");
+    object.remove("admitted_at");
+    sort_json(&mut value);
+    let normalized = serde_json::to_vec(&value).map_err(|_| {
+        StorageError::new(
+            StorageErrorCode::InvalidRequest,
+            "command fingerprint serialization failed",
+        )
+    })?;
+    let digest = Sha256::digest(normalized);
+    let alphabet = b"0123456789abcdef";
+    let mut fingerprint = String::with_capacity(71);
+    fingerprint.push_str("sha256:");
+    for byte in digest {
+        fingerprint.push(char::from(alphabet[usize::from(byte >> 4)]));
+        fingerprint.push(char::from(alphabet[usize::from(byte & 0x0f)]));
+    }
+    Ok(fingerprint)
+}
+
+fn sort_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Array(values) => values.iter_mut().for_each(sort_json),
+        serde_json::Value::Object(values) => {
+            let mut entries = std::mem::take(values).into_iter().collect::<Vec<_>>();
+            entries.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+            for (key, mut child) in entries {
+                sort_json(&mut child);
+                values.insert(key, child);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub(crate) fn decode_authorization(

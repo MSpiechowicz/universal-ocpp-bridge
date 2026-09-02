@@ -10,6 +10,9 @@ use crate::{DeliveryOutcome, DeliveryReport};
 /// Largest page a caller may request from an operational read port.
 pub const MAX_PAGE_SIZE: u16 = 100;
 
+/// Minimum lifetime of a resolved command's idempotency record.
+pub const COMMAND_DEDUPLICATION_RETENTION_SECONDS: i64 = 7 * 24 * 60 * 60;
+
 /// Object-safe future returned by operational storage implementations.
 pub type StorageFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, StorageError>> + Send + 'a>>;
 
@@ -287,16 +290,19 @@ impl<C, E, D, R> AtomicStoreWrite<C, E, D, R> {
 }
 
 /// Result of request-ID deduplication performed inside the atomic commit.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandAdmissionOutcome {
     /// This transaction durably admitted a previously unseen request.
     Admitted,
     /// An identical command was already durably admitted.
-    Duplicate,
+    Duplicate {
+        /// Latest durable result known for the original command, when one has been recorded.
+        result: Option<Box<CommandResult>>,
+    },
 }
 
 /// Visible outcome of one successful atomic write.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AtomicWriteOutcome {
     /// Admission outcome when the write included a command.
     pub command: Option<CommandAdmissionOutcome>,
@@ -462,6 +468,12 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
     /// Reads one durably admitted command by idempotency identity.
     fn command_by_request_id(&self, request_id: RequestId)
     -> StorageFuture<'_, Option<Command<C>>>;
+
+    /// Removes resolved command identities whose seven-day retention period has elapsed.
+    ///
+    /// Commands without a terminal result, including transmission-uncertain commands, must be
+    /// retained regardless of age. The returned count is the number of removed identities.
+    fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64>;
 }
 
 /// Narrow durable outbox surface used by target delivery supervision.

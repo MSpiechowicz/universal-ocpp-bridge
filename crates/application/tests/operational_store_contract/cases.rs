@@ -57,7 +57,10 @@ fn atomic_success_and_identical_retry_are_visible_without_duplication() {
     let first = block_on(store.write_atomic(populated_write())).expect("first commit");
     assert_eq!(first.command, Some(CommandAdmissionOutcome::Admitted));
     let retry = block_on(store.write_atomic(populated_write())).expect("idempotent retry");
-    assert_eq!(retry.command, Some(CommandAdmissionOutcome::Duplicate));
+    assert_eq!(
+        retry.command,
+        Some(CommandAdmissionOutcome::Duplicate { result: None })
+    );
     let mut conflicting_write = populated_write();
     conflicting_write
         .command

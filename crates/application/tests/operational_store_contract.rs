@@ -74,7 +74,7 @@ impl
                 match candidate.commands.get(command.request_id.as_str()) {
                     Some(existing) if existing == &command => {
                         return Ok(AtomicWriteOutcome {
-                            command: Some(CommandAdmissionOutcome::Duplicate),
+                            command: Some(CommandAdmissionOutcome::Duplicate { result: None }),
                         });
                     }
                     Some(_) => {
@@ -228,6 +228,10 @@ impl
                 .cloned())
         })
     }
+
+    fn prune_command_deduplication(&self, _now: UtcTimestamp) -> StorageFuture<'_, u64> {
+        Box::pin(async { Ok(0) })
+    }
 }
 
 #[derive(Clone, Default)]
@@ -286,6 +290,10 @@ impl
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<Command<TestCommandPayload>>> {
         self.0.command_by_request_id(request_id)
+    }
+
+    fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
+        self.0.prune_command_deduplication(now)
     }
 }
 
