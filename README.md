@@ -119,3 +119,7 @@ the shared read/control/privileged command guard and equivalent MQTT ACL classes
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
+
+Core readiness, new-session admission, component degradation, and resource counters are exposed
+separately. See [health and metrics](docs/operations/health-readiness-metrics.md) for endpoint and
+failure semantics.

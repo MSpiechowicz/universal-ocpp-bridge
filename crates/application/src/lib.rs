@@ -5,6 +5,7 @@ mod admission;
 mod command;
 mod database;
 mod diagnostic;
+mod health;
 mod payment;
 mod protocol;
 mod query;
@@ -41,6 +42,11 @@ pub use diagnostic::{
     SafeDiagnosticField, SafeEndpointLabel, SafeEndpointLabelError, SanitizedDiagnostic,
     SensitiveDataClass, SensitiveDiagnosticValue, UnknownVendorPayload,
 };
+pub use health::{
+    AuxiliaryProcess, ComponentHealth, ComponentHealthState, ComponentKind, CoreLoopState,
+    HealthMonitor, HealthSnapshot, LatencyClass, LatencySnapshot, ProcessResourceMetrics,
+    ReadinessState, StorageHealthState, StorageRetentionStatusView,
+};
 pub use payment::{
     CheckoutIntent, CheckoutIntentId, CheckoutPresentation, CheckoutRequest, PaymentAuditPort,
     PaymentAuthorizationAudit, PaymentAuthorizationInput, PaymentError, PaymentErrorCode,
@@ -56,8 +62,9 @@ pub use resource::{
     AdmissionError, AdmissionLimit, DEFAULT_AGGREGATE_QUEUED_PAYLOAD_BYTES,
     DEFAULT_MAX_CONNECTED_STATIONS, DEFAULT_MAX_OCPP_MESSAGE_BYTES, DEFAULT_TRACE_RING_BYTES,
     DiagnosticDropReason, LaggingConsumer, LaggingConsumerAction, ReplaceableTelemetrySlot,
-    RuntimeQueueLimits, RuntimeReservation, RuntimeResourceBudget, RuntimeResourceLimits,
-    RuntimeResourceSnapshot, StationAdmission, TelemetryReplaceOutcome, WorkClass,
+    RuntimeQueueLimits, RuntimeQueueSnapshot, RuntimeReservation, RuntimeResourceBudget,
+    RuntimeResourceLimits, RuntimeResourceSnapshot, StationAdmission, TelemetryReplaceOutcome,
+    WorkClass,
 };
 pub use security::{IsolatedControl, RuntimeSecurityPolicy, SecurityPolicyError};
 pub use station::{SizedStationOutput, StationEffects, StationInput, StationStateMachine};
@@ -93,13 +100,35 @@ use uob_contracts::{ContractVersion, RuntimeIdentity, ServiceIdentity};
 #[derive(Clone, Debug)]
 pub struct Application {
     identity: ServiceIdentity,
+    health: HealthMonitor,
 }
 
 impl Application {
     /// Creates the application facade with composition-root-owned identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the compile-time default runtime limits become internally invalid.
     #[must_use]
-    pub const fn new(identity: ServiceIdentity) -> Self {
-        Self { identity }
+    pub fn new(identity: ServiceIdentity) -> Self {
+        Self::with_resource_limits(identity, RuntimeResourceLimits::default())
+            .expect("default runtime resource limits are valid")
+    }
+
+    /// Creates the facade with one shared daemon resource budget and health monitor.
+    ///
+    /// # Errors
+    ///
+    /// Returns an admission error when any configured resource bound is invalid.
+    pub fn with_resource_limits(
+        identity: ServiceIdentity,
+        limits: RuntimeResourceLimits,
+    ) -> Result<Self, AdmissionError> {
+        let budget = RuntimeResourceBudget::new(limits)?;
+        Ok(Self {
+            identity,
+            health: HealthMonitor::new(budget),
+        })
     }
 
     /// Reports the contract version supported by the domain layer.
@@ -118,6 +147,12 @@ impl Application {
     #[must_use]
     pub const fn runtime_identity(&self) -> &RuntimeIdentity {
         &self.identity.runtime
+    }
+
+    /// Returns the shared health, readiness, and daemon resource authority.
+    #[must_use]
+    pub const fn health(&self) -> &HealthMonitor {
+        &self.health
     }
 
     /// Returns security gates derived from the trusted runtime environment.
