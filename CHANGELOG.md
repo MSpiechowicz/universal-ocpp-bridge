@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.19.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e3ba3cec8df5435337c819dd249df447d33e0e3b..v0.19.0) - 2026-09-03
+#### Features
+- (**api**) expose canonical management reads - ([e3ba3ce](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/e3ba3cec8df5435337c819dd249df447d33e0e3b)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.18.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/011b8ee710de86ce19d433ef2b19ac6b74883af3..v0.18.0) - 2026-09-03
 #### Features
 - (**protocol**) ingest OCPP 2.0.1 meter values - ([011b8ee](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/011b8ee710de86ce19d433ef2b19ac6b74883af3)) - Maciej Spiechowicz
