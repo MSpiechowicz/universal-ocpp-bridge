@@ -1,5 +1,6 @@
 #![doc = "Axum-based management adapter."]
 
+mod assets;
 mod health_view;
 mod security;
 
@@ -19,6 +20,7 @@ use uob_application::{
 
 use health_view::health_json;
 
+pub use assets::ManagementRouterOptions;
 pub use security::{
     DEFAULT_MANAGEMENT_LISTEN_ADDRESS, ManagementCredentialConfiguration,
     ManagementListenerConfiguration, ManagementListenerPolicyError, ManagementTlsConfiguration,
@@ -26,12 +28,22 @@ pub use security::{
 
 /// Builds the management router while keeping framework types out of the application.
 pub fn router(application: Application) -> Router {
-    Router::new()
+    router_with_options(application, ManagementRouterOptions::default())
+}
+
+/// Builds the same API router with optional static browser assets.
+pub fn router_with_options(application: Application, options: ManagementRouterOptions) -> Router {
+    let router = Router::new()
         .route("/health", get(health))
         .route("/api/v1/health", get(detailed_health))
         .route("/metrics", get(metrics))
-        .route("/api/v1/identity", get(identity))
-        .with_state(application)
+        .route("/api/v1/identity", get(identity));
+    let router = if options.static_assets {
+        router.route("/", get(assets::browser_entry))
+    } else {
+        router
+    };
+    router.with_state(application)
 }
 
 async fn health(State(application): State<Application>) -> impl IntoResponse {
@@ -290,6 +302,19 @@ const fn auxiliary_name(process: AuxiliaryProcess) -> &'static str {
 ///
 /// Returns an I/O error when the listener cannot bind or the server fails.
 pub async fn serve(address: SocketAddr, application: Application) -> io::Result<()> {
+    serve_with_options(address, application, ManagementRouterOptions::default()).await
+}
+
+/// Binds and serves the management adapter with explicit static-asset routing.
+///
+/// # Errors
+///
+/// Returns an I/O error when the listener is unsafe, cannot bind, or the server fails.
+pub async fn serve_with_options(
+    address: SocketAddr,
+    application: Application,
+    options: ManagementRouterOptions,
+) -> io::Result<()> {
     if !address.ip().is_loopback() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -297,7 +322,7 @@ pub async fn serve(address: SocketAddr, application: Application) -> io::Result<
         ));
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, router(application)).await
+    axum::serve(listener, router_with_options(application, options)).await
 }
 
 #[cfg(test)]

@@ -1,34 +1,14 @@
-use std::{error::Error, net::SocketAddr};
-
-use uob_contracts::{ArtifactDigest, BridgeId, ReleaseId};
-use uob_external_export_adapter::{
-    DataExportConfiguration, DatabaseProviderRegistry, DestinationTransition, ExportBacklogState,
-    postgresql_configuration_schema,
-};
-use uob_service::{StartupIdentityConfiguration, compose_with_data_export};
-use uob_target_adapter::TargetRegistry;
+use std::io::{self, Write};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let identity = StartupIdentityConfiguration::production(
-        BridgeId::new("default")?,
-        ReleaseId::new(env!("CARGO_PKG_VERSION"))?,
-        ArtifactDigest::new(option_env!("UOB_RELEASE_DIGEST").unwrap_or("sha256:development"))?,
-    );
-    let mut targets = TargetRegistry::<(), ()>::new();
-    targets.declare_first_release_unavailable_targets()?;
-    let mut database_providers = DatabaseProviderRegistry::new();
-    database_providers.declare_postgresql_unavailable(postgresql_configuration_schema())?;
-    let service = compose_with_data_export(
-        targets,
-        database_providers,
-        identity,
-        None,
-        DataExportConfiguration::disabled(),
-        &ExportBacklogState::default(),
-        DestinationTransition::Preserve,
-    )?;
-    let address = SocketAddr::from(([127, 0, 0, 1], 8080));
-    uob_management_adapter::serve(address, service.application).await?;
-    Ok(())
+async fn main() {
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    let result = uob_service::cli::execute(std::env::args().skip(1), &mut output).await;
+    if let Some(diagnostic) = result.diagnostic {
+        let _ = writeln!(io::stderr().lock(), "{diagnostic}");
+    }
+    if result.exit_code != 0 {
+        std::process::exit(i32::from(result.exit_code));
+    }
 }

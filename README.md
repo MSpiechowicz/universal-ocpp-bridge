@@ -40,6 +40,11 @@ Contributions use pinned, Rust-native Conventional Commit and pull request title
 baseline, feature-squash policy, automatic semantic-version releases, and local verification
 commands.
 
+The service has a noninteractive `uob` CLI for offline configuration validation, headless startup,
+optional static-asset disabling, and authenticated JSONL event consumption. See the
+[headless CLI guide](docs/operations/headless-cli.md) for configuration, stream security, and exit
+codes.
+
 Runtime bridge, environment, release, process, and selected-target identity is owned by the
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
 for production defaults and isolated staging/demo examples.
