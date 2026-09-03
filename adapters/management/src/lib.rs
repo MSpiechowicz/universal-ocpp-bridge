@@ -2,19 +2,15 @@
 
 mod assets;
 mod command_api;
+mod event_api;
 mod health_view;
 mod read_api;
+mod routing;
 mod security;
 
-use std::{fmt::Write, io, net::SocketAddr, sync::Arc};
+use std::{fmt::Write, io, net::SocketAddr};
 
-use axum::{
-    Json, Router,
-    extract::State,
-    http::header,
-    response::IntoResponse,
-    routing::{get, post},
-};
+use axum::{Json, extract::State, http::header, response::IntoResponse};
 use uob_application::{
     Application, AuxiliaryProcess, ComponentKind, HealthSnapshot, ProcessResourceMetrics,
     ReadinessState,
@@ -24,72 +20,21 @@ pub use assets::ManagementRouterOptions;
 pub use command_api::{
     ManagementCommandConfiguration, PrivilegedPayloadValidator, router_with_queries_and_commands,
 };
+pub use event_api::{
+    AuthenticatedEventAccess, ManagementEventAuthenticator, ManagementEventConfiguration,
+    ManagementEventLimits,
+};
 pub use read_api::ManagementReadLimits;
+pub use routing::{
+    router, router_with_authenticated_events, router_with_commands_and_authenticated_events,
+    router_with_options, router_with_queries,
+};
 pub use security::{
     DEFAULT_MANAGEMENT_LISTEN_ADDRESS, ManagementCredentialConfiguration,
     ManagementListenerConfiguration, ManagementListenerPolicyError, ManagementTlsConfiguration,
 };
 
-/// Builds the management router while keeping framework types out of the application.
-pub fn router(application: Application) -> Router {
-    router_with_options(application, ManagementRouterOptions::default())
-}
-
-/// Builds the same API router with optional static browser assets.
-pub fn router_with_options(application: Application, options: ManagementRouterOptions) -> Router {
-    base_router(
-        ManagementState {
-            application,
-            queries: None,
-            commands: None,
-        },
-        options,
-    )
-}
-
-/// Builds the management router with scoped canonical station reads.
-pub fn router_with_queries(
-    application: Application,
-    source: Arc<dyn uob_application::CanonicalQuerySource<serde_json::Value>>,
-    authorization: uob_application::TargetQueryAuthorization,
-    limits: ManagementReadLimits,
-    options: ManagementRouterOptions,
-) -> Router {
-    let queries = read_api::ManagementQueries::new(source, authorization, limits);
-    base_router(
-        ManagementState {
-            application,
-            queries: Some(queries),
-            commands: None,
-        },
-        options,
-    )
-}
-
-#[derive(Clone)]
-pub(crate) struct ManagementState {
-    application: Application,
-    queries: Option<read_api::ManagementQueries>,
-    commands: Option<command_api::ManagementCommands>,
-}
-
-pub(crate) fn base_router(state: ManagementState, options: ManagementRouterOptions) -> Router {
-    let router = Router::new()
-        .route("/health", get(health))
-        .route("/api/v1/health", get(detailed_health))
-        .route("/metrics", get(metrics))
-        .route("/api/v1/identity", get(identity))
-        .route("/api/v1/stations", get(read_api::stations))
-        .route("/api/v1/stations/{station_id}", get(read_api::station))
-        .route("/api/v1/commands", post(command_api::submit))
-        .route("/api/v1/commands/{request_id}", get(command_api::status));
-    let router = if options.static_assets {
-        router.route("/", get(assets::browser_entry))
-    } else {
-        router
-    };
-    router.with_state(state)
-}
+pub(crate) use routing::{ManagementState, base_router};
 
 async fn health(State(state): State<ManagementState>) -> impl IntoResponse {
     health_view::health_response(&state.application)

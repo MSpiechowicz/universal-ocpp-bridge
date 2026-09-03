@@ -20,3 +20,10 @@ Durable event cursors use the `uob:event:` namespace. Incremental export cursors
 sequence values, process-local debug `TraceSequence` values, MQTT packet identifiers, and SSE
 transport identifiers are not accepted by this port. Telemetry and traces remain best effort and
 do not inherit journal retention or replay guarantees.
+
+Application-owned retained subscriptions pair every emitted envelope with the exact opaque cursor
+immediately after that envelope. This per-item checkpoint is required by transports such as SSE:
+using only a page-end cursor could skip records when a connection closes mid-page. The management
+adapter places that cursor in SSE's `id` field and accepts it back through `Last-Event-ID`; it does
+not reinterpret the envelope's globally unique `EventId` or resource-local `sequence` as a storage
+position.

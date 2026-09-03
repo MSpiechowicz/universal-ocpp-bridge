@@ -11,10 +11,11 @@ use std::{
 
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_application::{
-    CanonicalQuerySource, Page, PageLimit, RetainedEventQuery, ScopedTargetQueryPort,
-    SnapshotCursor, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
-    TargetQueryAuthorization, TargetQueryPermission, TargetQueryPort, TargetQueryResult,
-    TargetResourceScope, TargetRetainedEventStream, TargetSubscription,
+    CanonicalQuerySource, Page, PageLimit, RetainedEventCursor, RetainedEventItem,
+    RetainedEventQuery, ScopedTargetQueryPort, SnapshotCursor, TargetPortError,
+    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryAuthorization,
+    TargetQueryPermission, TargetQueryPort, TargetQueryResult, TargetResourceScope,
+    TargetRetainedEventStream, TargetSubscription,
 };
 use uob_contracts::{
     AccessMode, AuthenticatedCommandOrigin, BridgeId, CommandLifecycle, CommandResult,
@@ -30,7 +31,7 @@ struct FakeSource {
     query_calls: AtomicUsize,
     subscription_calls: AtomicUsize,
     snapshots: Vec<StationSnapshot>,
-    events: Vec<EventEnvelope<String>>,
+    events: Vec<RetainedEventItem<String>>,
     descriptor: Option<DataPointDescriptor>,
     value: Option<DataPointValue>,
     command_result: Option<CommandResult>,
@@ -86,9 +87,9 @@ impl CanonicalQuerySource<String> for FakeSource {
                     let items = self
                         .events
                         .iter()
-                        .filter(|event| same_station(&event.resource, &query.resource))
+                        .filter(|item| same_station(&item.event.resource, &query.resource))
                         .take(usize::from(query.limit.get()))
-                        .cloned()
+                        .map(|item| item.event.clone())
                         .collect();
                     TargetQueryResult::RetainedEvents(Page {
                         items,
@@ -121,7 +122,7 @@ impl CanonicalQuerySource<String> for FakeSource {
 }
 
 struct FakeSubscription<E> {
-    events: VecDeque<Result<EventEnvelope<E>, TargetPortError>>,
+    events: VecDeque<Result<RetainedEventItem<E>, TargetPortError>>,
     capacity: usize,
 }
 
@@ -129,7 +130,7 @@ impl<E: Send + Unpin> TargetSubscription<E> for FakeSubscription<E> {
     fn poll_event(
         self: Pin<&mut Self>,
         _context: &mut Context<'_>,
-    ) -> Poll<Option<Result<EventEnvelope<E>, TargetPortError>>> {
+    ) -> Poll<Option<Result<RetainedEventItem<E>, TargetPortError>>> {
         Poll::Ready(self.get_mut().events.pop_front())
     }
 
@@ -169,7 +170,7 @@ fn fake_adapter_reads_every_supported_canonical_view_without_storage_access() {
     let command_result = command_result(station.clone());
     let source = Arc::new(FakeSource {
         snapshots: vec![snapshot(station.clone()), snapshot(other_station)],
-        events: vec![event(station.clone(), 1)],
+        events: vec![retained_event(station.clone(), "storage-a", 1)],
         descriptor: Some(descriptor.clone()),
         value: Some(value.clone()),
         command_result: Some(command_result.clone()),
@@ -233,7 +234,12 @@ fn fake_adapter_reads_every_supported_canonical_view_without_storage_access() {
         .subscribe(event_query(station, 10))
         .expect("retained stream");
     assert_eq!(stream.capacity(), 10);
-    assert!(matches!(poll_stream(&mut stream), Poll::Ready(Some(Ok(_)))));
+    assert!(matches!(
+        poll_stream(&mut stream),
+        Poll::Ready(Some(Ok(item)))
+            if item.cursor.as_str() == "uob:event:storage-a"
+                && item.event.event_id.as_str() == "event-1"
+    ));
     assert_eq!(source.query_calls.load(Ordering::SeqCst), 7);
     assert_eq!(source.subscription_calls.load(Ordering::SeqCst), 1);
 }
@@ -244,7 +250,7 @@ fn cross_station_queries_status_and_subscriptions_are_rejected() {
     let forbidden = station_resource("station-b");
     let source = Arc::new(FakeSource {
         command_result: Some(command_result(forbidden.clone())),
-        events: vec![event(forbidden.clone(), 1)],
+        events: vec![retained_event(forbidden.clone(), "storage-b", 1)],
         ..FakeSource::default()
     });
     let port =
@@ -445,6 +451,13 @@ fn event(resource: ResourceRef, sequence: u64) -> EventEnvelope<String> {
     }
 }
 
+fn retained_event(resource: ResourceRef, cursor: &str, sequence: u64) -> RetainedEventItem<String> {
+    RetainedEventItem {
+        cursor: RetainedEventCursor::new(format!("uob:event:{cursor}")).expect("retained cursor"),
+        event: event(resource, sequence),
+    }
+}
+
 fn timestamp(minute: u8) -> UtcTimestamp {
     UtcTimestamp::new(
         PrimitiveDateTime::new(
@@ -475,7 +488,7 @@ fn block_on<T>(future: impl Future<Output = T>) -> T {
 
 fn poll_stream<E>(
     stream: &mut TargetRetainedEventStream<E>,
-) -> Poll<Option<Result<EventEnvelope<E>, TargetPortError>>> {
+) -> Poll<Option<Result<RetainedEventItem<E>, TargetPortError>>> {
     let mut context = Context::from_waker(Waker::noop());
     stream.as_mut().poll_event(&mut context)
 }
