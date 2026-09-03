@@ -95,7 +95,10 @@ async fn charging_call(
         ActionKind::StopTransaction => SimulatorAction::StopTransaction,
         _ => unreachable!(),
     };
-    validate_before(state, step, action)?;
+    match state.version {
+        crate::OcppVersion::V1_6 => validate_before_16(state, step, action)?,
+        crate::OcppVersion::V2_0_1 => super::execution_201::validate_before(state, step, action)?,
+    }
     let response = client
         .as_deref()
         .ok_or_else(|| failure("not_connected", "station is not connected"))?
@@ -106,7 +109,12 @@ async fn charging_call(
         .await
         .map_err(|_| failure("charging_call_failed", "OCPP charging call failed"))?;
     assert_response(step, &response)?;
-    apply_after(state, step, action, &response)?;
+    match state.version {
+        crate::OcppVersion::V1_6 => apply_after_16(state, step, action, &response)?,
+        crate::OcppVersion::V2_0_1 => {
+            super::execution_201::apply_after(state, step, action, &response)?;
+        }
+    }
     Ok(response.to_string())
 }
 
@@ -151,7 +159,7 @@ fn assert_response(step: &StepDefinition, actual: &serde_json::Value) -> Result<
     }
 }
 
-fn validate_before(
+fn validate_before_16(
     state: &StationState,
     step: &StepDefinition,
     action: SimulatorAction,
@@ -228,7 +236,7 @@ fn validate_active_transaction(
     Ok(())
 }
 
-fn apply_after(
+fn apply_after_16(
     state: &mut StationState,
     step: &StepDefinition,
     action: SimulatorAction,

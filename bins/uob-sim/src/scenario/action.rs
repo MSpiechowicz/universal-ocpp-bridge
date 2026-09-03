@@ -69,4 +69,14 @@ impl ActionKind {
             Self::Connect | Self::Wait | Self::Disconnect => None,
         }
     }
+
+    #[must_use]
+    pub fn accepts_message(self, message: &str) -> bool {
+        match self {
+            Self::StartTransaction => matches!(message, "StartTransaction" | "TransactionEvent"),
+            Self::MeterValues => matches!(message, "MeterValues" | "TransactionEvent"),
+            Self::StopTransaction => matches!(message, "StopTransaction" | "TransactionEvent"),
+            _ => self.message_name() == Some(message),
+        }
+    }
 }

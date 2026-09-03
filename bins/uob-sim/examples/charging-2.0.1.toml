@@ -1,0 +1,101 @@
+schema_version = 1
+seed = 47
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 1000
+expect_event = "connected"
+expect_detail = "ocpp2.0.1"
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 1000
+fixture_id = "sim.ocpp201.boot.accepted"
+expect_message = "BootNotification"
+expect_event = "boot_result"
+payload = { reason = "PowerUp", chargingStation = { model = "Simulator", vendorName = "UOB" } }
+expect_response = { currentTime = "2026-09-01T00:00:00Z", interval = 60, status = "Accepted" }
+
+[[steps]]
+id = "authorize"
+station = "alpha"
+action = "authorize"
+timeout_ms = 1000
+fixture_id = "sim.ocpp201.authorize.accepted"
+expect_message = "Authorize"
+expect_event = "authorization_result"
+payload = { idToken = { idToken = "LOCAL-USER-201", type = "Central" } }
+expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "evse-2-available"
+station = "alpha"
+action = "status"
+timeout_ms = 1000
+fixture_id = "sim.ocpp201.status.evse-2-available"
+expect_message = "StatusNotification"
+expect_event = "status_result"
+payload = { timestamp = "2026-09-01T00:00:01Z", connectorStatus = "Available", evseId = 2, connectorId = 1 }
+expect_response = {}
+
+[[steps]]
+id = "start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp201.transaction.started"
+expect_message = "TransactionEvent"
+expect_event = "transaction_started"
+payload = { eventType = "Started", timestamp = "2026-09-01T00:00:02Z", triggerReason = "Authorized", seqNo = 0, transactionInfo = { transactionId = "tx-201-42", chargingState = "EVConnected" }, evse = { id = 2, connectorId = 1 }, idToken = { idToken = "LOCAL-USER-201", type = "Central" } }
+expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "meter"
+station = "alpha"
+action = "meter_values"
+timeout_ms = 1000
+start_delay_ms = 10
+fixture_id = "sim.ocpp201.transaction.meter"
+expect_message = "TransactionEvent"
+expect_event = "meter_values_result"
+payload = { eventType = "Updated", timestamp = "2026-09-01T00:05:02Z", triggerReason = "MeterValuePeriodic", seqNo = 1, transactionInfo = { transactionId = "tx-201-42", chargingState = "Charging" }, evse = { id = 2, connectorId = 1 }, meterValue = [{ timestamp = "2026-09-01T00:05:02Z", sampledValue = [{ value = 1250.25, context = "Sample.Periodic", measurand = "Energy.Active.Import.Register", phase = "L1-N", location = "Outlet", unitOfMeasure = { unit = "Wh", multiplier = 0 } }] }] }
+expect_response = {}
+
+[[steps]]
+id = "disconnect-active"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 1000
+expect_event = "disconnected"
+expect_detail = "stopped"
+
+[[steps]]
+id = "reconnect"
+station = "alpha"
+action = "connect"
+timeout_ms = 1000
+expect_event = "connected"
+expect_detail = "ocpp2.0.1"
+
+[[steps]]
+id = "stop"
+station = "alpha"
+action = "stop_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp201.transaction.ended"
+expect_message = "TransactionEvent"
+expect_event = "transaction_stopped"
+payload = { eventType = "Ended", timestamp = "2026-09-01T00:10:02Z", triggerReason = "RemoteStop", seqNo = 2, transactionInfo = { transactionId = "tx-201-42", chargingState = "Idle", stoppedReason = "Remote" }, evse = { id = 2, connectorId = 1 } }
+expect_response = {}
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 1000
+expect_event = "disconnected"
+expect_detail = "stopped"

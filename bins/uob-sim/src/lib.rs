@@ -14,6 +14,7 @@ use ocpp_client::{
 use tokio::sync::{mpsc, oneshot};
 
 mod client_runtime;
+mod client_runtime_201;
 pub mod scenario;
 
 pub const PINNED_OCPP_CLIENT_VERSION: &str = "0.5.0";
@@ -87,6 +88,7 @@ pub struct SimulatorClientConfig {
     pub command_capacity: usize,
     pub trace_capacity: usize,
     pub connectors: Vec<u16>,
+    pub evse_connectors: Vec<(u16, u16)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -116,6 +118,17 @@ impl SimulatorAction {
             Self::StartTransaction => "StartTransaction",
             Self::MeterValues => "MeterValues",
             Self::StopTransaction => "StopTransaction",
+        }
+    }
+
+    #[must_use]
+    pub const fn wire_name(self, version: OcppVersion) -> &'static str {
+        match (version, self) {
+            (
+                OcppVersion::V2_0_1,
+                Self::StartTransaction | Self::MeterValues | Self::StopTransaction,
+            ) => "TransactionEvent",
+            _ => self.name(),
         }
     }
 }
@@ -221,6 +234,11 @@ struct Ocpp16State {
     active_transactions: HashMap<i64, u16>,
 }
 
+#[derive(Default)]
+struct Ocpp201State {
+    active_transactions: HashMap<String, (u16, u16)>,
+}
+
 impl TraceBuffer {
     fn new(capacity: usize) -> Self {
         Self {
@@ -317,18 +335,28 @@ impl SimulatorProtocolClient {
                 let client = connect_2_0_1(&config.endpoint, Some(options))
                     .await
                     .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
-                client_runtime::register_2_0_1_handlers(&client, &traces).await;
+                let state = Arc::new(Mutex::new(Ocpp201State::default()));
+                client_runtime_201::register_handlers(
+                    &client,
+                    &traces,
+                    remote_commands,
+                    config.evse_connectors.clone(),
+                    Arc::clone(&state),
+                )
+                .await;
                 client_runtime::register_2_0_1_reconnect(&client, &traces).await;
                 traces.push(
                     TraceKind::Connected,
                     OcppVersion::V2_0_1.websocket_protocol(),
                 );
                 let emergency_client = EmergencyClient::V2_0_1(client.clone());
-                let worker = tokio::spawn(client_runtime::run_2_0_1(
+                let worker = tokio::spawn(client_runtime_201::run(
                     client,
                     receiver,
                     traces.clone(),
                     config.command_capacity,
+                    remote_receiver,
+                    state,
                 ))
                 .abort_handle();
                 (worker, emergency_client)

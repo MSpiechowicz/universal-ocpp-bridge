@@ -36,19 +36,21 @@ so a delayed, disconnected, or missing-response station cannot stop another stat
 progress. Reports are reconstructed in source-step order to retain deterministic JSONL identifiers
 even though station workers execute concurrently.
 
-The OCPP 1.6 charging actions carry an exact native JSON `payload`, an independently authored
-`fixture_id`, and optional exact `expect_response`. The checked-in
-`bins/uob-sim/examples/charging-1.6.toml` sequence boots, authorizes, reports connector state,
-starts and meters a transaction, disconnects and reconnects without losing simulator-owned
-transaction state, then stops. Meter readings remain strings with their source timestamp,
-measurand, context, format, location, and unit. A rejected authorization does not make the tag
-eligible for a later start.
+Charging actions carry an exact native JSON `payload`, an independently authored `fixture_id`, and
+optional exact `expect_response`. The checked-in `charging-1.6.toml` sequence boots, authorizes,
+reports connector state, starts and meters a transaction, reconnects without losing simulator-owned
+state, then stops. The parallel `charging-2.0.1.toml` scenario uses native `TransactionEvent`
+Started/Updated/Ended messages against a multi-EVSE topology and retains transaction ID, sequence,
+EVSE/connector, phase, unit, context, location, and source timestamp. Duplicate, skipped, or
+replayed sequence numbers, flattened EVSE identities, and incomplete meter-quality fields fail
+before transmission. A rejected authorization does not make an identity eligible for a later start.
 
-Inbound `RemoteStartTransaction` and `RemoteStopTransaction` requests are placed on the bounded
-station command queue. Their CALLRESULT acceptance is recorded independently from subsequent
-scenario actions: an accepted remote start does not fabricate a started transaction, and an
-accepted remote stop does not fabricate a stopped transaction. Unknown connectors and inactive
-transaction identifiers are rejected. Scenario steps can consume these commands with
+Inbound OCPP 1.6 `RemoteStartTransaction`/`RemoteStopTransaction` and OCPP 2.0.1
+`RequestStartTransaction`/`RequestStopTransaction` requests are placed on the bounded station
+command queue. Their CALLRESULT acceptance is recorded independently from subsequent scenario
+actions: an accepted remote start does not fabricate a started transaction, and an accepted remote
+stop does not fabricate a stopped transaction. Unknown connectors or EVSEs and inactive transaction
+identifiers are rejected. Scenario steps can consume these commands with
 `await_remote_start` and `await_remote_stop`, including the original request payload and the
 separate acceptance boolean.
 

@@ -12,6 +12,7 @@ pub enum StationResource {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceState {
     pub transaction_id: Option<String>,
+    pub last_sequence: Option<i64>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,12 +109,38 @@ impl StationState {
         resource: StationResource,
     ) -> Result<String, StationStateError> {
         self.validate_resource_kind(resource)?;
-        self.resources
+        let state = self
+            .resources
             .get_mut(&resource)
-            .ok_or(StationStateError::UnknownResource)?
+            .ok_or(StationStateError::UnknownResource)?;
+        let transaction_id = state
             .transaction_id
             .take()
-            .ok_or(StationStateError::NoActiveTransaction)
+            .ok_or(StationStateError::NoActiveTransaction)?;
+        state.last_sequence = None;
+        Ok(transaction_id)
+    }
+
+    /// Records the latest accepted transaction-event sequence for a resource.
+    ///
+    /// # Errors
+    ///
+    /// Rejects identities from the wrong protocol model, unknown resources, and idle resources.
+    pub fn record_sequence(
+        &mut self,
+        resource: StationResource,
+        sequence: i64,
+    ) -> Result<(), StationStateError> {
+        self.validate_resource_kind(resource)?;
+        let state = self
+            .resources
+            .get_mut(&resource)
+            .ok_or(StationStateError::UnknownResource)?;
+        if state.transaction_id.is_none() {
+            return Err(StationStateError::NoActiveTransaction);
+        }
+        state.last_sequence = Some(sequence);
+        Ok(())
     }
 
     fn validate_resource_kind(&self, resource: StationResource) -> Result<(), StationStateError> {
@@ -141,6 +168,7 @@ impl ResourceState {
     const fn idle() -> Self {
         Self {
             transaction_id: None,
+            last_sequence: None,
         }
     }
 }

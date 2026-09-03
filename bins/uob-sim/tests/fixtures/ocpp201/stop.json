@@ -1,0 +1,1 @@
+[2,"fixture-201-stop","TransactionEvent",{"eventType":"Ended","timestamp":"2026-09-01T00:10:02Z","triggerReason":"RemoteStop","seqNo":2,"transactionInfo":{"transactionId":"tx-201-42","chargingState":"Idle","stoppedReason":"Remote"},"evse":{"id":2,"connectorId":1}}]

@@ -138,6 +138,10 @@ The simulator's OCPP 1.6 charging example exercises registration, authorization,
 transaction start/meter/stop, active-transaction reconnect, exact wire fixtures, and separate
 remote-command acceptance without importing bridge state-machine code.
 
+The OCPP 2.0.1 charging example exercises the corresponding native multi-EVSE flow with
+`TransactionEvent` sequencing, complete meter-quality fields, reconnect continuity, exact
+independent fixtures, and separate RequestStart/RequestStop acceptance.
+
 Core readiness, new-session admission, component degradation, and resource counters are exposed
 separately. See [health and metrics](docs/operations/health-readiness-metrics.md) for endpoint and
 failure semantics.
