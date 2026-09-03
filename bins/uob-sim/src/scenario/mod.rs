@@ -20,6 +20,7 @@ pub use runner::{
     CancellationHandle, CancellationToken, ConnectFuture, RealClock, RealConnector, ScenarioClock,
     ScenarioConnector, ScenarioRunner, SleepFuture, cancellation_pair,
 };
+pub(crate) use state::CommandAdmission;
 pub use state::{ResourceState, StationResource, StationState, StationStateError};
 
 pub const SCHEMA_VERSION: u16 = 1;

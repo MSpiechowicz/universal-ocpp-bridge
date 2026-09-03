@@ -1,0 +1,151 @@
+schema_version = 1
+seed = 48
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 1000
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.boot.accepted"
+payload = { chargePointVendor = "UOB", chargePointModel = "Simulator" }
+
+[[steps]]
+id = "missing-credential-start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.missing-credential"
+expect_failure = "missing_id_tag"
+payload = { connectorId = 1, meterStart = 0, timestamp = "2026-09-01T00:00:00Z" }
+
+[[steps]]
+id = "deny-credential"
+station = "alpha"
+action = "authorize"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.authorize.denied"
+payload = { idTag = "DENIED" }
+expect_response = { idTagInfo = { status = "Invalid" } }
+
+[[steps]]
+id = "denied-start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.denied"
+expect_failure = "not_authorized"
+payload = { connectorId = 1, idTag = "DENIED", meterStart = 0, timestamp = "2026-09-01T00:00:01Z" }
+
+[[steps]]
+id = "expire-credential"
+station = "alpha"
+action = "authorize"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.authorize.expired"
+payload = { idTag = "EXPIRED" }
+expect_response = { idTagInfo = { status = "Expired" } }
+
+[[steps]]
+id = "expired-start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.expired"
+expect_failure = "not_authorized"
+payload = { connectorId = 1, idTag = "EXPIRED", meterStart = 0, timestamp = "2026-09-01T00:00:02Z" }
+
+[[steps]]
+id = "target-outage"
+station = "alpha"
+action = "target_offline"
+timeout_ms = 1000
+expect_detail = "offline:physical_effects=0"
+
+[[steps]]
+id = "local-authorize"
+station = "alpha"
+action = "authorize"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.authorize.local"
+payload = { idTag = "LOCAL-USER" }
+expect_response = { idTagInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "local-start-during-outage"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 1000
+fixture_id = "sim.ocpp16.transaction.local"
+payload = { connectorId = 1, idTag = "LOCAL-USER", meterStart = 0, timestamp = "2026-09-01T00:00:03Z" }
+expect_response = { idTagInfo = { status = "Accepted" }, transactionId = 42 }
+
+[[steps]]
+id = "target-reconnect"
+station = "alpha"
+action = "target_online"
+timeout_ms = 1000
+expect_detail = "online:physical_effects=1"
+
+[[steps]]
+id = "expired-command"
+station = "alpha"
+action = "await_remote_start"
+timeout_ms = 1000
+request_id = "request-expired"
+delivery_id = "delivery-expired"
+expires_at_ms = 10
+execute_at_ms = 11
+expect_failure = "command_expired"
+
+[[steps]]
+id = "uncertain-command"
+station = "alpha"
+action = "await_remote_start"
+timeout_ms = 1000
+request_id = "request-uncertain"
+delivery_id = "delivery-uncertain"
+execute_at_ms = 12
+expect_failure = "transmission_uncertain"
+expect_response = { accepted = true, request = { connectorId = 2, idTag = "REMOTE-USER" } }
+[steps.fault]
+kind = "missing_response"
+
+[[steps]]
+id = "duplicate-request"
+station = "alpha"
+action = "await_remote_start"
+timeout_ms = 1000
+request_id = "request-uncertain"
+delivery_id = "delivery-retry"
+execute_at_ms = 13
+expect_detail = "duplicate_suppressed"
+
+[[steps]]
+id = "duplicate-delivery"
+station = "alpha"
+action = "await_remote_start"
+timeout_ms = 1000
+request_id = "request-retry"
+delivery_id = "delivery-uncertain"
+execute_at_ms = 14
+expect_detail = "duplicate_suppressed"
+
+[[steps]]
+id = "reconcile"
+station = "alpha"
+action = "reconcile_command"
+timeout_ms = 1000
+request_id = "request-uncertain"
+expect_detail = "confirmed_without_replay:physical_effects=2"
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 1000

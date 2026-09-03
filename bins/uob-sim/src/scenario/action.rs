@@ -12,6 +12,9 @@ pub enum ActionKind {
     StopTransaction,
     AwaitRemoteStart,
     AwaitRemoteStop,
+    TargetOffline,
+    TargetOnline,
+    ReconcileCommand,
     Heartbeat,
     Wait,
     Disconnect,
@@ -30,6 +33,9 @@ impl ActionKind {
             Self::StopTransaction => "stop_transaction",
             Self::AwaitRemoteStart => "await_remote_start",
             Self::AwaitRemoteStop => "await_remote_stop",
+            Self::TargetOffline => "target_offline",
+            Self::TargetOnline => "target_online",
+            Self::ReconcileCommand => "reconcile_command",
             Self::Heartbeat => "heartbeat",
             Self::Wait => "wait",
             Self::Disconnect => "disconnect",
@@ -48,6 +54,9 @@ impl ActionKind {
             Self::StopTransaction => "transaction_stopped",
             Self::AwaitRemoteStart => "remote_start_received",
             Self::AwaitRemoteStop => "remote_stop_received",
+            Self::TargetOffline => "target_unavailable",
+            Self::TargetOnline => "target_reconnected",
+            Self::ReconcileCommand => "command_reconciled",
             Self::Heartbeat => "heartbeat_result",
             Self::Wait => "delay_elapsed",
             Self::Disconnect => "disconnected",
@@ -66,7 +75,12 @@ impl ActionKind {
             Self::Heartbeat => Some("Heartbeat"),
             Self::AwaitRemoteStart => Some("RemoteStartTransaction"),
             Self::AwaitRemoteStop => Some("RemoteStopTransaction"),
-            Self::Connect | Self::Wait | Self::Disconnect => None,
+            Self::Connect
+            | Self::TargetOffline
+            | Self::TargetOnline
+            | Self::ReconcileCommand
+            | Self::Wait
+            | Self::Disconnect => None,
         }
     }
 

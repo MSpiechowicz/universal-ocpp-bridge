@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::{
-    ActionKind, FailureCategory, RunFailure, ScenarioClock, ScenarioConnector, StationDefinition,
-    StationResource, StationState, StepDefinition,
+    ActionKind, CommandAdmission, FailureCategory, FaultKind, RunFailure, ScenarioClock,
+    ScenarioConnector, StationDefinition, StationResource, StationState, StepDefinition,
 };
 use crate::{ProtocolClient, RemoteCommandKind, SimulatorAction, SimulatorCall};
 
@@ -14,6 +14,7 @@ pub(super) async fn execute_action(
     step: &StepDefinition,
     client: &mut Option<Box<dyn ProtocolClient>>,
     state: &mut StationState,
+    selected_fault: Option<FaultKind>,
 ) -> Result<String, RunFailure> {
     match step.action {
         ActionKind::Connect => connect(connector, station, client, state).await,
@@ -30,8 +31,11 @@ pub(super) async fn execute_action(
         | ActionKind::MeterValues
         | ActionKind::StopTransaction => charging_call(step, client, state).await,
         ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop => {
-            remote_command(step, client).await
+            remote_command(step, client, state, selected_fault).await
         }
+        ActionKind::TargetOffline => Ok(target_state(state, false)),
+        ActionKind::TargetOnline => Ok(target_state(state, true)),
+        ActionKind::ReconcileCommand => reconcile_command(step, state),
         ActionKind::Wait => {
             let duration_ms = step.duration_ms.expect("validated wait duration");
             clock.sleep(Duration::from_millis(duration_ms)).await;
@@ -121,7 +125,24 @@ async fn charging_call(
 async fn remote_command(
     step: &StepDefinition,
     client: &mut Option<Box<dyn ProtocolClient>>,
+    state: &mut StationState,
+    selected_fault: Option<FaultKind>,
 ) -> Result<String, RunFailure> {
+    let tracked = step.request_id.as_deref().zip(step.delivery_id.as_deref());
+    if let Some((request_id, delivery_id)) = tracked {
+        let expired = step
+            .expires_at_ms
+            .is_some_and(|expires| expires <= step.execute_at_ms.expect("validated command time"));
+        if state.admit_command(request_id, delivery_id, expired) == CommandAdmission::Duplicate {
+            return Ok("duplicate_suppressed".to_owned());
+        }
+        if expired {
+            return Err(failure(
+                "command_expired",
+                "command expired before protocol dispatch",
+            ));
+        }
+    }
     let command = client
         .as_deref()
         .ok_or_else(|| failure("not_connected", "station is not connected"))?
@@ -141,7 +162,47 @@ async fn remote_command(
     }
     let response = serde_json::json!({"accepted": command.accepted, "request": command.payload});
     assert_response(step, &response)?;
+    if let Some((request_id, _)) = tracked {
+        let response_lost = matches!(selected_fault, Some(FaultKind::MissingResponse));
+        state.complete_command(request_id, command.accepted, response_lost);
+        if response_lost && command.accepted {
+            return Err(failure(
+                "transmission_uncertain",
+                "charger may have acted but its response was lost",
+            ));
+        }
+    }
     Ok(response.to_string())
+}
+
+fn target_state(state: &mut StationState, online: bool) -> String {
+    state.set_target_online(online);
+    let status = if state.target_online() {
+        "online"
+    } else {
+        "offline"
+    };
+    format!("{status}:physical_effects={}", state.physical_effects())
+}
+
+fn reconcile_command(
+    step: &StepDefinition,
+    state: &mut StationState,
+) -> Result<String, RunFailure> {
+    let request_id = step
+        .request_id
+        .as_deref()
+        .expect("validated request identity");
+    if !state.reconcile_command(request_id) {
+        return Err(failure(
+            "command_not_uncertain",
+            "only a transmission-uncertain command can be reconciled",
+        ));
+    }
+    Ok(format!(
+        "confirmed_without_replay:physical_effects={}",
+        state.physical_effects()
+    ))
 }
 
 fn assert_response(step: &StepDefinition, actual: &serde_json::Value) -> Result<(), RunFailure> {
@@ -283,6 +344,7 @@ fn apply_after_16(
                     "could not start transaction",
                 )
             })?;
+        state.record_local_effect();
     }
     if action == SimulatorAction::StopTransaction {
         let transaction_id = payload["transactionId"]
