@@ -2697,6 +2697,7 @@ name = "uob-management-adapter"
 version = "0.18.0"
 dependencies = [
  "axum",
+ "serde",
  "serde_json",
  "tokio",
  "tower",
