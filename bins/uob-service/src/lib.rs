@@ -1,5 +1,8 @@
 #![doc = "Production service composition root."]
 
+pub mod cli;
+mod configuration;
+mod event_stream;
 mod identity;
 
 use std::{error::Error, fmt};

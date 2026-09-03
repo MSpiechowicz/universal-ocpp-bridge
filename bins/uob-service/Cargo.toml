@@ -7,8 +7,18 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "uob"
+path = "src/main.rs"
+
 [dependencies]
+futures-util.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+toml.workspace = true
 uuid.workspace = true
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
@@ -18,6 +28,9 @@ uob-protocol-adapter = { path = "../../adapters/protocol" }
 uob-provider-adapter = { path = "../../adapters/providers" }
 uob-storage-adapter = { path = "../../adapters/storage" }
 uob-target-adapter = { path = "../../adapters/target" }
+
+[dev-dependencies]
+tower = { version = "=0.5.3", features = ["util"] }
 
 [lints]
 workspace = true
