@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use axum::{
     Json,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
@@ -90,23 +90,21 @@ struct StationPage {
 
 pub(crate) async fn stations(
     State(state): State<ManagementState>,
+    headers: HeaderMap,
     Query(query): Query<StationPageQuery>,
 ) -> Response {
-    let Some(queries) = state.queries else {
-        return ApiError::Unavailable.into_response();
-    };
     let Ok(limit) = PageLimit::new(query.limit.unwrap_or(DEFAULT_PAGE_SIZE)) else {
         return ApiError::Invalid("query.invalid_page_limit").into_response();
     };
     let Ok(after) = query.after.map(SnapshotCursor::new).transpose() else {
         return ApiError::Invalid("query.invalid_cursor").into_response();
     };
-    match queries
-        .query(TargetQuery::StationSnapshots(SnapshotQuery {
-            after,
-            limit,
-        }))
-        .await
+    match execute_query(
+        &state,
+        &headers,
+        TargetQuery::StationSnapshots(SnapshotQuery { after, limit }),
+    )
+    .await
     {
         Ok(TargetQueryResult::StationSnapshots(page)) => Json(StationPage {
             items: page.items,
@@ -120,11 +118,9 @@ pub(crate) async fn stations(
 
 pub(crate) async fn station(
     State(state): State<ManagementState>,
+    headers: HeaderMap,
     Path(station_id): Path<String>,
 ) -> Response {
-    let Some(queries) = state.queries else {
-        return ApiError::Unavailable.into_response();
-    };
     let Ok(station_id) = StationId::new(station_id) else {
         return ApiError::Invalid("query.invalid_station_id").into_response();
     };
@@ -134,7 +130,7 @@ pub(crate) async fn station(
         resource: None,
         native_protocol_reference: None,
     };
-    match queries.query(TargetQuery::StationSnapshot(resource)).await {
+    match execute_query(&state, &headers, TargetQuery::StationSnapshot(resource)).await {
         Ok(TargetQueryResult::StationSnapshot(Some(snapshot))) => Json(snapshot).into_response(),
         Ok(TargetQueryResult::StationSnapshot(None)) => ApiError::NotFound.into_response(),
         Ok(_) => ApiError::Invalid("query.response_type_mismatch").into_response(),
@@ -142,7 +138,25 @@ pub(crate) async fn station(
     }
 }
 
+pub(crate) async fn execute_query(
+    state: &ManagementState,
+    headers: &HeaderMap,
+    query: TargetQuery,
+) -> Result<TargetQueryResult<serde_json::Value>, ApiError> {
+    if let Some(events) = &state.events {
+        let access = events
+            .authenticate(headers)
+            .map_err(|()| ApiError::Authentication)?;
+        return events.query(access.authorization, query).await;
+    }
+    let Some(queries) = &state.queries else {
+        return Err(ApiError::Unavailable);
+    };
+    queries.query(query).await
+}
+
 pub(crate) enum ApiError {
+    Authentication,
     Invalid(&'static str),
     NotFound,
     Busy,
@@ -153,7 +167,11 @@ pub(crate) enum ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        if matches!(&self, Self::Authentication) {
+            return crate::event_api::authentication_error();
+        }
         let (status, code) = match self {
+            Self::Authentication => unreachable!(),
             Self::Invalid(code) => (StatusCode::BAD_REQUEST, code.to_owned()),
             Self::NotFound => (StatusCode::NOT_FOUND, "query.station_not_found".to_owned()),
             Self::Busy => (

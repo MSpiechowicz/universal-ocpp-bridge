@@ -4,13 +4,11 @@ use std::{
     task::{Context, Poll},
 };
 
-use uob_contracts::{
-    BridgeId, CanonicalResource, EventEnvelope, ResourceRef, StationId, TargetInstanceId,
-};
+use uob_contracts::{BridgeId, CanonicalResource, ResourceRef, StationId, TargetInstanceId};
 
 use crate::{
-    RetainedEventQuery, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
-    TargetQueryPort, TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
+    RetainedEventItem, RetainedEventQuery, TargetPortError, TargetPortErrorCode, TargetPortFuture,
+    TargetQuery, TargetQueryPort, TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
 };
 
 /// Canonical query classes granted to one configured target instance.
@@ -203,18 +201,18 @@ impl<E: Send> TargetSubscription<E> for ScopedRetainedEventStream<E> {
     fn poll_event(
         self: Pin<&mut Self>,
         context: &mut Context<'_>,
-    ) -> Poll<Option<Result<EventEnvelope<E>, TargetPortError>>> {
+    ) -> Poll<Option<Result<RetainedEventItem<E>, TargetPortError>>> {
         let this = self.get_mut();
         if this.stopped {
             return Poll::Ready(None);
         }
 
         match this.inner.as_mut().poll_event(context) {
-            Poll::Ready(Some(Ok(event)))
-                if this.authorization.permits_resource(&event.resource)
-                    && same_canonical_resource(&this.resource, &event.resource) =>
+            Poll::Ready(Some(Ok(item)))
+                if this.authorization.permits_resource(&item.event.resource)
+                    && same_canonical_resource(&this.resource, &item.event.resource) =>
             {
-                Poll::Ready(Some(Ok(event)))
+                Poll::Ready(Some(Ok(item)))
             }
             Poll::Ready(Some(Ok(_))) => {
                 this.stopped = true;

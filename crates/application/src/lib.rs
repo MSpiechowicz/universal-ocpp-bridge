@@ -97,13 +97,14 @@ pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,
     ConfigurationErrorCode, ConfigurationField, ConfigurationFieldKind, ConfigurationSchema,
     ConfigurationValue, CredentialReference, DeliveryOutcome, DeliveryReport, DeliverySemantic,
-    DiagnosticDrop, ErrorRetryClassification, TargetCapability, TargetConfiguration, TargetContext,
-    TargetDelivery, TargetDeliveryClass, TargetDeliveryReceiver, TargetDescriptor,
-    TargetDiagnostic, TargetDiagnosticPort, TargetError, TargetErrorCode, TargetHealth,
-    TargetHealthState, TargetLimits, TargetMessage, TargetMessageClass, TargetPortError,
-    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryPort, TargetQueryResult,
-    TargetReportPort, TargetRetainedEventStream, TargetRuntimeLimits, TargetShutdown,
-    TargetSubscription, TargetTask, ValidatedTargetConfiguration,
+    DiagnosticDrop, ErrorRetryClassification, RetainedEventItem, TargetCapability,
+    TargetConfiguration, TargetContext, TargetDelivery, TargetDeliveryClass,
+    TargetDeliveryReceiver, TargetDescriptor, TargetDiagnostic, TargetDiagnosticPort, TargetError,
+    TargetErrorCode, TargetHealth, TargetHealthState, TargetLimits, TargetMessage,
+    TargetMessageClass, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
+    TargetQueryPort, TargetQueryResult, TargetReportPort, TargetRetainedEventStream,
+    TargetRuntimeLimits, TargetShutdown, TargetSubscription, TargetTask,
+    ValidatedTargetConfiguration,
 };
 
 use uob_contracts::{ContractVersion, RuntimeIdentity, ServiceIdentity};

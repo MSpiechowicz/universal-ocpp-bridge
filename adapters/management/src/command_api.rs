@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
     extract::rejection::JsonRejection,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
@@ -38,6 +38,7 @@ pub fn router_with_queries_and_commands(
                 read_limits,
             )),
             commands: Some(ManagementCommands::new(commands)),
+            events: None,
         },
         options,
     )
@@ -148,18 +149,21 @@ pub(crate) async fn submit(
 
 pub(crate) async fn status(
     State(state): State<ManagementState>,
+    headers: HeaderMap,
     Path(request_id): Path<String>,
 ) -> Response {
     let Ok(request_id) = RequestId::new(request_id) else {
         return error(StatusCode::BAD_REQUEST, "command.invalid_request_id");
     };
-    let Some(queries) = state.queries else {
+    if state.queries.is_none() && state.events.is_none() {
         return error(
             StatusCode::SERVICE_UNAVAILABLE,
             "command.status_unavailable",
         );
-    };
-    match queries.query(TargetQuery::CommandResult(request_id)).await {
+    }
+    match crate::read_api::execute_query(&state, &headers, TargetQuery::CommandResult(request_id))
+        .await
+    {
         Ok(TargetQueryResult::CommandResult(Some(result))) => Json(result).into_response(),
         Ok(TargetQueryResult::CommandResult(None)) => {
             error(StatusCode::NOT_FOUND, "command.not_found")

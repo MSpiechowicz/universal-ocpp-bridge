@@ -44,6 +44,18 @@ pub type TargetTask = Pin<Box<dyn Future<Output = Result<(), TargetError>> + Sen
 /// Boxed bounded subscription to retained durable events.
 pub type TargetRetainedEventStream<E> = Pin<Box<dyn TargetSubscription<E>>>;
 
+/// One durable event paired with the exact application cursor after that event.
+///
+/// Keeping the opaque cursor beside the event lets transports acknowledge individual records
+/// without deriving a storage position from an event identity or resource-local sequence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RetainedEventItem<E> {
+    /// Opaque checkpoint that resumes immediately after this event.
+    pub cursor: RetainedEventCursor,
+    /// Canonical durable event at this checkpoint.
+    pub event: EventEnvelope<E>,
+}
+
 /// Object-safe lifecycle implemented by every bidirectional target adapter.
 ///
 /// `E` is the application-owned domain-event payload and `P` is the statically typed payload
@@ -322,11 +334,14 @@ pub trait TargetQueryPort<E>: Send + Sync {
 /// This surface carries only durable [`EventEnvelope`] records. Best-effort telemetry uses a
 /// separate diagnostic/delivery surface and cannot be mistaken for resumable history.
 pub trait TargetSubscription<E>: Send {
-    /// Polls the next retained event. Stream failures remain structured and sanitized.
+    /// Polls the next retained event and its exact resume cursor.
+    ///
+    /// Stream failures remain structured and sanitized. Implementations must never synthesize
+    /// the cursor from [`EventEnvelope::event_id`] or [`EventEnvelope::sequence`].
     fn poll_event(
         self: Pin<&mut Self>,
         context: &mut Context<'_>,
-    ) -> Poll<Option<Result<EventEnvelope<E>, TargetPortError>>>;
+    ) -> Poll<Option<Result<RetainedEventItem<E>, TargetPortError>>>;
 
     /// Maximum number of events the subscription may buffer.
     fn capacity(&self) -> usize;
