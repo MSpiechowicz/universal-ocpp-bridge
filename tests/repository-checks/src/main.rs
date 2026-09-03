@@ -18,6 +18,7 @@ const EXPECTED_PACKAGES: &[&str] = &[
     "uob-external-export-adapter",
     "uob-hostile-websocket-peer",
     "uob-management-adapter",
+    "uob-mqtt-target-adapter",
     "uob-ocpp-fixtures",
     "uob-protocol-adapter",
     "uob-provider-adapter",
@@ -72,6 +73,7 @@ struct Package {
 #[derive(Deserialize)]
 struct Dependency {
     name: String,
+    rename: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -223,8 +225,19 @@ fn check_owned_dependencies(packages: &BTreeMap<&str, &Package>, errors: &mut Ve
                     "{package_name} declares rust-ocpp, which is owned only by uob-protocol-adapter"
                 ));
             }
+            if is_rumqtt_dependency(dependency) && *package_name != "uob-mqtt-target-adapter" {
+                errors.push(format!(
+                    "{package_name} declares {}, which is owned only by uob-mqtt-target-adapter",
+                    dependency.name
+                ));
+            }
         }
     }
+}
+
+fn is_rumqtt_dependency(dependency: &Dependency) -> bool {
+    matches!(dependency.name.as_str(), "rumqttc" | "rumqttc-v4-next")
+        || dependency.rename.as_deref() == Some("rumqttc")
 }
 
 fn check_deferred_industrial_dependencies(
@@ -412,7 +425,7 @@ fn check_graph_excludes(
 
 #[cfg(test)]
 mod tests {
-    use super::is_opcua_sdk;
+    use super::{Dependency, is_opcua_sdk, is_rumqtt_dependency};
 
     #[test]
     fn deferred_opcua_sdk_names_are_recognized() {
@@ -421,5 +434,13 @@ mod tests {
         }
         assert!(!is_opcua_sdk("uob-target-adapter"));
         assert!(!is_opcua_sdk("rumqttc"));
+    }
+
+    #[test]
+    fn mqtt_ownership_recognizes_the_v4_next_package_alias() {
+        assert!(is_rumqtt_dependency(&Dependency {
+            name: "rumqttc-v4-next".to_owned(),
+            rename: Some("rumqttc".to_owned()),
+        }));
     }
 }

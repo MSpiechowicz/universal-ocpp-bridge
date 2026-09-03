@@ -69,6 +69,7 @@ packages=(
   uob-repository-checks
   uob-protocol-adapter
   uob-target-adapter
+  uob-mqtt-target-adapter
   uob-storage-adapter
   uob-external-export-adapter
   uob-provider-adapter

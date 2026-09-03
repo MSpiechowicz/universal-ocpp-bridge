@@ -26,6 +26,9 @@ Target `settings` are converted to the shared typed configuration boundary; name
 `_file` or containing `credential` are credential references, not inline secret values. The
 registry still rejects kinds whose concrete factory is not present in this build.
 
+The concrete outbound MQTT target, its TLS/plaintext rules, topic taxonomy, and broker integration
+test are documented in [`MQTT target`](../configuration/mqtt-target.md).
+
 ## Commands and exit codes
 
 Validate without binding a socket, resolving DNS, reading credentials, or starting adapters:

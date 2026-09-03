@@ -24,6 +24,7 @@ uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
 uob-external-export-adapter = { path = "../../adapters/export" }
 uob-management-adapter = { path = "../../adapters/management" }
+uob-mqtt-target-adapter = { path = "../../adapters/target-mqtt" }
 uob-protocol-adapter = { path = "../../adapters/protocol" }
 uob-provider-adapter = { path = "../../adapters/providers" }
 uob-storage-adapter = { path = "../../adapters/storage" }
