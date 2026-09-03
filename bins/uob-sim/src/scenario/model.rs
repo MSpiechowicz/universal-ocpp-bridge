@@ -73,6 +73,7 @@ impl StationDefinition {
             command_capacity: self.command_capacity,
             trace_capacity: self.trace_capacity,
             connectors: self.connector_ids(),
+            evse_connectors: self.evse_connectors(),
         }
     }
 
@@ -349,7 +350,7 @@ fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
         ));
     }
     if let Some(message) = &step.expect_message
-        && step.action.message_name() != Some(message.as_str())
+        && !step.action.accepts_message(message)
     {
         return Err(setup_failure(
             "unsupported_expected_message",

@@ -25,6 +25,7 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         command_capacity: 2,
         trace_capacity: 16,
         connectors: vec![1],
+        evse_connectors: vec![(1, 1), (2, 1)],
     }
 }
 

@@ -1,0 +1,1 @@
+[2,"fixture-201-start","TransactionEvent",{"eventType":"Started","timestamp":"2026-09-01T00:00:02Z","triggerReason":"Authorized","seqNo":0,"transactionInfo":{"transactionId":"tx-201-42","chargingState":"EVConnected"},"evse":{"id":2,"connectorId":1},"idToken":{"idToken":"LOCAL-USER-201","type":"Central"}}]
