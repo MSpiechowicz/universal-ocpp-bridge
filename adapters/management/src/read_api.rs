@@ -57,7 +57,7 @@ impl ManagementQueries {
         }
     }
 
-    async fn query(
+    pub(crate) async fn query(
         &self,
         query: TargetQuery,
     ) -> Result<TargetQueryResult<serde_json::Value>, ApiError> {
@@ -142,7 +142,7 @@ pub(crate) async fn station(
     }
 }
 
-enum ApiError {
+pub(crate) enum ApiError {
     Invalid(&'static str),
     NotFound,
     Busy,
