@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.22.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/3ce285ba06a46a82f8e8b2cad768da87a3aa9094..v0.22.0) - 2026-09-03
+#### Features
+- (**api**) stream authenticated resumable events - ([3ce285b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3ce285ba06a46a82f8e8b2cad768da87a3aa9094)) - Maciej Spiechowicz
+- (**mqtt**) publish canonical outbound messages - ([994a2f4](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/994a2f4c6092a30985bd01909e58ec0af49d3f82)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.21.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e061794938ea5ba262500e57c515b7f66bae99c7..v0.21.0) - 2026-09-03
 #### Features
 - (**api**) expose durable command admission - ([e061794](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/e061794938ea5ba262500e57c515b7f66bae99c7)) - Maciej Spiechowicz
