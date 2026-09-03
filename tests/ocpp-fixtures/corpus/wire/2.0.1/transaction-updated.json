@@ -1,0 +1,16 @@
+[
+  2,
+  "fixture-201-transaction-002",
+  "TransactionEvent",
+  {
+    "eventType": "Updated",
+    "timestamp": "2026-09-01T12:35:00Z",
+    "triggerReason": "ChargingStateChanged",
+    "seqNo": 1,
+    "transactionInfo": {
+      "transactionId": "independent-transaction-001",
+      "chargingState": "Charging"
+    },
+    "evse": { "id": 1, "connectorId": 1 }
+  }
+]

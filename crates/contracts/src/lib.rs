@@ -42,7 +42,7 @@ pub use snapshot::{
     AvailabilityState, CapabilityError, CapabilityName, ChargingResourceSnapshot, Connectivity,
     Operation, OperationParameter, OptionalCapability, ParameterName, ProtocolCapabilityDetail,
     ProtocolEdition, ResourceCapabilities, StationSnapshot, SupportedOperation, TransactionId,
-    TransactionSnapshot, TransactionState,
+    TransactionProtocolState, TransactionSnapshot, TransactionState,
 };
 pub use timestamp::UtcTimestamp;
 pub use trace::{

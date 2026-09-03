@@ -62,7 +62,9 @@ pub use payment::{
 };
 pub use protocol::{
     ChargerObservation, MeasurementApplyError, MeasurementObservation, RegistrationObservation,
-    TransactionStartObservation, apply_measurements,
+    TransactionApplyError, TransactionApplyOutcome, TransactionEventKind,
+    TransactionEventObservation, TransactionStartObservation, apply_measurements,
+    apply_transaction_event,
 };
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,

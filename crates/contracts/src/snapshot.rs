@@ -266,6 +266,30 @@ pub struct TransactionSnapshot {
     /// Observed end time, when the transaction has ended.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<UtcTimestamp>,
+    /// Version-specific lifecycle evidence needed to reject stale events after recovery.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol_state: Option<TransactionProtocolState>,
+}
+
+/// Persisted protocol evidence for the latest accepted transaction event.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct TransactionProtocolState {
+    /// Protocol edition that owns the sequence semantics.
+    pub protocol: ProtocolEdition,
+    /// Charger-assigned transaction identity.
+    pub native_transaction_id: String,
+    /// Original connector or EVSE address.
+    pub native_resource: crate::NativeProtocolReference,
+    /// Last accepted OCPP sequence number.
+    pub last_sequence_number: u32,
+    /// Last accepted lifecycle event name.
+    pub last_event: String,
+    /// Protocol trigger reason retained verbatim.
+    pub last_trigger_reason: String,
+    /// Charger-reported timestamp of the last accepted event.
+    pub last_event_at: UtcTimestamp,
+    /// SHA-256 of the typed protocol payload used to distinguish exact from altered replays.
+    pub last_event_fingerprint: String,
 }
 
 /// Observed state and advertised model of one connector or EVSE resource.

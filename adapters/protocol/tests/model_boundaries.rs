@@ -1,5 +1,10 @@
-use uob_application::{ChargerObservation, apply_measurements};
-use uob_contracts::{NativeProtocolReference, ProtocolEdition, StationSnapshot, UtcTimestamp};
+use uob_application::{
+    ChargerObservation, TransactionApplyError, TransactionApplyOutcome, TransactionEventKind,
+    apply_measurements, apply_transaction_event,
+};
+use uob_contracts::{
+    NativeProtocolReference, ProtocolEdition, StationSnapshot, TransactionState, UtcTimestamp,
+};
 use uob_protocol_adapter::{DecodeErrorKind, OcppErrorCode, protocol_for_subprotocol, v16, v201};
 
 const OCPP16_BOOT: &[u8] =
@@ -16,6 +21,10 @@ const OCPP201_TRANSACTION: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/transaction-started.json");
 const OCPP201_METER_VALUES: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/transaction-meter-values.json");
+const OCPP201_TRANSACTION_UPDATED: &[u8] =
+    include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/transaction-updated.json");
+const OCPP201_TRANSACTION_ENDED: &[u8] =
+    include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/transaction-ended.json");
 
 #[test]
 fn independent_ocpp16_fixtures_map_without_leaking_model_types() {
@@ -72,9 +81,12 @@ fn independent_ocpp201_fixtures_preserve_evse_and_transaction_identity() {
     let transaction = v201::decode_call(OCPP201_TRANSACTION).expect("OCPP 2.0.1 transaction");
     assert!(matches!(
         transaction.observation,
-        ChargerObservation::TransactionStarted(ref started)
-            if started.native_transaction_id.as_deref() == Some("independent-transaction-001")
-                && started.native_resource == NativeProtocolReference::Ocpp201 {
+        ChargerObservation::TransactionEvent(ref event)
+            if event.event == TransactionEventKind::Started
+                && event.sequence_number == 0
+                && event.trigger_reason == "Authorized"
+                && event.native_transaction_id == "independent-transaction-001"
+                && event.native_resource == NativeProtocolReference::Ocpp201 {
                     evse_id: 1,
                     connector_id: Some(1),
                 }
@@ -84,9 +96,10 @@ fn independent_ocpp201_fixtures_preserve_evse_and_transaction_identity() {
 #[test]
 fn ocpp201_meter_values_preserve_exact_semantics_and_native_identity() {
     let call = v201::decode_call(OCPP201_METER_VALUES).expect("OCPP 2.0.1 metering fixture");
-    let ChargerObservation::Measurements(observation) = call.observation else {
-        panic!("expected measurement observation");
+    let ChargerObservation::TransactionEvent(event) = call.observation else {
+        panic!("expected transaction event");
     };
+    let observation = event.measurements.expect("embedded meter values");
     assert_eq!(observation.protocol, ProtocolEdition::Ocpp201);
     assert_eq!(
         observation.native_resource,
@@ -123,9 +136,10 @@ fn ocpp201_meter_values_preserve_exact_semantics_and_native_identity() {
 #[test]
 fn ocpp201_meter_values_update_state_that_survives_persistence_and_recovery() {
     let call = v201::decode_call(OCPP201_METER_VALUES).expect("metering fixture");
-    let ChargerObservation::Measurements(observation) = call.observation else {
-        panic!("expected measurement observation");
+    let ChargerObservation::TransactionEvent(event) = call.observation else {
+        panic!("expected transaction event");
     };
+    let observation = event.measurements.expect("embedded meter values");
     let mut persisted: serde_json::Value = serde_json::from_slice(include_bytes!(
         "../../../crates/contracts/tests/fixtures/station-snapshot-ocpp16-v1.json"
     ))
@@ -148,6 +162,96 @@ fn ocpp201_meter_values_update_state_that_survives_persistence_and_recovery() {
 
     apply_measurements(&mut snapshot, &observation, observed_at).expect("replayed after reconnect");
     assert_eq!(snapshot.resources[0].current_values.len(), 2);
+}
+
+#[test]
+fn ocpp201_transaction_lifecycle_is_durable_idempotent_and_ordered() {
+    let started = v201::decode_call(OCPP201_TRANSACTION).expect("started fixture");
+    let ChargerObservation::TransactionEvent(started) = started.observation else {
+        panic!("expected started transaction event");
+    };
+    let ChargerObservation::TransactionEvent(updated) =
+        v201::decode_call(OCPP201_TRANSACTION_UPDATED)
+            .expect("updated event")
+            .observation
+    else {
+        panic!("expected updated transaction event");
+    };
+    let ChargerObservation::TransactionEvent(ended) = v201::decode_call(OCPP201_TRANSACTION_ENDED)
+        .expect("ended event")
+        .observation
+    else {
+        panic!("expected ended transaction event");
+    };
+    let mut snapshot: StationSnapshot = serde_json::from_slice(include_bytes!(
+        "../../../crates/contracts/tests/fixtures/station-snapshot-ocpp201-v1.json"
+    ))
+    .expect("snapshot fixture");
+    let observed_at: UtcTimestamp =
+        serde_json::from_str("\"2026-09-01T13:00:01Z\"").expect("observation time");
+
+    assert_eq!(
+        apply_transaction_event(&mut snapshot, &started, observed_at),
+        Ok(TransactionApplyOutcome::Applied)
+    );
+    let recovered: StationSnapshot =
+        serde_json::from_slice(&serde_json::to_vec(&snapshot).expect("persisted snapshot"))
+            .expect("recovered snapshot");
+    snapshot = recovered;
+    assert_eq!(
+        apply_transaction_event(&mut snapshot, &started, observed_at),
+        Ok(TransactionApplyOutcome::Duplicate)
+    );
+    assert_eq!(
+        apply_transaction_event(&mut snapshot, &ended, observed_at),
+        Err(TransactionApplyError::OutOfOrder)
+    );
+    assert_eq!(
+        apply_transaction_event(&mut snapshot, &updated, observed_at),
+        Ok(TransactionApplyOutcome::Applied)
+    );
+    assert_eq!(snapshot.transactions[0].state, TransactionState::Active);
+    assert_eq!(
+        apply_transaction_event(&mut snapshot, &ended, observed_at),
+        Ok(TransactionApplyOutcome::Applied)
+    );
+    assert_eq!(snapshot.transactions[0].state, TransactionState::Ended);
+    assert_eq!(snapshot.transactions[0].ended_at, Some(ended.occurred_at));
+    let state = snapshot.transactions[0]
+        .protocol_state
+        .as_ref()
+        .expect("recovery evidence");
+    assert_eq!(state.last_sequence_number, 2);
+    assert_eq!(state.last_trigger_reason, "RemoteStop");
+}
+
+#[test]
+fn ocpp201_transaction_lifecycle_rejects_invalid_and_conflicting_events() {
+    let no_evse = br#"[2,"bad","TransactionEvent",{"eventType":"Started","timestamp":"2026-09-01T12:30:00Z","triggerReason":"Authorized","seqNo":0,"transactionInfo":{"transactionId":"tx"}}]"#;
+    assert_eq!(
+        v201::decode_call(no_evse)
+            .expect_err("EVSE is required")
+            .kind(),
+        DecodeErrorKind::InvalidPayload
+    );
+
+    let started = v201::decode_call(OCPP201_TRANSACTION).expect("started fixture");
+    let ChargerObservation::TransactionEvent(started) = started.observation else {
+        panic!("expected transaction event");
+    };
+    let mut snapshot: StationSnapshot = serde_json::from_slice(include_bytes!(
+        "../../../crates/contracts/tests/fixtures/station-snapshot-ocpp201-v1.json"
+    ))
+    .expect("snapshot fixture");
+    let observed_at: UtcTimestamp =
+        serde_json::from_str("\"2026-09-01T12:30:01Z\"").expect("observation time");
+    apply_transaction_event(&mut snapshot, &started, observed_at).expect("initial start");
+    let mut conflicting = started.clone();
+    conflicting.trigger_reason = "RemoteStart".to_owned();
+    assert_eq!(
+        apply_transaction_event(&mut snapshot, &conflicting, observed_at),
+        Err(TransactionApplyError::ConflictingReplay)
+    );
 }
 
 #[test]

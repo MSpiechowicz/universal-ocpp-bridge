@@ -1,5 +1,6 @@
 use uob_contracts::{
-    DataPointValue, NativeProtocolReference, ProtocolEdition, StationSnapshot, UtcTimestamp,
+    DataPointValue, NativeProtocolReference, ProtocolEdition, StationSnapshot, TransactionId,
+    TransactionProtocolState, TransactionSnapshot, TransactionState, UtcTimestamp,
 };
 
 /// Target-neutral charger observation accepted from a protocol adapter.
@@ -18,8 +19,169 @@ pub enum ChargerObservation {
     },
     /// A transaction start was reported by the station.
     TransactionStarted(TransactionStartObservation),
+    /// An OCPP 2.0.1 transaction lifecycle event.
+    TransactionEvent(TransactionEventObservation),
     /// One or more exact meter samples reported by the station.
     Measurements(MeasurementObservation),
+}
+
+/// OCPP 2.0.1 transaction lifecycle event with version-specific sequencing evidence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransactionEventObservation {
+    pub protocol: ProtocolEdition,
+    pub event: TransactionEventKind,
+    pub native_transaction_id: String,
+    pub native_resource: NativeProtocolReference,
+    pub sequence_number: u32,
+    pub trigger_reason: String,
+    pub charging_state: Option<String>,
+    pub stopped_reason: Option<String>,
+    pub occurred_at: UtcTimestamp,
+    pub measurements: Option<MeasurementObservation>,
+    pub payload_fingerprint: String,
+}
+
+/// Lifecycle operation carried by an OCPP 2.0.1 `TransactionEvent`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransactionEventKind {
+    Started,
+    Updated,
+    Ended,
+}
+
+/// Result of reconciling a lifecycle event with durable snapshot state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransactionApplyOutcome {
+    Applied,
+    Duplicate,
+}
+
+/// Reconciles one transaction event into the snapshot that callers persist atomically with events.
+///
+/// # Errors
+///
+/// Returns [`TransactionApplyError`] for an unsupported protocol, unknown resource, invalid
+/// identity, stale or conflicting sequence, or an invalid lifecycle transition. The snapshot is
+/// unchanged when reconciliation fails.
+pub fn apply_transaction_event(
+    snapshot: &mut StationSnapshot,
+    observation: &TransactionEventObservation,
+    observed_at: UtcTimestamp,
+) -> Result<TransactionApplyOutcome, TransactionApplyError> {
+    if observation.protocol != ProtocolEdition::Ocpp201 {
+        return Err(TransactionApplyError::UnsupportedProtocol);
+    }
+    let transaction_id = TransactionId::new(observation.native_transaction_id.clone())
+        .map_err(|_| TransactionApplyError::InvalidIdentity)?;
+    let resource = snapshot
+        .resources
+        .iter()
+        .find(|item| item.resource.native_protocol_reference == Some(observation.native_resource))
+        .map(|item| item.resource.clone())
+        .ok_or(TransactionApplyError::UnknownResource)?;
+    let current = snapshot.transactions.iter().position(|transaction| {
+        transaction.protocol_state.as_ref().is_some_and(|state| {
+            state.protocol == observation.protocol
+                && state.native_transaction_id == observation.native_transaction_id
+        })
+    });
+    if let Some(index) = current {
+        let transaction = &snapshot.transactions[index];
+        let state = transaction
+            .protocol_state
+            .as_ref()
+            .ok_or(TransactionApplyError::InvalidTransition)?;
+        if observation.sequence_number == state.last_sequence_number {
+            let same = state.native_resource == observation.native_resource
+                && state.last_event == event_name(observation.event)
+                && state.last_trigger_reason == observation.trigger_reason
+                && state.last_event_at == observation.occurred_at
+                && state.last_event_fingerprint == observation.payload_fingerprint;
+            return if same {
+                Ok(TransactionApplyOutcome::Duplicate)
+            } else {
+                Err(TransactionApplyError::ConflictingReplay)
+            };
+        }
+        if observation.sequence_number != state.last_sequence_number.saturating_add(1) {
+            return Err(TransactionApplyError::OutOfOrder);
+        }
+        if transaction.state == TransactionState::Ended {
+            return Err(TransactionApplyError::AlreadyEnded);
+        }
+        if observation.event == TransactionEventKind::Started {
+            return Err(TransactionApplyError::InvalidTransition);
+        }
+    } else if observation.event != TransactionEventKind::Started {
+        return Err(TransactionApplyError::MissingStart);
+    }
+
+    if let Some(measurements) = &observation.measurements {
+        apply_measurements(snapshot, measurements, observed_at)
+            .map_err(|_| TransactionApplyError::UnknownResource)?;
+    }
+    let state = transaction_state(observation);
+    let ended_at =
+        (observation.event == TransactionEventKind::Ended).then_some(observation.occurred_at);
+    let protocol_state = TransactionProtocolState {
+        protocol: observation.protocol,
+        native_transaction_id: observation.native_transaction_id.clone(),
+        native_resource: observation.native_resource,
+        last_sequence_number: observation.sequence_number,
+        last_event: event_name(observation.event).to_owned(),
+        last_trigger_reason: observation.trigger_reason.clone(),
+        last_event_at: observation.occurred_at,
+        last_event_fingerprint: observation.payload_fingerprint.clone(),
+    };
+    if let Some(index) = current {
+        let transaction = &mut snapshot.transactions[index];
+        transaction.state = state;
+        transaction.ended_at = ended_at;
+        transaction.protocol_state = Some(protocol_state);
+    } else {
+        snapshot.transactions.push(TransactionSnapshot {
+            transaction_id,
+            resource,
+            state,
+            started_at: observation.occurred_at,
+            ended_at,
+            protocol_state: Some(protocol_state),
+        });
+    }
+    snapshot.observed_at = observed_at;
+    Ok(TransactionApplyOutcome::Applied)
+}
+
+fn event_name(event: TransactionEventKind) -> &'static str {
+    match event {
+        TransactionEventKind::Started => "Started",
+        TransactionEventKind::Updated => "Updated",
+        TransactionEventKind::Ended => "Ended",
+    }
+}
+
+fn transaction_state(observation: &TransactionEventObservation) -> TransactionState {
+    if observation.event == TransactionEventKind::Ended {
+        return TransactionState::Ended;
+    }
+    match observation.charging_state.as_deref() {
+        Some("Charging") => TransactionState::Active,
+        Some("SuspendedEV" | "SuspendedEVSE") => TransactionState::Suspended,
+        _ => TransactionState::Pending,
+    }
+}
+
+/// Invalid or stale transaction lifecycle evidence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransactionApplyError {
+    UnsupportedProtocol,
+    UnknownResource,
+    InvalidIdentity,
+    MissingStart,
+    OutOfOrder,
+    ConflictingReplay,
+    AlreadyEnded,
+    InvalidTransition,
 }
 
 /// Application-owned meter samples from one OCPP operation.
