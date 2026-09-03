@@ -1,5 +1,5 @@
-use uob_application::ChargerObservation;
-use uob_contracts::{NativeProtocolReference, ProtocolEdition};
+use uob_application::{ChargerObservation, apply_measurements};
+use uob_contracts::{NativeProtocolReference, ProtocolEdition, StationSnapshot, UtcTimestamp};
 use uob_protocol_adapter::{DecodeErrorKind, OcppErrorCode, protocol_for_subprotocol, v16, v201};
 
 const OCPP16_BOOT: &[u8] =
@@ -14,6 +14,8 @@ const OCPP201_HEARTBEAT: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/heartbeat.json");
 const OCPP201_TRANSACTION: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/transaction-started.json");
+const OCPP201_METER_VALUES: &[u8] =
+    include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/transaction-meter-values.json");
 
 #[test]
 fn independent_ocpp16_fixtures_map_without_leaking_model_types() {
@@ -77,6 +79,93 @@ fn independent_ocpp201_fixtures_preserve_evse_and_transaction_identity() {
                     connector_id: Some(1),
                 }
     ));
+}
+
+#[test]
+fn ocpp201_meter_values_preserve_exact_semantics_and_native_identity() {
+    let call = v201::decode_call(OCPP201_METER_VALUES).expect("OCPP 2.0.1 metering fixture");
+    let ChargerObservation::Measurements(observation) = call.observation else {
+        panic!("expected measurement observation");
+    };
+    assert_eq!(observation.protocol, ProtocolEdition::Ocpp201);
+    assert_eq!(
+        observation.native_resource,
+        NativeProtocolReference::Ocpp201 {
+            evse_id: 2,
+            connector_id: Some(1),
+        }
+    );
+    assert_eq!(
+        observation.native_transaction_id.as_deref(),
+        Some("independent-transaction-001")
+    );
+    assert_eq!(observation.sequence_number, Some(7));
+    assert_eq!(observation.values.len(), 1);
+    let encoded = serde_json::to_value(&observation.values[0]).expect("canonical value");
+    assert_eq!(encoded["value"]["value"], "12345678901234567.8901234567");
+    assert_eq!(
+        encoded["measurement"]["original_value"],
+        "12345678901234567890.1234567"
+    );
+    assert_eq!(encoded["measurement"]["original_unit"], "Wh");
+    assert_eq!(
+        encoded["measurement"]["measurand"],
+        "EnergyActiveImportRegister"
+    );
+    assert_eq!(encoded["measurement"]["phase"], "L1N");
+    assert_eq!(encoded["measurement"]["context"], "SamplePeriodic");
+    assert_eq!(encoded["measurement"]["location"], "Outlet");
+    assert_eq!(encoded["measurement"]["protocol_reference"]["evse_id"], 2);
+    assert_eq!(observation.signed_values.len(), 1);
+    assert!(observation.signed_values[0].contains("fixture-public-key"));
+}
+
+#[test]
+fn ocpp201_meter_values_update_state_that_survives_persistence_and_recovery() {
+    let call = v201::decode_call(OCPP201_METER_VALUES).expect("metering fixture");
+    let ChargerObservation::Measurements(observation) = call.observation else {
+        panic!("expected measurement observation");
+    };
+    let mut persisted: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../crates/contracts/tests/fixtures/station-snapshot-ocpp16-v1.json"
+    ))
+    .expect("snapshot fixture");
+    persisted["resources"][0]["resource"]["native_protocol_reference"] =
+        serde_json::json!({"protocol":"ocpp201","evse_id":2,"connector_id":1});
+    let mut snapshot: StationSnapshot =
+        serde_json::from_value(persisted).expect("canonical snapshot");
+    let observed_at: UtcTimestamp =
+        serde_json::from_str("\"2026-09-01T00:05:03Z\"").expect("trusted observation time");
+
+    apply_measurements(&mut snapshot, &observation, observed_at).expect("known EVSE");
+    let stored = serde_json::to_vec(&snapshot).expect("persist snapshot");
+    let recovered: StationSnapshot = serde_json::from_slice(&stored).expect("recover snapshot");
+    let values = &recovered.resources[0].current_values;
+    assert_eq!(values.len(), 2);
+    assert_eq!(values[1].point_id, observation.values[0].point_id);
+    assert_eq!(values[1].value, observation.values[0].value);
+    assert_eq!(values[1].observed_at, observed_at);
+
+    apply_measurements(&mut snapshot, &observation, observed_at).expect("replayed after reconnect");
+    assert_eq!(snapshot.resources[0].current_values.len(), 2);
+}
+
+#[test]
+fn ocpp201_metering_rejects_invalid_resources_and_empty_samples() {
+    let negative_evse = br#"[2,"meter","MeterValues",{"evseId":-1,"meterValue":[]}]"#;
+    assert_eq!(
+        v201::decode_call(negative_evse)
+            .expect_err("negative EVSE")
+            .kind(),
+        DecodeErrorKind::InvalidPayload
+    );
+    let empty_samples = br#"[2,"meter","MeterValues",{"evseId":1,"meterValue":[{"timestamp":"2026-09-01T00:00:00Z","sampledValue":[]}]}]"#;
+    assert_eq!(
+        v201::decode_call(empty_samples)
+            .expect_err("empty samples")
+            .kind(),
+        DecodeErrorKind::InvalidPayload
+    );
 }
 
 #[test]

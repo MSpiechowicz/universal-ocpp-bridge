@@ -60,7 +60,10 @@ pub use payment::{
     PaymentFuture, PaymentIntentStore, PaymentOrchestrator, PaymentProvider, PaymentProviderEvent,
     PaymentProviderId, PaymentVerificationReference, SensitivePaymentData, VerifiedPaymentEvent,
 };
-pub use protocol::{ChargerObservation, RegistrationObservation, TransactionStartObservation};
+pub use protocol::{
+    ChargerObservation, MeasurementApplyError, MeasurementObservation, RegistrationObservation,
+    TransactionStartObservation, apply_measurements,
+};
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
     TargetResourceScope,
