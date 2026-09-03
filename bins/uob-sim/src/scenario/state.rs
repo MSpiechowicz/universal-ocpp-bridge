@@ -23,6 +23,24 @@ pub struct StationState {
     pub registered: bool,
     resources: HashMap<StationResource, ResourceState>,
     authorized_tags: HashSet<String>,
+    target_online: bool,
+    command_requests: HashMap<String, CommandState>,
+    command_deliveries: HashSet<String>,
+    physical_effects: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CommandState {
+    Expired,
+    Rejected,
+    TransmissionUncertain,
+    Confirmed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CommandAdmission {
+    New,
+    Duplicate,
 }
 
 impl StationState {
@@ -53,6 +71,10 @@ impl StationState {
             registered: false,
             resources,
             authorized_tags: HashSet::new(),
+            target_online: true,
+            command_requests: HashMap::new(),
+            command_deliveries: HashSet::new(),
+            physical_effects: 0,
         }
     }
 
@@ -63,6 +85,70 @@ impl StationState {
     #[must_use]
     pub fn is_authorized(&self, id_tag: &str) -> bool {
         self.authorized_tags.contains(id_tag)
+    }
+
+    pub(crate) fn set_target_online(&mut self, online: bool) {
+        self.target_online = online;
+    }
+
+    pub(crate) const fn target_online(&self) -> bool {
+        self.target_online
+    }
+
+    pub(crate) const fn physical_effects(&self) -> u64 {
+        self.physical_effects
+    }
+
+    pub(crate) fn record_local_effect(&mut self) {
+        self.physical_effects = self.physical_effects.saturating_add(1);
+    }
+
+    pub(crate) fn admit_command(
+        &mut self,
+        request_id: &str,
+        delivery_id: &str,
+        expired: bool,
+    ) -> CommandAdmission {
+        if self.command_requests.contains_key(request_id)
+            || self.command_deliveries.contains(delivery_id)
+        {
+            return CommandAdmission::Duplicate;
+        }
+        self.command_deliveries.insert(delivery_id.to_owned());
+        if expired {
+            self.command_requests
+                .insert(request_id.to_owned(), CommandState::Expired);
+        }
+        CommandAdmission::New
+    }
+
+    pub(crate) fn complete_command(
+        &mut self,
+        request_id: &str,
+        accepted: bool,
+        response_lost: bool,
+    ) {
+        let state = if !accepted {
+            CommandState::Rejected
+        } else if response_lost {
+            self.physical_effects = self.physical_effects.saturating_add(1);
+            CommandState::TransmissionUncertain
+        } else {
+            self.physical_effects = self.physical_effects.saturating_add(1);
+            CommandState::Confirmed
+        };
+        self.command_requests.insert(request_id.to_owned(), state);
+    }
+
+    pub(crate) fn reconcile_command(&mut self, request_id: &str) -> bool {
+        let Some(state) = self.command_requests.get_mut(request_id) else {
+            return false;
+        };
+        if *state != CommandState::TransmissionUncertain {
+            return false;
+        }
+        *state = CommandState::Confirmed;
+        true
     }
 
     #[must_use]

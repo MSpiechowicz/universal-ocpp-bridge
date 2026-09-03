@@ -1,10 +1,11 @@
-use std::collections::HashSet;
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use serde::Deserialize;
 
 use super::{ActionKind, FailureCategory, RunFailure, SCHEMA_VERSION};
 use crate::{OcppVersion, SimulatorClientConfig};
+
+mod command;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -130,6 +131,11 @@ pub struct StepDefinition {
     pub payload: Option<serde_json::Value>,
     pub expect_response: Option<serde_json::Value>,
     pub fixture_id: Option<String>,
+    pub expect_failure: Option<String>,
+    pub request_id: Option<String>,
+    pub delivery_id: Option<String>,
+    pub expires_at_ms: Option<u64>,
+    pub execute_at_ms: Option<u64>,
 }
 
 impl StepDefinition {
@@ -302,6 +308,7 @@ fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             "only wait actions require duration_ms",
         ));
     }
+    command::validate_fields(step)?;
     let is_charging_call = matches!(
         step.action,
         ActionKind::Boot
@@ -357,30 +364,7 @@ fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             "expected message does not match the selected action",
         ));
     }
-    if let Some(fault) = &step.fault {
-        if fault.probability_percent == 0 || fault.probability_percent > 100 {
-            return Err(setup_failure(
-                "invalid_fault_probability",
-                "fault probability_percent must be between 1 and 100",
-            ));
-        }
-        if matches!(
-            fault.kind,
-            FaultKind::ResponseDelay | FaultKind::OutOfOrderResponse
-        ) && fault.delay_ms == 0
-        {
-            return Err(setup_failure(
-                "invalid_fault_delay",
-                "response delay and out-of-order controls require a nonzero delay_ms",
-            ));
-        }
-        if !matches!(step.action, ActionKind::Heartbeat) {
-            return Err(setup_failure(
-                "invalid_fault_action",
-                "response fault controls are supported only for heartbeat actions",
-            ));
-        }
-    }
+    command::validate_fault(step)?;
     Ok(())
 }
 

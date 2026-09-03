@@ -144,6 +144,7 @@ pub(super) fn apply_after(
         state
             .start_transaction(resource, transaction_id(payload)?)
             .map_err(|_| transition_failure())?;
+        state.record_local_effect();
     }
     state
         .record_sequence(resource, sequence)

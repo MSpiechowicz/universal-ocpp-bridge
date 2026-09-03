@@ -334,7 +334,9 @@ async fn execute_step(
         cleanup_client(client, true, diagnostics).await;
         state.connected = false;
     }
-    if matches!(selected_fault, Some(FaultKind::MissingResponse)) {
+    if matches!(selected_fault, Some(FaultKind::MissingResponse))
+        && matches!(step.action, super::ActionKind::Heartbeat)
+    {
         let connected = client
             .as_deref()
             .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?;
@@ -351,13 +353,43 @@ async fn execute_step(
         return Ok(result);
     }
 
-    let result = execute_action(connector, clock, station, step, client, state).await?;
+    let result = execute_action(
+        connector,
+        clock,
+        station,
+        step,
+        client,
+        state,
+        selected_fault,
+    )
+    .await;
+    let result = expected_failure(step, result)?;
     if matches!(selected_fault, Some(FaultKind::ResponseDelay)) {
         let delay = step.fault.as_ref().map_or(0, |fault| fault.delay_ms);
         clock.sleep(Duration::from_millis(delay)).await;
     }
     step.assert_detail(&result)?;
     Ok(result)
+}
+
+fn expected_failure(
+    step: &StepDefinition,
+    result: Result<String, RunFailure>,
+) -> Result<String, RunFailure> {
+    match (step.expect_failure.as_deref(), result) {
+        (None, result) => result,
+        (Some(expected), Err(failure)) if failure.code == expected => {
+            Ok(format!("expected_failure:{expected}"))
+        }
+        (Some(_), Err(_)) => Err(assertion_failure(
+            "unexpected_failure",
+            "step failed with a different code than expected",
+        )),
+        (Some(_), Ok(_)) => Err(assertion_failure(
+            "expected_failure_missing",
+            "step succeeded when a failure was expected",
+        )),
+    }
 }
 
 async fn cleanup_client(

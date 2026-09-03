@@ -31,7 +31,8 @@ by one station; a 1.6 connector is never collapsed into a 2.0.1 EVSE/connector p
 Scenario steps name their station, action, and nonzero wall-clock timeout. Version 1 supports
 `connect`, `boot`, `authorize`, `status`, `start_transaction`, `meter_values`,
 `stop_transaction`, `await_remote_start`, `await_remote_stop`, `heartbeat`, `wait`, and
-`disconnect`. Each station executes its own ordered step queue,
+`disconnect`. Resilience scenarios additionally use `target_offline`, `target_online`, and
+`reconcile_command`. Each station executes its own ordered step queue,
 so a delayed, disconnected, or missing-response station cannot stop another station from making
 progress. Reports are reconstructed in source-step order to retain deterministic JSONL identifiers
 even though station workers execute concurrently.
@@ -45,6 +46,12 @@ EVSE/connector, phase, unit, context, location, and source timestamp. Duplicate,
 replayed sequence numbers, flattened EVSE identities, and incomplete meter-quality fields fail
 before transmission. A rejected authorization does not make an identity eligible for a later start.
 
+The checked-in `resilience-1.6.toml` and `resilience-2.0.1.toml` scenarios exercise missing,
+denied, and expired local credentials while keeping each protocol's native token and resource
+shape. `expect_failure` names the exact stable failure that is required for a step to pass; an
+unexpected success or a different failure code fails the run. This lets a scenario continue after
+proving that a denied start produced no transaction or physical effect.
+
 Inbound OCPP 1.6 `RemoteStartTransaction`/`RemoteStopTransaction` and OCPP 2.0.1
 `RequestStartTransaction`/`RequestStopTransaction` requests are placed on the bounded station
 command queue. Their CALLRESULT acceptance is recorded independently from subsequent scenario
@@ -54,14 +61,29 @@ identifiers are rejected. Scenario steps can consume these commands with
 `await_remote_start` and `await_remote_stop`, including the original request payload and the
 separate acceptance boolean.
 
+Remote-command resilience steps can carry `request_id`, `delivery_id`, `execute_at_ms`, and an
+optional `expires_at_ms`. A tracked command that has reached its deadline fails with
+`command_expired` before the simulator consumes a charger command. Reusing either identity yields
+`duplicate_suppressed` and cannot increment the station's physical-effect count. These logical
+times are deterministic scenario evidence, not wall-clock or network time.
+
+`target_offline` and `target_online` model availability of the selected external target without
+disconnecting the charger. The resilience examples authorize and begin charging while that target
+is offline, then report the unchanged physical-effect count when it reconnects. A
+`missing_response` fault on a tracked accepted remote command records `transmission_uncertain`:
+the charger may have acted, so the command is not rejected or replayed. `reconcile_command` can
+confirm only that uncertain request from later observed state and reports
+`confirmed_without_replay` with the same effect count.
+
 `start_delay_ms` adds a station-local delay before an action; `jitter_ms` adds a deterministic
 seed-derived value from zero through that bound. A heartbeat can carry a `[steps.fault]` table with
 `kind`, `probability_percent`, and (where required) `delay_ms`. Supported controls are:
 
 - `disconnect`: close the selected station before its heartbeat;
 - `response_delay`: hold the completed response for the configured delay;
-- `missing_response`: start the exchange but suppress its observed completion until its step
-  timeout;
+- `missing_response`: for heartbeat, start the exchange but suppress its observed completion until
+  its step timeout; for a tracked remote command, record a possible physical effect and require an
+  explicit `transmission_uncertain` expectation;
 - `out_of_order_response`: issue a bounded pair of exchanges, hold the first completion, and allow
   the second correlated response to complete first; this requires `command_capacity` of at least
   two.
