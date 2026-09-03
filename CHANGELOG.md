@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.20.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/484ba1e6b33be18201dab7f6482242fc193f9edd..v0.20.0) - 2026-09-03
+#### Features
+- (**protocol**) implement OCPP 2.0.1 transaction lifecycle - ([484ba1e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/484ba1e6b33be18201dab7f6482242fc193f9edd)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.19.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e3ba3cec8df5435337c819dd249df447d33e0e3b..v0.19.0) - 2026-09-03
 #### Features
 - (**api**) expose canonical management reads - ([e3ba3ce](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/e3ba3cec8df5435337c819dd249df447d33e0e3b)) - Maciej Spiechowicz
