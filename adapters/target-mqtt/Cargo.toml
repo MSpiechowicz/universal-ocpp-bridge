@@ -1,0 +1,29 @@
+[package]
+name = "uob-mqtt-target-adapter"
+description = "MQTT 3.1.1 target adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rumqttc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+toml.workspace = true
+url.workspace = true
+uob-application = { path = "../../crates/application" }
+uob-contracts = { path = "../../crates/contracts" }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+uob-target-conformance = { path = "../../tests/target-conformance" }
+
+[lints]
+workspace = true

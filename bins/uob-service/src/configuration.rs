@@ -2,15 +2,18 @@ use std::{collections::BTreeMap, error::Error, fmt, fs, net::SocketAddr, path::P
 
 use reqwest::Url;
 use serde::Deserialize;
-use uob_application::{ConfigurationValue, CredentialReference, TargetConfiguration};
+use uob_application::{
+    ConfigurationValue, CredentialReference, TargetCapability, TargetConfiguration,
+};
 use uob_contracts::{ArtifactDigest, BridgeId, Environment, ReleaseId, TargetInstanceId};
 use uob_external_export_adapter::{
     DataExportConfiguration, DatabaseProviderRegistry, DestinationTransition, ExportBacklogState,
     postgresql_configuration_schema,
 };
+use uob_mqtt_target_adapter::{MQTT_TARGET_KIND, MqttTargetFactory};
 use uob_target_adapter::{
-    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TargetRegistry, TransportEncryption,
-    TransportSecurity,
+    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TargetDisplayFamily,
+    TargetRegistration, TargetRegistry, TransportEncryption, TransportPolicy, TransportSecurity,
 };
 
 use crate::{ServiceComposition, StartupIdentityConfiguration, compose_with_data_export};
@@ -136,7 +139,7 @@ fn validate(
         configuration.targets,
     )?;
     let identity = StartupIdentityConfiguration::production(
-        bridge_id,
+        bridge_id.clone(),
         ReleaseId::new(env!("CARGO_PKG_VERSION"))
             .map_err(|_| ConfigurationLoadError::InvalidIdentity)?,
         ArtifactDigest::new(option_env!("UOB_RELEASE_DIGEST").unwrap_or("sha256:development"))
@@ -145,6 +148,13 @@ fn validate(
     .in_environment(configuration.bridge.environment);
 
     let mut targets = TargetRegistry::<(), ()>::new();
+    targets
+        .register(
+            MqttTargetFactory::new(&bridge_id, configuration.bridge.environment)
+                .map_err(|_| ConfigurationLoadError::Composition)?,
+            mqtt_registration(),
+        )
+        .map_err(|_| ConfigurationLoadError::Composition)?;
     targets
         .declare_first_release_unavailable_targets()
         .map_err(|_| ConfigurationLoadError::Composition)?;
@@ -185,7 +195,7 @@ fn target_selection(
             .map_err(|_| ConfigurationLoadError::InvalidIdentity)?;
     let targets = targets
         .into_iter()
-        .map(configured_target)
+        .map(|entry| configured_target(entry, environment))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(Some(BridgeTargetSelection {
         bridge_id: bridge_id.clone(),
@@ -195,20 +205,85 @@ fn target_selection(
     }))
 }
 
-fn configured_target(entry: TargetEntry) -> Result<ConfiguredTarget, ConfigurationLoadError> {
+fn configured_target(
+    entry: TargetEntry,
+    environment: Environment,
+) -> Result<ConfiguredTarget, ConfigurationLoadError> {
     let instance_id =
         TargetInstanceId::new(entry.id).map_err(|_| ConfigurationLoadError::InvalidIdentity)?;
     let mut configuration = TargetConfiguration::new(instance_id, entry.revision);
     for (name, value) in entry.settings {
         configuration = configuration.with_setting(name.clone(), setting(&name, value)?);
     }
-    let transport_security = entry.transport.map(transport).transpose()?;
+    let transport_security = if entry.kind == MQTT_TARGET_KIND {
+        if entry.transport.is_some() {
+            return Err(ConfigurationLoadError::InvalidTransport);
+        }
+        Some(mqtt_transport(environment, &configuration)?)
+    } else {
+        entry.transport.map(transport).transpose()?
+    };
     Ok(ConfiguredTarget {
         kind: entry.kind,
         enabled: entry.enabled,
         configuration,
         transport_security,
     })
+}
+
+fn mqtt_transport(
+    environment: Environment,
+    configuration: &TargetConfiguration,
+) -> Result<TransportSecurity, ConfigurationLoadError> {
+    let Some(ConfigurationValue::Text(broker_url)) = configuration.setting("broker_url") else {
+        return Err(ConfigurationLoadError::InvalidTransport);
+    };
+    let (encryption, certificate_verification) = if broker_url.starts_with("mqtts://") {
+        (TransportEncryption::Tls, true)
+    } else if broker_url.starts_with("mqtt://") {
+        (TransportEncryption::Plaintext, false)
+    } else {
+        return Err(ConfigurationLoadError::InvalidTransport);
+    };
+    let allow_plaintext = match configuration.setting("allow_plaintext") {
+        Some(ConfigurationValue::Boolean(value)) => *value,
+        None => false,
+        _ => return Err(ConfigurationLoadError::InvalidTransport),
+    };
+    match (encryption, environment, allow_plaintext) {
+        (TransportEncryption::Tls, _, false)
+        | (TransportEncryption::Plaintext, Environment::Demo, true) => {}
+        _ => return Err(ConfigurationLoadError::InvalidTransport),
+    }
+    let credentials = match configuration.setting("credentials_file") {
+        Some(ConfigurationValue::CredentialReference(reference)) => Some(reference.clone()),
+        None => None,
+        _ => return Err(ConfigurationLoadError::InvalidTransport),
+    };
+    Ok(TransportSecurity {
+        endpoint: NetworkEndpoint::parse(broker_url)
+            .map_err(|_| ConfigurationLoadError::InvalidTransport)?,
+        encryption,
+        certificate_verification,
+        credentials,
+        access_policy: None,
+        explicitly_isolated: allow_plaintext,
+    })
+}
+
+fn mqtt_registration() -> TargetRegistration {
+    TargetRegistration {
+        display_family: TargetDisplayFamily {
+            id: "mqtt".to_owned(),
+            display_name: "MQTT".to_owned(),
+        },
+        presets: vec![],
+        capabilities: vec![
+            TargetCapability("retained-state".to_owned()),
+            TargetCapability("redacted-tracing".to_owned()),
+        ],
+        transport_policy: Some(TransportPolicy::Outbound),
+    }
 }
 
 fn setting(name: &str, value: toml::Value) -> Result<ConfigurationValue, ConfigurationLoadError> {
@@ -351,6 +426,30 @@ mod tests {
         assert!(matches!(
             validate(parsed),
             Err(ConfigurationLoadError::UnsafeRemoteEventEndpoint)
+        ));
+    }
+
+    #[test]
+    fn mqtt_uses_one_broker_url_and_trusted_runtime_namespace() {
+        let document = "[bridge]\nid='site-01'\nenvironment='demo'\ntarget_id='main'\n\n[[targets]]\nid='main'\nkind='mqtt'\nenabled=true\n\n[targets.settings]\nbroker_url='mqtt://127.0.0.1:1883'\nallow_plaintext=true\n";
+        let parsed = toml::from_str(document).expect("configuration syntax");
+        let validated = validate(parsed).expect("valid isolated MQTT configuration");
+
+        assert!(validated.service.targets.contains("mqtt"));
+        assert!(validated.service.target_selection.is_some());
+
+        let duplicate = "[bridge]\nid='site-01'\nenvironment='demo'\ntarget_id='main'\n\n[[targets]]\nid='main'\nkind='mqtt'\nenabled=true\ntransport={ endpoint='mqtt://other:1883', encryption='plaintext', explicitly_isolated=true }\n\n[targets.settings]\nbroker_url='mqtt://127.0.0.1:1883'\nallow_plaintext=true\n";
+        let parsed = toml::from_str(duplicate).expect("configuration syntax");
+        assert!(matches!(
+            validate(parsed),
+            Err(ConfigurationLoadError::InvalidTransport)
+        ));
+
+        let implicit_plaintext = "[bridge]\nid='site-01'\nenvironment='demo'\ntarget_id='main'\n\n[[targets]]\nid='main'\nkind='mqtt'\nenabled=true\n\n[targets.settings]\nbroker_url='mqtt://127.0.0.1:1883'\n";
+        let parsed = toml::from_str(implicit_plaintext).expect("configuration syntax");
+        assert!(matches!(
+            validate(parsed),
+            Err(ConfigurationLoadError::InvalidTransport)
         ));
     }
 }
