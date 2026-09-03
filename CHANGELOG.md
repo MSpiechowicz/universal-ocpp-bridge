@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.17.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/d502429c56fd3753b101f20e9218599dfef54d49..v0.17.0) - 2026-09-03
+#### Features
+- (**cli**) add noninteractive service commands - ([23eb95f](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/23eb95fee13810b534809b8c8bbdcd4bf472f8f7)) - Maciej Spiechowicz
+#### Tests
+- (**sim**) add authorization failure scenarios - ([d502429](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/d502429c56fd3753b101f20e9218599dfef54d49)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.16.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/90c8dd2bfca66695be4b4ab47fb175f0d70e544f..v0.16.0) - 2026-09-03
 #### Features
 - (**sim**) add OCPP 2.0.1 charging scenarios - ([90c8dd2](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/90c8dd2bfca66695be4b4ab47fb175f0d70e544f)) - Maciej Spiechowicz
