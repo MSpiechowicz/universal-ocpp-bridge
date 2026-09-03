@@ -980,6 +980,21 @@
       "description": "Unique identity of one running process instance.",
       "type": "string"
     },
+    "ProtocolEdition": {
+      "description": "Protocol edition negotiated with a station.",
+      "oneOf": [
+        {
+          "const": "ocpp16j",
+          "description": "OCPP 1.6J.",
+          "type": "string"
+        },
+        {
+          "const": "ocpp201",
+          "description": "OCPP 2.0.1.",
+          "type": "string"
+        }
+      ]
+    },
     "Quality": {
       "description": "Quality classification and optional machine-readable reason.",
       "properties": {
@@ -1112,6 +1127,56 @@
       "description": "Stable canonical identity of a charging transaction.",
       "type": "string"
     },
+    "TransactionProtocolState": {
+      "description": "Persisted protocol evidence for the latest accepted transaction event.",
+      "properties": {
+        "last_event": {
+          "description": "Last accepted lifecycle event name.",
+          "type": "string"
+        },
+        "last_event_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "Charger-reported timestamp of the last accepted event."
+        },
+        "last_event_fingerprint": {
+          "description": "SHA-256 of the typed protocol payload used to distinguish exact from altered replays.",
+          "type": "string"
+        },
+        "last_sequence_number": {
+          "description": "Last accepted OCPP sequence number.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_trigger_reason": {
+          "description": "Protocol trigger reason retained verbatim.",
+          "type": "string"
+        },
+        "native_resource": {
+          "$ref": "#/$defs/NativeProtocolReference",
+          "description": "Original connector or EVSE address."
+        },
+        "native_transaction_id": {
+          "description": "Charger-assigned transaction identity.",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolEdition",
+          "description": "Protocol edition that owns the sequence semantics."
+        }
+      },
+      "required": [
+        "protocol",
+        "native_transaction_id",
+        "native_resource",
+        "last_sequence_number",
+        "last_event",
+        "last_trigger_reason",
+        "last_event_at",
+        "last_event_fingerprint"
+      ],
+      "type": "object"
+    },
     "TransactionSnapshot": {
       "description": "Observed transaction state associated with a canonical charging resource.",
       "properties": {
@@ -1125,6 +1190,17 @@
             }
           ],
           "description": "Observed end time, when the transaction has ended."
+        },
+        "protocol_state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransactionProtocolState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Version-specific lifecycle evidence needed to reject stale events after recovery."
         },
         "resource": {
           "$ref": "#/$defs/ResourceRef",

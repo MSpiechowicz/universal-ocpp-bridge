@@ -1,0 +1,17 @@
+[
+  2,
+  "fixture-201-transaction-003",
+  "TransactionEvent",
+  {
+    "eventType": "Ended",
+    "timestamp": "2026-09-01T13:00:00Z",
+    "triggerReason": "RemoteStop",
+    "seqNo": 2,
+    "transactionInfo": {
+      "transactionId": "independent-transaction-001",
+      "chargingState": "Idle",
+      "stoppedReason": "Remote"
+    },
+    "evse": { "id": 1, "connectorId": 1 }
+  }
+]

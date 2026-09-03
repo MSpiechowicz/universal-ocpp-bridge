@@ -1,5 +1,7 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
+use std::fmt::Write as _;
+
 use rust_ocpp::v2_0_1::datatypes::meter_value_type::MeterValueType;
 use rust_ocpp::v2_0_1::messages::{
     boot_notification::BootNotificationRequest, heartbeat::HeartbeatRequest,
@@ -7,9 +9,10 @@ use rust_ocpp::v2_0_1::messages::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use uob_application::{
-    ChargerObservation, MeasurementObservation, RegistrationObservation,
-    TransactionStartObservation,
+    ChargerObservation, MeasurementObservation, RegistrationObservation, TransactionEventKind,
+    TransactionEventObservation,
 };
 use uob_contracts::{
     DataPointValue, ExactDecimal, Freshness, MeasurementContext, MeasurementLocation,
@@ -66,47 +69,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         }
         "TransactionEvent" => {
             let request: TransactionEventRequest = payload_as(payload)?;
-            if request.seq_no < 0 {
-                return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
-            }
-            let evse = request
-                .evse
-                .filter(|evse| evse.id > 0 && evse.connector_id.is_none_or(|id| id > 0))
-                .ok_or_else(|| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
-            let evse_id = u32::try_from(evse.id)
-                .map_err(|_| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
-            let connector_id = evse
-                .connector_id
-                .map(u32::try_from)
-                .transpose()
-                .map_err(|_| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
-            if request.transaction_info.transaction_id.trim().is_empty() {
-                return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
-            }
-            let native_resource = NativeProtocolReference::Ocpp201 {
-                evse_id,
-                connector_id,
-            };
-            if let Some(values) = request.meter_value {
-                if values.is_empty() {
-                    return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
-                }
-                measurements(
-                    native_resource,
-                    Some(request.transaction_info.transaction_id),
-                    Some(request.seq_no.cast_unsigned()),
-                    values,
-                )?
-            } else if format!("{:?}", request.event_type) == "Started" {
-                ChargerObservation::TransactionStarted(TransactionStartObservation {
-                    protocol: PROTOCOL,
-                    native_transaction_id: Some(request.transaction_info.transaction_id),
-                    native_resource,
-                    occurred_at: timestamp(request.timestamp)?,
-                })
-            } else {
-                return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
-            }
+            transaction_event(request)?
         }
         _ => {
             return Err(DecodeError::new(
@@ -123,6 +86,88 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         action,
         observation,
     })
+}
+
+fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservation, DecodeError> {
+    let payload_fingerprint = serde_json::to_vec(&request)
+        .map(|bytes| hex_digest(&bytes))
+        .map_err(|_| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
+    if request.seq_no < 0 {
+        return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
+    }
+    let evse = request
+        .evse
+        .filter(|evse| evse.id > 0 && evse.connector_id.is_none_or(|id| id > 0))
+        .ok_or_else(|| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
+    let evse_id = u32::try_from(evse.id)
+        .map_err(|_| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
+    let connector_id = evse
+        .connector_id
+        .map(u32::try_from)
+        .transpose()
+        .map_err(|_| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
+    if request.transaction_info.transaction_id.trim().is_empty() {
+        return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
+    }
+    let native_resource = NativeProtocolReference::Ocpp201 {
+        evse_id,
+        connector_id,
+    };
+    let event = match format!("{:?}", request.event_type).as_str() {
+        "Started" => TransactionEventKind::Started,
+        "Updated" => TransactionEventKind::Updated,
+        "Ended" => TransactionEventKind::Ended,
+        _ => return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload)),
+    };
+    let native_transaction_id = request.transaction_info.transaction_id;
+    let sequence_number = request.seq_no.cast_unsigned();
+    let meter_observation = request
+        .meter_value
+        .map(|values| {
+            measurements(
+                native_resource,
+                Some(native_transaction_id.clone()),
+                Some(sequence_number),
+                values,
+            )
+        })
+        .transpose()?
+        .map(|observation| {
+            let ChargerObservation::Measurements(observation) = observation else {
+                unreachable!("measurement decoder always returns measurements")
+            };
+            observation
+        });
+    Ok(ChargerObservation::TransactionEvent(
+        TransactionEventObservation {
+            protocol: PROTOCOL,
+            event,
+            native_transaction_id,
+            native_resource,
+            sequence_number,
+            trigger_reason: format!("{:?}", request.trigger_reason),
+            charging_state: request
+                .transaction_info
+                .charging_state
+                .map(|value| format!("{value:?}")),
+            stopped_reason: request
+                .transaction_info
+                .stopped_reason
+                .map(|value| format!("{value:?}")),
+            occurred_at: timestamp(request.timestamp)?,
+            measurements: meter_observation,
+            payload_fingerprint,
+        },
+    ))
+}
+
+fn hex_digest(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+            write!(output, "{byte:02x}").expect("writing to a String cannot fail");
+            output
+        })
 }
 
 fn measurements(
