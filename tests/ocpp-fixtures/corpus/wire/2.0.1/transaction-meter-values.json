@@ -1,0 +1,34 @@
+[
+  2,
+  "fixture-201-meter-values",
+  "TransactionEvent",
+  {
+    "eventType": "Updated",
+    "timestamp": "2026-09-01T00:05:02Z",
+    "triggerReason": "MeterValuePeriodic",
+    "seqNo": 7,
+    "transactionInfo": { "transactionId": "independent-transaction-001" },
+    "evse": { "id": 2, "connectorId": 1 },
+    "meterValue": [
+      {
+        "timestamp": "2026-09-01T00:05:01.125Z",
+        "sampledValue": [
+          {
+            "value": 12345678901234567890.1234567,
+            "context": "Sample.Periodic",
+            "measurand": "Energy.Active.Import.Register",
+            "phase": "L1-N",
+            "location": "Outlet",
+            "signedMeterValue": {
+              "signedMeterData": "MEUCIQDfixture",
+              "signingMethod": "ECDSA-secp256r1-SHA256",
+              "encodingMethod": "OCMF",
+              "publicKey": "fixture-public-key"
+            },
+            "unitOfMeasure": { "unit": "Wh", "multiplier": -3 }
+          }
+        ]
+      }
+    ]
+  }
+]
