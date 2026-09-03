@@ -1,4 +1,4 @@
-# Management read API
+# Management API
 
 The target-independent management listener exposes canonical station state when the composition
 root supplies a `CanonicalQuerySource` and an authenticated `TargetQueryAuthorization`. The same
@@ -20,6 +20,26 @@ seconds by default). Excess concurrency returns `429`; a slow source returns `50
 keep management reads from waiting on charging work indefinitely. If no canonical source is wired,
 station routes return `503` while health, readiness, metrics, identity, and optional static assets
 remain independently available.
+
+## Commands
+
+`POST /api/v1/commands` accepts the versioned canonical `CommandRequest` JSON contract. The HTTP
+authentication layer supplies the trusted management principal separately from the body, and the
+composition root wraps the common application admission port with that principal's control and
+resource grant. Privileged OCPP operations additionally pass through the protocol adapter's pinned
+action/schema registry before admission.
+
+The endpoint returns `202` only when the common application path reports a durably admitted command.
+Its response includes the request ID, `/api/v1/commands/{request_id}` status URL, and the latest
+result. `GET` on that status URL reads the common canonical result, so management, CLI, and target
+consumers observe the same lifecycle. Charger protocol acceptance remains in `lifecycle`; later
+physical charging evidence remains in the separate `observed_effects` collection.
+
+Invalid input and conflicting request IDs return `400`/`409`, missing permission returns `403`, an
+expired request returns `410`, unsupported capability returns `422`, bounded saturation returns
+`429`, and unavailable authoritative persistence returns `503`. A storage commit failure therefore
+cannot be mistaken for durable acceptance. Stable response bodies contain an `error` code and no
+credential or raw internal failure details.
 
 Health responses distinguish core readiness from selected-target, broker, client, and optional
 export degradation. They contain only stable component reason codes and counters; credential

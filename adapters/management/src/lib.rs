@@ -1,21 +1,30 @@
 #![doc = "Axum-based management adapter."]
 
 mod assets;
+mod command_api;
 mod health_view;
 mod read_api;
 mod security;
 
 use std::{fmt::Write, io, net::SocketAddr, sync::Arc};
 
-use axum::{Json, Router, extract::State, http::header, response::IntoResponse, routing::get};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::header,
+    response::IntoResponse,
+    routing::{get, post},
+};
 use uob_application::{
     Application, AuxiliaryProcess, ComponentKind, HealthSnapshot, ProcessResourceMetrics,
     ReadinessState,
 };
 
-pub use read_api::ManagementReadLimits;
-
 pub use assets::ManagementRouterOptions;
+pub use command_api::{
+    ManagementCommandConfiguration, PrivilegedPayloadValidator, router_with_queries_and_commands,
+};
+pub use read_api::ManagementReadLimits;
 pub use security::{
     DEFAULT_MANAGEMENT_LISTEN_ADDRESS, ManagementCredentialConfiguration,
     ManagementListenerConfiguration, ManagementListenerPolicyError, ManagementTlsConfiguration,
@@ -32,6 +41,7 @@ pub fn router_with_options(application: Application, options: ManagementRouterOp
         ManagementState {
             application,
             queries: None,
+            commands: None,
         },
         options,
     )
@@ -50,25 +60,29 @@ pub fn router_with_queries(
         ManagementState {
             application,
             queries: Some(queries),
+            commands: None,
         },
         options,
     )
 }
 
 #[derive(Clone)]
-struct ManagementState {
+pub(crate) struct ManagementState {
     application: Application,
     queries: Option<read_api::ManagementQueries>,
+    commands: Option<command_api::ManagementCommands>,
 }
 
-fn base_router(state: ManagementState, options: ManagementRouterOptions) -> Router {
+pub(crate) fn base_router(state: ManagementState, options: ManagementRouterOptions) -> Router {
     let router = Router::new()
         .route("/health", get(health))
         .route("/api/v1/health", get(detailed_health))
         .route("/metrics", get(metrics))
         .route("/api/v1/identity", get(identity))
         .route("/api/v1/stations", get(read_api::stations))
-        .route("/api/v1/stations/{station_id}", get(read_api::station));
+        .route("/api/v1/stations/{station_id}", get(read_api::station))
+        .route("/api/v1/commands", post(command_api::submit))
+        .route("/api/v1/commands/{request_id}", get(command_api::status));
     let router = if options.static_assets {
         router.route("/", get(assets::browser_entry))
     } else {
