@@ -1,8 +1,48 @@
 use serde_json::{Map, Value, json};
 use uob_application::{
-    AuxiliaryProcess, ComponentHealthState, ComponentKind, CoreLoopState, HealthSnapshot,
-    ReadinessState, StorageHealthState,
+    Application, AuxiliaryProcess, ComponentHealthState, ComponentKind, CoreLoopState,
+    HealthSnapshot, ProcessResourceMetrics, ReadinessState, StorageHealthState,
 };
+
+use axum::{Json, http::StatusCode};
+
+pub(super) fn health_response(application: &Application) -> (StatusCode, Json<Value>) {
+    sample_daemon_process(application);
+    let snapshot = application.health().snapshot();
+    let status = if snapshot.readiness == ReadinessState::Ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (status, Json(health_json(&snapshot)))
+}
+
+pub(super) fn sample_daemon_process(application: &Application) {
+    if let Some(metrics) = linux_process_metrics() {
+        application.health().report_daemon_process(metrics);
+    }
+}
+
+fn linux_process_metrics() -> Option<ProcessResourceMetrics> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let rss_kib = status
+        .lines()
+        .find_map(|line| line.strip_prefix("VmRSS:"))?
+        .split_whitespace()
+        .next()?
+        .parse::<u64>()
+        .ok()?;
+    let cpu_nanoseconds = std::fs::read_to_string("/proc/self/schedstat")
+        .ok()?
+        .split_whitespace()
+        .next()?
+        .parse::<u64>()
+        .ok()?;
+    Some(ProcessResourceMetrics {
+        rss_bytes: rss_kib.saturating_mul(1_024),
+        cpu_time_milliseconds: cpu_nanoseconds / 1_000_000,
+    })
+}
 
 pub(super) fn health_json(snapshot: &HealthSnapshot) -> Value {
     let resources = snapshot.runtime;

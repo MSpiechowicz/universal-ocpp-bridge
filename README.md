@@ -150,3 +150,8 @@ independent fixtures, and separate RequestStart/RequestStop acceptance.
 Core readiness, new-session admission, component degradation, and resource counters are exposed
 separately. See [health and metrics](docs/operations/health-readiness-metrics.md) for endpoint and
 failure semantics.
+
+The management adapter can expose canonical, resource-scoped station inventory and snapshot reads
+through bounded application query ports. See the
+[management read API](docs/operations/management-read-api.md) for routes, limits, and failure
+semantics.

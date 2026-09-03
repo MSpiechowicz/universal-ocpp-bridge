@@ -2,23 +2,18 @@
 
 mod assets;
 mod health_view;
+mod read_api;
 mod security;
 
-use std::{fmt::Write, io, net::SocketAddr};
+use std::{fmt::Write, io, net::SocketAddr, sync::Arc};
 
-use axum::{
-    Json, Router,
-    extract::State,
-    http::{StatusCode, header},
-    response::IntoResponse,
-    routing::get,
-};
+use axum::{Json, Router, extract::State, http::header, response::IntoResponse, routing::get};
 use uob_application::{
     Application, AuxiliaryProcess, ComponentKind, HealthSnapshot, ProcessResourceMetrics,
     ReadinessState,
 };
 
-use health_view::health_json;
+pub use read_api::ManagementReadLimits;
 
 pub use assets::ManagementRouterOptions;
 pub use security::{
@@ -33,69 +28,71 @@ pub fn router(application: Application) -> Router {
 
 /// Builds the same API router with optional static browser assets.
 pub fn router_with_options(application: Application, options: ManagementRouterOptions) -> Router {
+    base_router(
+        ManagementState {
+            application,
+            queries: None,
+        },
+        options,
+    )
+}
+
+/// Builds the management router with scoped canonical station reads.
+pub fn router_with_queries(
+    application: Application,
+    source: Arc<dyn uob_application::CanonicalQuerySource<serde_json::Value>>,
+    authorization: uob_application::TargetQueryAuthorization,
+    limits: ManagementReadLimits,
+    options: ManagementRouterOptions,
+) -> Router {
+    let queries = read_api::ManagementQueries::new(source, authorization, limits);
+    base_router(
+        ManagementState {
+            application,
+            queries: Some(queries),
+        },
+        options,
+    )
+}
+
+#[derive(Clone)]
+struct ManagementState {
+    application: Application,
+    queries: Option<read_api::ManagementQueries>,
+}
+
+fn base_router(state: ManagementState, options: ManagementRouterOptions) -> Router {
     let router = Router::new()
         .route("/health", get(health))
         .route("/api/v1/health", get(detailed_health))
         .route("/metrics", get(metrics))
-        .route("/api/v1/identity", get(identity));
+        .route("/api/v1/identity", get(identity))
+        .route("/api/v1/stations", get(read_api::stations))
+        .route("/api/v1/stations/{station_id}", get(read_api::station));
     let router = if options.static_assets {
         router.route("/", get(assets::browser_entry))
     } else {
         router
     };
-    router.with_state(application)
+    router.with_state(state)
 }
 
-async fn health(State(application): State<Application>) -> impl IntoResponse {
-    health_response(&application)
+async fn health(State(state): State<ManagementState>) -> impl IntoResponse {
+    health_view::health_response(&state.application)
 }
 
-async fn detailed_health(State(application): State<Application>) -> impl IntoResponse {
-    health_response(&application)
+async fn detailed_health(State(state): State<ManagementState>) -> impl IntoResponse {
+    health_view::health_response(&state.application)
 }
 
-fn health_response(application: &Application) -> (StatusCode, Json<serde_json::Value>) {
-    sample_daemon_process(application);
-    let snapshot = application.health().snapshot();
-    let status = if snapshot.readiness == ReadinessState::Ready {
-        StatusCode::OK
-    } else {
-        StatusCode::SERVICE_UNAVAILABLE
-    };
-    (status, Json(health_json(&snapshot)))
-}
-
-async fn metrics(State(application): State<Application>) -> impl IntoResponse {
-    sample_daemon_process(&application);
-    let body = encode_metrics(&application.health().snapshot());
+async fn metrics(State(state): State<ManagementState>) -> impl IntoResponse {
+    health_view::sample_daemon_process(&state.application);
+    let body = encode_metrics(&state.application.health().snapshot());
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], body)
 }
 
-async fn identity(State(application): State<Application>) -> Json<uob_contracts::ServiceIdentity> {
-    Json(application.identity().clone())
-}
-
-fn sample_daemon_process(application: &Application) {
-    if let Some(metrics) = linux_process_metrics() {
-        application.health().report_daemon_process(metrics);
-    }
-}
-
-fn linux_process_metrics() -> Option<ProcessResourceMetrics> {
-    let status = std::fs::read_to_string("/proc/self/status").ok()?;
-    let rss_kib = status
-        .lines()
-        .find_map(|line| line.strip_prefix("VmRSS:"))?
-        .split_whitespace()
-        .next()?
-        .parse::<u64>()
-        .ok()?;
-    let schedstat = std::fs::read_to_string("/proc/self/schedstat").ok()?;
-    let cpu_nanoseconds = schedstat.split_whitespace().next()?.parse::<u64>().ok()?;
-    Some(ProcessResourceMetrics {
-        rss_bytes: rss_kib.saturating_mul(1_024),
-        cpu_time_milliseconds: cpu_nanoseconds / 1_000_000,
-    })
+async fn identity(State(state): State<ManagementState>) -> Json<uob_contracts::ServiceIdentity> {
+    Json(state.application.identity().clone())
 }
 
 fn encode_metrics(snapshot: &HealthSnapshot) -> String {
