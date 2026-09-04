@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.23.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/4614a17bbcfc9c7d30dd9281a8ecc8166f63a58d..v0.23.0) - 2026-09-04
+#### Features
+- (**mqtt**) add authenticated command ingress - ([4614a17](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/4614a17bbcfc9c7d30dd9281a8ecc8166f63a58d)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.22.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/3ce285ba06a46a82f8e8b2cad768da87a3aa9094..v0.22.0) - 2026-09-03
 #### Features
 - (**api**) stream authenticated resumable events - ([3ce285b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3ce285ba06a46a82f8e8b2cad768da87a3aa9094)) - Maciej Spiechowicz
