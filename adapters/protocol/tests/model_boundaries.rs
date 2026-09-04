@@ -13,6 +13,8 @@ const OCPP16_HEARTBEAT: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/1.6/heartbeat.json");
 const OCPP16_TRANSACTION: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/1.6/start-transaction.json");
+const OCPP16_METER_VALUES: &[u8] =
+    include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/1.6/meter-values.json");
 const OCPP201_BOOT: &[u8] =
     include_bytes!("../../../tests/ocpp-fixtures/corpus/wire/2.0.1/boot-notification.json");
 const OCPP201_HEARTBEAT: &[u8] =
@@ -91,6 +93,137 @@ fn independent_ocpp201_fixtures_preserve_evse_and_transaction_identity() {
                     connector_id: Some(1),
                 }
     ));
+}
+
+#[test]
+fn ocpp16_meter_values_preserve_exact_semantics_defaults_and_invalid_quality() {
+    let call = v16::decode_call(OCPP16_METER_VALUES).expect("OCPP 1.6 metering fixture");
+    let ChargerObservation::Measurements(observation) = call.observation else {
+        panic!("expected measurements");
+    };
+    assert_eq!(observation.protocol, ProtocolEdition::Ocpp16j);
+    assert_eq!(
+        observation.native_resource,
+        NativeProtocolReference::Ocpp16 { connector_id: 1 }
+    );
+    assert_eq!(observation.native_transaction_id.as_deref(), Some("42"));
+    assert_eq!(observation.sequence_number, None);
+    assert_eq!(observation.values.len(), 3);
+
+    let exact = serde_json::to_value(&observation.values[0]).expect("canonical exact value");
+    assert_eq!(exact["value"]["value"], "12345678901234567890.1234567");
+    assert_eq!(
+        exact["measurement"]["original_value"],
+        "12345678901234567.8901234567"
+    );
+    assert_eq!(exact["measurement"]["original_unit"], "kWh");
+    assert_eq!(
+        exact["measurement"]["measurand"],
+        "Energy.Active.Import.Register"
+    );
+    assert_eq!(exact["measurement"]["phase"], "L1-N");
+    assert_eq!(exact["measurement"]["context"], "Sample.Periodic");
+    assert_eq!(exact["measurement"]["location"], "Outlet");
+    assert_eq!(
+        exact["measurement"]["protocol_reference"]["connector_id"],
+        1
+    );
+
+    let signed = serde_json::to_value(&observation.values[1]).expect("signed value evidence");
+    assert!(signed.get("value").is_none());
+    assert_eq!(signed["quality"]["level"], "uncertain");
+    assert_eq!(signed["quality"]["reason"], "signed_data_unverified");
+    assert_eq!(observation.signed_values, ["A1B2C3D4"]);
+
+    let unavailable = serde_json::to_value(&observation.values[2]).expect("bad value evidence");
+    assert!(unavailable.get("value").is_none());
+    assert_eq!(unavailable["quality"]["level"], "bad");
+    assert_eq!(unavailable["quality"]["reason"], "invalid_decimal");
+
+    let defaults = br#"[2,"defaults","MeterValues",{"connectorId":0,"meterValue":[{"timestamp":"2026-09-01T00:06:00Z","sampledValue":[{"value":"7"}]}]}]"#;
+    let call = v16::decode_call(defaults).expect("protocol defaults");
+    let ChargerObservation::Measurements(defaults) = call.observation else {
+        panic!("expected default measurement");
+    };
+    let encoded = serde_json::to_value(&defaults.values[0]).expect("default metadata");
+    assert_eq!(encoded["measurement"]["original_unit"], "Wh");
+    assert_eq!(encoded["measurement"]["context"], "Sample.Periodic");
+    assert_eq!(encoded["measurement"]["location"], "Outlet");
+}
+
+#[test]
+fn ocpp16_meter_values_update_state_that_survives_persistence_and_recovery() {
+    let call = v16::decode_call(OCPP16_METER_VALUES).expect("metering fixture");
+    let ChargerObservation::Measurements(observation) = call.observation else {
+        panic!("expected measurements");
+    };
+    let mut snapshot: StationSnapshot = serde_json::from_slice(include_bytes!(
+        "../../../crates/contracts/tests/fixtures/station-snapshot-ocpp16-v1.json"
+    ))
+    .expect("snapshot fixture");
+    let observed_at: UtcTimestamp =
+        serde_json::from_str("\"2026-09-01T00:07:00Z\"").expect("trusted observation time");
+
+    apply_measurements(&mut snapshot, &observation, observed_at).expect("known connector");
+    let stored = serde_json::to_vec(&snapshot).expect("persist snapshot");
+    let mut recovered: StationSnapshot = serde_json::from_slice(&stored).expect("recover snapshot");
+    let values = &recovered.resources[0].current_values;
+    assert_eq!(values.len(), 4);
+    assert_eq!(values[1].point_id, observation.values[0].point_id);
+    assert_eq!(values[1].value, observation.values[0].value);
+    assert_eq!(values[1].source_time, observation.values[0].source_time);
+    assert_eq!(values[1].observed_at, observed_at);
+
+    apply_measurements(&mut recovered, &observation, observed_at)
+        .expect("replayed after reconnect");
+    assert_eq!(recovered.resources[0].current_values.len(), 4);
+
+    let station_level = br#"[2,"station-meter","MeterValues",{"connectorId":0,"meterValue":[{"timestamp":"2026-09-01T00:08:00Z","sampledValue":[{"value":"8"}]}]}]"#;
+    let ChargerObservation::Measurements(station_level) = v16::decode_call(station_level)
+        .expect("station meter")
+        .observation
+    else {
+        panic!("expected station measurement");
+    };
+    apply_measurements(&mut recovered, &station_level, observed_at).expect("connector zero");
+    assert_eq!(recovered.current_values.len(), 1);
+}
+
+#[test]
+fn ocpp16_metering_rejects_invalid_payloads_and_unknown_connectors() {
+    let empty = br#"[2,"meter","MeterValues",{"connectorId":1,"meterValue":[]}]"#;
+    assert_eq!(
+        v16::decode_call(empty)
+            .expect_err("empty meter values")
+            .kind(),
+        DecodeErrorKind::InvalidPayload
+    );
+    let empty_samples = br#"[2,"meter","MeterValues",{"connectorId":1,"meterValue":[{"timestamp":"2026-09-01T00:00:00Z","sampledValue":[]}]}]"#;
+    assert_eq!(
+        v16::decode_call(empty_samples)
+            .expect_err("empty samples")
+            .kind(),
+        DecodeErrorKind::InvalidPayload
+    );
+    let unknown_unit = br#"[2,"meter","MeterValues",{"connectorId":1,"meterValue":[{"timestamp":"2026-09-01T00:00:00Z","sampledValue":[{"value":"1","unit":"parsecs"}]}]}]"#;
+    assert_eq!(
+        v16::decode_call(unknown_unit)
+            .expect_err("unknown unit")
+            .kind(),
+        DecodeErrorKind::InvalidPayload
+    );
+
+    let call = v16::decode_call(OCPP16_METER_VALUES).expect("metering fixture");
+    let ChargerObservation::Measurements(mut observation) = call.observation else {
+        panic!("expected measurements");
+    };
+    observation.native_resource = NativeProtocolReference::Ocpp16 { connector_id: 99 };
+    let mut snapshot: StationSnapshot = serde_json::from_slice(include_bytes!(
+        "../../../crates/contracts/tests/fixtures/station-snapshot-ocpp16-v1.json"
+    ))
+    .expect("snapshot fixture");
+    let observed_at = serde_json::from_str("\"2026-09-01T00:07:00Z\"").expect("timestamp");
+    assert!(apply_measurements(&mut snapshot, &observation, observed_at).is_err());
 }
 
 #[test]

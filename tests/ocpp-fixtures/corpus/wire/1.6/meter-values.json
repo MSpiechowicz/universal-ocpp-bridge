@@ -1,0 +1,43 @@
+[
+  2,
+  "independent-meter-values-16-001",
+  "MeterValues",
+  {
+    "connectorId": 1,
+    "transactionId": 42,
+    "meterValue": [
+      {
+        "timestamp": "2026-09-01T00:05:02Z",
+        "sampledValue": [
+          {
+            "value": "12345678901234567.8901234567",
+            "context": "Sample.Periodic",
+            "format": "Raw",
+            "measurand": "Energy.Active.Import.Register",
+            "phase": "L1-N",
+            "location": "Outlet",
+            "unit": "kWh"
+          },
+          {
+            "value": "A1B2C3D4",
+            "context": "Transaction.Begin",
+            "format": "SignedData",
+            "measurand": "Voltage",
+            "phase": "L2-N",
+            "location": "Inlet",
+            "unit": "V"
+          },
+          {
+            "value": "not-available",
+            "context": "Sample.Clock",
+            "format": "Raw",
+            "measurand": "Current.Import",
+            "phase": "L1",
+            "location": "Cable",
+            "unit": "A"
+          }
+        ]
+      }
+    ]
+  }
+]

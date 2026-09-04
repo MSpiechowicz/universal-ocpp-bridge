@@ -67,10 +67,10 @@ fn copy_directory(source: &Path, destination: &Path) {
 #[test]
 fn canonical_corpus_is_valid_but_not_release_complete() {
     let report = check_corpus(&corpus_root(), CheckMode::Development).unwrap();
-    assert_eq!(report.fixtures, 9);
+    assert_eq!(report.fixtures, 10);
     assert_eq!(report.requirements, 36);
-    assert_eq!(report.verified_requirements, 8);
-    assert_eq!(report.required_remaining, 27);
+    assert_eq!(report.verified_requirements, 9);
+    assert_eq!(report.required_remaining, 26);
 
     let errors = check_corpus(&corpus_root(), CheckMode::Release).unwrap_err();
     assert!(
