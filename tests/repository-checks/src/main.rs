@@ -15,6 +15,7 @@ const EXPECTED_PACKAGES: &[&str] = &[
     "uob-contracts",
     "uob-database-conformance",
     "uob-domain",
+    "uob-ems-scada-http-target-adapter",
     "uob-external-export-adapter",
     "uob-hostile-websocket-peer",
     "uob-management-adapter",

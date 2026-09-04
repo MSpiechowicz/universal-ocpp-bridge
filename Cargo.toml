@@ -11,6 +11,7 @@ members = [
     "adapters/protocol",
     "adapters/target",
     "adapters/target-mqtt",
+    "adapters/target-ems-scada-http",
     "adapters/storage",
     "adapters/export",
     "adapters/providers",

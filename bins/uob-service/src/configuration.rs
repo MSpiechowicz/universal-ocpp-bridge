@@ -6,6 +6,7 @@ use uob_application::{
     ConfigurationValue, CredentialReference, TargetCapability, TargetConfiguration,
 };
 use uob_contracts::{ArtifactDigest, BridgeId, Environment, ReleaseId, TargetInstanceId};
+use uob_ems_scada_http_target_adapter::{EMS_SCADA_HTTP_TARGET_KIND, EmsScadaHttpTargetFactory};
 use uob_external_export_adapter::{
     DataExportConfiguration, DatabaseProviderRegistry, DestinationTransition, ExportBacklogState,
     postgresql_configuration_schema,
@@ -158,6 +159,12 @@ fn validate(
         )
         .map_err(|_| ConfigurationLoadError::Composition)?;
     targets
+        .register(
+            EmsScadaHttpTargetFactory::new(configuration.bridge.environment),
+            ems_scada_http_registration(),
+        )
+        .map_err(|_| ConfigurationLoadError::Composition)?;
+    targets
         .declare_first_release_unavailable_targets()
         .map_err(|_| ConfigurationLoadError::Composition)?;
     let mut providers = DatabaseProviderRegistry::new();
@@ -222,6 +229,15 @@ fn configured_target(
             return Err(ConfigurationLoadError::InvalidTransport);
         }
         Some(mqtt_transport(environment, &configuration)?)
+    } else if entry.kind == EMS_SCADA_HTTP_TARGET_KIND {
+        // The listener owns its own exposure rule: loopback needs no TLS, while a public
+        // address requires explicit enablement, a TLS identity, and scoped credentials. The
+        // shared outbound transport block would demand TLS even on loopback, so it is not
+        // accepted for this kind.
+        if entry.transport.is_some() {
+            return Err(ConfigurationLoadError::InvalidTransport);
+        }
+        None
     } else {
         entry.transport.map(transport).transpose()?
     };
@@ -294,6 +310,19 @@ fn mqtt_registration() -> TargetRegistration {
             TargetCapability("redacted-tracing".to_owned()),
         ],
         transport_policy: Some(TransportPolicy::Outbound),
+    }
+}
+
+fn ems_scada_http_registration() -> TargetRegistration {
+    TargetRegistration {
+        display_family: TargetDisplayFamily {
+            id: "ems-scada".to_owned(),
+            display_name: "EMS/SCADA".to_owned(),
+        },
+        presets: vec![],
+        capabilities: vec![],
+        // The factory validates listener exposure itself; see `configured_target`.
+        transport_policy: None,
     }
 }
 

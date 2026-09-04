@@ -23,6 +23,7 @@ uuid.workspace = true
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
 uob-external-export-adapter = { path = "../../adapters/export" }
+uob-ems-scada-http-target-adapter = { path = "../../adapters/target-ems-scada-http" }
 uob-management-adapter = { path = "../../adapters/management" }
 uob-mqtt-target-adapter = { path = "../../adapters/target-mqtt" }
 uob-protocol-adapter = { path = "../../adapters/protocol" }
