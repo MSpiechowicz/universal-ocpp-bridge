@@ -168,6 +168,79 @@ async fn a_delivery_is_reported_as_local_exposure_and_never_as_peer_consumption(
 }
 
 #[tokio::test]
+async fn no_integration_client_leaves_latest_state_waiting_in_the_target_outbox() {
+    let address = free_loopback_address();
+    let target = target(&address).expect("configured target");
+    let hosted = FakeTargetHost::<(), ()>::build(
+        HostCapacities {
+            deliveries: 2,
+            commands: 2,
+            reports: 2,
+            diagnostics: 4,
+        },
+        Arc::new(UnsupportedQueryPort),
+        TargetRuntimeLimits {
+            maximum_in_flight_deliveries: 2,
+            maximum_in_flight_commands: 2,
+            maximum_command_bytes: 4096,
+        },
+        UtcTimestamp::new(time::OffsetDateTime::UNIX_EPOCH),
+    )
+    .expect("fake host");
+    let mut host = hosted.host;
+    let session = tokio::spawn(target.run(hosted.context));
+
+    // No client ever connects. Far more replaceable latest-state deliveries than the outbox can
+    // hold are still accepted and reported, so nothing accumulates behind an absent consumer.
+    let total = 12;
+    let mut reported = Vec::with_capacity(total);
+    for index in 0..total {
+        let delivery = snapshot_delivery(&format!("delivery-{index}"));
+        while host.try_deliver(clone_delivery(&delivery)).is_err() {
+            let report = tokio::time::timeout(Duration::from_secs(5), host.next_report())
+                .await
+                .expect("report before timeout")
+                .expect("delivery report");
+            reported.push(report);
+        }
+    }
+    while reported.len() < total {
+        let report = tokio::time::timeout(Duration::from_secs(5), host.next_report())
+            .await
+            .expect("report before timeout")
+            .expect("delivery report");
+        reported.push(report);
+    }
+
+    for report in &reported {
+        assert!(
+            matches!(report.outcome, DeliveryOutcome::LocallyExposed { .. }),
+            "{:?}",
+            report.outcome
+        );
+    }
+
+    host.request_shutdown();
+    session
+        .await
+        .expect("session task")
+        .expect("graceful shutdown");
+}
+
+/// Copies one delivery so the same canonical message can be queued repeatedly.
+fn clone_delivery(delivery: &TargetDelivery<()>) -> TargetDelivery<()> {
+    TargetDelivery {
+        delivery_id: delivery.delivery_id.clone(),
+        target_instance_id: delivery.target_instance_id.clone(),
+        target_configuration_revision: delivery.target_configuration_revision,
+        station_ordering_key: delivery.station_ordering_key.clone(),
+        deadline: delivery.deadline,
+        class: delivery.class,
+        message: Arc::clone(&delivery.message),
+    }
+}
+
+#[tokio::test]
 async fn a_public_listen_address_is_refused_before_any_socket_is_opened() {
     // Offline validation already refuses the configuration, so no session can be constructed
     // and no socket is ever opened on a public address.

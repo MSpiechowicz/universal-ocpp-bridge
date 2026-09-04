@@ -1,9 +1,9 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use uob_application::{
     BridgeTarget, BridgeTargetFactory, ConfigurationError, ConfigurationErrorCode,
     ConfigurationField, ConfigurationFieldKind, ConfigurationSchema, ConfigurationValue,
-    CredentialReference, TargetConfiguration, ValidatedTargetConfiguration,
+    CredentialReference, PageLimit, TargetConfiguration, ValidatedTargetConfiguration,
 };
 use uob_contracts::{Environment, TargetInstanceId};
 
@@ -39,6 +39,10 @@ pub struct EmsScadaHttpRuntimeOptions {
     pub maximum_concurrent_clients: usize,
     /// Largest accepted request body.
     pub maximum_request_bytes: usize,
+    /// Station snapshots one bounded point page may inspect.
+    pub maximum_station_scan: u16,
+    /// Deadline applied independently to every canonical read.
+    pub query_deadline: Duration,
 }
 
 impl Default for EmsScadaHttpRuntimeOptions {
@@ -49,6 +53,8 @@ impl Default for EmsScadaHttpRuntimeOptions {
             maximum_in_flight_commands: 8,
             maximum_concurrent_clients: 32,
             maximum_request_bytes: 64 * 1024,
+            maximum_station_scan: 16,
+            query_deadline: Duration::from_secs(2),
         }
     }
 }
@@ -60,7 +66,14 @@ impl EmsScadaHttpRuntimeOptions {
             || self.maximum_in_flight_commands == 0
             || self.maximum_concurrent_clients == 0
             || self.maximum_request_bytes == 0
+            || self.query_deadline.is_zero()
         {
+            return Err(ConfigurationError::new(
+                ConfigurationErrorCode::InvalidField,
+            ));
+        }
+        // The scan budget is a bounded read, so the application's own page limit validates it.
+        if PageLimit::new(self.maximum_station_scan).is_err() {
             return Err(ConfigurationError::new(
                 ConfigurationErrorCode::InvalidField,
             ));

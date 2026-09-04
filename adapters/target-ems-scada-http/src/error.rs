@@ -23,6 +23,22 @@ pub enum IntegrationErrorCode {
     UnsupportedOperation,
     /// The listener's bounded concurrent-request budget is exhausted.
     CapacityExhausted,
+    /// The request names a malformed identifier, filter, page bound, or cursor.
+    InvalidRequest,
+    /// The credential holds scopes in several bridges, so the request must name one.
+    BridgeRequired,
+    /// The addressed canonical resource is not currently known to this bridge.
+    ResourceNotFound,
+    /// The supplied pagination cursor is outside the source's retention window.
+    CursorExpired,
+    /// The request itself expired before the canonical source admitted it.
+    Expired,
+    /// The host did not grant this query class to the configured target instance.
+    OperationNotSupported,
+    /// Authoritative canonical state is temporarily unreadable.
+    SourceUnavailable,
+    /// The canonical source did not answer within the listener's bounded deadline.
+    DeadlineExceeded,
 }
 
 impl IntegrationErrorCode {
@@ -36,6 +52,14 @@ impl IntegrationErrorCode {
             Self::UnknownResource => "ems_scada_http.unknown_resource",
             Self::UnsupportedOperation => "ems_scada_http.unsupported_operation",
             Self::CapacityExhausted => "ems_scada_http.capacity_exhausted",
+            Self::InvalidRequest => "ems_scada_http.invalid_request",
+            Self::BridgeRequired => "ems_scada_http.bridge_required",
+            Self::ResourceNotFound => "ems_scada_http.resource_not_found",
+            Self::CursorExpired => "ems_scada_http.cursor_expired",
+            Self::Expired => "ems_scada_http.expired",
+            Self::OperationNotSupported => "ems_scada_http.operation_not_supported",
+            Self::SourceUnavailable => "ems_scada_http.source_unavailable",
+            Self::DeadlineExceeded => "ems_scada_http.deadline_exceeded",
         }
     }
 
@@ -43,9 +67,15 @@ impl IntegrationErrorCode {
         match self {
             Self::Unauthenticated | Self::InvalidCredential => StatusCode::UNAUTHORIZED,
             Self::PermissionDenied => StatusCode::FORBIDDEN,
-            Self::UnknownResource => StatusCode::NOT_FOUND,
+            Self::UnknownResource | Self::ResourceNotFound => StatusCode::NOT_FOUND,
             Self::UnsupportedOperation => StatusCode::METHOD_NOT_ALLOWED,
-            Self::CapacityExhausted => StatusCode::SERVICE_UNAVAILABLE,
+            Self::CapacityExhausted | Self::SourceUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::InvalidRequest | Self::BridgeRequired | Self::CursorExpired => {
+                StatusCode::BAD_REQUEST
+            }
+            Self::Expired => StatusCode::GONE,
+            Self::OperationNotSupported => StatusCode::NOT_IMPLEMENTED,
+            Self::DeadlineExceeded => StatusCode::GATEWAY_TIMEOUT,
         }
     }
 }
@@ -88,6 +118,14 @@ mod tests {
             IntegrationErrorCode::UnknownResource,
             IntegrationErrorCode::UnsupportedOperation,
             IntegrationErrorCode::CapacityExhausted,
+            IntegrationErrorCode::InvalidRequest,
+            IntegrationErrorCode::BridgeRequired,
+            IntegrationErrorCode::ResourceNotFound,
+            IntegrationErrorCode::CursorExpired,
+            IntegrationErrorCode::Expired,
+            IntegrationErrorCode::OperationNotSupported,
+            IntegrationErrorCode::SourceUnavailable,
+            IntegrationErrorCode::DeadlineExceeded,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for code in codes {

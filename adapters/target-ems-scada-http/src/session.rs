@@ -17,6 +17,7 @@ use uob_contracts::{TargetInstanceId, UtcTimestamp};
 
 use crate::{
     configuration::{INTEGRATION_PATH_PREFIX, IntegrationCredentials, resolve_credentials},
+    reads::{ReadExecutor, SupervisedReads},
     routing::{IntegrationState, integration_router},
     target::EmsScadaHttpTarget,
 };
@@ -44,10 +45,17 @@ where
         )
         .await?;
         let listener = bind(self.target.settings.listen_address).await?;
+        // Canonical reads are answered by the host's scoped query port. The listener opens no
+        // database, keeps no snapshot of its own, and duplicates no business handler.
+        let reads = ReadExecutor::new(
+            Arc::new(SupervisedReads::new(Arc::clone(&self.context.queries))),
+            self.target.runtime.query_deadline,
+        );
         let state = IntegrationState::new(
             self.target.descriptor(),
             self.target.listener_limits(),
             credentials,
+            reads,
         );
 
         let (stop, stopped) = oneshot::channel::<()>();

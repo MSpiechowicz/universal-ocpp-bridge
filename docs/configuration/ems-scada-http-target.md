@@ -77,10 +77,59 @@ origin and can never be configured on the management listener, which requires a 
 | Endpoint | Behavior |
 |---|---|
 | `GET /bridge/v1/capabilities` | Contract version, served resources and operations, descriptor delivery semantics, applicable limits, and the calling credential's own permissions and resource scopes. |
+| `GET /bridge/v1/stations` | Paginated canonical station inventory with each station's current snapshot. |
+| `GET /bridge/v1/stations/{station_id}` | One current canonical station snapshot. |
+| `GET /bridge/v1/points` | Filtered, paginated canonical point catalog with descriptors and latest values. |
+| `GET /bridge/v1/points/{point_id}` | One canonical point descriptor and its latest value. |
 
 Any other path returns `ems_scada_http.unknown_resource`, and an unsupported method on a served
 resource returns `ems_scada_http.unsupported_operation`. Error bodies carry a stable machine-readable
 `error` code and never echo a path, payload, or credential.
+
+### Reading canonical state
+
+Every read requires a credential holding the `read` permission. A listener with no credential
+document serves only `GET /bridge/v1/capabilities`: an anonymous local caller has no reader role
+and no resource scope, so it reaches no canonical record.
+
+| Parameter | Applies to | Meaning |
+|---|---|---|
+| `limit` | both lists | Page size. A zero or oversized value is refused rather than clamped. |
+| `after` | both lists | Opaque cursor from the previous page of the *same* list, with the same filters. |
+| `bridge_id` | items and `points` | Required only when the credential holds scopes in more than one bridge. |
+| `station_id` | `points` | Restricts the catalog to one station. |
+| `evse_id`, `connector_id` | `points` | Narrows a named station to one EVSE, one connector, or one connector below an EVSE. An EVSE named without a connector covers its connectors. |
+
+`GET /bridge/v1/points/{point_id}` addresses a point inside one resource, so it requires
+`station_id` and, for a point below the station, the EVSE or connector identifiers. Point
+identities are stable within their owning resource, not across a bridge.
+
+Descriptors and values are the canonical contract objects themselves. Units, access mode, exact
+decimals, source and observation timestamps, quality, and freshness therefore reach an EMS client
+exactly as the bridge recorded them, and are identical to the documents the MQTT target publishes.
+Station-level meters — OCPP 1.6 connector zero and OCPP 2.0.1 EVSE zero — are listed against the
+station itself and carry no snapshot descriptor.
+
+Every query, list and item alike, is checked against the calling credential's own permission and
+resource scopes, which are narrower than or equal to the grant the composition root gave the
+target instance. Enumeration silently omits everything outside the caller's scope; a direct
+identifier outside it is refused with `ems_scada_http.permission_denied` whether or not the
+resource exists, so neither route can be used to discover another scope's stations.
+
+### Read error codes
+
+| Code | Status | Meaning |
+|---|---|---|
+| `ems_scada_http.invalid_request` | 400 | Malformed identifier, filter, page bound, or cursor. |
+| `ems_scada_http.bridge_required` | 400 | The credential spans several bridges; name one with `bridge_id`. |
+| `ems_scada_http.cursor_expired` | 400 | The cursor is outside the source's retention window. |
+| `ems_scada_http.permission_denied` | 403 | The credential holds no reader role, or no scope covering the resource. |
+| `ems_scada_http.resource_not_found` | 404 | The addressed resource is in scope but is not currently known. |
+| `ems_scada_http.expired` | 410 | The request expired before the canonical source admitted it. |
+| `ems_scada_http.operation_not_supported` | 501 | The host did not grant this query class to the target instance. |
+| `ems_scada_http.capacity_exhausted` | 503 | The bounded concurrent-request budget is exhausted. |
+| `ems_scada_http.source_unavailable` | 503 | Authoritative canonical state is temporarily unreadable. |
+| `ems_scada_http.deadline_exceeded` | 504 | The canonical source did not answer within the listener's bounded deadline. |
 
 ## Delivery meaning
 
@@ -88,6 +137,14 @@ Delivery through this target means the canonical record is available on the loca
 surface. It does not assert that an EMS client consumed it, so the descriptor advertises
 `local_exposure` and nothing else. Host deliveries are drained continuously, so an absent or slow
 integration client cannot fill the target outbox or block charging.
+
+## Bounded reads
+
+The listener holds no canonical state of its own: every read is answered through the host's scoped
+query port, which owns consistency and persistence. Concurrent clients, request bodies, page sizes,
+and the number of station snapshots one point page may inspect are all bounded, and every canonical
+read carries a deadline, so a slow authoritative source releases a client slot instead of holding
+it. The applicable values are advertised under `limits` in the capability response.
 
 ## Current limits
 
