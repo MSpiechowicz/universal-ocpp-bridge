@@ -2796,7 +2796,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "uob-application"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "serde_json",
  "time",
@@ -2806,7 +2806,7 @@ dependencies = [
 
 [[package]]
 name = "uob-contracts"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "jsonschema 0.52.1",
  "schemars",
@@ -2817,7 +2817,7 @@ dependencies = [
 
 [[package]]
 name = "uob-database-conformance"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "serde_json",
  "time",
@@ -2828,14 +2828,14 @@ dependencies = [
 
 [[package]]
 name = "uob-domain"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "uob-contracts",
 ]
 
 [[package]]
 name = "uob-external-export-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "serde_json",
  "uob-application",
@@ -2844,7 +2844,7 @@ dependencies = [
 
 [[package]]
 name = "uob-hostile-websocket-peer"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "futures",
  "serde",
@@ -2857,7 +2857,7 @@ dependencies = [
 
 [[package]]
 name = "uob-management-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "axum",
  "futures-util",
@@ -2871,7 +2871,7 @@ dependencies = [
 
 [[package]]
 name = "uob-mqtt-target-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "libc",
  "rumqttc-v4-next",
@@ -2888,7 +2888,7 @@ dependencies = [
 
 [[package]]
 name = "uob-ocpp-fixtures"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "jsonschema 0.52.1",
  "serde",
@@ -2898,7 +2898,7 @@ dependencies = [
 
 [[package]]
 name = "uob-protocol-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "axum",
  "base64",
@@ -2921,7 +2921,7 @@ dependencies = [
 
 [[package]]
 name = "uob-provider-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "sha2",
  "uob-application",
@@ -2929,14 +2929,14 @@ dependencies = [
 
 [[package]]
 name = "uob-release-manager"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "uob-contracts",
 ]
 
 [[package]]
 name = "uob-repository-checks"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2944,7 +2944,7 @@ dependencies = [
 
 [[package]]
 name = "uob-service"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "futures-util",
  "reqwest",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "uob-sim"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "futures",
  "ocpp-client",
@@ -2981,7 +2981,7 @@ dependencies = [
 
 [[package]]
 name = "uob-storage-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "rusqlite",
  "serde",
@@ -2996,7 +2996,7 @@ dependencies = [
 
 [[package]]
 name = "uob-target-adapter"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3009,7 +3009,7 @@ dependencies = [
 
 [[package]]
 name = "uob-target-conformance"
-version = "0.24.0"
+version = "0.25.0"
 dependencies = [
  "time",
  "tokio",

@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.25.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/8f34a19625d0230cfe824cbd79ffee1927103ce8..v0.25.0) - 2026-09-04
+#### Features
+- (**mqtt**) publish Home Assistant discovery - ([8f34a19](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/8f34a19625d0230cfe824cbd79ffee1927103ce8)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.24.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/b4139afde2b36168a1c45ed57e3e29ce27351c77..v0.24.0) - 2026-09-04
 #### Features
 - (**protocol**) ingest OCPP 1.6J meter values - ([b4139af](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b4139afde2b36168a1c45ed57e3e29ce27351c77)) - Maciej Spiechowicz
