@@ -16,7 +16,7 @@ env:
 
 concurrency:
   group: rust-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   workspace:
@@ -46,6 +46,11 @@ jobs:
     name: Version and publish successful main builds
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: workspace
+    environment:
+      name: stable-release
+    concurrency:
+      group: stable-release-publication
+      cancel-in-progress: false
     permissions:
       contents: write # create the generated version commit, tag, and GitHub Release
     runs-on: ubuntu-24.04
@@ -56,17 +61,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Restore the verified build outputs
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-rust-1.98-ci-v1-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-1.98-ci-v1-
+      - name: Verify live repository and environment protections
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}
+        run: ./scripts/check-release-protections.sh
       - name: Install the reviewed Cocogitto release
         env:
           COG_ARCHIVE_SHA256: e03938ff2c4c86d71c00c0f3284dbbe95c5ca76fe34a51f33e945c23010d59bb

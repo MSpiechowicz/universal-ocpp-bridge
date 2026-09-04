@@ -56,6 +56,7 @@ cargo fmt --all --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo test --locked --workspace
 cargo run --locked --quiet --package uob-ocpp-fixtures
+./scripts/test-release-protections.sh
 ./scripts/test-boundaries.sh
 
 packages=(
