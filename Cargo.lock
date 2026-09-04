@@ -2916,6 +2916,9 @@ dependencies = [
  "uob-application",
  "uob-contracts",
  "uob-hostile-websocket-peer",
+ "uob-provider-adapter",
+ "uob-storage-adapter",
+ "uuid",
  "validator",
 ]
 

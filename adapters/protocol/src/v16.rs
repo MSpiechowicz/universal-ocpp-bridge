@@ -1,5 +1,9 @@
 //! OCPP 1.6J model isolation and charger-to-application mappings.
 
+mod authorization;
+
+pub use authorization::{Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call};
+
 use rust_ocpp::v1_6::messages::{
     boot_notification::BootNotificationRequest, heart_beat::HeartbeatRequest,
     meter_values::MeterValuesRequest, start_transaction::StartTransactionRequest,
