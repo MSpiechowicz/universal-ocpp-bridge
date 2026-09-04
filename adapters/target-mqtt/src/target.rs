@@ -62,10 +62,16 @@ where
                 DeliverySemantic::NamedPeerAcknowledgement,
                 DeliverySemantic::UncertainHandoff,
             ],
-            optional_capabilities: vec![
-                TargetCapability("retained-state".to_owned()),
-                TargetCapability("redacted-tracing".to_owned()),
-            ],
+            optional_capabilities: {
+                let mut capabilities = vec![
+                    TargetCapability("retained-state".to_owned()),
+                    TargetCapability("redacted-tracing".to_owned()),
+                ];
+                if self.settings.home_assistant_discovery {
+                    capabilities.push(TargetCapability("home-assistant-discovery".to_owned()));
+                }
+                capabilities
+            },
         }
     }
 

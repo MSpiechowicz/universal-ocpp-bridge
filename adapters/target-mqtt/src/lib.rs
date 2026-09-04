@@ -2,6 +2,7 @@
 
 mod client;
 mod configuration;
+mod discovery;
 mod error;
 mod ingress;
 mod mapping;
