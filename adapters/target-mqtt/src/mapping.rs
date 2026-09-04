@@ -2,7 +2,10 @@ use std::io;
 
 use serde::Serialize;
 use uob_application::{ConfigurationError, ConfigurationErrorCode, TargetDelivery, TargetMessage};
-use uob_contracts::{BridgeId, ContractVersion, Environment, TargetInstanceId, TargetKind};
+use uob_contracts::{
+    BridgeId, CommandResult, ContractVersion, Environment, RequestId, ResourceRef,
+    TargetInstanceId, TargetKind,
+};
 
 use crate::configuration::MQTT_TARGET_KIND;
 
@@ -46,6 +49,57 @@ impl TopicNamespace {
     #[must_use]
     pub fn availability(&self) -> String {
         format!("{}/availability", self.base)
+    }
+
+    /// Returns the only command namespace this adapter subscribes to.
+    #[must_use]
+    pub fn command_subscription(&self) -> String {
+        format!("{}/commands/+/+", self.base)
+    }
+
+    pub(crate) fn command_topic_matches(
+        &self,
+        topic: &str,
+        resource: &ResourceRef,
+        request_id: &RequestId,
+    ) -> bool {
+        resource.bridge_id == self.bridge_id
+            && topic
+                == format!(
+                    "{}/commands/{}/{}",
+                    self.base,
+                    encode_segment(resource.station_id.as_str()),
+                    encode_segment(request_id.as_str())
+                )
+    }
+
+    pub(crate) fn command_result(
+        &self,
+        target: &TargetInstanceId,
+        result: &CommandResult,
+        maximum_payload_bytes: usize,
+    ) -> Result<WirePublication, MappingError> {
+        if result.schema_version != ContractVersion::V1_INITIAL
+            || result.resource.bridge_id != self.bridge_id
+            || !matches!(
+                &result.return_route.origin,
+                uob_contracts::AuthenticatedCommandOrigin::Target {
+                    target_instance_id,
+                    ..
+                } if target_instance_id == target
+            )
+        {
+            return Err(MappingError::IdentityMismatch);
+        }
+        Ok(WirePublication {
+            topic: self.message_topic(
+                "results",
+                result.resource.station_id.as_str(),
+                Some(result.return_route.request_id.as_str()),
+            )?,
+            retain: false,
+            payload: encode(result, maximum_payload_bytes)?,
+        })
     }
 
     /// Derives a process-controlled client ID with no user-supplied override.

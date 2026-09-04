@@ -1,9 +1,9 @@
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use uob_application::{
     BridgeTarget, DeliverySemantic, TargetCapability, TargetContext, TargetDescriptor,
     TargetLimits, TargetMessageClass, TargetTask,
 };
-use uob_contracts::{ContractVersion, TargetKind};
+use uob_contracts::{ContractVersion, Operation, TargetKind};
 
 use crate::{
     configuration::{MQTT_TARGET_KIND, MqttRuntimeOptions, MqttSettings, resolve_credentials},
@@ -35,7 +35,7 @@ impl MqttTarget {
 impl<E, P> BridgeTarget<E, P> for MqttTarget
 where
     E: Serialize + Send + Sync + 'static,
-    P: Send + 'static,
+    P: Clone + DeserializeOwned + Send + 'static,
 {
     fn descriptor(&self) -> TargetDescriptor {
         TargetDescriptor {
@@ -48,11 +48,15 @@ where
                 TargetMessageClass::CommandResult,
                 TargetMessageClass::Diagnostic,
             ],
-            inbound_operations: vec![],
+            inbound_operations: vec![
+                Operation::Start,
+                Operation::Stop,
+                Operation::SetChargingLimit,
+            ],
             limits: TargetLimits {
                 maximum_message_bytes: self.runtime.maximum_message_bytes,
                 maximum_in_flight_deliveries: self.runtime.maximum_in_flight_deliveries,
-                maximum_in_flight_commands: 0,
+                maximum_in_flight_commands: self.runtime.maximum_in_flight_commands,
             },
             delivery_semantics: vec![
                 DeliverySemantic::NamedPeerAcknowledgement,

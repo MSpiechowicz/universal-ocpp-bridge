@@ -57,7 +57,7 @@ async fn publishes_canonical_outputs_with_versioned_topics_and_broker_ack_truth(
         tokio::time::timeout(Duration::from_millis(50), target.host.next_command())
             .await
             .is_err(),
-        "outbound MQTT must not implement command ingress"
+        "the target must not invent command ingress without a broker publication"
     );
     graceful_shutdown(
         &mut target,

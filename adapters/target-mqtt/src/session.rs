@@ -3,8 +3,8 @@ use std::{
     future::poll_fn,
 };
 
-use rumqttc::{AsyncClient, Event, Incoming, Outgoing, PublishOptions};
-use serde::Serialize;
+use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
+use serde::{Serialize, de::DeserializeOwned};
 use tokio::{
     task::{JoinError, JoinSet},
     time::Instant,
@@ -13,19 +13,19 @@ use uob_application::{
     AcknowledgementScope, DeliveryId, DeliveryOutcome, TargetContext, TargetError,
     TargetHealthState, TargetPortError,
 };
+use uob_contracts::CommandResult;
 
 use crate::{
     client::create_client,
     configuration::{MqttRuntimeOptions, MqttSettings, ResolvedCredentials},
-    error::{
-        check_report_task, permanent_connection, permanent_data, permanent_mapping,
-        permanent_refusal,
-    },
+    error::{check_report_task, permanent_connection, permanent_data, permanent_refusal},
     mapping::{TopicNamespace, WirePublication},
     protocol_driver::{ProtocolDriver, ProtocolSignal},
     target::MqttTarget,
 };
 
+mod command;
+mod publishing;
 mod reporting;
 mod shutdown;
 #[cfg(test)]
@@ -45,6 +45,8 @@ pub(crate) struct Session<E, P> {
     awaiting_packet_id: VecDeque<TrackedPurpose>,
     in_flight: BTreeMap<u16, TrackedPurpose>,
     reports: JoinSet<Result<(), TargetPortError>>,
+    commands: JoinSet<CommandResult>,
+    command_results: VecDeque<WirePublication>,
     connected: bool,
     connected_before: bool,
     reset_pending: bool,
@@ -76,6 +78,7 @@ enum Wake<E> {
     NoProgress,
     Delivery(Option<uob_application::TargetDelivery<E>>),
     Report(Option<Result<Result<(), TargetPortError>, JoinError>>),
+    Command(Option<Result<CommandResult, JoinError>>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -88,7 +91,7 @@ pub(super) enum EventEffect {
 impl<E, P> Session<E, P>
 where
     E: Serialize + Send + Sync + 'static,
-    P: Send + 'static,
+    P: Clone + DeserializeOwned + Send + 'static,
 {
     pub(crate) fn new(
         target: MqttTarget,
@@ -109,6 +112,8 @@ where
             awaiting_packet_id: VecDeque::new(),
             in_flight: BTreeMap::new(),
             reports: JoinSet::new(),
+            commands: JoinSet::new(),
+            command_results: VecDeque::new(),
             connected: false,
             connected_before: false,
             reset_pending: false,
@@ -121,10 +126,12 @@ where
     pub(crate) async fn run(mut self) -> Result<(), TargetError> {
         let mut backoff = self.runtime.reconnect_initial_backoff;
         loop {
+            self.flush_command_results();
             self.flush_replay();
             self.ensure_progress_deadline();
             let can_receive = self.can_receive_delivery();
             let has_reports = !self.reports.is_empty();
+            let has_commands = !self.commands.is_empty();
             let watchdog_armed = self.connected
                 && !self.reset_pending
                 && self.has_protocol_work()
@@ -135,6 +142,7 @@ where
                 let shutdown = &mut self.context.shutdown;
                 let protocol = &mut self.protocol;
                 let reports = &mut self.reports;
+                let commands = &mut self.commands;
                 tokio::select! {
                     biased;
                     () = poll_fn(|cx| shutdown.as_mut().poll_shutdown(cx)) => Wake::Shutdown,
@@ -144,6 +152,7 @@ where
                     delivery = poll_fn(|cx| deliveries.as_mut().poll_receive(cx)),
                         if can_receive => Wake::Delivery(delivery),
                     report = reports.join_next(), if has_reports => Wake::Report(report),
+                    command = commands.join_next(), if has_commands => Wake::Command(command),
                 }
             };
             match wake {
@@ -151,6 +160,7 @@ where
                 Wake::Delivery(Some(delivery)) => self.accept_delivery(&delivery),
                 Wake::Delivery(None) => self.delivery_ingress = DeliveryIngress::Closed,
                 Wake::Report(result) => check_report_task(result.as_ref())?,
+                Wake::Command(result) => self.finish_command_task(result)?,
                 Wake::Protocol(Some(signal)) => match signal {
                     ProtocolSignal::Event(event) => {
                         self.handle_event(event)?;
@@ -267,84 +277,6 @@ where
             .then(|| Instant::now() + self.runtime.no_progress_timeout);
     }
 
-    fn accept_delivery(&mut self, delivery: &uob_application::TargetDelivery<E>) {
-        let delivery_id = delivery.delivery_id.clone();
-        let publication = match self.topics.map(
-            &self.settings.target_instance_id,
-            self.settings.configuration_revision,
-            delivery,
-            self.runtime.maximum_message_bytes,
-        ) {
-            Ok(publication) => publication,
-            Err(error) => {
-                self.spawn_report(delivery_id, permanent_mapping(error));
-                return;
-            }
-        };
-        if publication.retain
-            && !self.retained_state.contains_key(&publication.topic)
-            && self.retained_state.len() == self.runtime.retained_state_capacity
-        {
-            self.emit_health(TargetHealthState::Degraded, "mqtt.retained_state_capacity");
-            self.spawn_report(
-                delivery_id,
-                DeliveryOutcome::RetryableFailure {
-                    reason: "mqtt.retained_state_capacity".to_owned(),
-                },
-            );
-            return;
-        }
-        if publication.retain {
-            self.retained_state
-                .insert(publication.topic.clone(), publication.clone());
-        }
-        if self.queue_publication(&publication, PublishPurpose::Delivery(delivery_id.clone())) {
-            return;
-        }
-        self.spawn_report(
-            delivery_id,
-            DeliveryOutcome::RetryableFailure {
-                reason: "mqtt.request_capacity".to_owned(),
-            },
-        );
-    }
-
-    fn flush_replay(&mut self) {
-        while self.connected && self.awaiting_packet_id.len() < self.runtime.request_capacity {
-            let Some(publication) = self.replay.pop_front() else {
-                break;
-            };
-            if !self.queue_publication(&publication, PublishPurpose::Internal) {
-                self.replay.push_front(publication);
-                break;
-            }
-        }
-    }
-
-    fn queue_publication(
-        &mut self,
-        publication: &WirePublication,
-        purpose: PublishPurpose,
-    ) -> bool {
-        if self
-            .client
-            .try_publish(
-                publication.topic.clone(),
-                publication.payload.clone(),
-                PublishOptions::at_least_once().retain(publication.retain),
-            )
-            .is_err()
-        {
-            return false;
-        }
-        self.awaiting_packet_id.push_back(TrackedPurpose {
-            epoch: self.epoch,
-            purpose,
-        });
-        self.ensure_progress_deadline();
-        true
-    }
-
     fn handle_event(&mut self, event: Event) -> Result<EventEffect, TargetError> {
         match event {
             Event::Incoming(Incoming::ConnAck(connack)) => {
@@ -357,6 +289,9 @@ where
                         self.rebind_epoch(next_epoch);
                     } else {
                         self.classify_lost_session();
+                        self.client
+                            .try_subscribe(self.topics.command_subscription(), QoS::AtLeastOnce)
+                            .map_err(|_| permanent_data("mqtt.command_subscription_capacity"))?;
                     }
                 }
                 self.epoch = next_epoch;
@@ -371,6 +306,10 @@ where
                 );
                 self.replay.extend(self.retained_state.values().cloned());
                 self.emit_health(TargetHealthState::Ready, "mqtt.broker_connected");
+                Ok(EventEffect::None)
+            }
+            Event::Incoming(Incoming::Publish(publication)) => {
+                self.handle_command(&publication);
                 Ok(EventEffect::None)
             }
             Event::Outgoing(Outgoing::Publish(packet_id)) => {

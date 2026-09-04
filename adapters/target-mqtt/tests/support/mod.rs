@@ -38,6 +38,7 @@ impl TestBroker {
         let mut connection = BrokerConnection {
             stream,
             connect: None,
+            subscriptions: Vec::new(),
         };
         let (header, bytes) = connection.next_frame().await.expect("CONNECT frame");
         assert_eq!(header >> 4, 1, "first MQTT packet must be CONNECT");
@@ -62,6 +63,7 @@ impl TestBroker {
 pub struct BrokerConnection {
     stream: TcpStream,
     connect: Option<ConnectPacket>,
+    subscriptions: Vec<String>,
 }
 
 impl BrokerConnection {
@@ -74,10 +76,58 @@ impl BrokerConnection {
             let (header, bytes) = self.next_frame().await.expect("MQTT packet");
             match header >> 4 {
                 3 => return parse_publish(header, &bytes),
+                4 => {}
+                8 => {
+                    self.subscriptions.push(parse_subscription(&bytes));
+                    self.acknowledge_subscription(&bytes).await;
+                }
                 12 => self.write_frame(&[0xD0, 0x00]).await,
                 packet_type => panic!("expected PUBLISH, received MQTT type {packet_type}"),
             }
         }
+    }
+
+    pub async fn next_subscription(&mut self) -> String {
+        loop {
+            let (header, bytes) = self.next_frame().await.expect("MQTT packet");
+            match header >> 4 {
+                8 => {
+                    let topic = parse_subscription(&bytes);
+                    self.subscriptions.push(topic.clone());
+                    self.acknowledge_subscription(&bytes).await;
+                    return topic;
+                }
+                12 => self.write_frame(&[0xD0, 0x00]).await,
+                packet_type => panic!("expected SUBSCRIBE, received MQTT type {packet_type}"),
+            }
+        }
+    }
+
+    pub fn subscriptions(&self) -> &[String] {
+        &self.subscriptions
+    }
+
+    pub async fn publish_command(
+        &mut self,
+        topic: &str,
+        payload: &[u8],
+        packet_id: u16,
+        retained: bool,
+        duplicate: bool,
+    ) {
+        let mut body = Vec::new();
+        push_mqtt_bytes(&mut body, topic.as_bytes());
+        body.extend_from_slice(&packet_id.to_be_bytes());
+        body.extend_from_slice(payload);
+        let mut frame = vec![0x32 | u8::from(retained) | (u8::from(duplicate) << 3)];
+        push_remaining_length(&mut frame, body.len());
+        frame.extend_from_slice(&body);
+        self.write_frame(&frame).await;
+    }
+
+    async fn acknowledge_subscription(&mut self, bytes: &[u8]) {
+        let [high, low] = [bytes[0], bytes[1]];
+        self.write_frame(&[0x90, 0x03, high, low, 0x01]).await;
     }
 
     pub async fn acknowledge(&mut self, publication: &Publication) {
@@ -206,6 +256,37 @@ fn parse_publish(header: u8, bytes: &[u8]) -> Publication {
         qos,
         retain: header & 0x01 != 0,
         duplicate: header & 0x08 != 0,
+    }
+}
+
+fn parse_subscription(bytes: &[u8]) -> String {
+    let mut cursor = 2;
+    let topic = mqtt_text(bytes, &mut cursor);
+    assert_eq!(bytes[cursor], 1, "command subscription must request QoS 1");
+    assert_eq!(cursor + 1, bytes.len(), "one authorized filter only");
+    topic
+}
+
+fn push_mqtt_bytes(output: &mut Vec<u8>, value: &[u8]) {
+    output.extend_from_slice(
+        &u16::try_from(value.len())
+            .expect("test MQTT string length")
+            .to_be_bytes(),
+    );
+    output.extend_from_slice(value);
+}
+
+fn push_remaining_length(output: &mut Vec<u8>, mut remaining: usize) {
+    loop {
+        let mut byte = u8::try_from(remaining % 128).expect("remaining-length byte");
+        remaining /= 128;
+        if remaining > 0 {
+            byte |= 0x80;
+        }
+        output.push(byte);
+        if remaining == 0 {
+            break;
+        }
     }
 }
 

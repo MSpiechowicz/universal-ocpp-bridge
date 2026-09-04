@@ -6,7 +6,6 @@ use crate::{configuration::ResolvedCredentials, target::MqttTarget};
 
 const MAX_MQTT_TOPIC_BYTES: usize = 65_535;
 const MAX_PUBLISH_FRAMING_BYTES: usize = 9;
-const MAX_INCOMING_CONTROL_PACKET_BYTES: usize = 64 * 1024;
 
 pub(crate) fn create_client(
     target: &MqttTarget,
@@ -36,7 +35,7 @@ pub(crate) fn create_client(
         )
         .set_request_channel_capacity(target.runtime.request_capacity)
         .set_max_packet_size(
-            MAX_INCOMING_CONTROL_PACKET_BYTES,
+            maximum_outgoing_packet_bytes(target.runtime.maximum_message_bytes),
             maximum_outgoing_packet_bytes(target.runtime.maximum_message_bytes),
         )
         .set_last_will(LastWill::new(
@@ -50,6 +49,9 @@ pub(crate) fn create_client(
     let (client, mut eventloop) = AsyncClient::builder(options)
         .capacity(target.runtime.request_capacity)
         .build();
+    client
+        .try_subscribe(target.topics.command_subscription(), QoS::AtLeastOnce)
+        .expect("validated command subscription fits an empty bounded request channel");
     let mut network = NetworkOptions::new();
     network
         .set_connection_timeout(target.runtime.connection_timeout_seconds)
