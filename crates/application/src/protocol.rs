@@ -204,7 +204,8 @@ pub struct MeasurementObservation {
 /// Applies a measurement observation to authoritative snapshot state before atomic persistence.
 ///
 /// Existing point values with the same identity are replaced; unrelated values are retained.
-/// EVSE zero is the OCPP 2.0.1 station-level meter and therefore updates station values.
+/// OCPP 1.6J connector zero and OCPP 2.0.1 EVSE zero are station-level meters and therefore update
+/// station values.
 ///
 /// # Errors
 ///
@@ -216,7 +217,8 @@ pub fn apply_measurements(
     observed_at: UtcTimestamp,
 ) -> Result<(), MeasurementApplyError> {
     let target = match observation.native_resource {
-        NativeProtocolReference::Ocpp201 { evse_id: 0, .. } => &mut snapshot.current_values,
+        NativeProtocolReference::Ocpp16 { connector_id: 0 }
+        | NativeProtocolReference::Ocpp201 { evse_id: 0, .. } => &mut snapshot.current_values,
         native => {
             &mut snapshot
                 .resources
