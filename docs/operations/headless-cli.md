@@ -27,7 +27,9 @@ Target `settings` are converted to the shared typed configuration boundary; name
 registry still rejects kinds whose concrete factory is not present in this build.
 
 The concrete outbound MQTT target, its TLS/plaintext rules, topic taxonomy, and broker integration
-test are documented in [`MQTT target`](../configuration/mqtt-target.md).
+test are documented in [`MQTT target`](../configuration/mqtt-target.md). The direct integration
+listener is documented in
+[`EMS/SCADA HTTP target`](../configuration/ems-scada-http-target.md).
 
 ## Commands and exit codes
 

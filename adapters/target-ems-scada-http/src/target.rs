@@ -1,0 +1,72 @@
+use uob_application::{
+    BridgeTarget, DeliverySemantic, TargetContext, TargetDescriptor, TargetLimits,
+    TargetMessageClass, TargetTask,
+};
+use uob_contracts::{ContractVersion, TargetKind};
+
+use crate::{
+    capabilities::ListenerLimits,
+    configuration::{EMS_SCADA_HTTP_TARGET_KIND, EmsScadaHttpRuntimeOptions, EmsScadaHttpSettings},
+    session::Session,
+};
+
+pub(crate) struct EmsScadaHttpTarget {
+    pub(crate) settings: EmsScadaHttpSettings,
+    pub(crate) runtime: EmsScadaHttpRuntimeOptions,
+}
+
+impl EmsScadaHttpTarget {
+    pub(crate) const fn new(
+        settings: EmsScadaHttpSettings,
+        runtime: EmsScadaHttpRuntimeOptions,
+    ) -> Self {
+        Self { settings, runtime }
+    }
+
+    pub(crate) const fn listener_limits(&self) -> ListenerLimits {
+        ListenerLimits {
+            maximum_request_bytes: self.runtime.maximum_request_bytes,
+            maximum_concurrent_requests: self.runtime.maximum_concurrent_clients,
+        }
+    }
+
+    pub(crate) fn descriptor(&self) -> TargetDescriptor {
+        TargetDescriptor {
+            kind: TargetKind::new(EMS_SCADA_HTTP_TARGET_KIND)
+                .expect("static EMS/SCADA HTTP target kind"),
+            instance_id: self.settings.target_instance_id.clone(),
+            contract_version: ContractVersion::V1_INITIAL,
+            // Canonical state, durable events, and command results reach the integration
+            // surface; they are not asserted to have been consumed by an EMS client.
+            outbound_message_classes: vec![
+                TargetMessageClass::StationSnapshot,
+                TargetMessageClass::DomainEvent,
+                TargetMessageClass::CommandResult,
+            ],
+            // Command admission is a separate integration endpoint; this build authenticates and
+            // describes the surface without accepting target-originated operations.
+            inbound_operations: vec![],
+            limits: TargetLimits {
+                maximum_message_bytes: self.runtime.maximum_message_bytes,
+                maximum_in_flight_deliveries: self.runtime.maximum_in_flight_deliveries,
+                maximum_in_flight_commands: self.runtime.maximum_in_flight_commands,
+            },
+            delivery_semantics: vec![DeliverySemantic::LocalExposure],
+            optional_capabilities: vec![],
+        }
+    }
+}
+
+impl<E, P> BridgeTarget<E, P> for EmsScadaHttpTarget
+where
+    E: Send + Sync + 'static,
+    P: Send + 'static,
+{
+    fn descriptor(&self) -> TargetDescriptor {
+        Self::descriptor(self)
+    }
+
+    fn run(self: Box<Self>, context: TargetContext<E, P>) -> TargetTask {
+        Box::pin(async move { Session::new(*self, context).run().await })
+    }
+}

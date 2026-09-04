@@ -2834,6 +2834,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "uob-ems-scada-http-target-adapter"
+version = "0.25.0"
+dependencies = [
+ "axum",
+ "libc",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+ "toml",
+ "tower",
+ "uob-application",
+ "uob-contracts",
+ "uob-management-adapter",
+ "uob-target-adapter",
+ "uob-target-conformance",
+]
+
+[[package]]
 name = "uob-external-export-adapter"
 version = "0.25.0"
 dependencies = [
@@ -2960,6 +2979,7 @@ dependencies = [
  "tower",
  "uob-application",
  "uob-contracts",
+ "uob-ems-scada-http-target-adapter",
  "uob-external-export-adapter",
  "uob-management-adapter",
  "uob-mqtt-target-adapter",

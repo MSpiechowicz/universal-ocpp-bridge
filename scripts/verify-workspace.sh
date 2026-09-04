@@ -71,6 +71,7 @@ packages=(
   uob-protocol-adapter
   uob-target-adapter
   uob-mqtt-target-adapter
+  uob-ems-scada-http-target-adapter
   uob-storage-adapter
   uob-external-export-adapter
   uob-provider-adapter
