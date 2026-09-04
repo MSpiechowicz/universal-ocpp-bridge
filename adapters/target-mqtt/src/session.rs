@@ -42,6 +42,7 @@ pub(crate) struct Session<E, P> {
     runtime: MqttRuntimeOptions,
     retained_state: BTreeMap<String, WirePublication>,
     discovery: BTreeMap<String, WirePublication>,
+    point_catalog: BTreeMap<String, WirePublication>,
     replay: VecDeque<WirePublication>,
     awaiting_packet_id: VecDeque<TrackedPurpose>,
     in_flight: BTreeMap<u16, TrackedPurpose>,
@@ -110,6 +111,7 @@ where
             runtime: target.runtime,
             retained_state: BTreeMap::new(),
             discovery: BTreeMap::new(),
+            point_catalog: BTreeMap::new(),
             replay: VecDeque::new(),
             awaiting_packet_id: VecDeque::new(),
             in_flight: BTreeMap::new(),
@@ -307,6 +309,7 @@ where
                         .availability_publication(&self.settings.target_instance_id, true),
                 );
                 self.replay.extend(self.discovery.values().cloned());
+                self.replay.extend(self.point_catalog.values().cloned());
                 self.replay.extend(self.retained_state.values().cloned());
                 self.emit_health(TargetHealthState::Ready, "mqtt.broker_connected");
                 Ok(EventEffect::None)

@@ -102,6 +102,14 @@ impl TopicNamespace {
         })
     }
 
+    pub(crate) fn point_catalog(
+        &self,
+        snapshot: &StationSnapshot,
+        maximum_payload_bytes: usize,
+    ) -> Result<Vec<WirePublication>, MappingError> {
+        crate::points::publications(&self.bridge_id, &self.base, snapshot, maximum_payload_bytes)
+    }
+
     pub(crate) fn home_assistant_discovery(
         &self,
         snapshot: &StationSnapshot,

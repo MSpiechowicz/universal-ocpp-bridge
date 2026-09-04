@@ -58,10 +58,18 @@ where
                 maximum_in_flight_deliveries: self.runtime.maximum_in_flight_deliveries,
                 maximum_in_flight_commands: self.runtime.maximum_in_flight_commands,
             },
-            delivery_semantics: vec![
-                DeliverySemantic::NamedPeerAcknowledgement,
-                DeliverySemantic::UncertainHandoff,
-            ],
+            delivery_semantics: {
+                let mut semantics = vec![
+                    DeliverySemantic::NamedPeerAcknowledgement,
+                    DeliverySemantic::UncertainHandoff,
+                ];
+                if self.settings.profile.publishes_point_catalog() {
+                    // Retained descriptors and values are exposed on the broker; EMS-client
+                    // presence and processing stay unknown without application evidence.
+                    semantics.push(DeliverySemantic::LocalExposure);
+                }
+                semantics
+            },
             optional_capabilities: {
                 let mut capabilities = vec![
                     TargetCapability("retained-state".to_owned()),
@@ -69,6 +77,9 @@ where
                 ];
                 if self.settings.home_assistant_discovery {
                     capabilities.push(TargetCapability("home-assistant-discovery".to_owned()));
+                }
+                if self.settings.profile.publishes_point_catalog() {
+                    capabilities.push(TargetCapability("ems-scada-point-catalog".to_owned()));
                 }
                 capabilities
             },

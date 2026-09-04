@@ -118,6 +118,58 @@ protocol response remains distinct from later observed charging effects. Command
 protocol polling continue while outbound delivery waits for broker acknowledgement, within the
 configured command and request bounds.
 
+## EMS/SCADA preset
+
+`profile` selects a catalog preset of this same adapter. It accepts `standard` (the default) and
+`ems-scada`. A preset is not a second target: the service still starts exactly one `MqttTarget`,
+and selecting `ems-scada` never starts the EMS integration HTTP listener. Conversely, a direct
+HTTP target configuration starts no broker connection or MQTT task. Unimplemented drivers such as
+`ems-scada.opcua` are rejected as an unsupported `profile`; they are separate adapters with their
+own kind and schema.
+
+```toml
+[targets.settings]
+broker_url = "mqtts://broker.example:8883"
+credentials_file = "/run/secrets/uob-mqtt.toml"
+profile = "ems-scada"
+```
+
+The preset adds a retained canonical point catalog beside the existing state, event, result, and
+trace topics. Every other topic, payload, bound, and command rule stays exactly as documented
+above.
+
+| Canonical record | Topic | Retained |
+| --- | --- | --- |
+| Point descriptor | `uob/v1/{environment}/{bridge}/points/{station}/{point}` | yes |
+| Latest point value | `uob/v1/{environment}/{bridge}/values/{station}/{point}` | yes |
+
+Both payloads are the canonical `DataPointDescriptor` and `DataPointValue` documents themselves, so
+they match the published v1.0 contract schemas that the direct HTTP target serves. Engineering
+units, quality level and reason, freshness, `source_time`, `observed_at`, and the exact original
+measurement text are carried inside those canonical records and are never re-derived, rounded, or
+renamed by this adapter. Descriptors come from the canonical snapshot's per-resource data points, so
+a resource belonging to another bridge or station is rejected instead of published.
+
+Commands are unchanged: an EMS/SCADA client publishes explicit, non-retained requests to the same
+authorized `commands/{station}/{request_id}` namespace, they pass through the same application
+admission pipeline as direct HTTP commands, and correlated results appear under `results`. The
+catalog is bounded by `point_catalog_capacity`; an over-capacity snapshot is refused as a whole and
+reported as `mqtt.point_catalog_capacity` rather than published in part. After a lost broker
+session the bounded catalog cache is republished with availability and current state.
+
+The preset advertises the `ems-scada-point-catalog` capability and adds the `LocalExposure`
+delivery semantic to the descriptor. Broker connectivity and a QoS 1 `PUBACK` therefore remain
+evidence of broker receipt only. EMS-client presence and processing stay unknown unless the
+application observes explicit evidence, such as a correlated command and its later observed
+effects.
+
+`home_assistant_discovery` still defaults to `false` under this preset; the industrial catalog and
+consumer discovery are independent settings.
+
+An EMS/SCADA system that speaks only a vendor HTTP API cannot consume these topics merely because a
+broker exists. That integration needs an explicit connector implementing that API's own mapping and
+authentication contract; the bridge performs no implicit MQTT-to-HTTP conversion.
+
 ## Home Assistant discovery
 
 `home_assistant_discovery` is optional and defaults to `false` in every environment, including

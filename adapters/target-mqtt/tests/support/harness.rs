@@ -6,7 +6,9 @@ use uob_application::{
     BridgeTargetFactory, ConfigurationValue, TargetConfiguration, TargetError, TargetRuntimeLimits,
 };
 use uob_contracts::{BridgeId, Environment, UtcTimestamp};
-use uob_mqtt_target_adapter::{MqttRuntimeOptions, MqttTargetFactory};
+use uob_mqtt_target_adapter::{
+    EMS_SCADA_PROFILE, MqttRuntimeOptions, MqttTargetFactory, STANDARD_PROFILE,
+};
 use uob_target_conformance::{FakeTargetHost, HostCapacities, UnsupportedQueryPort};
 
 use super::{
@@ -34,7 +36,7 @@ pub fn start_target_url(
     runtime: MqttRuntimeOptions,
     capacities: HostCapacities,
 ) -> RunningTarget {
-    start_target_url_with_discovery(broker_url, bridge, runtime, capacities, false)
+    start_configured_target(broker_url, bridge, runtime, capacities, Preset::Standard)
 }
 
 pub fn start_target_with_discovery(
@@ -43,15 +45,38 @@ pub fn start_target_with_discovery(
     runtime: MqttRuntimeOptions,
     capacities: HostCapacities,
 ) -> RunningTarget {
-    start_target_url_with_discovery(&broker.url(), bridge, runtime, capacities, true)
+    start_configured_target(
+        &broker.url(),
+        bridge,
+        runtime,
+        capacities,
+        Preset::HomeAssistant,
+    )
 }
 
-fn start_target_url_with_discovery(
+pub fn start_ems_scada_target(
+    broker: &TestBroker,
+    bridge: &str,
+    runtime: MqttRuntimeOptions,
+    capacities: HostCapacities,
+) -> RunningTarget {
+    start_configured_target(&broker.url(), bridge, runtime, capacities, Preset::EmsScada)
+}
+
+/// Exactly one target instance is started; a preset never adds a second target or listener.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Preset {
+    Standard,
+    HomeAssistant,
+    EmsScada,
+}
+
+fn start_configured_target(
     broker_url: &str,
     bridge: &str,
     runtime: MqttRuntimeOptions,
     capacities: HostCapacities,
-    home_assistant_discovery: bool,
+    preset: Preset,
 ) -> RunningTarget {
     let bridge = BridgeId::new(bridge).expect("bridge identity");
     let factory = MqttTargetFactory::new(&bridge, Environment::Demo)
@@ -66,7 +91,17 @@ fn start_target_url_with_discovery(
         .with_setting("allow_plaintext", ConfigurationValue::Boolean(true))
         .with_setting(
             "home_assistant_discovery",
-            ConfigurationValue::Boolean(home_assistant_discovery),
+            ConfigurationValue::Boolean(preset == Preset::HomeAssistant),
+        )
+        .with_setting(
+            "profile",
+            ConfigurationValue::Text(
+                match preset {
+                    Preset::EmsScada => EMS_SCADA_PROFILE,
+                    Preset::Standard | Preset::HomeAssistant => STANDARD_PROFILE,
+                }
+                .to_owned(),
+            ),
         );
     let validated = <MqttTargetFactory as BridgeTargetFactory<TestEvent, ()>>::validate(
         &factory,

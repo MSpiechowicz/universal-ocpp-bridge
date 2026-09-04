@@ -1,6 +1,5 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
-use serde::Deserialize;
 use uob_application::{
     BridgeTarget, BridgeTargetFactory, ConfigurationError, ConfigurationErrorCode,
     ConfigurationField, ConfigurationFieldKind, ConfigurationSchema, ConfigurationValue,
@@ -11,15 +10,19 @@ use url::Url;
 
 use crate::{mapping::TopicNamespace, target::MqttTarget};
 
-use self::bounded_file::read_bounded_file;
+pub use self::profile::{EMS_SCADA_PROFILE, STANDARD_PROFILE};
+pub(crate) use self::{
+    credentials::{ResolvedCredentials, resolve_credentials},
+    profile::MqttProfile,
+};
 
-mod bounded_file;
+mod credentials;
+mod profile;
+#[cfg(test)]
+mod tests;
 
 /// Stable registry kind for the MQTT target.
 pub const MQTT_TARGET_KIND: &str = "mqtt";
-
-const MAX_CREDENTIAL_FILE_BYTES: u64 = 64 * 1024;
-const MAX_CERTIFICATE_FILE_BYTES: u64 = 1024 * 1024;
 
 /// Adapter-owned runtime bounds. They are fixed by the composition root, not broker input.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +39,8 @@ pub struct MqttRuntimeOptions {
     pub retained_state_capacity: usize,
     /// Largest retained Home Assistant discovery cache used for reconnect republishing.
     pub discovery_capacity: usize,
+    /// Largest retained EMS/SCADA point-catalog cache used for reconnect republishing.
+    pub point_catalog_capacity: usize,
     /// MQTT keepalive interval.
     pub keep_alive: Duration,
     /// TCP/TLS connection timeout in seconds.
@@ -57,6 +62,7 @@ impl Default for MqttRuntimeOptions {
             maximum_in_flight_commands: 8,
             retained_state_capacity: 64,
             discovery_capacity: 512,
+            point_catalog_capacity: 512,
             keep_alive: Duration::from_secs(15),
             connection_timeout_seconds: 2,
             no_progress_timeout: Duration::from_secs(30),
@@ -75,6 +81,7 @@ impl MqttRuntimeOptions {
             || self.maximum_in_flight_commands == 0
             || self.retained_state_capacity == 0
             || self.discovery_capacity == 0
+            || self.point_catalog_capacity == 0
             || self.keep_alive < Duration::from_secs(1)
             || self.keep_alive.subsec_nanos() != 0
             || self.keep_alive.as_secs() > u64::from(u16::MAX)
@@ -180,6 +187,11 @@ impl MqttTargetFactory {
                 "credentials_file",
             ));
         }
+        let profile = match configuration.setting("profile") {
+            Some(ConfigurationValue::Text(value)) => MqttProfile::parse(value)?,
+            None => MqttProfile::default(),
+            _ => return Err(field(ConfigurationErrorCode::InvalidField, "profile")),
+        };
         let home_assistant_discovery = match configuration.setting("home_assistant_discovery") {
             Some(ConfigurationValue::Boolean(value)) => *value,
             None => false,
@@ -216,6 +228,7 @@ impl MqttTargetFactory {
             ))
             .expect("a validated target identity produces a visible principal"),
             home_assistant_discovery,
+            profile,
         })
     }
 }
@@ -279,6 +292,11 @@ pub fn mqtt_configuration_schema() -> ConfigurationSchema {
                 kind: ConfigurationFieldKind::Boolean,
                 required: false,
             },
+            ConfigurationField {
+                name: "profile".to_owned(),
+                kind: ConfigurationFieldKind::Text,
+                required: false,
+            },
         ],
     }
 }
@@ -333,167 +351,9 @@ pub(crate) struct MqttSettings {
     pub(crate) client_id: String,
     pub(crate) command_principal: uob_contracts::PrincipalId,
     pub(crate) home_assistant_discovery: bool,
-}
-
-pub(crate) struct ResolvedCredentials {
-    pub(crate) login: Option<(String, String)>,
-    pub(crate) certificate_authority: Option<Vec<u8>>,
-    pub(crate) client_authentication: Option<(Vec<u8>, Vec<u8>)>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CredentialFile {
-    username: Option<String>,
-    password: Option<String>,
-    ca_certificate_file: Option<PathBuf>,
-    client_certificate_file: Option<PathBuf>,
-    client_private_key_file: Option<PathBuf>,
-}
-
-pub(crate) fn resolve_credentials(
-    reference: Option<&CredentialReference>,
-) -> Result<Option<ResolvedCredentials>, &'static str> {
-    let Some(reference) = reference else {
-        return Ok(None);
-    };
-    let path = PathBuf::from(reference.as_str());
-    let source = read_bounded_file(&path, MAX_CREDENTIAL_FILE_BYTES, true)
-        .map_err(|()| "mqtt.credentials_unavailable")?;
-    let document: CredentialFile =
-        toml::from_slice(&source).map_err(|_| "mqtt.credentials_invalid")?;
-    let login = match (document.username, document.password) {
-        (Some(username), Some(password)) if !username.is_empty() && !password.is_empty() => {
-            Some((username, password))
-        }
-        (None, None) => None,
-        _ => return Err("mqtt.credentials_invalid"),
-    };
-    let certificate_authority = document
-        .ca_certificate_file
-        .map(|path| read_bounded_file(&path, MAX_CERTIFICATE_FILE_BYTES, false))
-        .transpose()
-        .map_err(|()| "mqtt.tls_material_unavailable")?;
-    let client_authentication = match (
-        document.client_certificate_file,
-        document.client_private_key_file,
-    ) {
-        (Some(certificate), Some(private_key)) if certificate_authority.is_some() => Some((
-            read_bounded_file(&certificate, MAX_CERTIFICATE_FILE_BYTES, false)
-                .map_err(|()| "mqtt.tls_material_unavailable")?,
-            read_bounded_file(&private_key, MAX_CERTIFICATE_FILE_BYTES, true)
-                .map_err(|()| "mqtt.tls_material_unavailable")?,
-        )),
-        (None, None) => None,
-        _ => return Err("mqtt.credentials_invalid"),
-    };
-    if login.is_none() && client_authentication.is_none() {
-        return Err("mqtt.credentials_invalid");
-    }
-    Ok(Some(ResolvedCredentials {
-        login,
-        certificate_authority,
-        client_authentication,
-    }))
+    pub(crate) profile: MqttProfile,
 }
 
 fn field(code: ConfigurationErrorCode, name: &'static str) -> ConfigurationError {
     ConfigurationError::field(code, name)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use uob_application::{ConfigurationErrorCode, ConfigurationValue, TargetConfiguration};
-    use uob_contracts::{BridgeId, Environment, TargetInstanceId};
-
-    use super::MqttTargetFactory;
-
-    fn configuration(url: &str) -> TargetConfiguration {
-        TargetConfiguration::new(TargetInstanceId::new("main").expect("target identity"), 1)
-            .with_setting("broker_url", ConfigurationValue::Text(url.to_owned()))
-    }
-
-    #[test]
-    fn plaintext_needs_an_explicit_demo_only_acknowledgement() {
-        let bridge = BridgeId::new("bridge-a").expect("bridge identity");
-        let demo = MqttTargetFactory::new(&bridge, Environment::Demo).expect("factory");
-        let Err(missing) =
-            <MqttTargetFactory as uob_application::BridgeTargetFactory<(), ()>>::validate(
-                &demo,
-                &configuration("mqtt://127.0.0.1:1883"),
-            )
-        else {
-            panic!("plaintext must not be inferred from demo");
-        };
-        assert_eq!(missing.code(), ConfigurationErrorCode::MissingField);
-
-        let explicit = configuration("mqtt://127.0.0.1:1883")
-            .with_setting("allow_plaintext", ConfigurationValue::Boolean(true));
-        assert!(
-            <MqttTargetFactory as uob_application::BridgeTargetFactory<(), ()>>::validate(
-                &demo, &explicit,
-            )
-            .is_ok()
-        );
-
-        let production = MqttTargetFactory::new(&bridge, Environment::Production).expect("factory");
-        assert!(
-            <MqttTargetFactory as uob_application::BridgeTargetFactory<(), ()>>::validate(
-                &production,
-                &explicit,
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn tls_rejects_a_stale_plaintext_acknowledgement() {
-        let bridge = BridgeId::new("bridge-a").expect("bridge identity");
-        let factory = MqttTargetFactory::new(&bridge, Environment::Staging).expect("factory");
-        let configuration = configuration("mqtts://broker.example:8883")
-            .with_setting("allow_plaintext", ConfigurationValue::Boolean(true));
-
-        assert!(
-            <MqttTargetFactory as uob_application::BridgeTargetFactory<(), ()>>::validate(
-                &factory,
-                &configuration,
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn target_settings_cannot_override_trusted_namespace_identity() {
-        let bridge = BridgeId::new("trusted-bridge").expect("bridge identity");
-        let factory = MqttTargetFactory::new(&bridge, Environment::Demo).expect("factory");
-        for forbidden in ["bridge_id", "environment", "client_id"] {
-            let configuration = configuration("mqtt://127.0.0.1:1883")
-                .with_setting("allow_plaintext", ConfigurationValue::Boolean(true))
-                .with_setting(forbidden, ConfigurationValue::Text("spoofed".to_owned()));
-            let result =
-                <MqttTargetFactory as uob_application::BridgeTargetFactory<(), ()>>::validate(
-                    &factory,
-                    &configuration,
-                );
-            assert!(result.is_err(), "accepted forbidden setting {forbidden}");
-        }
-    }
-
-    #[test]
-    fn runtime_keepalive_must_fit_the_mqtt_v4_seconds_field_exactly() {
-        let bridge = BridgeId::new("bridge-a").expect("bridge identity");
-        let factory = MqttTargetFactory::new(&bridge, Environment::Demo).expect("factory");
-        for keep_alive in [
-            Duration::from_millis(1_500),
-            Duration::from_secs(u64::from(u16::MAX) + 1),
-        ] {
-            let runtime = super::MqttRuntimeOptions {
-                keep_alive,
-                ..super::MqttRuntimeOptions::default()
-            };
-            assert!(factory.clone().with_runtime_options(runtime).is_err());
-        }
-    }
 }

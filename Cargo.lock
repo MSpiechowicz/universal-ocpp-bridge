@@ -2873,6 +2873,7 @@ dependencies = [
 name = "uob-mqtt-target-adapter"
 version = "0.25.0"
 dependencies = [
+ "jsonschema 0.52.1",
  "libc",
  "rumqttc-v4-next",
  "serde",
