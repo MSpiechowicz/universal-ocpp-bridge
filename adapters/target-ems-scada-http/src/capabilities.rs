@@ -1,6 +1,7 @@
 use serde::Serialize;
 use uob_application::{
-    AccessPermission, AccessResourceScope, DeliverySemantic, TargetDescriptor, TargetMessageClass,
+    AccessPermission, AccessResourceScope, DeliverySemantic, PageLimit, TargetDescriptor,
+    TargetMessageClass,
 };
 
 use crate::configuration::IntegrationPrincipal;
@@ -17,11 +18,33 @@ pub(crate) struct IntegrationResource {
 ///
 /// The capability response is generated from this table, so an advertised resource cannot drift
 /// away from a route that exists, and a route cannot appear without being advertised.
-pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[IntegrationResource {
-    name: "capabilities",
-    path: "/bridge/v1/capabilities",
-    operations: &["read"],
-}];
+pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[
+    IntegrationResource {
+        name: "capabilities",
+        path: "/bridge/v1/capabilities",
+        operations: &["read"],
+    },
+    IntegrationResource {
+        name: "stations",
+        path: "/bridge/v1/stations",
+        operations: &["read"],
+    },
+    IntegrationResource {
+        name: "station",
+        path: "/bridge/v1/stations/{station_id}",
+        operations: &["read"],
+    },
+    IntegrationResource {
+        name: "points",
+        path: "/bridge/v1/points",
+        operations: &["read"],
+    },
+    IntegrationResource {
+        name: "point",
+        path: "/bridge/v1/points/{point_id}",
+        operations: &["read"],
+    },
+];
 
 /// Versioned description of the integration surface, generated from the target descriptor.
 #[derive(Serialize)]
@@ -60,6 +83,9 @@ struct LimitsView {
     maximum_in_flight_commands: usize,
     maximum_request_bytes: usize,
     maximum_concurrent_requests: usize,
+    maximum_page_size: u16,
+    default_page_size: u16,
+    maximum_station_scan: u16,
 }
 
 /// Permissions and canonical resources the authenticated caller actually holds.
@@ -90,6 +116,8 @@ enum ScopeView {
 pub(crate) struct ListenerLimits {
     pub(crate) maximum_request_bytes: usize,
     pub(crate) maximum_concurrent_requests: usize,
+    /// Station snapshots one bounded point page may inspect.
+    pub(crate) station_scan_limit: PageLimit,
 }
 
 impl CapabilityDocument {
@@ -135,6 +163,9 @@ impl CapabilityDocument {
                 maximum_in_flight_commands: descriptor.limits.maximum_in_flight_commands,
                 maximum_request_bytes: listener.maximum_request_bytes,
                 maximum_concurrent_requests: listener.maximum_concurrent_requests,
+                maximum_page_size: crate::request::maximum_page_size(),
+                default_page_size: crate::request::DEFAULT_PAGE_SIZE,
+                maximum_station_scan: listener.station_scan_limit.get(),
             },
             caller: CallerView {
                 permissions: principal

@@ -8,9 +8,15 @@
 mod capabilities;
 mod configuration;
 mod error;
+mod points;
+mod reads;
+mod request;
 mod routing;
 mod session;
+mod stations;
 mod target;
+#[cfg(test)]
+mod test_support;
 
 pub use configuration::{
     EMS_SCADA_HTTP_TARGET_KIND, EmsScadaHttpRuntimeOptions, EmsScadaHttpTargetFactory,

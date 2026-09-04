@@ -1,5 +1,5 @@
 use uob_application::{
-    BridgeTarget, DeliverySemantic, TargetContext, TargetDescriptor, TargetLimits,
+    BridgeTarget, DeliverySemantic, PageLimit, TargetContext, TargetDescriptor, TargetLimits,
     TargetMessageClass, TargetTask,
 };
 use uob_contracts::{ContractVersion, TargetKind};
@@ -23,10 +23,17 @@ impl EmsScadaHttpTarget {
         Self { settings, runtime }
     }
 
-    pub(crate) const fn listener_limits(&self) -> ListenerLimits {
+    /// Returns the listener's own bounds.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the scan budget became invalid after configuration validation accepted it.
+    pub(crate) fn listener_limits(&self) -> ListenerLimits {
         ListenerLimits {
             maximum_request_bytes: self.runtime.maximum_request_bytes,
             maximum_concurrent_requests: self.runtime.maximum_concurrent_clients,
+            station_scan_limit: PageLimit::new(self.runtime.maximum_station_scan)
+                .expect("validated station scan budget"),
         }
     }
 

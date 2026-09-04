@@ -1,112 +1,10 @@
-use axum::{
-    Router,
-    body::{Body, to_bytes},
-    http::{Request, StatusCode},
-};
-use serde_json::Value;
-use tower::ServiceExt as _;
-use uob_application::{
-    BridgeTargetFactory, ConfigurationValue, CredentialReference, TargetConfiguration,
-    TargetDescriptor,
-};
-use uob_contracts::{Environment, TargetInstanceId};
+use axum::http::StatusCode;
 
-use super::{IntegrationState, integration_router};
 use crate::{
     capabilities::IMPLEMENTED_RESOURCES,
-    configuration::{EmsScadaHttpTargetFactory, IntegrationCredentials, resolve_credentials},
+    configuration::IntegrationCredentials,
+    test_support::{READER_TOKEN, authenticated_router, descriptor, get, router, send},
 };
-
-const READER_TOKEN: &str = "reader-token";
-
-/// Builds the descriptor and listener limits from the real factory, not a test double.
-fn descriptor() -> TargetDescriptor {
-    let factory = EmsScadaHttpTargetFactory::new(Environment::Demo);
-    let configuration =
-        TargetConfiguration::new(TargetInstanceId::new("main").expect("target instance"), 1)
-            .with_setting(
-                "listen_addr".to_owned(),
-                ConfigurationValue::Text("127.0.0.1:9080".to_owned()),
-            );
-    let validated = <EmsScadaHttpTargetFactory as BridgeTargetFactory<(), ()>>::validate(
-        &factory,
-        &configuration,
-    )
-    .expect("validated configuration");
-    <EmsScadaHttpTargetFactory as BridgeTargetFactory<(), ()>>::create(&factory, validated)
-        .expect("constructed target")
-        .descriptor()
-}
-
-fn router(credentials: IntegrationCredentials) -> Router {
-    integration_router(IntegrationState::new(
-        descriptor(),
-        crate::capabilities::ListenerLimits {
-            maximum_request_bytes: 64 * 1024,
-            maximum_concurrent_requests: 32,
-        },
-        credentials,
-    ))
-}
-
-fn authenticated_router() -> Router {
-    router(scoped_credentials())
-}
-
-/// Resolves one real credential file so tests exercise the shipped parser and grant validation.
-fn scoped_credentials() -> IntegrationCredentials {
-    let directory = std::env::temp_dir().join(format!(
-        "uob-ems-http-router-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    std::fs::create_dir_all(&directory).expect("create test directory");
-    let path = directory.join("integration.toml");
-    std::fs::write(
-        &path,
-        "[[principals]]\nid = 'ems-reader'\ntoken = 'reader-token'\npermissions = ['read']\nbridges = ['site-01']\n",
-    )
-    .expect("write credential file");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-            .expect("restrict credential file");
-    }
-    let credentials = resolve_credentials(
-        Some(&CredentialReference::new(path.to_str().expect("path text")).expect("reference")),
-        &TargetInstanceId::new("main").expect("target instance"),
-    )
-    .expect("valid credential file");
-    std::fs::remove_dir_all(&directory).expect("remove test directory");
-    credentials
-}
-
-async fn send(
-    router: Router,
-    method: &str,
-    path: &str,
-    token: Option<&str>,
-) -> (StatusCode, Value) {
-    let mut request = Request::builder().method(method).uri(path);
-    if let Some(token) = token {
-        request = request.header(axum::http::header::AUTHORIZATION, format!("Bearer {token}"));
-    }
-    let response = router
-        .oneshot(request.body(Body::empty()).expect("request"))
-        .await
-        .expect("response");
-    let status = response.status();
-    let body = to_bytes(response.into_body(), 64 * 1024)
-        .await
-        .expect("response body");
-    let value = serde_json::from_slice(&body).unwrap_or(Value::Null);
-    (status, value)
-}
-
-async fn get(router: Router, path: &str, token: Option<&str>) -> (StatusCode, Value) {
-    send(router, "GET", path, token).await
-}
 
 #[tokio::test]
 async fn the_capability_response_advertises_exactly_the_routes_this_build_serves() {
@@ -121,16 +19,40 @@ async fn the_capability_response_advertises_exactly_the_routes_this_build_serves
     let resources = body["resources"].as_array().expect("resource list");
     assert_eq!(resources.len(), IMPLEMENTED_RESOURCES.len());
     for resource in resources {
-        let path = resource["path"].as_str().expect("resource path");
-        let (status, _) = get(router(IntegrationCredentials::default()), path, None).await;
-        assert_eq!(
-            status,
-            StatusCode::OK,
+        let path = resource["path"]
+            .as_str()
+            .expect("resource path")
+            .replace("{station_id}", "station-a")
+            .replace("{point_id}", "energy.active.import.register");
+        // An advertised resource must be mounted. Whether this caller may read it is a
+        // separate question answered by its credential, not by the resource table.
+        let (status, _) = get(router(IntegrationCredentials::default()), &path, None).await;
+        assert!(
+            !matches!(
+                status,
+                StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+            ),
             "advertised resource {path} is not served"
         );
     }
     assert_eq!(resources[0]["path"], "/bridge/v1/capabilities");
     assert_eq!(resources[0]["operations"], serde_json::json!(["read"]));
+}
+
+#[tokio::test]
+async fn an_uncredentialed_listener_still_reads_no_canonical_state() {
+    // The open loopback default lets a local operator read the contract description. It grants
+    // no reader role and no resource scope, so no canonical record is reachable through it.
+    for path in [
+        "/bridge/v1/stations",
+        "/bridge/v1/stations/station-a",
+        "/bridge/v1/points",
+        "/bridge/v1/points/energy.active.import.register?station_id=station-a",
+    ] {
+        let (status, body) = get(router(IntegrationCredentials::default()), path, None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{path}");
+        assert_eq!(body["error"], "ems_scada_http.permission_denied", "{path}");
+    }
 }
 
 #[tokio::test]
@@ -181,6 +103,7 @@ async fn the_capability_response_matches_the_supervised_target_descriptor() {
 async fn management_debug_and_simulator_paths_are_unreachable_with_a_stable_code() {
     for path in [
         "/api/v1/health",
+        "/bridge/v1/stations/station-a/points",
         "/api/v1/identity",
         "/api/v1/commands",
         "/api/v1/events",
