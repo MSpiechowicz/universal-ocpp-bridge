@@ -65,6 +65,11 @@ Dependency, secret, workflow, and source-SBOM checks are fail-closed and use pin
 [dependency and workflow security policy](docs/security/dependency-and-workflow-policy.md) for the
 review rules, fixture evidence, and current source-versus-package SBOM boundary.
 
+Stable source publication is gated by live branch, merge, Actions, and protected-environment
+settings rather than workflow comments alone. See
+[repository release protection](docs/operations/repository-release-protection.md) for the required
+GitHub configuration and fail-closed verification command.
+
 OCPP release coverage is tracked separately from implementation claims. See the
 [independent OCPP fixture corpus](docs/testing/ocpp-fixture-corpus.md) for pinned specification
 provenance, hand-authored wire fixtures, the coverage-to-test matrix, and its fail-closed release

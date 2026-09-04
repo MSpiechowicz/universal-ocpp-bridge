@@ -1,0 +1,21 @@
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": [
+      "Format, lint, test, and architecture",
+      "PR title, commit range, and documentation",
+      "Rust advisories, licenses, and sources",
+      "Secret scanning",
+      "GitHub Actions policy",
+      "Locked source SBOM"
+    ]
+  },
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0
+  },
+  "enforce_admins": { "enabled": true },
+  "required_conversation_resolution": { "enabled": true },
+  "required_linear_history": { "enabled": true },
+  "allow_force_pushes": { "enabled": false },
+  "allow_deletions": { "enabled": false }
+}

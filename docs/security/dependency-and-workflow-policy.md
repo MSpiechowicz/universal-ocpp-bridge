@@ -35,12 +35,24 @@ SHA and comment together.
 
 Untrusted pull-request jobs have no production, signing, deployment, or publishing credential and
 do not use privileged writable caches. The automatic version-release job receives only repository
-contents write permission, runs only after the exact pushed `main` revision passes the Rust job,
-and checks out without persisting its credential. The publication token is exposed to a shell step
-only after all repository-controlled versioning and build commands have finished. The job publishes
-a source commit, tag, and GitHub Release, but no binary or deployable artifact. Future package,
-binary, signing, or deployment jobs must use separate protected environments and cache namespaces
-and must never execute artifacts produced by untrusted jobs.
+contents write permission and starts only after the exact pushed `main` revision passes the Rust
+job and a reviewer authorizes the protected `stable-release` environment. It checks out without
+persisting its credential, restores no writable build cache, and consumes no pull-request artifact.
+The short-lived GitHub token is exposed to the publication shell step only after all
+repository-controlled versioning and build commands have finished. The separate
+`RELEASE_PROTECTION_TOKEN` secret is read-only, is exposed only to the live protection check, and
+must be a fine-grained token limited to repository Administration and Environments reads. The job
+publishes a source commit, tag, and GitHub Release, but no binary or deployable artifact. Future
+package, binary, signing, or deployment jobs must use separate protected environments, short-lived
+OIDC identities where supported, and isolated cache namespaces; they must never execute artifacts
+produced by untrusted jobs.
+
+The concrete repository and environment settings, setup order, and verification command are
+documented in [repository release protection](../operations/repository-release-protection.md).
+Publication runs share one non-cancelling concurrency group. Every release run checks the live
+merge policy, `main` protection, required checks, Actions defaults, and protected environment before
+running the version tool. A missing setting, reviewer, or inspection credential stops publication
+with the failed requirement instead of treating checked-in YAML as proof of protection.
 
 ## SBOM evidence
 
