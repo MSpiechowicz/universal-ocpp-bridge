@@ -3,7 +3,7 @@ use std::io;
 use serde::Serialize;
 use uob_application::{ConfigurationError, ConfigurationErrorCode, TargetDelivery, TargetMessage};
 use uob_contracts::{
-    BridgeId, CommandResult, ContractVersion, Environment, RequestId, ResourceRef,
+    BridgeId, CommandResult, ContractVersion, Environment, RequestId, ResourceRef, StationSnapshot,
     TargetInstanceId, TargetKind,
 };
 
@@ -100,6 +100,20 @@ impl TopicNamespace {
             retain: false,
             payload: encode(result, maximum_payload_bytes)?,
         })
+    }
+
+    pub(crate) fn home_assistant_discovery(
+        &self,
+        snapshot: &StationSnapshot,
+        maximum_payload_bytes: usize,
+    ) -> Result<Vec<WirePublication>, MappingError> {
+        crate::discovery::publications(
+            self.environment,
+            &self.bridge_id,
+            &self.base,
+            snapshot,
+            maximum_payload_bytes,
+        )
     }
 
     /// Derives a process-controlled client ID with no user-supplied override.
@@ -244,7 +258,7 @@ impl TopicNamespace {
     }
 }
 
-fn encode(value: &impl Serialize, maximum: usize) -> Result<Vec<u8>, MappingError> {
+pub(crate) fn encode(value: &impl Serialize, maximum: usize) -> Result<Vec<u8>, MappingError> {
     let mut output = BoundedBytes::new(maximum);
     match serde_json::to_writer(&mut output, value) {
         Ok(()) => Ok(output.into_inner()),
@@ -335,7 +349,7 @@ fn environment_name(environment: Environment) -> &'static str {
     }
 }
 
-fn encode_segment(value: &str) -> String {
+pub(crate) fn encode_segment(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {

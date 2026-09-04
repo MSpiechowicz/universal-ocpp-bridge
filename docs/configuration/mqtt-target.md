@@ -26,6 +26,7 @@ revision = 1
 [targets.settings]
 broker_url = "mqtts://broker.example:8883"
 credentials_file = "/run/secrets/uob-mqtt.toml"
+home_assistant_discovery = true
 ```
 
 The referenced credential document can contain a username/password pair, or a client certificate
@@ -116,6 +117,54 @@ result, while reuse of a request ID with changed content produces a stable confl
 protocol response remains distinct from later observed charging effects. Command admission and
 protocol polling continue while outbound delivery waits for broker acknowledgement, within the
 configured command and request bounds.
+
+## Home Assistant discovery
+
+`home_assistant_discovery` is optional and defaults to `false` in every environment, including
+staging. Enabling it publishes retained discovery configurations under the standard
+`homeassistant/<component>/<node_id>/<object_id>/config` prefix for station connectivity and the
+current telemetry points present in canonical station snapshots. Entity, device, node, and object
+identifiers include the trusted environment, bridge, and station identity using a collision-free
+encoding. Discovery payloads contain canonical state and availability topics only; they never copy
+broker credentials, authorization values, command payloads, or diagnostic details.
+
+The adapter retains the discovery configurations, bridge availability, and latest canonical
+station snapshots. A Home Assistant MQTT integration restart therefore receives configuration and
+current state from the broker. If the broker loses its session or retained store, the adapter's
+bounded in-memory discovery and state caches are republished after reconnect. This recovery is not
+durable across a simultaneous broker and bridge restart; the normal durable snapshot delivery must
+repopulate the caches in that case.
+
+Home Assistant controls must use explicit, non-retained command publications. This script creates
+a fresh request ID, sets a short expiry, and does not treat publication or the later OCPP response
+as evidence that charging started:
+
+```yaml
+script:
+  uob_start_station_7:
+    sequence:
+      - action: mqtt.publish
+        data:
+          qos: 1
+          retain: false
+          topic: >-
+            uob/v1/production/site-01/commands/station-7/{{ context.id }}
+          payload: >-
+            {"schema_version":{"major":1,"revision":0},
+             "request_id":"{{ context.id }}",
+             "correlation_id":"ha-{{ context.id }}",
+             "resource":{"bridge_id":"site-01","station_id":"station-7"},
+             "operation":{"kind":"start","parameters":{}},
+             "expires_at":"{{ (now() + timedelta(minutes=1)).isoformat() }}"}
+```
+
+Observe the correlated lifecycle separately on
+`uob/v1/production/site-01/results/station-7/<request-id>`. A lifecycle with
+`stage: protocol_response` and `accepted: true` means only that the charger accepted the OCPP
+request. Confirm the physical effect from a subsequent transaction/status event under
+`uob/v1/production/site-01/events/station-7/+` or from the retained station snapshot. Automations
+must never publish commands with `retain: true`, reuse a fixed request ID, or infer charging from a
+result alone.
 
 ## Broker integration test
 

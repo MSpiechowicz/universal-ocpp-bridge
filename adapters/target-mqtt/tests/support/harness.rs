@@ -34,6 +34,25 @@ pub fn start_target_url(
     runtime: MqttRuntimeOptions,
     capacities: HostCapacities,
 ) -> RunningTarget {
+    start_target_url_with_discovery(broker_url, bridge, runtime, capacities, false)
+}
+
+pub fn start_target_with_discovery(
+    broker: &TestBroker,
+    bridge: &str,
+    runtime: MqttRuntimeOptions,
+    capacities: HostCapacities,
+) -> RunningTarget {
+    start_target_url_with_discovery(&broker.url(), bridge, runtime, capacities, true)
+}
+
+fn start_target_url_with_discovery(
+    broker_url: &str,
+    bridge: &str,
+    runtime: MqttRuntimeOptions,
+    capacities: HostCapacities,
+    home_assistant_discovery: bool,
+) -> RunningTarget {
     let bridge = BridgeId::new(bridge).expect("bridge identity");
     let factory = MqttTargetFactory::new(&bridge, Environment::Demo)
         .expect("MQTT factory")
@@ -44,7 +63,11 @@ pub fn start_target_url(
             "broker_url",
             ConfigurationValue::Text(broker_url.to_owned()),
         )
-        .with_setting("allow_plaintext", ConfigurationValue::Boolean(true));
+        .with_setting("allow_plaintext", ConfigurationValue::Boolean(true))
+        .with_setting(
+            "home_assistant_discovery",
+            ConfigurationValue::Boolean(home_assistant_discovery),
+        );
     let validated = <MqttTargetFactory as BridgeTargetFactory<TestEvent, ()>>::validate(
         &factory,
         &configuration,

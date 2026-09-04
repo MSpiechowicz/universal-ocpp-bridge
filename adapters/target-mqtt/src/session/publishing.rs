@@ -1,6 +1,6 @@
 use rumqttc::PublishOptions;
 use serde::{Serialize, de::DeserializeOwned};
-use uob_application::{DeliveryOutcome, TargetDelivery, TargetHealthState};
+use uob_application::{DeliveryOutcome, TargetDelivery, TargetHealthState, TargetMessage};
 
 use super::{PublishPurpose, Session, TrackedPurpose};
 use crate::{error::permanent_mapping, mapping::WirePublication};
@@ -12,6 +12,39 @@ where
 {
     pub(super) fn accept_delivery(&mut self, delivery: &TargetDelivery<E>) {
         let delivery_id = delivery.delivery_id.clone();
+        let discovery = if self.settings.home_assistant_discovery {
+            match delivery.message.as_ref() {
+                TargetMessage::StationSnapshot(snapshot) => {
+                    match self
+                        .topics
+                        .home_assistant_discovery(snapshot, self.runtime.maximum_message_bytes)
+                    {
+                        Ok(publications) => publications,
+                        Err(error) => {
+                            self.spawn_report(delivery_id, permanent_mapping(error));
+                            return;
+                        }
+                    }
+                }
+                _ => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        let new_discoveries = discovery
+            .iter()
+            .filter(|publication| !self.discovery.contains_key(&publication.topic))
+            .count();
+        if self.discovery.len().saturating_add(new_discoveries) > self.runtime.discovery_capacity {
+            self.emit_health(TargetHealthState::Degraded, "mqtt.discovery_capacity");
+            self.spawn_report(
+                delivery_id,
+                DeliveryOutcome::RetryableFailure {
+                    reason: "mqtt.discovery_capacity".to_owned(),
+                },
+            );
+            return;
+        }
         let publication = match self.topics.map(
             &self.settings.target_instance_id,
             self.settings.configuration_revision,
@@ -40,6 +73,11 @@ where
         if publication.retain {
             self.retained_state
                 .insert(publication.topic.clone(), publication.clone());
+        }
+        for discovery in discovery {
+            self.discovery
+                .insert(discovery.topic.clone(), discovery.clone());
+            self.replay.push_back(discovery);
         }
         if self.queue_publication(&publication, PublishPurpose::Delivery(delivery_id.clone())) {
             return;

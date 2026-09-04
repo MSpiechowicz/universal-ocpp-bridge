@@ -34,6 +34,8 @@ pub struct MqttRuntimeOptions {
     pub maximum_in_flight_commands: usize,
     /// Largest retained station-state cache used for reconnect republishing.
     pub retained_state_capacity: usize,
+    /// Largest retained Home Assistant discovery cache used for reconnect republishing.
+    pub discovery_capacity: usize,
     /// MQTT keepalive interval.
     pub keep_alive: Duration,
     /// TCP/TLS connection timeout in seconds.
@@ -54,6 +56,7 @@ impl Default for MqttRuntimeOptions {
             maximum_in_flight_deliveries: 16,
             maximum_in_flight_commands: 8,
             retained_state_capacity: 64,
+            discovery_capacity: 512,
             keep_alive: Duration::from_secs(15),
             connection_timeout_seconds: 2,
             no_progress_timeout: Duration::from_secs(30),
@@ -71,6 +74,7 @@ impl MqttRuntimeOptions {
             || self.maximum_in_flight_deliveries > usize::from(u16::MAX)
             || self.maximum_in_flight_commands == 0
             || self.retained_state_capacity == 0
+            || self.discovery_capacity == 0
             || self.keep_alive < Duration::from_secs(1)
             || self.keep_alive.subsec_nanos() != 0
             || self.keep_alive.as_secs() > u64::from(u16::MAX)
@@ -176,6 +180,16 @@ impl MqttTargetFactory {
                 "credentials_file",
             ));
         }
+        let home_assistant_discovery = match configuration.setting("home_assistant_discovery") {
+            Some(ConfigurationValue::Boolean(value)) => *value,
+            None => false,
+            _ => {
+                return Err(field(
+                    ConfigurationErrorCode::InvalidField,
+                    "home_assistant_discovery",
+                ));
+            }
+        };
         let client_id = self.topics.client_id(&configuration.target_instance_id)?;
         for online in [true, false] {
             if self
@@ -201,6 +215,7 @@ impl MqttTargetFactory {
                 configuration.target_instance_id.as_str()
             ))
             .expect("a validated target identity produces a visible principal"),
+            home_assistant_discovery,
         })
     }
 }
@@ -259,6 +274,11 @@ pub fn mqtt_configuration_schema() -> ConfigurationSchema {
                 kind: ConfigurationFieldKind::Boolean,
                 required: false,
             },
+            ConfigurationField {
+                name: "home_assistant_discovery".to_owned(),
+                kind: ConfigurationFieldKind::Boolean,
+                required: false,
+            },
         ],
     }
 }
@@ -312,6 +332,7 @@ pub(crate) struct MqttSettings {
     pub(crate) configuration_revision: u64,
     pub(crate) client_id: String,
     pub(crate) command_principal: uob_contracts::PrincipalId,
+    pub(crate) home_assistant_discovery: bool,
 }
 
 pub(crate) struct ResolvedCredentials {
