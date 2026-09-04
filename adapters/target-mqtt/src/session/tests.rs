@@ -93,6 +93,7 @@ fn test_session() -> (
             command_principal: uob_contracts::PrincipalId::new("mqtt-target:main")
                 .expect("principal"),
             home_assistant_discovery: false,
+            profile: crate::configuration::MqttProfile::Standard,
         },
         MqttRuntimeOptions::default(),
     );

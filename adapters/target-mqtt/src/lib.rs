@@ -6,11 +6,13 @@ mod discovery;
 mod error;
 mod ingress;
 mod mapping;
+mod points;
 mod protocol_driver;
 mod session;
 mod target;
 
 pub use configuration::{
-    MQTT_TARGET_KIND, MqttRuntimeOptions, MqttTargetFactory, mqtt_configuration_schema,
+    EMS_SCADA_PROFILE, MQTT_TARGET_KIND, MqttRuntimeOptions, MqttTargetFactory, STANDARD_PROFILE,
+    mqtt_configuration_schema,
 };
 pub use mapping::TopicNamespace;

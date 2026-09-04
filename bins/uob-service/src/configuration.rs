@@ -10,9 +10,11 @@ use uob_external_export_adapter::{
     DataExportConfiguration, DatabaseProviderRegistry, DestinationTransition, ExportBacklogState,
     postgresql_configuration_schema,
 };
-use uob_mqtt_target_adapter::{MQTT_TARGET_KIND, MqttTargetFactory};
+use uob_mqtt_target_adapter::{
+    EMS_SCADA_PROFILE, MQTT_TARGET_KIND, MqttTargetFactory, STANDARD_PROFILE,
+};
 use uob_target_adapter::{
-    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TargetDisplayFamily,
+    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TargetDisplayFamily, TargetPreset,
     TargetRegistration, TargetRegistry, TransportEncryption, TransportPolicy, TransportSecurity,
 };
 
@@ -277,7 +279,16 @@ fn mqtt_registration() -> TargetRegistration {
             id: "mqtt".to_owned(),
             display_name: "MQTT".to_owned(),
         },
-        presets: vec![],
+        presets: vec![
+            TargetPreset {
+                id: STANDARD_PROFILE.to_owned(),
+                display_name: "Standard bridge namespace".to_owned(),
+            },
+            TargetPreset {
+                id: EMS_SCADA_PROFILE.to_owned(),
+                display_name: "EMS/SCADA over MQTT".to_owned(),
+            },
+        ],
         capabilities: vec![
             TargetCapability("retained-state".to_owned()),
             TargetCapability("redacted-tracing".to_owned()),
@@ -387,69 +398,4 @@ impl fmt::Display for ConfigurationLoadError {
 impl Error for ConfigurationLoadError {}
 
 #[cfg(test)]
-mod tests {
-    use super::{ConfigurationLoadError, FileConfiguration, validate};
-
-    #[test]
-    fn configuration_rejects_unknown_fields_and_embedded_event_credentials() {
-        let unknown = "[bridge]\nid='demo'\nunknown=true\n";
-        assert!(toml::from_str::<FileConfiguration>(unknown).is_err());
-
-        let document = "[bridge]\nid='demo'\nenvironment='demo'\n[events]\nendpoint='http://user:secret@localhost:8080/api/v1/events'\n";
-        let parsed = toml::from_str(document).expect("configuration syntax");
-        assert!(matches!(
-            validate(parsed),
-            Err(ConfigurationLoadError::InvalidEventEndpoint)
-        ));
-    }
-
-    #[test]
-    fn api_only_configuration_uses_shared_composition() {
-        let document =
-            "[bridge]\nid='demo'\nenvironment='demo'\n[management]\nlisten_addr='127.0.0.1:0'\n";
-        let parsed = toml::from_str(document).expect("configuration syntax");
-        let validated = validate(parsed).expect("valid configuration");
-
-        assert_eq!(
-            validated.service.application.identity().bridge_id.as_str(),
-            "demo"
-        );
-        assert!(validated.service.target_selection.is_none());
-        assert_eq!(validated.management_address.port(), 0);
-    }
-
-    #[test]
-    fn remote_events_require_https_and_a_credential_reference() {
-        let document =
-            "[bridge]\nid='demo'\n[events]\nendpoint='http://events.example/api/v1/events'\n";
-        let parsed = toml::from_str(document).expect("configuration syntax");
-        assert!(matches!(
-            validate(parsed),
-            Err(ConfigurationLoadError::UnsafeRemoteEventEndpoint)
-        ));
-    }
-
-    #[test]
-    fn mqtt_uses_one_broker_url_and_trusted_runtime_namespace() {
-        let document = "[bridge]\nid='site-01'\nenvironment='demo'\ntarget_id='main'\n\n[[targets]]\nid='main'\nkind='mqtt'\nenabled=true\n\n[targets.settings]\nbroker_url='mqtt://127.0.0.1:1883'\nallow_plaintext=true\n";
-        let parsed = toml::from_str(document).expect("configuration syntax");
-        let validated = validate(parsed).expect("valid isolated MQTT configuration");
-
-        assert!(validated.service.targets.contains("mqtt"));
-        assert!(validated.service.target_selection.is_some());
-
-        let duplicate = "[bridge]\nid='site-01'\nenvironment='demo'\ntarget_id='main'\n\n[[targets]]\nid='main'\nkind='mqtt'\nenabled=true\ntransport={ endpoint='mqtt://other:1883', encryption='plaintext', explicitly_isolated=true }\n\n[targets.settings]\nbroker_url='mqtt://127.0.0.1:1883'\nallow_plaintext=true\n";
-        let parsed = toml::from_str(duplicate).expect("configuration syntax");
-        assert!(matches!(
-            validate(parsed),
-            Err(ConfigurationLoadError::InvalidTransport)
-        ));
-
-        let implicit_plaintext = "[bridge]\nid='site-01'\nenvironment='demo'\ntarget_id='main'\n\n[[targets]]\nid='main'\nkind='mqtt'\nenabled=true\n\n[targets.settings]\nbroker_url='mqtt://127.0.0.1:1883'\n";
-        let parsed = toml::from_str(implicit_plaintext).expect("configuration syntax");
-        assert!(matches!(
-            validate(parsed),
-            Err(ConfigurationLoadError::InvalidTransport)
-        ));
-    }
-}
+mod tests;
