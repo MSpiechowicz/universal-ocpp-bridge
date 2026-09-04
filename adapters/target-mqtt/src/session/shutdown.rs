@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use time::OffsetDateTime;
 use uob_application::{DeliveryOutcome, ErrorRetryClassification, TargetError, TargetErrorCode};
 
@@ -10,7 +10,7 @@ use crate::{error::check_report_task, protocol_driver::ProtocolSignal};
 impl<E, P> Session<E, P>
 where
     E: Serialize + Send + Sync + 'static,
-    P: Send + 'static,
+    P: Clone + DeserializeOwned + Send + 'static,
 {
     pub(super) async fn finish_shutdown(mut self) -> Result<(), TargetError> {
         let now = OffsetDateTime::now_utc();

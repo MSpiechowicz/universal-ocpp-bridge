@@ -53,14 +53,14 @@ pub fn start_target_url(
     let target =
         <MqttTargetFactory as BridgeTargetFactory<TestEvent, ()>>::create(&factory, validated)
             .expect("MQTT target");
-    assert!(target.descriptor().inbound_operations.is_empty());
+    assert!(!target.descriptor().inbound_operations.is_empty());
     let host = FakeTargetHost::build(
         capacities,
         Arc::new(UnsupportedQueryPort),
         TargetRuntimeLimits {
             maximum_in_flight_deliveries: runtime.maximum_in_flight_deliveries,
-            maximum_in_flight_commands: 0,
-            maximum_command_bytes: 1,
+            maximum_in_flight_commands: runtime.maximum_in_flight_commands,
+            maximum_command_bytes: runtime.maximum_message_bytes,
         },
         UtcTimestamp::new(OffsetDateTime::now_utc() + Duration::from_secs(10)),
     )

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use time::OffsetDateTime;
 use uob_application::{
     DeliveryId, DeliveryOutcome, DeliveryReport, TargetDiagnostic, TargetHealth, TargetHealthState,
@@ -12,7 +12,7 @@ use super::Session;
 impl<E, P> Session<E, P>
 where
     E: Serialize + Send + Sync + 'static,
-    P: Send + 'static,
+    P: Clone + DeserializeOwned + Send + 'static,
 {
     pub(super) fn spawn_report(&mut self, delivery_id: DeliveryId, outcome: DeliveryOutcome) {
         let reports = Arc::clone(&self.context.critical_reports);

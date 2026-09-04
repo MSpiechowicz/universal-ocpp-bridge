@@ -30,6 +30,8 @@ pub struct MqttRuntimeOptions {
     pub maximum_message_bytes: usize,
     /// Largest number of host deliveries awaiting broker acknowledgement.
     pub maximum_in_flight_deliveries: usize,
+    /// Largest number of target-originated commands awaiting host admission.
+    pub maximum_in_flight_commands: usize,
     /// Largest retained station-state cache used for reconnect republishing.
     pub retained_state_capacity: usize,
     /// MQTT keepalive interval.
@@ -50,6 +52,7 @@ impl Default for MqttRuntimeOptions {
             request_capacity: 32,
             maximum_message_bytes: 256 * 1024,
             maximum_in_flight_deliveries: 16,
+            maximum_in_flight_commands: 8,
             retained_state_capacity: 64,
             keep_alive: Duration::from_secs(15),
             connection_timeout_seconds: 2,
@@ -66,6 +69,7 @@ impl MqttRuntimeOptions {
             || self.maximum_message_bytes == 0
             || self.maximum_in_flight_deliveries == 0
             || self.maximum_in_flight_deliveries > usize::from(u16::MAX)
+            || self.maximum_in_flight_commands == 0
             || self.retained_state_capacity == 0
             || self.keep_alive < Duration::from_secs(1)
             || self.keep_alive.subsec_nanos() != 0
@@ -192,6 +196,11 @@ impl MqttTargetFactory {
             target_instance_id: configuration.target_instance_id.clone(),
             configuration_revision: configuration.revision,
             client_id,
+            command_principal: uob_contracts::PrincipalId::new(format!(
+                "mqtt-target:{}",
+                configuration.target_instance_id.as_str()
+            ))
+            .expect("a validated target identity produces a visible principal"),
         })
     }
 }
@@ -199,7 +208,7 @@ impl MqttTargetFactory {
 impl<E, P> BridgeTargetFactory<E, P> for MqttTargetFactory
 where
     E: serde::Serialize + Send + Sync + 'static,
-    P: Send + 'static,
+    P: Clone + serde::de::DeserializeOwned + Send + 'static,
 {
     fn kind(&self) -> &'static str {
         MQTT_TARGET_KIND
@@ -302,6 +311,7 @@ pub(crate) struct MqttSettings {
     pub(crate) target_instance_id: uob_contracts::TargetInstanceId,
     pub(crate) configuration_revision: u64,
     pub(crate) client_id: String,
+    pub(crate) command_principal: uob_contracts::PrincipalId,
 }
 
 pub(crate) struct ResolvedCredentials {

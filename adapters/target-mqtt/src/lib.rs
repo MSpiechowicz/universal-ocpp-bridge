@@ -1,8 +1,9 @@
-#![doc = "Bounded MQTT 3.1.1 outbound target implementation."]
+#![doc = "Bounded bidirectional MQTT 3.1.1 target implementation."]
 
 mod client;
 mod configuration;
 mod error;
+mod ingress;
 mod mapping;
 mod protocol_driver;
 mod session;

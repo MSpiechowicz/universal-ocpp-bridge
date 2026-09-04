@@ -1,9 +1,8 @@
 # MQTT target
 
-The `mqtt` target is an outbound MQTT 3.1.1 adapter for canonical v1 bridge records. It uses one
-long-lived client and continuously polls its event loop; it does not subscribe to command topics or
-admit target-originated commands. MQTT command ingress is a separate capability and retained
-commands are prohibited.
+The `mqtt` target is a bidirectional MQTT 3.1.1 adapter for canonical v1 bridge records and
+commands. It uses one long-lived client, continuously polls its event loop, and subscribes only to
+the configured bridge's command namespace. Retained commands are prohibited.
 
 ## Configuration
 
@@ -76,6 +75,7 @@ so `/`, `+`, `#`, `%`, controls, and non-ASCII bytes cannot create topic levels 
 | Availability | `uob/v1/{environment}/{bridge}/availability` | yes |
 | Station snapshot | `uob/v1/{environment}/{bridge}/state/{station}` | yes |
 | Durable event | `uob/v1/{environment}/{bridge}/events/{station}/{event_id}` | no |
+| Command request | `uob/v1/{environment}/{bridge}/commands/{station}/{request_id}` | prohibited |
 | Command result | `uob/v1/{environment}/{bridge}/results/{station}/{request_id}` | no |
 | Redacted trace | `uob/v1/{environment}/{bridge}/traces/{station}/{trace_id}` | no |
 
@@ -93,6 +93,29 @@ that remains connected while tracked publishes stop advancing; healthy idle conn
 that watchdog. Event, result, trace, and any future command publication are never retained. Request,
 in-flight, retained-state, payload, topic, and diagnostic buffers all have fixed bounds; an outage
 leaves additional durable work in the host-owned queue.
+
+## Command ingress
+
+The adapter subscribes at QoS 1 to exactly
+`uob/v1/{environment}/{bridge}/commands/+/+`. A publisher sends a non-retained JSON object with
+`schema_version`, `request_id`, optional `correlation_id`, canonical `resource`, typed `operation`,
+and `expires_at`; trusted `origin`, environment, and admission timestamps are not payload fields.
+The encoded station and request-ID topic segments must exactly match the canonical payload, and the
+payload bridge must match the process configuration.
+
+The adapter derives the origin as target instance `{target}` and principal `mqtt-target:{target}`.
+Broker credentials and ACLs authorize publication to the command namespace; payload fields can
+never select a principal, environment, bridge, or wider resource scope. The host's scoped command
+port then reapplies operation, resource, payload-size, concurrency, authorization, safety,
+capability, expiry, and durable idempotency checks.
+
+Retained, expired, wrong-scope, unsupported, unauthorized, unsafe, malformed, oversized, and
+conflicting commands are never dispatched. Rejections that contain a valid correlation identity
+produce a canonical non-retained result. Identical QoS 1 redelivery reuses the application's stored
+result, while reuse of a request ID with changed content produces a stable conflict result. A
+protocol response remains distinct from later observed charging effects. Command admission and
+protocol polling continue while outbound delivery waits for broker acknowledgement, within the
+configured command and request bounds.
 
 ## Broker integration test
 

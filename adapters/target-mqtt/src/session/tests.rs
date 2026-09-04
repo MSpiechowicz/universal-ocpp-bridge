@@ -90,6 +90,8 @@ fn test_session() -> (
             target_instance_id: target_id,
             configuration_revision: 1,
             client_id: "uob-test-client".to_owned(),
+            command_principal: uob_contracts::PrincipalId::new("mqtt-target:main")
+                .expect("principal"),
         },
         MqttRuntimeOptions::default(),
     );
@@ -103,8 +105,8 @@ fn test_session() -> (
         Arc::new(UnsupportedQueryPort),
         TargetRuntimeLimits {
             maximum_in_flight_deliveries: 4,
-            maximum_in_flight_commands: 0,
-            maximum_command_bytes: 1,
+            maximum_in_flight_commands: 1,
+            maximum_command_bytes: 1024,
         },
         UtcTimestamp::new(OffsetDateTime::now_utc() + Duration::from_secs(5)),
     )
