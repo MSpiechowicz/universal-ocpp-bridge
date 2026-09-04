@@ -64,6 +64,7 @@ jobs:
       - name: Verify live repository and environment protections
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: ./scripts/check-release-protections.sh
       - name: Install the reviewed Cocogitto release
         env:
