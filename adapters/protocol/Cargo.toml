@@ -28,6 +28,9 @@ rcgen.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-tungstenite.workspace = true
 uob-hostile-websocket-peer = { path = "../../tests/hostile-websocket-peer" }
+uob-provider-adapter = { path = "../providers" }
+uob-storage-adapter = { path = "../storage" }
+uuid.workspace = true
 
 [lints]
 workspace = true

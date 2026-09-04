@@ -110,6 +110,7 @@ fn check_release_protection(root: &Path, errors: &mut Vec<String>) {
         "group: stable-release-publication",
         "cancel-in-progress: false",
         "GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}",
+        "GH_REPOSITORY: ${{ github.repository }}",
         "run: ./scripts/check-release-protections.sh",
     ] {
         if !release.contains(required) {

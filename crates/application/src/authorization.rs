@@ -99,7 +99,11 @@ pub trait AuthorizationProvider: Send + Sync {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AuthorizationDecision {
     /// The opaque reference is active for the requested charging resource.
-    Allowed { reference: AuthorizationReference },
+    Allowed {
+        reference: AuthorizationReference,
+        /// Trusted policy expiry returned to protocols that support cache invalidation.
+        expires_at: Option<UtcTimestamp>,
+    },
     /// The request failed closed for a stable reason.
     Denied { reason: AuthorizationDenialReason },
 }
@@ -185,6 +189,7 @@ impl LocalAuthorizationPolicy {
         }
         AuthorizationDecision::Allowed {
             reference: reference.clone(),
+            expires_at: entry.expires_at,
         }
     }
 }

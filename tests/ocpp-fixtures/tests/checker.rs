@@ -67,16 +67,16 @@ fn copy_directory(source: &Path, destination: &Path) {
 #[test]
 fn canonical_corpus_is_valid_but_not_release_complete() {
     let report = check_corpus(&corpus_root(), CheckMode::Development).unwrap();
-    assert_eq!(report.fixtures, 10);
+    assert_eq!(report.fixtures, 11);
     assert_eq!(report.requirements, 36);
-    assert_eq!(report.verified_requirements, 9);
-    assert_eq!(report.required_remaining, 26);
+    assert_eq!(report.verified_requirements, 10);
+    assert_eq!(report.required_remaining, 25);
 
     let errors = check_corpus(&corpus_root(), CheckMode::Release).unwrap_err();
     assert!(
         errors
             .iter()
-            .any(|error| error.contains("ocpp16.authorization is planned"))
+            .any(|error| error.contains("ocpp16.local-authorization is planned"))
     );
 }
 
@@ -149,13 +149,13 @@ fn matrix_rejects_duplicates_missing_rows_and_false_completion() {
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|row| row["requirement_id"] == "ocpp16.authorization")
+        .find(|row| row["requirement_id"] == "ocpp16.local-authorization")
         .unwrap();
     row["status"] = Value::String("verified".to_owned());
     false_completion.write_json("coverage.json", &coverage);
     let errors = check_corpus(&false_completion.root, CheckMode::Development).unwrap_err();
     assert!(errors.iter().any(|error| {
-        error.contains("ocpp16.authorization is complete without executable fixture evidence")
+        error.contains("ocpp16.local-authorization is complete without executable fixture evidence")
     }));
 }
 
