@@ -31,7 +31,7 @@ pub(crate) struct Session<E, P> {
 impl<E, P> Session<E, P>
 where
     E: Send + Sync + 'static,
-    P: Send + 'static,
+    P: serde::de::DeserializeOwned + Send + 'static,
 {
     pub(crate) const fn new(target: EmsScadaHttpTarget, context: TargetContext<E, P>) -> Self {
         Self { target, context }
@@ -56,7 +56,14 @@ where
             self.target.listener_limits(),
             credentials,
             reads,
-        );
+        )
+        .with_commands(crate::commands::CommandExecutor::new(
+            Arc::new(crate::commands::SupervisedCommands::new(Arc::clone(
+                &self.context.commands,
+            ))),
+            self.target.runtime.query_deadline,
+            self.target.runtime.maximum_in_flight_commands,
+        ));
 
         let (stop, stopped) = oneshot::channel::<()>();
         let mut server = tokio::spawn(

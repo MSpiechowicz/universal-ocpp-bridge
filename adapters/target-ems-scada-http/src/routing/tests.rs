@@ -22,11 +22,23 @@ async fn the_capability_response_advertises_exactly_the_routes_this_build_serves
         let path = resource["path"]
             .as_str()
             .expect("resource path")
+            .replace("{request_id}", "request-a")
             .replace("{station_id}", "station-a")
             .replace("{point_id}", "energy.active.import.register");
         // An advertised resource must be mounted. Whether this caller may read it is a
         // separate question answered by its credential, not by the resource table.
-        let (status, _) = get(router(IntegrationCredentials::default()), &path, None).await;
+        let method = if resource["operations"][0] == "control" && resource["name"] == "commands" {
+            "POST"
+        } else {
+            "GET"
+        };
+        let (status, _) = send(
+            router(IntegrationCredentials::default()),
+            method,
+            &path,
+            None,
+        )
+        .await;
         assert!(
             !matches!(
                 status,
@@ -82,9 +94,11 @@ async fn the_capability_response_matches_the_supervised_target_descriptor() {
         body["delivery_semantics"],
         serde_json::json!(["local_exposure"])
     );
-    // Command admission is a separate integration endpoint, so nothing inbound is advertised.
-    assert!(descriptor.inbound_operations.is_empty());
-    assert_eq!(body["inbound_operations"], serde_json::json!([]));
+    assert_eq!(descriptor.inbound_operations.len(), 3);
+    assert_eq!(
+        body["inbound_operations"],
+        serde_json::to_value(&descriptor.inbound_operations).unwrap()
+    );
     assert_eq!(
         body["limits"]["maximum_message_bytes"],
         descriptor.limits.maximum_message_bytes

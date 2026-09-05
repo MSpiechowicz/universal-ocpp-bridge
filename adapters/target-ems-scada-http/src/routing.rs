@@ -5,13 +5,14 @@ use axum::{
     extract::{DefaultBodyLimit, State},
     http::{HeaderMap, header},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use tokio::sync::{Semaphore, SemaphorePermit, TryAcquireError};
 use uob_application::{PageLimit, TargetDescriptor};
 
 use crate::{
     capabilities::{CapabilityDocument, ListenerLimits},
+    commands,
     configuration::{IntegrationCredentials, IntegrationPrincipal},
     error::IntegrationErrorCode,
     points, reads, stations,
@@ -33,6 +34,7 @@ struct IntegrationInner {
     limits: ListenerLimits,
     credentials: IntegrationCredentials,
     reads: reads::ReadExecutor,
+    commands: Option<commands::CommandExecutor>,
     in_flight: Semaphore,
 }
 
@@ -50,8 +52,20 @@ impl IntegrationState {
                 limits,
                 credentials,
                 reads,
+                commands: None,
             }),
         }
+    }
+
+    pub(crate) fn with_commands(mut self, commands: commands::CommandExecutor) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("unshared listener state")
+            .commands = Some(commands);
+        self
+    }
+
+    pub(crate) fn commands(&self) -> Option<&commands::CommandExecutor> {
+        self.inner.commands.as_ref()
     }
 
     /// Reserves one of the listener's bounded concurrent-request slots.
@@ -101,6 +115,8 @@ pub(crate) fn integration_router(state: IntegrationState) -> Router {
         .route("/bridge/v1/stations/{station_id}", get(stations::station))
         .route("/bridge/v1/points", get(points::points))
         .route("/bridge/v1/points/{point_id}", get(points::point))
+        .route("/bridge/v1/commands", post(commands::submit))
+        .route("/bridge/v1/commands/{request_id}", get(commands::status))
         .fallback(unknown_resource)
         .method_not_allowed_fallback(unsupported_operation)
         .layer(DefaultBodyLimit::max(body_limit))

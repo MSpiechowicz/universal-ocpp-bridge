@@ -2848,6 +2848,7 @@ dependencies = [
  "uob-application",
  "uob-contracts",
  "uob-management-adapter",
+ "uob-storage-adapter",
  "uob-target-adapter",
  "uob-target-conformance",
 ]

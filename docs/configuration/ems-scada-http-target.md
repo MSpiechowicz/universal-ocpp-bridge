@@ -81,6 +81,8 @@ origin and can never be configured on the management listener, which requires a 
 | `GET /bridge/v1/stations/{station_id}` | One current canonical station snapshot. |
 | `GET /bridge/v1/points` | Filtered, paginated canonical point catalog with descriptors and latest values. |
 | `GET /bridge/v1/points/{point_id}` | One canonical point descriptor and its latest value. |
+| `POST /bridge/v1/commands` | Durably admit an operator command through the shared application port. |
+| `GET /bridge/v1/commands/{request_id}` | Read the canonical lifecycle and separately linked observed effects of an operator command. |
 
 Any other path returns `ems_scada_http.unknown_resource`, and an unsupported method on a served
 resource returns `ems_scada_http.unsupported_operation`. Error bodies carry a stable machine-readable
@@ -88,7 +90,7 @@ resource returns `ems_scada_http.unsupported_operation`. Error bodies carry a st
 
 ### Reading canonical state
 
-Every read requires a credential holding the `read` permission. A listener with no credential
+Every station and point read requires a credential holding the `read` permission. A listener with no credential
 document serves only `GET /bridge/v1/capabilities`: an anonymous local caller has no reader role
 and no resource scope, so it reaches no canonical record.
 
@@ -130,6 +132,70 @@ resource exists, so neither route can be used to discover another scope's statio
 | `ems_scada_http.capacity_exhausted` | 503 | The bounded concurrent-request budget is exhausted. |
 | `ems_scada_http.source_unavailable` | 503 | Authoritative canonical state is temporarily unreadable. |
 | `ems_scada_http.deadline_exceeded` | 504 | The canonical source did not answer within the listener's bounded deadline. |
+
+## Commands and status
+
+Both command routes require `control`. A reader cannot submit a command or inspect command status,
+even when it knows the request ID. The credential's bridge/station scope applies to both routes;
+status additionally belongs to this configured target instance. Operators can inspect commands
+from other operators of the same target within their resource scope. Management and other target
+origins remain inaccessible here. The host must grant `CommandStatus` on its scoped query port.
+
+POST accepts the canonical `CommandRequest` fields, using the same ordinary `start`, `stop`, and
+`set_charging_limit` operations as management and MQTT ingress. The shared application checks
+capability, safety, expiry, and idempotency. This integration credential vocabulary does not grant
+privileged OCPP operations. Origin, principal, and target identity are assigned from the verified
+credential; supplying them in JSON is an invalid request.
+
+```json
+{
+  "request_id": "ems-start-001",
+  "resource": { "bridge_id": "site-01", "station_id": "station-a" },
+  "operation": { "kind": "start", "parameters": {} },
+  "expires_at": "2026-09-05T12:05:00Z"
+}
+```
+
+Choose a future expiration and an available resource with the advertised operation. Request IDs
+must be nonblank, at most 256 UTF-8 bytes, and cannot be `.` or `..`. The returned `status_url`
+percent-encodes the ID as one path segment; clients should follow that URL rather than concatenate
+unescaped IDs. Request and result shapes are the canonical contracts published under
+`crates/contracts/schemas/v1.0`.
+
+A successful POST returns `202` with `request_id`, `status_url`, and the canonical `result`, only
+after the application confirms durable admission. The result may already contain a protocol
+response. Neither HTTP admission nor charger acceptance proves charging has started or stopped.
+GET returns the latest `CommandResult`; `observed_effects` links later evidence independently and
+is omitted when empty. Identical retries reuse the durable result; conflicting reuse of an ID
+returns `409` and never dispatches another command.
+
+Command bodies and concurrent requests use the advertised listener bounds. Commands also hold
+an independent `maximum_in_flight_commands` permit. The composition root's `query_deadline`
+(default two seconds) bounds the complete POST, including reading the body and waiting for the
+application. No unbounded command queue or detached admission task is created. A timeout can happen
+after persistence or transmission: it is not proof the command failed or never ran. Read status
+with the original request ID, and retain that ID for any retry so application deduplication applies.
+
+| Stable error | HTTP status | Meaning |
+|---|---|---|
+| `ems_scada_http.unauthenticated`, `ems_scada_http.invalid_credential` | 401 | Missing or invalid integration bearer credential. |
+| `ems_scada_http.permission_denied` | 403 | Missing control authority, forbidden resource, privileged operation, or another command origin. |
+| `ems_scada_http.invalid_request` | 400 | Malformed JSON, canonical request, or request ID. |
+| `ems_scada_http.payload_too_large` | 413 | Body exceeds the advertised byte limit. |
+| `ems_scada_http.command_busy` | 429 | All command admission slots are occupied or the host is busy. |
+| `ems_scada_http.request_conflict` | 409 | Request identity conflicts with persisted command content. |
+| `ems_scada_http.command_unsupported` | 422 | Application admission does not support the operation. |
+| `ems_scada_http.command_policy_rejected` | 400 | Application admission policy refused the request. |
+| `ems_scada_http.expired` | 410 | The request expired. |
+| `ems_scada_http.source_unavailable` | 503 | Admission or authoritative storage is unavailable, including exhausted storage capacity. |
+| `ems_scada_http.deadline_exceeded` | 504 | Request deadline elapsed; consult durable status. |
+| `ems_scada_http.resource_not_found` | 404 | No retained command result exists for this ID. |
+
+Application lifecycle rejections return the canonical `CommandResult` instead of the transport
+error envelope: unauthorized is `403`, expired is `410`, unsupported is `422`, disconnected station
+is `409`, and invalid parameters/policy/protocol rejection is `400`. These responses never return
+`202`. Known protocol responses, including charger rejection, retain their canonical lifecycle;
+HTTP admission and charger response remain separate facts.
 
 ## Delivery meaning
 

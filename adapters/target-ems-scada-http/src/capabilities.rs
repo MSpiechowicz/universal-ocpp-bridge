@@ -44,6 +44,16 @@ pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[
         path: "/bridge/v1/points/{point_id}",
         operations: &["read"],
     },
+    IntegrationResource {
+        name: "commands",
+        path: "/bridge/v1/commands",
+        operations: &["control"],
+    },
+    IntegrationResource {
+        name: "command_status",
+        path: "/bridge/v1/commands/{request_id}",
+        operations: &["control"],
+    },
 ];
 
 /// Versioned description of the integration surface, generated from the target descriptor.
