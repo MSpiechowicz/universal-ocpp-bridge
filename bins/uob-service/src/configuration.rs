@@ -33,6 +33,8 @@ struct FileConfiguration {
     targets: Vec<TargetEntry>,
     #[serde(default)]
     data_export: DataExportSection,
+    #[serde(default)]
+    lifecycle: crate::lifecycle::LifecycleConfiguration,
 }
 
 #[derive(Deserialize)]
@@ -108,6 +110,7 @@ pub(crate) struct ValidatedServiceConfiguration {
     pub service: ServiceComposition<(), ()>,
     pub management_address: SocketAddr,
     pub events: ValidatedEventClientConfiguration,
+    pub shutdown_timeout: std::time::Duration,
 }
 
 #[derive(Clone)]
@@ -126,6 +129,10 @@ pub(crate) fn load(path: &Path) -> Result<ValidatedServiceConfiguration, Configu
 fn validate(
     configuration: FileConfiguration,
 ) -> Result<ValidatedServiceConfiguration, ConfigurationLoadError> {
+    let shutdown_timeout = configuration
+        .lifecycle
+        .validate()
+        .ok_or(ConfigurationLoadError::InvalidShutdownTimeout)?;
     if !configuration.management.listen_addr.ip().is_loopback() {
         return Err(ConfigurationLoadError::UnsafeManagementListener);
     }
@@ -186,6 +193,7 @@ fn validate(
     Ok(ValidatedServiceConfiguration {
         service,
         management_address: configuration.management.listen_addr,
+        shutdown_timeout,
         events,
     })
 }
@@ -415,6 +423,7 @@ pub(crate) enum ConfigurationLoadError {
     InvalidEventEndpoint,
     UnsafeRemoteEventEndpoint,
     UnavailableDataExport,
+    InvalidShutdownTimeout,
     Composition,
 }
 

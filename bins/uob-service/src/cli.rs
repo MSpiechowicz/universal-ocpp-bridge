@@ -56,10 +56,11 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
         configuration.management_address,
         if no_ui { "disabled" } else { "enabled" }
     );
-    match uob_management_adapter::serve_with_options(
+    match crate::lifecycle::serve(
         configuration.management_address,
         configuration.service.application,
         options,
+        configuration.shutdown_timeout,
     )
     .await
     {

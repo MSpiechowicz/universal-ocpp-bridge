@@ -1,0 +1,44 @@
+[Unit]
+Description=Universal OCPP Bridge
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=uob
+Group=uob
+ExecStartPre=/usr/local/bin/uob config check --config /etc/uob/bridge.toml
+ExecStart=/usr/local/bin/uob serve --config /etc/uob/bridge.toml --no-ui
+WorkingDirectory=/var/lib/uob
+StateDirectory=uob
+StateDirectoryMode=0700
+RuntimeDirectory=uob
+RuntimeDirectoryMode=0700
+UMask=0077
+TimeoutStopSec=25s
+KillSignal=SIGTERM
+KillMode=control-group
+SendSIGKILL=yes
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+LogNamespace=uob
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

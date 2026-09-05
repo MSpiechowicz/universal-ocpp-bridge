@@ -84,10 +84,10 @@ impl<E: Send + 'static> StationTask<E> {
     /// Returns the state, queue, panic, or cancellation failure that stopped the task.
     pub async fn wait(mut self) -> Result<(), StationTaskError<E>> {
         let shutdown = self.shutdown.take();
-        let Some(join_handle) = self.join.take() else {
+        let Some(join_handle) = self.join.as_mut() else {
             return Err(StationTaskError::SupervisorUnavailable);
         };
-        let result = join(join_handle).await;
+        let result = flatten_join(join_handle.await);
         drop(shutdown);
         result
     }
@@ -101,10 +101,10 @@ impl<E: Send + 'static> StationTask<E> {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        let Some(mut join_handle) = self.join.take() else {
+        let Some(join_handle) = self.join.as_mut() else {
             return Err(StationTaskError::SupervisorUnavailable);
         };
-        if let Ok(result) = timeout(deadline, &mut join_handle).await {
+        if let Ok(result) = timeout(deadline, &mut *join_handle).await {
             flatten_join(result)
         } else {
             join_handle.abort();
@@ -272,12 +272,6 @@ fn publish_outputs<T, E>(
             .map_err(|_| StationTaskError::OutputUnavailable(kind))?;
     }
     Ok(())
-}
-
-async fn join<E: Send + 'static>(
-    join_handle: JoinHandle<Result<(), StationTaskError<E>>>,
-) -> Result<(), StationTaskError<E>> {
-    flatten_join(join_handle.await)
 }
 
 fn flatten_join<E>(

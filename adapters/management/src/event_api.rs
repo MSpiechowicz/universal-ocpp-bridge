@@ -31,7 +31,7 @@ use crate::{ManagementReadLimits, ManagementState, read_api::ApiError};
 use payload::PayloadEncodingError;
 use recovery::{cursor_expired_response, error_event, gap_event};
 use request::{EventQuery, bearer_token, validate_query};
-use subscriber::{QueuedPayloadReservation, SubscriberBudget};
+use subscriber::{QueuedPayloadReservation, SubscriberBudget, SubscriberTask};
 
 const MAX_SSE_ID_BYTES: usize = 512;
 const HARD_MAX_SUBSCRIBERS: usize = 128;
@@ -214,7 +214,7 @@ pub(crate) async fn events(
         };
 
     let (sender, receiver) = mpsc::channel(usize::from(events.limits.subscriber_capacity));
-    tokio::spawn(pump(
+    let task = SubscriberTask(tokio::spawn(pump(
         subscription,
         sender,
         query.resource,
@@ -222,14 +222,14 @@ pub(crate) async fn events(
         events.limits,
         permit,
         subscriber_budget,
-    ));
-    let output = stream::unfold(receiver, |mut receiver| async move {
+    )));
+    let output = stream::unfold((receiver, task), |(mut receiver, task)| async move {
         receiver.recv().await.map(|queued| {
             let QueuedEvent {
                 event,
                 reservation: _reservation,
             } = queued;
-            (Ok::<Event, Infallible>(event), receiver)
+            (Ok::<Event, Infallible>(event), (receiver, task))
         })
     });
     Sse::new(output)

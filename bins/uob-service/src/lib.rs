@@ -4,6 +4,7 @@ pub mod cli;
 mod configuration;
 mod event_stream;
 mod identity;
+mod lifecycle;
 
 use std::{error::Error, fmt};
 

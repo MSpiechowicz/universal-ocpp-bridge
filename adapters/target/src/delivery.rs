@@ -123,14 +123,31 @@ impl TargetDeliveryWorkerTask {
     /// # Errors
     ///
     /// Returns a storage, report-channel, join, or consumed-handle failure.
-    pub async fn shutdown(mut self) -> Result<(), TargetDeliveryWorkerError> {
+    pub async fn shutdown(self) -> Result<(), TargetDeliveryWorkerError> {
+        self.shutdown_with_deadline(Duration::from_secs(20)).await
+    }
+
+    /// Drains the current operation within the host deadline, then cancels and joins.
+    ///
+    /// # Errors
+    /// Reports worker errors or a missed deadline; durable pending deliveries are retained.
+    pub async fn shutdown_with_deadline(
+        mut self,
+        deadline: Duration,
+    ) -> Result<(), TargetDeliveryWorkerError> {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        let Some(join) = self.join.take() else {
+        let Some(join) = self.join.as_mut() else {
             return Err(TargetDeliveryWorkerError::SupervisorUnavailable);
         };
-        join.await.map_err(TargetDeliveryWorkerError::Join)?
+        if let Ok(result) = tokio::time::timeout(deadline, &mut *join).await {
+            result.map_err(TargetDeliveryWorkerError::Join)?
+        } else {
+            join.abort();
+            let _ = join.await;
+            Err(TargetDeliveryWorkerError::ShutdownDeadlineExceeded)
+        }
     }
 }
 
@@ -416,11 +433,16 @@ pub enum TargetDeliveryWorkerError {
     Join(JoinError),
     /// The owning task handle was already consumed.
     SupervisorUnavailable,
+    /// The current operation did not finish within the host deadline.
+    ShutdownDeadlineExceeded,
 }
 
 impl fmt::Display for TargetDeliveryWorkerError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ShutdownDeadlineExceeded => {
+                formatter.write_str("target delivery shutdown deadline exceeded")
+            }
             Self::InvalidOptions => formatter.write_str("invalid target delivery worker options"),
             Self::Storage(error) => write!(formatter, "target delivery storage failed: {error}"),
             Self::UnexpectedReport => formatter.write_str("unexpected target delivery report"),
@@ -447,50 +469,4 @@ impl Error for TargetDeliveryWorkerError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn policy(completion: DeliverySemantic) -> DeliveryRetryPolicy {
-        DeliveryRetryPolicy {
-            completion,
-            initial_backoff: Duration::from_secs(1),
-            maximum_backoff: Duration::from_secs(8),
-        }
-    }
-
-    #[test]
-    fn local_exposure_never_satisfies_named_peer_acknowledgement() {
-        let exposed = DeliveryOutcome::LocallyExposed {
-            surface: "ems.http.sse".to_owned(),
-        };
-        assert!(!completes(
-            DeliverySemantic::NamedPeerAcknowledgement,
-            &exposed
-        ));
-        assert!(completes(DeliverySemantic::LocalExposure, &exposed));
-        assert!(!completes(
-            DeliverySemantic::NamedPeerAcknowledgement,
-            &DeliveryOutcome::Acknowledged {
-                peer: String::new(),
-                scope: uob_application::AcknowledgementScope("processing".to_owned()),
-            }
-        ));
-    }
-
-    #[test]
-    fn retry_backoff_is_exponential_and_bounded() {
-        let start = UtcTimestamp::new(time::OffsetDateTime::UNIX_EPOCH);
-        assert_eq!(
-            retry_at(start, policy(DeliverySemantic::NamedPeerAcknowledgement), 0),
-            UtcTimestamp::new(time::OffsetDateTime::UNIX_EPOCH + Duration::from_secs(1))
-        );
-        assert_eq!(
-            retry_at(
-                start,
-                policy(DeliverySemantic::NamedPeerAcknowledgement),
-                20
-            ),
-            UtcTimestamp::new(time::OffsetDateTime::UNIX_EPOCH + Duration::from_secs(8))
-        );
-    }
-}
+mod tests;

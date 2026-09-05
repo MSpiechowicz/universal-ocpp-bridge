@@ -1,0 +1,10 @@
+# Replace the bridge identity before installation. This starts the current management service.
+[bridge]
+id = "site-01"
+environment = "production"
+
+[management]
+listen_addr = "127.0.0.1:8080"
+
+[lifecycle]
+shutdown_timeout_seconds = 20

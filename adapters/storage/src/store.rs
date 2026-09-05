@@ -1,7 +1,10 @@
 use std::{
     marker::PhantomData,
     path::Path,
-    sync::mpsc::{self, SyncSender, TrySendError},
+    sync::{
+        Arc,
+        mpsc::{self, TrySendError},
+    },
 };
 
 use rusqlite::Connection;
@@ -30,7 +33,7 @@ pub const DEFAULT_WORK_QUEUE_CAPACITY: usize = 64;
 type StoreTypes<C, E, D, R> = fn() -> (C, E, D, R);
 
 pub struct SqliteOperationalStore<C, E, D, R> {
-    sender: SyncSender<Request<C, E, D, R>>,
+    sender: Arc<crate::lifecycle::Worker<Request<C, E, D, R>>>,
     configuration: SqliteRuntimeConfiguration,
     retention_policy: SqliteRetentionPolicy,
     marker: PhantomData<StoreTypes<C, E, D, R>>,
@@ -103,7 +106,7 @@ where
         )?;
         let configuration = configure(&connection)?;
         let (sender, receiver) = mpsc::sync_channel(queue_capacity);
-        std::thread::Builder::new()
+        let join = std::thread::Builder::new()
             .name("uob-sqlite-operational-store".to_owned())
             .spawn(move || worker::run(connection, receiver, retention_policy))
             .map_err(|_| {
@@ -113,11 +116,23 @@ where
                 )
             })?;
         Ok(Self {
-            sender,
+            sender: Arc::new(crate::lifecycle::Worker::new(sender, join)),
             configuration,
             retention_policy,
             marker: PhantomData,
         })
+    }
+
+    /// Stops admission across all clones, drains accepted operations, and joins the worker.
+    ///
+    /// Call after stopping producers. A timeout closes admission but retains worker ownership:
+    /// call again to finish joining. Never delete WAL files or restore older data on timeout.
+    /// SQLite commits/rollbacks remain authoritative even if the process must be terminated.
+    ///
+    /// # Errors
+    /// Reports worker failure or a missed deadline without claiming a completed drain.
+    pub async fn shutdown(&self, deadline: std::time::Duration) -> Result<(), StorageError> {
+        self.sender.shutdown(deadline).await
     }
 
     fn request<T>(
