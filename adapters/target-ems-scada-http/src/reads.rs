@@ -10,10 +10,12 @@ use crate::error::IntegrationErrorCode;
 
 /// Exactly the canonical reads this listener serves, with the host event payload type erased.
 ///
-/// The integration surface never renders a retained event or a command result, so erasing the
+/// The integration surface never renders a retained event, so erasing the
 /// host's payload parameter here keeps the router and its handlers free of a type parameter that
 /// only the supervised session can name.
 pub(crate) enum CanonicalRead {
+    /// Latest durable command lifecycle, when known and in scope.
+    CommandResult(Box<Option<uob_contracts::CommandResult>>),
     /// One current station snapshot, when known and in scope.
     StationSnapshot(Box<Option<StationSnapshot>>),
     /// Bounded page of current station snapshots.
@@ -59,12 +61,15 @@ impl<E: Send + 'static> IntegrationReads for SupervisedReads<E> {
                 TargetQueryResult::DataPointValue(value) => {
                     Ok(CanonicalRead::DataPointValue(Box::new(value)))
                 }
-                TargetQueryResult::Capabilities(_)
-                | TargetQueryResult::CommandResult(_)
-                | TargetQueryResult::RetainedEvents(_) => Err(TargetPortError::new(
-                    TargetPortErrorCode::InvalidRequest,
-                    "query.response_type_mismatch",
-                )),
+                TargetQueryResult::CommandResult(result) => {
+                    Ok(CanonicalRead::CommandResult(Box::new(result)))
+                }
+                TargetQueryResult::Capabilities(_) | TargetQueryResult::RetainedEvents(_) => {
+                    Err(TargetPortError::new(
+                        TargetPortErrorCode::InvalidRequest,
+                        "query.response_type_mismatch",
+                    ))
+                }
             }
         })
     }

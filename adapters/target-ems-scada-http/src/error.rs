@@ -11,6 +11,16 @@ use serde::Serialize;
 /// exact reason without parsing prose.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IntegrationErrorCode {
+    /// An idempotency identity conflicts with an existing command.
+    RequestConflict,
+    /// Shared application policy rejected this command.
+    CommandPolicyRejected,
+    /// The resource does not support this command.
+    CommandUnsupported,
+    /// Command concurrency is exhausted.
+    CommandBusy,
+    /// Request body exceeds the advertised byte limit.
+    PayloadTooLarge,
     /// No integration credential was presented.
     Unauthenticated,
     /// The presented credential is not a configured integration principal.
@@ -46,6 +56,11 @@ impl IntegrationErrorCode {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::RequestConflict => "ems_scada_http.request_conflict",
+            Self::CommandPolicyRejected => "ems_scada_http.command_policy_rejected",
+            Self::CommandUnsupported => "ems_scada_http.command_unsupported",
+            Self::CommandBusy => "ems_scada_http.command_busy",
+            Self::PayloadTooLarge => "ems_scada_http.payload_too_large",
             Self::Unauthenticated => "ems_scada_http.unauthenticated",
             Self::InvalidCredential => "ems_scada_http.invalid_credential",
             Self::PermissionDenied => "ems_scada_http.permission_denied",
@@ -65,6 +80,11 @@ impl IntegrationErrorCode {
 
     const fn status(self) -> StatusCode {
         match self {
+            Self::RequestConflict => StatusCode::CONFLICT,
+            Self::CommandPolicyRejected => StatusCode::BAD_REQUEST,
+            Self::CommandUnsupported => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::CommandBusy => StatusCode::TOO_MANY_REQUESTS,
+            Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::Unauthenticated | Self::InvalidCredential => StatusCode::UNAUTHORIZED,
             Self::PermissionDenied => StatusCode::FORBIDDEN,
             Self::UnknownResource | Self::ResourceNotFound => StatusCode::NOT_FOUND,
@@ -112,6 +132,11 @@ mod tests {
     #[test]
     fn every_code_is_namespaced_and_distinct() {
         let codes = [
+            IntegrationErrorCode::RequestConflict,
+            IntegrationErrorCode::CommandPolicyRejected,
+            IntegrationErrorCode::CommandUnsupported,
+            IntegrationErrorCode::CommandBusy,
+            IntegrationErrorCode::PayloadTooLarge,
             IntegrationErrorCode::Unauthenticated,
             IntegrationErrorCode::InvalidCredential,
             IntegrationErrorCode::PermissionDenied,

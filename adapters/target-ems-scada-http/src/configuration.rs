@@ -41,7 +41,7 @@ pub struct EmsScadaHttpRuntimeOptions {
     pub maximum_request_bytes: usize,
     /// Station snapshots one bounded point page may inspect.
     pub maximum_station_scan: u16,
-    /// Deadline applied independently to every canonical read.
+    /// Deadline for each canonical read and each command request, including body reading.
     pub query_deadline: Duration,
 }
 
@@ -195,7 +195,7 @@ fn credential(
 impl<E, P> BridgeTargetFactory<E, P> for EmsScadaHttpTargetFactory
 where
     E: Send + Sync + 'static,
-    P: Send + 'static,
+    P: serde::de::DeserializeOwned + Send + 'static,
 {
     fn kind(&self) -> &'static str {
         EMS_SCADA_HTTP_TARGET_KIND

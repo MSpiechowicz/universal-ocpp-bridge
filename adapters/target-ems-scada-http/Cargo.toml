@@ -21,6 +21,7 @@ uob-contracts = { path = "../../crates/contracts" }
 libc.workspace = true
 
 [dev-dependencies]
+uob-storage-adapter = { path = "../storage" }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 tower = { version = "=0.5.3", features = ["util"] }
 uob-management-adapter = { path = "../management" }

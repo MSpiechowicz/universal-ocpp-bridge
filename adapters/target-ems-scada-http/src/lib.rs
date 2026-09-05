@@ -6,6 +6,7 @@
 #![doc = "than duplicating business handlers or storage."]
 
 mod capabilities;
+mod commands;
 mod configuration;
 mod error;
 mod points;

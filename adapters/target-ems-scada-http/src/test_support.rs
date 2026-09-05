@@ -130,7 +130,7 @@ pub(crate) fn scoped_credentials() -> IntegrationCredentials {
     ))
 }
 
-fn credentials_from(document: &str) -> IntegrationCredentials {
+pub(crate) fn credentials_from(document: &str) -> IntegrationCredentials {
     let directory = std::env::temp_dir().join(format!(
         "uob-ems-http-router-{}-{:?}",
         std::process::id(),

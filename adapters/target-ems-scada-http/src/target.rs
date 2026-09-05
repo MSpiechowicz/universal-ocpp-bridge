@@ -50,9 +50,12 @@ impl EmsScadaHttpTarget {
                 TargetMessageClass::DomainEvent,
                 TargetMessageClass::CommandResult,
             ],
-            // Command admission is a separate integration endpoint; this build authenticates and
-            // describes the surface without accepting target-originated operations.
-            inbound_operations: vec![],
+            // Ordinary commands use the host admission port; privileged OCPP is not exposed.
+            inbound_operations: vec![
+                uob_contracts::Operation::Start,
+                uob_contracts::Operation::Stop,
+                uob_contracts::Operation::SetChargingLimit,
+            ],
             limits: TargetLimits {
                 maximum_message_bytes: self.runtime.maximum_message_bytes,
                 maximum_in_flight_deliveries: self.runtime.maximum_in_flight_deliveries,
@@ -67,7 +70,7 @@ impl EmsScadaHttpTarget {
 impl<E, P> BridgeTarget<E, P> for EmsScadaHttpTarget
 where
     E: Send + Sync + 'static,
-    P: Send + 'static,
+    P: serde::de::DeserializeOwned + Send + 'static,
 {
     fn descriptor(&self) -> TargetDescriptor {
         Self::descriptor(self)
