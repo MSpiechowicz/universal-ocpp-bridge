@@ -1,4 +1,7 @@
 [Unit]
+Requires=uob-staging-governor.service
+After=uob-staging-governor.service
+BindsTo=uob-staging-governor.service
 Description=Universal OCPP Bridge staging
 Requires=uob-staging-network.service
 After=uob-staging-network.service

@@ -9,6 +9,7 @@ Type=exec
 User=uob
 Group=uob
 Slice=uob-production.slice
+MemoryMax=256M
 Environment=UOB_DEPLOYMENT_ENVIRONMENT=production
 InaccessiblePaths=-/etc/uob-staging -/var/lib/uob-staging -/run/uob-staging
 ExecStartPre=/usr/local/bin/uob config check --config /etc/uob/bridge.toml

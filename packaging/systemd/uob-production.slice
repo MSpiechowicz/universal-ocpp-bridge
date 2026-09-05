@@ -4,3 +4,5 @@ Description=Universal OCPP Bridge production slice
 [Slice]
 MemoryAccounting=yes
 IOAccounting=yes
+CPUWeight=100
+IOWeight=100

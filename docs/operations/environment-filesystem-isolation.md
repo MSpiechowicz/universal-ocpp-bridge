@@ -74,8 +74,8 @@ The staging sample uses a synthetic bridge identity, a distinct loopback managem
 and no selected target, charger connection, production credential, or export destination.
 Do not copy production configuration/secrets. Follow [staging network isolation](environment-network-isolation.md)
 to install its mandatory loopback-only namespace and admit synthetic test peers before startup.
-The staging resource governor remains tracked in #148; the slice establishes ownership and
-accounting without claiming memory or pressure-shedding guarantees.
+Install the mandatory [staging resource governor](staging-resource-governor.md) before startup.
+It enforces slice-wide limits, verifies admission headroom, and sheds staging under pressure.
 
 For a separate Linux staging host, install only the verified executable and the staging files
 above. Use the identical binary digest and configuration schema used for the candidate; no

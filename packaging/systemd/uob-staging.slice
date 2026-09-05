@@ -1,6 +1,14 @@
 [Unit]
+BindsTo=uob-staging-governor.service
+Before=uob-staging-governor.service
 Description=Universal OCPP Bridge staging slice
 
 [Slice]
 MemoryAccounting=yes
 IOAccounting=yes
+MemoryHigh=384M
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=50%
+CPUWeight=25
+IOWeight=25

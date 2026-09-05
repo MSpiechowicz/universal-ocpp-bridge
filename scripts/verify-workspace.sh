@@ -5,6 +5,7 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"
 
 ./scripts/check-file-sizes.sh
+python3 -B scripts/test_staging_governor.py
 
 container_mode=false
 if [[ "${1:-}" == "--container" ]]; then

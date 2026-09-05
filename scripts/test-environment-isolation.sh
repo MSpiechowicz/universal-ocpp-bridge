@@ -10,7 +10,9 @@ executable="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.
 service_binary="$(dirname "$(dirname "$executable")")/uob"
 # Verify the shipped directives with the just-built executable; install nothing on the host.
 for unit in packaging/systemd/*.service; do
-  sed -e "s|/usr/local/bin/uob|$service_binary|g" -e "s|/usr/local/libexec/uob-staging-network|$PWD/packaging/network/uob-staging-network|g" "$unit" >"$unit_directory/$(basename "$unit")"
+  sed -e "s|/usr/local/bin/uob|$service_binary|g" \
+    -e "s|/usr/local/libexec/staging_governor.py|$PWD/packaging/resources/staging_governor.py|g" \
+    -e "s|/usr/local/libexec/uob-staging-network|$PWD/packaging/network/uob-staging-network|g" "$unit" >"$unit_directory/$(basename "$unit")"
 done
 cp packaging/systemd/*.slice "$unit_directory/"
 systemd-analyze verify "$unit_directory"/*.service "$unit_directory"/*.slice
