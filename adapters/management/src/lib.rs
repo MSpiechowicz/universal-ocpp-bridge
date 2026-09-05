@@ -271,6 +271,20 @@ pub async fn serve_with_options(
     application: Application,
     options: ManagementRouterOptions,
 ) -> io::Result<()> {
+    serve_with_shutdown(address, application, options, std::future::pending()).await
+}
+
+/// Serves until the host stops ingress, then waits for active requests to finish.
+///
+/// # Errors
+/// Returns an I/O error for unsafe binding or listener failure. The host must enforce
+/// its overall shutdown deadline and terminate the runtime if requests cannot drain.
+pub async fn serve_with_shutdown(
+    address: SocketAddr,
+    application: Application,
+    options: ManagementRouterOptions,
+    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+) -> io::Result<()> {
     if !address.ip().is_loopback() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -278,7 +292,9 @@ pub async fn serve_with_options(
         ));
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, router_with_options(application, options)).await
+    axum::serve(listener, router_with_options(application, options))
+        .with_graceful_shutdown(shutdown)
+        .await
 }
 
 #[cfg(test)]

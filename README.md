@@ -165,3 +165,6 @@ The direct EMS/SCADA listener publishes a versioned OpenAPI contract with same-l
 schema references and an offline CI drift gate. See the
 [EMS/SCADA OpenAPI contract](docs/contracts/ems-scada-openapi.md) for regeneration and the
 broker-free Rust contract demo.
+
+See [service packaging and shutdown](docs/operations/service-lifecycle.md) for the non-root
+systemd unit, bounded journal namespace, shutdown deadlines, and SQLite drain/recovery contract.

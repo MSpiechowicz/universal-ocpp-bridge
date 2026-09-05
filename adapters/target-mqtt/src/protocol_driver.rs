@@ -39,6 +39,11 @@ impl ProtocolDriver {
         }
     }
 
+    pub(crate) async fn shutdown(&mut self) {
+        self.task.abort();
+        let _ = (&mut self.task).await;
+    }
+
     pub(crate) async fn next(&mut self) -> Option<ProtocolSignal> {
         self.signals.recv().await
     }

@@ -68,20 +68,24 @@ where
         ));
 
         let (stop, stopped) = oneshot::channel::<()>();
-        let mut server = tokio::spawn(
-            axum::serve(listener, integration_router(state))
-                .with_graceful_shutdown(async move {
-                    let _ = stopped.await;
-                })
-                .into_future(),
-        );
+        let mut owned = OwnedListener {
+            events: events.clone(),
+            server: tokio::spawn(
+                axum::serve(listener, integration_router(state))
+                    .with_graceful_shutdown(async move {
+                        let _ = stopped.await;
+                    })
+                    .into_future(),
+            ),
+        };
+        let server = &mut owned.server;
         self.emit_health(TargetHealthState::Ready, "ems_scada_http.local_exposure", 1);
 
-        let outcome = self.serve(&mut server).await;
+        let outcome = self.serve(server).await;
         events.shutdown();
         let _ = stop.send(());
         if !server.is_finished()
-            && tokio::time::timeout(self.target.runtime.query_deadline, &mut server)
+            && tokio::time::timeout(self.target.runtime.query_deadline, &mut *server)
                 .await
                 .is_err()
         {
@@ -127,6 +131,19 @@ where
                 active_connections: connections,
                 reason: Some(reason.to_owned()),
             }));
+    }
+}
+
+// Parent cancellation must not detach the listener or leave SSE producers running.
+struct OwnedListener {
+    server: JoinHandle<std::io::Result<()>>,
+    events: crate::events::EventService,
+}
+
+impl Drop for OwnedListener {
+    fn drop(&mut self) {
+        self.events.shutdown();
+        self.server.abort();
     }
 }
 

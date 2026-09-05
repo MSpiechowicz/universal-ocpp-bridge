@@ -4,6 +4,7 @@ mod codec;
 mod command;
 mod configuration;
 mod delivery;
+mod lifecycle;
 mod recovery;
 mod retention;
 mod schema;

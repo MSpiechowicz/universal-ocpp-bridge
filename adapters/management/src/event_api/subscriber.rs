@@ -46,3 +46,12 @@ impl Drop for QueuedPayloadReservation {
         self.budget.release(self.bytes);
     }
 }
+
+/// Cancels a source read even if it ignores receiver disconnection.
+pub(super) struct SubscriberTask(pub(super) tokio::task::JoinHandle<()>);
+
+impl Drop for SubscriberTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}

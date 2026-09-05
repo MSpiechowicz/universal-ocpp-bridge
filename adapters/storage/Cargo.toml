@@ -13,11 +13,12 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 time.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 time.workspace = true
 uuid.workspace = true
 

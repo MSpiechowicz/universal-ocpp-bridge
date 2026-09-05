@@ -410,3 +410,6 @@ mod local_authorization;
 
 #[path = "sqlite_operational_store/storage_retention.rs"]
 mod storage_retention;
+
+#[path = "sqlite_operational_store/lifecycle.rs"]
+mod lifecycle;

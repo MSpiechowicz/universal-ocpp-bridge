@@ -17,14 +17,18 @@ where
         let remaining = (self.context.shutdown_deadline.into_inner() - now)
             .try_into()
             .unwrap_or(Duration::ZERO);
-        match tokio::time::timeout(remaining, self.shutdown_inner()).await {
+        let outcome = match tokio::time::timeout(remaining, self.shutdown_inner()).await {
             Ok(result) => result,
             Err(_) => Err(TargetError::new(
                 TargetErrorCode::ShutdownDeadlineExceeded,
                 ErrorRetryClassification::Uncertain,
                 "mqtt.shutdown_deadline",
             )),
-        }
+        };
+        self.commands.shutdown().await;
+        self.reports.shutdown().await;
+        self.protocol.shutdown().await;
+        outcome
     }
 
     async fn shutdown_inner(&mut self) -> Result<(), TargetError> {

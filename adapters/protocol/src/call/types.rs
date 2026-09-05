@@ -336,7 +336,7 @@ impl CallSessionTask {
     ///
     /// Reports an unavailable, cancelled, or panicked session task.
     pub async fn wait(mut self) -> Result<(), &'static str> {
-        let Some(join) = self.join.take() else {
+        let Some(join) = self.join.as_mut() else {
             return Err("session task unavailable");
         };
         join.await.map_err(|_| "session task failed")
@@ -351,8 +351,8 @@ impl CallSessionTask {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        let mut join = self.join.take().ok_or("session task unavailable")?;
-        match timeout(deadline, &mut join).await {
+        let join = self.join.as_mut().ok_or("session task unavailable")?;
+        match timeout(deadline, &mut *join).await {
             Ok(Ok(())) => Ok(()),
             Ok(Err(_)) => Err("session task failed"),
             Err(_) => {

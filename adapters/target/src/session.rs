@@ -171,7 +171,7 @@ impl TargetSessionTask {
     /// Returns the target failure, panic, cancellation, or an unavailable supervisor handle.
     pub async fn wait(mut self) -> Result<(), TargetSessionError> {
         let shutdown = self.shutdown.take();
-        let Some(join) = self.join.take() else {
+        let Some(join) = self.join.as_mut() else {
             return Err(TargetSessionError::SupervisorUnavailable);
         };
         let result = flatten_join(join.await);
@@ -188,10 +188,10 @@ impl TargetSessionTask {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        let Some(mut join) = self.join.take() else {
+        let Some(join) = self.join.as_mut() else {
             return Err(TargetSessionError::SupervisorUnavailable);
         };
-        if let Ok(result) = timeout(deadline, &mut join).await {
+        if let Ok(result) = timeout(deadline, &mut *join).await {
             flatten_join(result)
         } else {
             join.abort();
@@ -424,3 +424,6 @@ impl Error for TargetSessionError {
         }
     }
 }
+
+#[cfg(test)]
+mod lifecycle_tests;
