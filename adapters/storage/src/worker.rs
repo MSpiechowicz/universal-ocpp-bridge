@@ -23,6 +23,7 @@ use crate::{
 };
 
 pub(crate) enum Request<C, E, D, R> {
+    Probe(Reply<()>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
     Snapshots(
         Option<String>,
@@ -61,6 +62,13 @@ pub(crate) fn run<C, E, D, R>(
 {
     for request in requests {
         match request {
+            Request::Probe(reply) => respond(
+                reply,
+                connection
+                    .query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))
+                    .map(|_| ())
+                    .map_err(unavailable),
+            ),
             Request::Write(write, reply) => respond(
                 reply,
                 write_atomic(&mut connection, retention_policy, write),

@@ -43,6 +43,8 @@ jobs:
             ${{ runner.os }}-rust-1.98-ci-v1-
       - name: Verify the complete Rust workspace
         run: ./scripts/verify-workspace.sh
+      - name: Verify service watchdog and bounded restart on the disposable runner
+        run: python3 -B scripts/test-service-watchdog.py --disposable
       - name: Verify Linux deployment isolation on the disposable runner
         run: ./scripts/test-environment-isolation.sh
 
