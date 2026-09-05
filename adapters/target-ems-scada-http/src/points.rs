@@ -32,7 +32,7 @@ use cursor::PointCursor;
 ///
 /// The fields are declared once rather than composed from the shared parameter structs: the
 /// URL-encoded form is not self-describing, so a flattened struct cannot be deserialized from it.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PointPageParameters {
     after: Option<String>,
@@ -62,7 +62,7 @@ impl PointPageParameters {
 }
 
 /// Bounded canonical point page.
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct PointPage {
     items: Vec<PointView>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -193,11 +193,14 @@ async fn bridge_points(
 pub(crate) async fn point(
     State(state): State<IntegrationState>,
     headers: HeaderMap,
-    Path(point_id): Path<String>,
+    point_id: Result<Path<String>, axum::extract::rejection::PathRejection>,
     selection: Result<Query<ResourceParameters>, QueryRejection>,
 ) -> Response {
     let Ok(permit) = state.acquire() else {
         return IntegrationErrorCode::CapacityExhausted.into_response();
+    };
+    let Ok(Path(point_id)) = point_id else {
+        return IntegrationErrorCode::InvalidRequest.into_response();
     };
     let response = one_point(&state, &headers, &point_id, selection).await;
     drop(permit);

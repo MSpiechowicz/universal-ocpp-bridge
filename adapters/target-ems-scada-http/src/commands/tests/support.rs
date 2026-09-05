@@ -236,5 +236,7 @@ pub(super) async fn send(
     let response = router.oneshot(request).await.unwrap();
     let status = response.status();
     let body = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
-    (status, serde_json::from_slice(&body).unwrap())
+    let value = serde_json::from_slice(&body).unwrap();
+    crate::openapi::tests::assert_response(method, path, status.as_u16(), &value);
+    (status, value)
 }

@@ -11,7 +11,7 @@ use crate::{
     request::{ResourceParameters, permits_read},
 };
 
-#[derive(Default, Deserialize)]
+#[derive(Default, Deserialize, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct Parameters {
     bridge_id: Option<String>,

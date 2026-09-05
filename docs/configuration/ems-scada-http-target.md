@@ -257,3 +257,9 @@ records only: telemetry and diagnostics are not promoted to durable events or as
 cursors. No SSE client acknowledgement or named EMS consumption is claimed. Host deliveries are
 reported independently of subscriber reads, and subscriber absence never extends journal retention
 or pins target outbox rows. The listening health reason is `ems_scada_http.local_exposure`.
+
+## Machine-readable contract
+
+Use `GET /bridge/v1/openapi.json` and its same-listener canonical schema references to discover
+request and response shapes. See [the versioned OpenAPI contract](../contracts/ems-scada-openapi.md)
+for authentication, drift checks and the broker-free Rust probe.

@@ -52,6 +52,28 @@ pub enum IntegrationErrorCode {
 }
 
 impl IntegrationErrorCode {
+    pub(crate) const ALL: &[Self] = &[
+        Self::RequestConflict,
+        Self::CommandPolicyRejected,
+        Self::CommandUnsupported,
+        Self::CommandBusy,
+        Self::PayloadTooLarge,
+        Self::Unauthenticated,
+        Self::InvalidCredential,
+        Self::PermissionDenied,
+        Self::UnknownResource,
+        Self::UnsupportedOperation,
+        Self::CapacityExhausted,
+        Self::InvalidRequest,
+        Self::BridgeRequired,
+        Self::ResourceNotFound,
+        Self::CursorExpired,
+        Self::Expired,
+        Self::OperationNotSupported,
+        Self::SourceUnavailable,
+        Self::DeadlineExceeded,
+    ];
+
     /// Returns the stable wire code shared by responses, diagnostics, and documentation.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -78,7 +100,7 @@ impl IntegrationErrorCode {
         }
     }
 
-    const fn status(self) -> StatusCode {
+    pub(crate) const fn status(self) -> StatusCode {
         match self {
             Self::RequestConflict => StatusCode::CONFLICT,
             Self::CommandPolicyRejected => StatusCode::BAD_REQUEST,
@@ -152,6 +174,7 @@ mod tests {
             IntegrationErrorCode::SourceUnavailable,
             IntegrationErrorCode::DeadlineExceeded,
         ];
+        assert_eq!(codes.as_slice(), IntegrationErrorCode::ALL);
         let mut seen = std::collections::BTreeSet::new();
         for code in codes {
             assert!(code.as_str().starts_with("ems_scada_http."), "{code:?}");

@@ -160,3 +160,8 @@ The management adapter can expose canonical, resource-scoped station inventory a
 through bounded application query ports. See the
 [management read API](docs/operations/management-read-api.md) for routes, limits, and failure
 semantics.
+
+The direct EMS/SCADA listener publishes a versioned OpenAPI contract with same-listener canonical
+schema references and an offline CI drift gate. See the
+[EMS/SCADA OpenAPI contract](docs/contracts/ems-scada-openapi.md) for regeneration and the
+broker-free Rust contract demo.

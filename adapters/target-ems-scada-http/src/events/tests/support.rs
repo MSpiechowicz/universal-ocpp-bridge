@@ -151,14 +151,40 @@ pub(super) async fn response(
         .unwrap()
 }
 pub(super) async fn text(response: Response) -> String {
-    String::from_utf8(
+    let status = response.status().as_u16();
+    let is_json = response
+        .headers()
+        .get("content-type")
+        .is_some_and(|v| v == "application/json");
+    let text = String::from_utf8(
         to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap()
             .to_vec(),
     )
-    .unwrap()
+    .unwrap();
+    if is_json {
+        crate::openapi::tests::assert_response(
+            "GET",
+            "/bridge/v1/events",
+            status,
+            &serde_json::from_str(&text).unwrap(),
+        );
+    } else {
+        for record in text.split("\n\n") {
+            let event = record.lines().find_map(|line| line.strip_prefix("event: "));
+            let data = record.lines().find_map(|line| line.strip_prefix("data: "));
+            if let (Some(event), Some(data)) = (event, data) {
+                crate::openapi::tests::assert_sse_payload(
+                    event,
+                    &serde_json::from_str(data).unwrap(),
+                );
+            }
+        }
+    }
+    text
 }
+
 pub(super) fn item(
     cursor: &str,
     event_id: &str,

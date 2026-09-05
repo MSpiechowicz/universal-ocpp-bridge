@@ -10,7 +10,7 @@ use uob_contracts::{
 /// The descriptor and the value are the canonical contract objects themselves, so units, access
 /// mode, exact decimals, both timestamps, quality, and freshness reach an EMS client exactly as
 /// the bridge recorded them. This adapter re-derives none of them.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, schemars::JsonSchema)]
 pub(crate) struct PointView {
     /// Stable point identity within its owning resource.
     pub(crate) point_id: PointId,

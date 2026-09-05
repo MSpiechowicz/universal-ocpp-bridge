@@ -89,8 +89,8 @@ impl CommandExecutor {
     }
 }
 
-#[derive(Serialize)]
-struct AcceptedCommand {
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct AcceptedCommand {
     request_id: String,
     status_url: String,
     result: CommandResult,

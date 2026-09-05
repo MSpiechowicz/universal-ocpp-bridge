@@ -25,6 +25,16 @@ pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[
         operations: &["read"],
     },
     IntegrationResource {
+        name: "openapi",
+        path: "/bridge/v1/openapi.json",
+        operations: &["read"],
+    },
+    IntegrationResource {
+        name: "schemas",
+        path: "/bridge/v1/schemas/v1.0/{schema}",
+        operations: &["read"],
+    },
+    IntegrationResource {
         name: "stations",
         path: "/bridge/v1/stations",
         operations: &["read"],
@@ -62,7 +72,7 @@ pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[
 ];
 
 /// Versioned description of the integration surface, generated from the target descriptor.
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct CapabilityDocument {
     contract_version: ContractVersion,
     target: TargetView,
@@ -76,13 +86,13 @@ pub(crate) struct CapabilityDocument {
     events: crate::events::EventPolicy,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct TargetView {
     kind: String,
     instance_id: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct ResourceView {
     name: &'static str,
     path: &'static str,
@@ -92,7 +102,7 @@ struct ResourceView {
 // The wire names deliberately mirror the descriptor's own limit names so an integration client
 // can match the capability response against the published contract field for field.
 #[allow(clippy::struct_field_names)]
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct LimitsView {
     maximum_message_bytes: usize,
     maximum_in_flight_deliveries: usize,
@@ -105,13 +115,13 @@ struct LimitsView {
 }
 
 /// Permissions and canonical resources the authenticated caller actually holds.
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 struct CallerView {
     permissions: Vec<&'static str>,
     resource_scopes: Vec<ScopeView>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 #[serde(tag = "scope", rename_all = "snake_case")]
 enum ScopeView {
     Bridge {

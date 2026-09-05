@@ -182,6 +182,7 @@ pub(crate) async fn send(
         .await
         .expect("response body");
     let value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+    crate::openapi::tests::assert_response(method, path, status.as_u16(), &value);
     (status, value)
 }
 

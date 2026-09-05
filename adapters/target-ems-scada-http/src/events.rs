@@ -1,6 +1,6 @@
 mod payload;
 mod recovery;
-mod request;
+pub(crate) mod request;
 use recovery::recovery;
 mod source;
 #[cfg(test)]
@@ -32,7 +32,7 @@ const MAX_PAYLOAD_BYTES: usize = 64 * 1024;
 const DEADLINE: Duration = Duration::from_secs(2);
 
 /// Honest delivery and replay policy exposed alongside the descriptor.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, schemars::JsonSchema)]
 pub(crate) struct EventPolicy {
     delivery: &'static str,
     durable_replay: &'static str,
