@@ -1,0 +1,10 @@
+# Synthetic test environment only; no production credentials or integration peers.
+[bridge]
+id = "test-site-01"
+environment = "staging"
+
+[management]
+listen_addr = "127.0.0.1:18080"
+
+[lifecycle]
+shutdown_timeout_seconds = 20

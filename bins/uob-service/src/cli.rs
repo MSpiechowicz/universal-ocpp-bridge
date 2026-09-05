@@ -48,6 +48,15 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
         Ok(configuration) => configuration,
         Err(error) => return failure(2, error.to_string()),
     };
+    let deployment = match configuration
+        .deployment
+        .as_ref()
+        .map(|layout| layout.open(configuration.service.application.identity()))
+        .transpose()
+    {
+        Ok(deployment) => deployment,
+        Err(error) => return failure(1, error.to_owned()),
+    };
     let options = uob_management_adapter::ManagementRouterOptions {
         static_assets: !no_ui,
     };
@@ -56,14 +65,15 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
         configuration.management_address,
         if no_ui { "disabled" } else { "enabled" }
     );
-    match crate::lifecycle::serve(
+    let result = crate::lifecycle::serve(
         configuration.management_address,
         configuration.service.application,
         options,
         configuration.shutdown_timeout,
+        deployment,
     )
-    .await
-    {
+    .await;
+    match result {
         Ok(()) => success(),
         Err(error) => failure(1, format!("service runtime {}", error.kind())),
     }

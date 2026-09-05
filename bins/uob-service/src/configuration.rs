@@ -110,6 +110,7 @@ pub(crate) struct ValidatedServiceConfiguration {
     pub service: ServiceComposition<(), ()>,
     pub management_address: SocketAddr,
     pub events: ValidatedEventClientConfiguration,
+    pub deployment: Option<crate::deployment::DeploymentLayout>,
     pub shutdown_timeout: std::time::Duration,
 }
 
@@ -129,6 +130,9 @@ pub(crate) fn load(path: &Path) -> Result<ValidatedServiceConfiguration, Configu
 fn validate(
     configuration: FileConfiguration,
 ) -> Result<ValidatedServiceConfiguration, ConfigurationLoadError> {
+    let deployment =
+        crate::deployment::DeploymentLayout::from_environment(configuration.bridge.environment)
+            .map_err(|_| ConfigurationLoadError::InvalidDeployment)?;
     let shutdown_timeout = configuration
         .lifecycle
         .validate()
@@ -194,6 +198,7 @@ fn validate(
         service,
         management_address: configuration.management.listen_addr,
         shutdown_timeout,
+        deployment,
         events,
     })
 }
@@ -424,6 +429,7 @@ pub(crate) enum ConfigurationLoadError {
     UnsafeRemoteEventEndpoint,
     UnavailableDataExport,
     InvalidShutdownTimeout,
+    InvalidDeployment,
     Composition,
 }
 

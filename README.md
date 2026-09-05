@@ -168,3 +168,7 @@ broker-free Rust contract demo.
 
 See [service packaging and shutdown](docs/operations/service-lifecycle.md) for the non-root
 systemd unit, bounded journal namespace, shutdown deadlines, and SQLite drain/recovery contract.
+
+See [production and staging filesystem isolation](docs/operations/environment-filesystem-isolation.md)
+for separate service accounts, units/slices, configuration, databases, runtime locks and journals,
+with same-Pi and separate-Linux-host staging layouts.
