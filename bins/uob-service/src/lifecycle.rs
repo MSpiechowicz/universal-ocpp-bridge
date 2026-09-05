@@ -32,6 +32,7 @@ pub(crate) async fn serve(
     application: Application,
     options: ManagementRouterOptions,
     deadline: Duration,
+    deployment: Option<crate::deployment::DeploymentState>,
 ) -> io::Result<()> {
     // Install both handlers before opening ingress, including systemd's default SIGTERM.
     let signal = stop_signal()?;
@@ -41,18 +42,30 @@ pub(crate) async fn serve(
             let _ = stopped.await;
         });
     tokio::pin!(server);
-    tokio::select! {
-        result = &mut server => return result,
-        () = signal => {}
-    }
+    let early_result = tokio::select! {
+        result = &mut server => Some(result),
+        () = signal => None,
+    };
+    let started = std::time::Instant::now();
     let _ = stop.send(());
-    match tokio::time::timeout(deadline, server).await {
-        Ok(result) => result,
-        Err(_) => Err(io::Error::new(
-            io::ErrorKind::TimedOut,
-            "shutdown deadline exceeded",
-        )),
+    let result = if let Some(result) = early_result {
+        result
+    } else {
+        match tokio::time::timeout(deadline, server).await {
+            Ok(result) => result,
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "shutdown deadline exceeded",
+            )),
+        }
+    };
+    if let Some(deployment) = deployment {
+        deployment
+            .shutdown(deadline.saturating_sub(started.elapsed()))
+            .await
+            .map_err(io::Error::other)?;
     }
+    result
 }
 
 #[cfg(unix)]

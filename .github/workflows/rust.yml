@@ -41,6 +41,8 @@ jobs:
             ${{ runner.os }}-rust-1.98-ci-v1-
       - name: Verify the complete Rust workspace
         run: ./scripts/verify-workspace.sh
+      - name: Verify Linux deployment isolation on the disposable runner
+        run: ./scripts/test-environment-isolation.sh
 
   release:
     name: Version and publish successful main builds

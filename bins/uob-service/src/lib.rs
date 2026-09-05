@@ -2,6 +2,7 @@
 
 pub mod cli;
 mod configuration;
+mod deployment;
 mod event_stream;
 mod identity;
 mod lifecycle;

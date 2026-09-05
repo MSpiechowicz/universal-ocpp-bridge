@@ -19,6 +19,7 @@ systemd-sysusers /etc/sysusers.d/uob.conf
 install -d -m 0750 -o root -g uob /etc/uob
 install -m 0640 -o root -g uob packaging/systemd/bridge.toml /etc/uob/bridge.toml
 install -m 0644 packaging/systemd/uob.service /etc/systemd/system/uob.service
+install -m 0644 packaging/systemd/uob-production.slice /etc/systemd/system/uob-production.slice
 install -m 0644 packaging/systemd/journald-uob.conf /etc/systemd/journald@uob.conf
 ```
 
@@ -88,3 +89,7 @@ wire reconnect/shutdown and EMS event-stream tests. Real external-export reconne
 belongs to the future export scheduler; disabled export creates no tasks or connections.
 The package policy test checks the dedicated identity and retention settings; installation
 and the `ps` check above verify actual non-root execution on a systemd host.
+
+See [production and staging filesystem isolation](environment-filesystem-isolation.md) for the
+optional staging package, environment-bound SQLite initialization, private runtime locks,
+separate-host layout, and cross-user permission tests.

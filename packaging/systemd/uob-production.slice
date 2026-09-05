@@ -1,0 +1,6 @@
+[Unit]
+Description=Universal OCPP Bridge production slice
+
+[Slice]
+MemoryAccounting=yes
+IOAccounting=yes
