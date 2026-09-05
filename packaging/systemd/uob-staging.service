@@ -1,6 +1,8 @@
 [Unit]
 Description=Universal OCPP Bridge staging
-After=network.target
+Requires=uob-staging-network.service
+After=uob-staging-network.service
+BindsTo=uob-staging-network.service
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
@@ -9,6 +11,8 @@ Type=exec
 User=uob-staging
 Group=uob-staging
 Slice=uob-staging.slice
+NetworkNamespacePath=/run/netns/uob-staging
+RestrictNamespaces=yes
 Environment=UOB_DEPLOYMENT_ENVIRONMENT=staging
 InaccessiblePaths=-/etc/uob -/var/lib/uob -/run/uob
 ExecStartPre=/usr/local/bin/uob config check --config /etc/uob-staging/bridge.toml

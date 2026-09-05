@@ -66,17 +66,16 @@ install -m 0640 -o root -g uob-staging packaging/systemd/staging.toml /etc/uob-s
 install -m 0644 packaging/systemd/uob-staging.service /etc/systemd/system/uob-staging.service
 install -m 0644 packaging/systemd/uob-staging.slice /etc/systemd/system/uob-staging.slice
 install -m 0644 packaging/systemd/journald-uob.conf /etc/systemd/journald@uob-staging.conf
-systemd-analyze verify /etc/systemd/system/uob-staging.service
-systemctl daemon-reload
-systemctl start uob-staging.service
-journalctl --namespace=uob-staging -u uob-staging.service
+# Install the mandatory network namespace helper/unit before starting staging;
+# follow environment-network-isolation.md.
 ```
 
 The staging sample uses a synthetic bridge identity, a distinct loopback management port,
 and no selected target, charger connection, production credential, or export destination.
-Do not copy production configuration/secrets. Network peer enforcement and the staging resource
-governor are separate backlog items (#145 and #148); the slice here establishes ownership and
-accounting, without claiming their firewall, memory, or pressure-shedding guarantees.
+Do not copy production configuration/secrets. Follow [staging network isolation](environment-network-isolation.md)
+to install its mandatory loopback-only namespace and admit synthetic test peers before startup.
+The staging resource governor remains tracked in #148; the slice establishes ownership and
+accounting without claiming memory or pressure-shedding guarantees.
 
 For a separate Linux staging host, install only the verified executable and the staging files
 above. Use the identical binary digest and configuration schema used for the candidate; no

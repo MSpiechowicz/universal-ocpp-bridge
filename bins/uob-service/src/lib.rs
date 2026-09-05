@@ -6,6 +6,7 @@ mod deployment;
 mod event_stream;
 mod identity;
 mod lifecycle;
+mod staging_network;
 
 use std::{error::Error, fmt};
 

@@ -189,6 +189,17 @@ fn deployment_layouts(uids: Option<(u32, u32)>) {
             .success()
     );
     assert!(production.identity().is_some()); // Failed staging cannot stop production.
+    if uids.is_none() {
+        assert!(
+            !staging.command("serve").status().unwrap().success(),
+            "staging must refuse the host network even with synthetic configuration"
+        );
+        assert!(!staging.root.join("state/identity.json").exists());
+        assert!(production.identity().is_some());
+        prod.stop();
+        production.start().stop();
+        return;
+    }
     let mut stage = staging.start();
     assert!(
         !production.command("serve").status().unwrap().success(),
@@ -318,7 +329,12 @@ fn package_has_distinct_users_paths_slices_and_no_staging_boot_dependency() {
                 .iter()
                 .any(|prefix| line.starts_with(prefix))
         }) {
-            assert!(!line.contains(peer), "cross-environment dependency {line}");
+            assert!(
+                !line
+                    .split_whitespace()
+                    .any(|word| word.ends_with(&format!("{peer}.service"))),
+                "cross-environment dependency {line}"
+            );
         }
     }
     assert!(production.contains("WantedBy=multi-user.target"));

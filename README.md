@@ -172,3 +172,6 @@ systemd unit, bounded journal namespace, shutdown deadlines, and SQLite drain/re
 See [production and staging filesystem isolation](docs/operations/environment-filesystem-isolation.md)
 for separate service accounts, units/slices, configuration, databases, runtime locks and journals,
 with same-Pi and separate-Linux-host staging layouts.
+
+See [staging network isolation](docs/operations/environment-network-isolation.md) for the mandatory
+loopback-only test namespace, production-socket denial, and fail-closed staging configuration.

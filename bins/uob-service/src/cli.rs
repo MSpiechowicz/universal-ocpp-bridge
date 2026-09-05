@@ -48,6 +48,16 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
         Ok(configuration) => configuration,
         Err(error) => return failure(2, error.to_string()),
     };
+    if let Err(error) = crate::staging_network::verify(
+        configuration
+            .service
+            .application
+            .identity()
+            .runtime
+            .environment,
+    ) {
+        return failure(1, error.to_owned());
+    }
     let deployment = match configuration
         .deployment
         .as_ref()
@@ -101,6 +111,16 @@ async fn events(
         Ok(configuration) => configuration,
         Err(error) => return failure(2, error.to_string()),
     };
+    if let Err(error) = crate::staging_network::verify(
+        configuration
+            .service
+            .application
+            .identity()
+            .runtime
+            .environment,
+    ) {
+        return failure(1, error.to_owned());
+    }
     match event_stream::stream(&configuration.events, after, output).await {
         Ok(()) => success(),
         Err(error) => failure(1, error.to_string()),
