@@ -57,7 +57,7 @@ python3 -B scripts/test-service-watchdog.py --disposable
 ```
 
 Run this only on a disposable Linux host with systemd and root/sudo. It creates a unique
-transient service using the shipped readiness/restart/watchdog settings and private temporary
+temporary runtime service using the shipped readiness/restart/watchdog settings and private temporary
 state. It verifies healthy operation across a watchdog period, suspends the process to trigger
 watchdog termination, then injects crashes to prove the restart limit and per-invocation causes.
 It stops and removes only its test service; it never installs or controls the real UOB units.

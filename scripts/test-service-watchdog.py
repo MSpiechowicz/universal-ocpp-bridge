@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual systemd readiness, watchdog, crash restart and cause evidence on disposable CI only."""
 import configparser
+import json
 import os
 from pathlib import Path
 import signal
@@ -53,15 +54,26 @@ def main():
                               ('Service', ['Type', 'NotifyAccess', 'TimeoutStartSec', 'WatchdogSec',
                                            'TimeoutAbortSec', 'LimitCORE', 'Restart', 'RestartSec',
                                            'ExecStopPost'])]:
+            properties.append("[" + section + "]")
             for key in keys:
-                properties.append('--property=' + key + '=' + policy[section][key])
-        environment = ['--setenv=UOB_DEPLOYMENT_ENVIRONMENT=production',
-                       '--setenv=STATE_DIRECTORY=' + str(root / 'state'),
-                       '--setenv=RUNTIME_DIRECTORY=' + str(root / 'runtime')]
+                properties.append(key + "=" + policy[section][key])
+        def quoted(value):
+            return json.dumps(str(value).replace('%', '%%'))
+
+        properties.extend([
+            'Environment=UOB_DEPLOYMENT_ENVIRONMENT=production',
+            'Environment=' + quoted('STATE_DIRECTORY=' + str(root / 'state')),
+            'Environment=' + quoted('RUNTIME_DIRECTORY=' + str(root / 'runtime')),
+            'ExecStart=' + quoted(binary) + ' serve --no-ui --config ' + quoted(config),
+        ])
+        unit_path = Path('/run/systemd/system') / unit
         try:
-            # systemd-run waits for READY=1 because Type=notify is copied from packaging.
-            run('systemd-run', '--unit=' + unit, *properties, *environment,
-                str(binary), 'serve', '--no-ui', '--config', str(config))
+            # Load a runtime unit file so specifiers/escaping are interpreted
+            # exactly as in the shipped files, rather than D-Bus transient argv.
+            with unit_path.open('x') as output:
+                output.write('\n'.join(properties) + '\n')
+            run('systemctl', 'daemon-reload')
+            run('systemctl', 'start', unit)
             first = wait_for(unit, lambda s: s['SubState'] == 'running')
             # More than one watchdog period proves fresh worker acknowledgements.
             time.sleep(11)
@@ -93,6 +105,8 @@ def main():
         finally:
             run('systemctl', 'stop', unit, check=False)
             run('systemctl', 'reset-failed', unit, check=False)
+            unit_path.unlink(missing_ok=True)
+            run('systemctl', 'daemon-reload')
 
 
 if __name__ == '__main__':
