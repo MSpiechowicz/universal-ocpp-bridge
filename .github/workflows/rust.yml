@@ -28,6 +28,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Verify staging resource shedding on the disposable runner
+        run: ./scripts/test-staging-resources.sh --disposable
       - name: Restore Cargo dependencies and build outputs
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
@@ -43,8 +45,6 @@ jobs:
         run: ./scripts/verify-workspace.sh
       - name: Verify Linux deployment isolation on the disposable runner
         run: ./scripts/test-environment-isolation.sh
-      - name: Verify staging resource shedding on the disposable runner
-        run: ./scripts/test-staging-resources.sh --disposable
 
   release:
     name: Version and publish successful main builds

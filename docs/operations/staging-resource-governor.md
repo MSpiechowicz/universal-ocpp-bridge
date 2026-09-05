@@ -109,7 +109,7 @@ admission, policy validation, bounded health parsing, and staging-only stop requ
 workspace verifier runs it.
 
 `./scripts/test-staging-resources.sh --disposable` requires root, systemd and cgroup v2 on a
-**disposable Linux test host**. CI runs it after workspace verification. It creates unique
+**disposable Linux test host**. CI runs it before workspace verification. It creates unique
 runtime-only test units, uses the shipped slice/governor with smaller test limits, verifies
 actual kernel CPU throttling and persistent production HTTP alarms, causes a real descendant OOM and observes whole-slice
 shutdown, verifies a separate production sentinel keeps its PID, and rejects peer admission
