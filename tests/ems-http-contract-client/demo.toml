@@ -1,0 +1,17 @@
+# Broker-free contract scenarios; identifiers match the independent HTTP fixture host.
+[[scenario]]
+protocol = "ocpp16"
+calls = [
+  { operation = "capabilities", path = "/bridge/v1/capabilities" },
+  { operation = "stations", path = "/bridge/v1/stations?limit=1" },
+  { operation = "station", path = "/bridge/v1/stations/station-a" },
+  { operation = "points", path = "/bridge/v1/points?station_id=station-a&limit=2" },
+  { operation = "point", path = "/bridge/v1/points/energy.active.import.register?station_id=station-a&connector_id=1" },
+]
+[[scenario]]
+protocol = "ocpp201"
+calls = [
+  { operation = "station", path = "/bridge/v1/stations/station-b" },
+  { operation = "points", path = "/bridge/v1/points?station_id=station-b&evse_id=1&limit=2" },
+  { operation = "point", path = "/bridge/v1/points/energy.active.import.register?station_id=station-b&evse_id=1&connector_id=1" },
+]

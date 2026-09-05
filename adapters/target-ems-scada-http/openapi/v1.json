@@ -1,0 +1,3172 @@
+{
+  "components": {
+    "schemas": {
+      "AcceptedCommand": {
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "result": {
+            "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+          },
+          "status_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "status_url",
+          "result"
+        ],
+        "title": "AcceptedCommand",
+        "type": "object"
+      },
+      "CallerView": {
+        "description": "Permissions and canonical resources the authenticated caller actually holds.",
+        "properties": {
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resource_scopes": {
+            "items": {
+              "$ref": "#/components/schemas/ScopeView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "permissions",
+          "resource_scopes"
+        ],
+        "type": "object"
+      },
+      "CapabilityDocument": {
+        "description": "Versioned description of the integration surface, generated from the target descriptor.",
+        "properties": {
+          "caller": {
+            "$ref": "#/components/schemas/CallerView"
+          },
+          "contract_version": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/ContractVersion"
+          },
+          "delivery_semantics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "events": {
+            "$ref": "#/components/schemas/EventPolicy"
+          },
+          "inbound_operations": {
+            "items": {
+              "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/Operation"
+            },
+            "type": "array"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/LimitsView"
+          },
+          "optional_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "outbound_message_classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceView"
+            },
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetView"
+          }
+        },
+        "required": [
+          "contract_version",
+          "target",
+          "resources",
+          "outbound_message_classes",
+          "inbound_operations",
+          "delivery_semantics",
+          "optional_capabilities",
+          "limits",
+          "caller",
+          "events"
+        ],
+        "title": "CapabilityDocument",
+        "type": "object"
+      },
+      "CommandRequest": {
+        "additionalProperties": false,
+        "description": "Untrusted command fields that an adapter may deserialize from a request payload.\n\nAuthentication and target-instance context are deliberately absent. Unknown fields and\noperation variants fail deserialization instead of being ignored or treated as extensions.",
+        "properties": {
+          "correlation_id": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/command.schema.json#/$defs/CorrelationId"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional caller-supplied correlation identity."
+          },
+          "expires_at": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp",
+            "description": "UTC instant after which admission or dispatch must fail."
+          },
+          "operation": {
+            "$ref": "/bridge/v1/schemas/v1.0/command.schema.json#/$defs/CommandOperation",
+            "description": "Explicit typed operation and parameters."
+          },
+          "request_id": {
+            "$ref": "/bridge/v1/schemas/v1.0/command.schema.json#/$defs/RequestId",
+            "description": "Caller-supplied idempotency identity."
+          },
+          "resource": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/ResourceRef",
+            "description": "Canonical charging resource, distinct from any selected bridge target."
+          }
+        },
+        "required": [
+          "request_id",
+          "resource",
+          "operation",
+          "expires_at"
+        ],
+        "title": "CommandRequest",
+        "type": "object"
+      },
+      "CursorGap": {
+        "properties": {
+          "error": {
+            "const": "ems_scada_http.cursor_expired"
+          },
+          "kind": {
+            "const": "durable_cursor_gap"
+          },
+          "recovery": {
+            "properties": {
+              "action": {
+                "const": "fetch_fresh_snapshot"
+              },
+              "omit_cursor": {
+                "const": true
+              },
+              "resource": {
+                "$ref": "/bridge/v1/schemas/v1.0/resource-ref.schema.json"
+              },
+              "resubscribe_url": {
+                "type": "string"
+              },
+              "snapshot_url": {
+                "type": "string"
+              },
+              "types": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "action",
+              "snapshot_url",
+              "resubscribe_url",
+              "resource",
+              "types",
+              "omit_cursor"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error",
+          "kind",
+          "recovery"
+        ],
+        "type": "object"
+      },
+      "EventPolicy": {
+        "description": "Honest delivery and replay policy exposed alongside the descriptor.",
+        "properties": {
+          "delivery": {
+            "type": "string"
+          },
+          "durable_replay": {
+            "type": "string"
+          },
+          "maximum_payload_bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_subscribers": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "queued_records_per_subscriber": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "slow_subscriber_timeout_seconds": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "telemetry": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "delivery",
+          "durable_replay",
+          "telemetry",
+          "maximum_subscribers",
+          "queued_records_per_subscriber",
+          "maximum_payload_bytes",
+          "slow_subscriber_timeout_seconds"
+        ],
+        "type": "object"
+      },
+      "IntegrationError": {
+        "properties": {
+          "error": {
+            "enum": [
+              "ems_scada_http.request_conflict",
+              "ems_scada_http.command_policy_rejected",
+              "ems_scada_http.command_unsupported",
+              "ems_scada_http.command_busy",
+              "ems_scada_http.payload_too_large",
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential",
+              "ems_scada_http.permission_denied",
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.unsupported_operation",
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.resource_not_found",
+              "ems_scada_http.cursor_expired",
+              "ems_scada_http.expired",
+              "ems_scada_http.operation_not_supported",
+              "ems_scada_http.source_unavailable",
+              "ems_scada_http.deadline_exceeded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "LimitsView": {
+        "properties": {
+          "default_page_size": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_concurrent_requests": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_in_flight_commands": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_in_flight_deliveries": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_message_bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_page_size": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_request_bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maximum_station_scan": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "maximum_message_bytes",
+          "maximum_in_flight_deliveries",
+          "maximum_in_flight_commands",
+          "maximum_request_bytes",
+          "maximum_concurrent_requests",
+          "maximum_page_size",
+          "default_page_size",
+          "maximum_station_scan"
+        ],
+        "type": "object"
+      },
+      "PointPage": {
+        "description": "Bounded canonical point page.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PointView"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PointPage",
+        "type": "object"
+      },
+      "PointView": {
+        "description": "One canonical point as the integration API renders it.\n\nThe descriptor and the value are the canonical contract objects themselves, so units, access\nmode, exact decimals, both timestamps, quality, and freshness reach an EMS client exactly as\nthe bridge recorded them. This adapter re-derives none of them.",
+        "properties": {
+          "descriptor": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/DataPointDescriptor"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical description, when the snapshot or the source carries one."
+          },
+          "point_id": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/PointId",
+            "description": "Stable point identity within its owning resource."
+          },
+          "resource": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/ResourceRef",
+            "description": "Canonical resource owning the point, preserving EVSE or connector identity."
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/DataPointValue"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest observed value, when one has been observed."
+          }
+        },
+        "required": [
+          "point_id",
+          "resource"
+        ],
+        "title": "PointView",
+        "type": "object"
+      },
+      "ResourceView": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "operations"
+        ],
+        "type": "object"
+      },
+      "ScopeView": {
+        "oneOf": [
+          {
+            "properties": {
+              "bridge_id": {
+                "type": "string"
+              },
+              "scope": {
+                "const": "bridge",
+                "type": "string"
+              }
+            },
+            "required": [
+              "scope",
+              "bridge_id"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "bridge_id": {
+                "type": "string"
+              },
+              "scope": {
+                "const": "station",
+                "type": "string"
+              },
+              "station_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "scope",
+              "bridge_id",
+              "station_id"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "bridge_id": {
+                "type": "string"
+              },
+              "scope": {
+                "const": "resource",
+                "type": "string"
+              },
+              "station_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "scope",
+              "bridge_id",
+              "station_id"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "StationPage": {
+        "description": "Bounded station inventory page.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "StationPage",
+        "type": "object"
+      },
+      "TargetView": {
+        "properties": {
+          "instance_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "instance_id"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "integrationBearer": {
+        "description": "Opaque integration token from the configured credential file, scoped by role and canonical resource. Never a management credential.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "The external client initiates HTTPS requests and an authenticated HTTP SSE subscription to the\nselected integration listener. No webhook, MQTT broker, outbound callback, management API,\nor browser session is required. Plain HTTP is restricted to explicitly isolated demo/test use.\n\nCapabilities, OpenAPI and schemas are readable without authentication only on a credential-free\nloopback listener. That default grants no access to canonical state or commands. With a credential\nfile, every one of these resources requires its integration bearer token. Read permission and\nstation/resource scope are checked for every read and stream; control permission is required for\ncommand admission and status. Privileged OCPP operations are refused on this integration surface.\n\nClients must obey the runtime limits returned by capabilities. List pages default to 25, reject\nzero/oversized limits, and return an opaque next_cursor when more scanning is needed. An empty\npage can still have a cursor after scope filtering. Reuse a cursor only with its original endpoint\nand filters; point pages are live views, not immutable snapshots. Point values preserve units,\nexact decimal strings, timestamps, quality and freshness. Missing values never mean zero.\n\nA 202 command response means durable admission (or replay of a known result), not charger\nacceptance or physical completion. Follow status_url and inspect the canonical lifecycle and\nseparately linked observed effects. Retry an uncertain HTTP outcome with the same request_id and\nidentical payload; do not invent a new idempotency identity. Authentication supplies origin and\ntarget identity; clients cannot submit them. A typed rejected CommandResult may be returned instead\nof the small integration error object; both forms are described for command failures.\n\nSSE durable records use event: durable, id: <opaque cursor>, and JSON EventEnvelope data.\nOnly durable records have replay IDs. Supply after or Last-Event-ID (both must agree if supplied).\nWithout a cursor, subscription starts from the retained source's default position. Cursors are\nresource-scoped and must not be reused as list cursors. Expiry before streaming returns HTTP 410\nCursorGap. Expiry during streaming emits event: gap with CursorGap data and closes; other terminal\nfailures emit event: error with IntegrationError data. Fetch recovery.snapshot_url and resubscribe\nusing recovery.resubscribe_url without the expired cursor. A fresh snapshot and resubscription\nare not an atomic historical replay. Keep-alive comments occur every 15 seconds. Slow readers\nare disconnected at the advertised bounded queue/deadline; reconnect using the last consumed ID.\nTelemetry is best effort and absent from this durable stream.\n\nTarget acknowledgement means local exposure through this API, not consumption by an EMS peer.\nAn absent or slow subscriber does not hold the target outbox or block local charging. Durable\nreplay lasts only within retention. Stable error objects contain a namespaced error code and never\necho submitted credentials or payloads. Unknown paths return 404 and unsupported methods 405;\nAxum automatically supports HEAD on GET routes with identical headers/status and an empty body.\n",
+    "title": "Universal OCPP Bridge EMS/SCADA HTTP API",
+    "version": "1.0.0"
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.1",
+  "paths": {
+    "/bridge/v1/capabilities": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "capabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityDocument"
+                }
+              }
+            },
+            "description": "Discover runtime bounds and the caller's permissions."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Discover runtime bounds and the caller's permissions."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "capabilities_head",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Discover runtime bounds and the caller's permissions."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/commands": {
+      "post": {
+        "description": "Only control operations supported by the resource are admitted. The schema preserves canonical operation variants; privileged kind=ocpp requests return 403. request_id is at most 256 bytes and cannot be '.' or '..'. Unknown fields, origin injection and unknown operation variants are rejected. Body bytes and admission concurrency are bounded by capabilities.",
+        "operationId": "commands",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "start": {
+                  "value": {
+                    "correlation_id": "workflow-42",
+                    "expires_at": "2026-09-01T14:01:00Z",
+                    "operation": {
+                      "kind": "start",
+                      "parameters": {
+                        "authorization_reference": "local-auth-9"
+                      }
+                    },
+                    "request_id": "cmd-target-start-7",
+                    "resource": {
+                      "bridge_id": "bridge-berlin-1",
+                      "native_protocol_reference": {
+                        "connector_id": 2,
+                        "evse_id": 1,
+                        "protocol": "ocpp201"
+                      },
+                      "resource": {
+                        "connector_id": "connector-2",
+                        "evse_id": "evse-1",
+                        "kind": "evse"
+                      },
+                      "station_id": "station-7"
+                    }
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedCommand"
+                }
+              }
+            },
+            "description": "Durably admit or replay an idempotent command. Admission is separate from protocol response and observed effect."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationError"
+                    },
+                    {
+                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "ems_scada_http.command_policy_rejected, ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.command_policy_rejected",
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationError"
+                    },
+                    {
+                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationError"
+                    },
+                    {
+                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "ems_scada_http.request_conflict",
+            "x-uob-error-codes": [
+              "ems_scada_http.request_conflict"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationError"
+                    },
+                    {
+                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.payload_too_large",
+            "x-uob-error-codes": [
+              "ems_scada_http.payload_too_large"
+            ]
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationError"
+                    },
+                    {
+                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "ems_scada_http.command_unsupported",
+            "x-uob-error-codes": [
+              "ems_scada_http.command_unsupported"
+            ]
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.command_busy",
+            "x-uob-error-codes": [
+              "ems_scada_http.command_busy"
+            ]
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Durably admit or replay an idempotent command. Admission is separate from protocol response and observed effect."
+      }
+    },
+    "/bridge/v1/commands/{request_id}": {
+      "get": {
+        "operationId": "command_status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                }
+              }
+            },
+            "description": "Read a scoped command result belonging to this target instance."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Read a scoped command result belonging to this target instance."
+      },
+      "head": {
+        "operationId": "command_status_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read a scoped command result belonging to this target instance."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/events": {
+      "get": {
+        "operationId": "events",
+        "parameters": [
+          {
+            "description": "Opaque position from the same endpoint and filters. Never interchange list and durable cursors.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Owning station identity; required for an individual point and SSE.",
+            "in": "query",
+            "name": "station_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated exact event types: at most 8 entries of 1–128 bytes, at most 1031 bytes total.",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One durable uob:event: cursor, at most 512 bytes without control characters. Must agree with after if both are supplied.",
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Subscribe to durable SSE records; see event payload schemas and recovery semantics."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorGap"
+                }
+              }
+            },
+            "description": "Durable cursor expired; fetch a fresh snapshot and resubscribe without it."
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Subscribe to durable SSE records; see event payload schemas and recovery semantics.",
+        "x-uob-sse-events": {
+          "durable": {
+            "id": "opaque durable cursor",
+            "schema": {
+              "$ref": "/bridge/v1/schemas/v1.0/event-envelope.schema.json"
+            }
+          },
+          "error": {
+            "schema": {
+              "$ref": "#/components/schemas/IntegrationError"
+            },
+            "terminal": true
+          },
+          "gap": {
+            "schema": {
+              "$ref": "#/components/schemas/CursorGap"
+            },
+            "terminal": true
+          }
+        }
+      },
+      "head": {
+        "operationId": "events_head",
+        "parameters": [
+          {
+            "description": "Opaque position from the same endpoint and filters. Never interchange list and durable cursors.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Owning station identity; required for an individual point and SSE.",
+            "in": "query",
+            "name": "station_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated exact event types: at most 8 entries of 1–128 bytes, at most 1031 bytes total.",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One durable uob:event: cursor, at most 512 bytes without control characters. Must agree with after if both are supplied.",
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscribe to durable SSE records; see event payload schemas and recovery semantics."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "description": "Durable cursor expired; fetch a fresh snapshot and resubscribe without it."
+          },
+          "501": {
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/openapi.json": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "openapi",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read the versioned OpenAPI document."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read the versioned OpenAPI document."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "openapi_head",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Read the versioned OpenAPI document."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/points": {
+      "get": {
+        "operationId": "points",
+        "parameters": [
+          {
+            "description": "Opaque position from the same endpoint and filters. Never interchange list and durable cursors.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size; reject zero or above maximum_page_size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owning station identity; required for an individual point and SSE.",
+            "in": "query",
+            "name": "station_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointPage"
+                }
+              }
+            },
+            "description": "Read bounded point descriptions and values. EVSE/connector filters require station_id. bridge_id resolves a named station; without station_id the caller's granted bridges are scanned."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Read bounded point descriptions and values. EVSE/connector filters require station_id. bridge_id resolves a named station; without station_id the caller's granted bridges are scanned."
+      },
+      "head": {
+        "operationId": "points_head",
+        "parameters": [
+          {
+            "description": "Opaque position from the same endpoint and filters. Never interchange list and durable cursors.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size; reject zero or above maximum_page_size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Owning station identity; required for an individual point and SSE.",
+            "in": "query",
+            "name": "station_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read bounded point descriptions and values. EVSE/connector filters require station_id. bridge_id resolves a named station; without station_id the caller's granted bridges are scanned."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/points/{point_id}": {
+      "get": {
+        "operationId": "point",
+        "parameters": [
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Owning station identity; required for an individual point and SSE.",
+            "in": "query",
+            "name": "station_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "point_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PointView"
+                }
+              }
+            },
+            "description": "Read one point within a required station and optional EVSE/connector."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Read one point within a required station and optional EVSE/connector."
+      },
+      "head": {
+        "operationId": "point_head",
+        "parameters": [
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional canonical resource filter below the named station.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Owning station identity; required for an individual point and SSE.",
+            "in": "query",
+            "name": "station_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "point_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read one point within a required station and optional EVSE/connector."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.0/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "station-snapshot.schema.json",
+                "resource-ref.schema.json",
+                "resource-capabilities.schema.json",
+                "runtime-identity.schema.json",
+                "service-identity.schema.json",
+                "data-point-descriptor.schema.json",
+                "data-point-value.schema.json",
+                "command.schema.json",
+                "command-result.schema.json",
+                "event-envelope.schema.json",
+                "trace-record.schema.json",
+                "export-record.schema.json",
+                "export-batch.schema.json",
+                "export-report.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "station-snapshot.schema.json",
+                "resource-ref.schema.json",
+                "resource-capabilities.schema.json",
+                "runtime-identity.schema.json",
+                "service-identity.schema.json",
+                "data-point-descriptor.schema.json",
+                "data-point-value.schema.json",
+                "command.schema.json",
+                "command-result.schema.json",
+                "event-envelope.schema.json",
+                "trace-record.schema.json",
+                "export-record.schema.json",
+                "export-batch.schema.json",
+                "export-report.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/stations": {
+      "get": {
+        "operationId": "stations",
+        "parameters": [
+          {
+            "description": "Opaque position from the same endpoint and filters. Never interchange list and durable cursors.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size; reject zero or above maximum_page_size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StationPage"
+                }
+              }
+            },
+            "description": "Read a bounded, scoped inventory page. Empty pages can have a next_cursor."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Read a bounded, scoped inventory page. Empty pages can have a next_cursor."
+      },
+      "head": {
+        "operationId": "stations_head",
+        "parameters": [
+          {
+            "description": "Opaque position from the same endpoint and filters. Never interchange list and durable cursors.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size; reject zero or above maximum_page_size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read a bounded, scoped inventory page. Empty pages can have a next_cursor."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/stations/{station_id}": {
+      "get": {
+        "operationId": "station",
+        "parameters": [
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Not valid for station snapshots: supplying this filter returns 400.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Not valid for station snapshots: supplying this filter returns 400.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Accepted for compatibility; the path station_id is authoritative.",
+            "in": "query",
+            "name": "station_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "station_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json"
+                }
+              }
+            },
+            "description": "Read a current station snapshot, including native OCPP references."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Read a current station snapshot, including native OCPP references."
+      },
+      "head": {
+        "operationId": "station_head",
+        "parameters": [
+          {
+            "description": "Required when the credential spans multiple bridges for an explicitly addressed station.",
+            "in": "query",
+            "name": "bridge_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Not valid for station snapshots: supplying this filter returns 400.",
+            "in": "query",
+            "name": "connector_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Not valid for station snapshots: supplying this filter returns 400.",
+            "in": "query",
+            "name": "evse_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Accepted for compatibility; the path station_id is authoritative.",
+            "in": "query",
+            "name": "station_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "station_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read a current station snapshot, including native OCPP references."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request, ems_scada_http.bridge_required, ems_scada_http.cursor_expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request",
+              "ems_scada_http.bridge_required",
+              "ems_scada_http.cursor_expired"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "403": {
+            "description": "ems_scada_http.permission_denied",
+            "x-uob-error-codes": [
+              "ems_scada_http.permission_denied"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource, ems_scada_http.resource_not_found",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource",
+              "ems_scada_http.resource_not_found"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "410": {
+            "description": "ems_scada_http.expired",
+            "x-uob-error-codes": [
+              "ems_scada_http.expired"
+            ]
+          },
+          "501": {
+            "description": "ems_scada_http.operation_not_supported",
+            "x-uob-error-codes": [
+              "ems_scada_http.operation_not_supported"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted, ems_scada_http.source_unavailable",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted",
+              "ems_scada_http.source_unavailable"
+            ]
+          },
+          "504": {
+            "description": "ems_scada_http.deadline_exceeded",
+            "x-uob-error-codes": [
+              "ems_scada_http.deadline_exceeded"
+            ]
+          }
+        },
+        "summary": "Same handler as GET; response body omitted."
+      }
+    }
+  },
+  "security": [
+    {
+      "integrationBearer": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Selected EMS/SCADA integration listener; HTTPS outside isolated demos.",
+      "url": "/"
+    }
+  ],
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  },
+  "x-uob-event-policy": {
+    "delivery": "local_exposure",
+    "durable_replay": "within_retention",
+    "maximum_payload_bytes": 65536,
+    "maximum_subscribers": 2,
+    "queued_records_per_subscriber": 8,
+    "slow_subscriber_timeout_seconds": 2,
+    "telemetry": "best_effort_not_in_durable_stream"
+  },
+  "x-uob-fallback-errors": {
+    "unknown_path": {
+      "error": "ems_scada_http.unknown_resource",
+      "status": 404
+    },
+    "unsupported_method": {
+      "error": "ems_scada_http.unsupported_operation",
+      "status": 405
+    }
+  }
+}

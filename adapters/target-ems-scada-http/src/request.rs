@@ -22,7 +22,7 @@ pub(crate) fn maximum_page_size() -> u16 {
 }
 
 /// Bounded pagination accepted by every integration list.
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PageParameters {
     /// Opaque cursor returned by the previous page.
@@ -46,7 +46,7 @@ impl PageParameters {
 // The field names are the query parameter names an integration client actually sends, so they
 // mirror the canonical identifiers rather than being shortened for the struct's sake.
 #[allow(clippy::struct_field_names)]
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ResourceParameters {
     /// Bridge installation, required only when the credential spans several.

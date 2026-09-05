@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 axum.workspace = true
 futures-util.workspace = true
+schemars.workspace = true
 serde.workspace = true
 time.workspace = true
 serde_json.workspace = true
@@ -22,6 +23,9 @@ uob-contracts = { path = "../../crates/contracts" }
 libc.workspace = true
 
 [dev-dependencies]
+jsonschema = { version = "=0.52.1", default-features = false }
+reqwest.workspace = true
+rustls.workspace = true
 uob-storage-adapter = { path = "../storage" }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 tower = { version = "=0.5.3", features = ["util"] }

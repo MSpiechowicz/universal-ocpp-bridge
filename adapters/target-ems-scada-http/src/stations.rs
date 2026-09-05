@@ -18,7 +18,7 @@ use crate::{
 mod tests;
 
 /// Bounded station inventory page.
-#[derive(Serialize)]
+#[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct StationPage {
     items: Vec<StationSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -75,11 +75,14 @@ async fn station_page(
 pub(crate) async fn station(
     State(state): State<IntegrationState>,
     headers: HeaderMap,
-    Path(station_id): Path<String>,
+    station_id: Result<Path<String>, axum::extract::rejection::PathRejection>,
     selection: Result<Query<ResourceParameters>, QueryRejection>,
 ) -> Response {
     let Ok(permit) = state.acquire() else {
         return IntegrationErrorCode::CapacityExhausted.into_response();
+    };
+    let Ok(Path(station_id)) = station_id else {
+        return IntegrationErrorCode::InvalidRequest.into_response();
     };
     let response = one_station(&state, &headers, &station_id, selection).await;
     drop(permit);

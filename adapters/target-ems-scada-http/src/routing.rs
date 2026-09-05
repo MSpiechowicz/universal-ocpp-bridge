@@ -124,6 +124,11 @@ pub(crate) fn integration_router(state: IntegrationState) -> Router {
     let body_limit = state.inner.limits.maximum_request_bytes;
     Router::new()
         .route("/bridge/v1/capabilities", get(capabilities))
+        .route("/bridge/v1/openapi.json", get(crate::openapi::document))
+        .route(
+            "/bridge/v1/schemas/v1.0/{schema}",
+            get(crate::openapi::schema),
+        )
         .route("/bridge/v1/events", get(crate::events::events))
         .route("/bridge/v1/stations", get(stations::stations))
         .route("/bridge/v1/stations/{station_id}", get(stations::station))

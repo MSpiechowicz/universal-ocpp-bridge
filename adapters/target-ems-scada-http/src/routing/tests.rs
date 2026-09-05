@@ -22,6 +22,7 @@ async fn the_capability_response_advertises_exactly_the_routes_this_build_serves
         let path = resource["path"]
             .as_str()
             .expect("resource path")
+            .replace("{schema}", "station-snapshot.schema.json")
             .replace("{request_id}", "request-a")
             .replace("{station_id}", "station-a")
             .replace("{point_id}", "energy.active.import.register");
