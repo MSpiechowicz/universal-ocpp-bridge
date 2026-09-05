@@ -18,7 +18,7 @@ SPEC.loader.exec_module(g)
 class GovernorTests(unittest.TestCase):
     def setUp(self):
         self.policy = g.Policy()
-        self.events = {'oom': 0, 'oom_kill': 0, 'high': 0}
+        self.events = {'oom': 0, 'oom_kill': 0, 'high': 0, 'current': 0}
         self.governor = g.Governor(self.policy, dict(self.events))
 
     def observe(self, now, memory=512, alarm=False):
@@ -47,6 +47,14 @@ class GovernorTests(unittest.TestCase):
             result = self.observe(second)
         self.assertEqual(result, 'staging_memory_pressure')
 
+    def test_resident_pressure_persists_between_kernel_throttle_events(self):
+        self.events['current'] = 385 * g.MIB
+        for second in range(31):
+            if second % 2 == 0:
+                self.events['high'] += 1
+            result = self.observe(second)
+        self.assertEqual(result, 'staging_memory_pressure')
+
     def test_admission_refuses_low_memory_without_ready(self):
         with patch.object(g, 'verify_limits', return_value=self.events), \
              patch.object(g, 'available_memory', return_value=511 * g.MIB), \
@@ -65,7 +73,7 @@ class GovernorTests(unittest.TestCase):
             ready.assert_not_called()
 
     def test_kernel_limits_missing_or_unbounded_refuse(self):
-        files = {'memory.high': str(384 * g.MIB), 'memory.max': str(512 * g.MIB),
+        files = {'memory.current': '0', 'memory.high': str(384 * g.MIB), 'memory.max': str(512 * g.MIB),
                  'memory.swap.max': '0',
                  'cpu.weight': '25', 'cpu.max': '50000 100000',
                  'io.weight': 'default 25', 'memory.events': 'oom 0\noom_kill 0\nhigh 0\n'}

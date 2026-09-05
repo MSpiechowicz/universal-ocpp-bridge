@@ -100,6 +100,7 @@ start_peer /usr/bin/sleep 120
 # the production sentinel retains exactly the same PID.
 systemd-run --unit="$prefix-oom" --slice="$slice" \
   --property="Requires=$guard" --property="After=$guard" \
+  --property=MemoryMax=32M --property=MemorySwapMax=0 \
   /usr/bin/python3 -c 'x=bytearray(160*1024*1024); import time; time.sleep(60)'
 wait_stopped
 journalctl -u "$guard" --no-pager | grep 'staging_oom'
@@ -107,6 +108,11 @@ if systemctl is-active --quiet "$peer"; then
   echo 'peer survived staging shedding' >&2
   exit 1
 fi
+# Resident pressure remains actionable even when throttling events arrive between polls.
+peer="$prefix-pressure-peer.service"
+start_peer /usr/bin/python3 -c 'x=bytearray(80*1024*1024); import time; time.sleep(120)'
+wait_stopped
+journalctl -u "$guard" --no-pager | grep '"reason": "staging_memory_pressure"'
 # Missing/enforcement-mismatched controls refuse readiness and peer execution.
 python3 - "$root/policy.json" <<'PY'
 import json, sys

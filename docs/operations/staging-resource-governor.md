@@ -34,7 +34,7 @@ be healthy before staging starts.
 
 Once per second the helper checks enforced limits, host memory, hierarchical staging memory
 counters and production health. A new staging `oom` or `oom_kill` event immediately queues a
-stop of the entire slice. Sustained MemoryHigh throttling, host available memory below 256 MiB,
+stop of the entire slice. Sustained MemoryHigh throttling or resident usage above MemoryHigh, host available memory below 256 MiB,
 or production alarms stop staging after 30 continuous seconds. Recovery resets each independent
 condition's clock; wall-clock corrections cannot change the monotonic duration. The next sample
 and bounded probe add detection latency. Existing historical OOM counters establish a baseline

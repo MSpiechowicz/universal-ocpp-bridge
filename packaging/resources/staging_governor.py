@@ -104,6 +104,7 @@ def verify_limits(policy, root=CGROUP):
     events = counters(root / 'memory.events')
     if not {'oom', 'oom_kill', 'high'} <= events.keys():
         raise ValueError('staging memory events unavailable')
+    events['current'] = number(root / 'memory.current')
     return events
 
 
@@ -152,7 +153,8 @@ class Governor:
             'host_memory_pressure': available < self.policy.stop_mib * MIB,
             'production_alarm': alarm,
             # Repeated MemoryHigh throttling is sustained staging load pressure.
-            'staging_memory_pressure': events['high'] > self.baseline['high'],
+            'staging_memory_pressure': (events['high'] > self.baseline['high']
+                                        or events['current'] > self.policy.memory_high_mib * MIB),
         }
         self.baseline = events
         for reason, active in conditions.items():
