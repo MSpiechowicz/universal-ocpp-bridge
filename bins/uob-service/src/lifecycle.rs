@@ -36,20 +36,68 @@ pub(crate) async fn serve(
 ) -> io::Result<()> {
     // Install both handlers before opening ingress, including systemd's default SIGTERM.
     let signal = stop_signal()?;
+    tokio::pin!(signal);
+    let notifier = crate::watchdog::Notifier::from_environment()?;
+    if notifier.enabled() {
+        let storage = deployment.as_ref().ok_or_else(|| {
+            io::Error::other("notified service requires initialized deployment storage")
+        })?;
+        tokio::time::timeout(Duration::from_secs(5), storage.probe_progress())
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "storage initialization probe stalled",
+                )
+            })??;
+    }
     let (stop, stopped) = oneshot::channel();
-    let server =
-        uob_management_adapter::serve_with_shutdown(address, application, options, async move {
+    let server = uob_management_adapter::serve_with_readiness(
+        address,
+        application,
+        options,
+        async move {
             let _ = stopped.await;
-        });
+        },
+        || notifier.send("READY=1\nSTATUS=Local storage and management initialized"),
+    );
     tokio::pin!(server);
-    let early_result = tokio::select! {
-        result = &mut server => Some(result),
-        () = signal => None,
+    let mut server_finished = false;
+    let early_result = loop {
+        let progress = async {
+            if let Some(interval) = notifier.interval {
+                let storage = deployment
+                    .as_ref()
+                    .ok_or_else(|| io::Error::other("watchdog storage missing"))?;
+                crate::watchdog::progress(storage.probe_progress(), interval).await
+            } else {
+                std::future::pending::<io::Result<()>>().await
+            }
+        };
+        tokio::select! {
+            // Poll the actual service before emitting progress; no detached notifier task.
+            biased;
+            result = &mut server => {
+                server_finished = true;
+                break Some(result);
+            },
+            () = &mut signal => break None,
+            result = progress => {
+                if let Err(error) = result {
+                    let _ = notifier.send("STATUS=Storage progress failed");
+                    break Some(Err(error));
+                }
+                if let Err(error) = notifier.send("WATCHDOG=1") {
+                    break Some(Err(error));
+                }
+            }
+        }
     };
+    let _ = notifier.send("STOPPING=1\nSTATUS=Draining local service");
     let started = std::time::Instant::now();
     let _ = stop.send(());
-    let result = if let Some(result) = early_result {
-        result
+    let drain = if server_finished {
+        Ok(())
     } else {
         match tokio::time::timeout(deadline, server).await {
             Ok(result) => result,
@@ -59,6 +107,7 @@ pub(crate) async fn serve(
             )),
         }
     };
+    let result = early_result.unwrap_or(Ok(())).and(drain);
     if let Some(deployment) = deployment {
         deployment
             .shutdown(deadline.saturating_sub(started.elapsed()))
