@@ -130,6 +130,7 @@ pub(crate) fn load(path: &Path) -> Result<ValidatedServiceConfiguration, Configu
 fn validate(
     configuration: FileConfiguration,
 ) -> Result<ValidatedServiceConfiguration, ConfigurationLoadError> {
+    staging::validate(&configuration)?;
     let deployment =
         crate::deployment::DeploymentLayout::from_environment(configuration.bridge.environment)
             .map_err(|_| ConfigurationLoadError::InvalidDeployment)?;
@@ -430,6 +431,7 @@ pub(crate) enum ConfigurationLoadError {
     UnavailableDataExport,
     InvalidShutdownTimeout,
     InvalidDeployment,
+    UnsafeStagingNetwork,
     Composition,
 }
 
@@ -443,3 +445,5 @@ impl Error for ConfigurationLoadError {}
 
 #[cfg(test)]
 mod tests;
+
+mod staging;

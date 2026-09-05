@@ -1,0 +1,11 @@
+[Unit]
+Description=Isolated loopback-only network for UOB synthetic test peers
+Before=uob-staging.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/libexec/uob-staging-network start
+ExecStop=/usr/local/libexec/uob-staging-network stop
+TimeoutStartSec=10s
+TimeoutStopSec=10s

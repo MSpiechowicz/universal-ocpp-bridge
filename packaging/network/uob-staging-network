@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Root-owned systemd helper. No uplinks, forwarding, DNS, or host-loopback access.
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+readonly namespace=uob-staging
+case "${1:-}" in
+  start)
+    # Never adopt an existing namespace: its links/routes may belong to another deployment.
+    if [[ -e /run/netns/$namespace ]]; then
+      echo 'staging namespace already exists; inspect and remove it before startup' >&2
+      exit 1
+    fi
+    ip netns add "$namespace"
+    trap 'ip netns delete "$namespace"' ERR
+    ip -n "$namespace" link set lo up
+    ;;
+  stop)
+    ip netns delete "$namespace"
+    ;;
+  *) echo 'usage: uob-staging-network start|stop' >&2; exit 2 ;;
+esac
