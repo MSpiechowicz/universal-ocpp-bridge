@@ -78,9 +78,15 @@ def main():
                 if index < 3:
                     restarted = wait_for(unit, lambda s: s['SubState'] == 'running'
                                          and s['MainPID'] != previous)
-            wait_for(unit, lambda s: s['Result'] == 'start-limit-hit')
+            # Some systemd versions retain the last process result (signal)
+            # when unit start admission hits its separate rate limiter.
+            exhausted = wait_for(unit, lambda s: s['ActiveState'] == 'failed'
+                                 and s['MainPID'] == '0' and s['NRestarts'] == '5')
+            time.sleep(6)
+            assert state(unit) == exhausted, 'restart limit did not stop retries'
             run('journalctl', '--sync')
             journal = run('journalctl', '--unit=' + unit, '--output=cat', '--no-pager')
+            assert 'Start request repeated too quickly' in journal, journal
             assert 'uob_service_exit result=watchdog' in journal, journal
             assert 'uob_service_exit result=signal code=killed status=KILL invocation=' in journal, journal
             print('systemd readiness, stalled-process watchdog, bounded crash restarts and causes passed')
