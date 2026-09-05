@@ -175,3 +175,6 @@ with same-Pi and separate-Linux-host staging layouts.
 
 See [staging network isolation](docs/operations/environment-network-isolation.md) for the mandatory
 loopback-only test namespace, production-socket denial, and fail-closed staging configuration.
+
+See [staging resource admission and shedding](docs/operations/staging-resource-governor.md) for
+cgroup limits, production health alarms, and whole-slice shutdown under pressure.

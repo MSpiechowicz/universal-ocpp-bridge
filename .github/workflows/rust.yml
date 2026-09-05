@@ -43,6 +43,8 @@ jobs:
         run: ./scripts/verify-workspace.sh
       - name: Verify Linux deployment isolation on the disposable runner
         run: ./scripts/test-environment-isolation.sh
+      - name: Verify staging resource shedding on the disposable runner
+        run: ./scripts/test-staging-resources.sh --disposable
 
   release:
     name: Version and publish successful main builds

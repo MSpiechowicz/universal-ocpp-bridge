@@ -1,0 +1,30 @@
+[Unit]
+Requires=uob-staging.slice
+After=uob-staging.slice
+Description=Fail-closed UOB staging resource admission and shedding
+# Run outside the staging slice so its OOM cannot kill its governor.
+# No production dependency or restart action is permitted here.
+
+[Service]
+Type=notify
+NotifyAccess=main
+WatchdogSec=10s
+ExecStart=/usr/bin/python3 /usr/local/libexec/staging_governor.py --policy /etc/uob-staging/staging-policy.json
+# Verify the kernel controls after systemd has realized the slice cgroup, before
+# any correctly ordered staging process starts. See the slice dependencies above.
+Slice=system.slice
+TimeoutStartSec=10s
+TimeoutStopSec=5s
+Restart=no
+MemoryMax=64M
+CPUWeight=100
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+StandardOutput=journal
+StandardError=journal

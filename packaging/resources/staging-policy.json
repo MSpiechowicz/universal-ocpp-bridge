@@ -1,0 +1,14 @@
+{
+  "start_mib": 512,
+  "stop_mib": 256,
+  "persistence_seconds": 30,
+  "memory_high_mib": 384,
+  "memory_max_mib": 512,
+  "cpu_percent": 50,
+  "cpu_weight": 25,
+  "io_weight": 25,
+  "production_port": 8080,
+  "latency_ms": 100,
+  "production_rss_mib": 128,
+  "cohosted": true
+}
