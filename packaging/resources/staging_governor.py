@@ -120,12 +120,18 @@ def production_alarm(policy):
         if response.status != 200 or len(payload) > 65536:
             return True
         health = json.loads(payload)
+        latency = health['local_response_latency']
+        # A freshly initialized healthy daemon has no latency samples. Null
+        # with samples present instead means p95 overflow and is an alarm.
+        p95 = latency['p95_upper_bound_ms']
+        latency_alarm = (latency['samples'] != 0 if p95 is None
+                         else p95 > policy.latency_ms)
         return (elapsed_ms > policy.latency_ms
                 or health['readiness'] != 'ready'
                 or health['core_loop'] != 'ready'
                 or health['storage'] != 'safe'
                 or not health['accepts_new_sessions']
-                or health['local_response_latency']['p95_upper_bound_ms'] > policy.latency_ms
+                or latency_alarm
                 or health['daemon_process']['rss_bytes'] > policy.production_rss_mib * MIB)
     except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
         return True

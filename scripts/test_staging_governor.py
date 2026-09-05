@@ -105,7 +105,7 @@ class GovernorTests(unittest.TestCase):
     def test_health_is_bounded_readonly_and_fail_closed(self):
         healthy = {'readiness': 'ready', 'core_loop': 'ready', 'storage': 'safe',
                    'accepts_new_sessions': True,
-                   'local_response_latency': {'p95_upper_bound_ms': 100},
+                   'local_response_latency': {'p95_upper_bound_ms': 100, 'samples': 1},
                    'daemon_process': {'rss_bytes': 128 * g.MIB}}
         with patch.object(g.http.client, 'HTTPConnection') as factory:
             connection = factory.return_value
@@ -116,6 +116,12 @@ class GovernorTests(unittest.TestCase):
             connection.request.assert_called_with('GET', '/health', headers={'Connection': 'close'})
             response.read.assert_called_with(65537)
             healthy['local_response_latency']['p95_upper_bound_ms'] = 101
+            response.read.return_value = json.dumps(healthy).encode()
+            self.assertTrue(g.production_alarm(self.policy))
+            healthy['local_response_latency'] = {'p95_upper_bound_ms': None, 'samples': 0}
+            response.read.return_value = json.dumps(healthy).encode()
+            self.assertFalse(g.production_alarm(self.policy))
+            healthy['local_response_latency']['samples'] = 1
             response.read.return_value = json.dumps(healthy).encode()
             self.assertTrue(g.production_alarm(self.policy))
             for payload in (b'{}', b'bad JSON', b'x' * 65537):

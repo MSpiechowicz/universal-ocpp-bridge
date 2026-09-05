@@ -14,6 +14,7 @@ class Handler(BaseHTTPRequestHandler):
             'readiness': 'ready', 'core_loop': 'ready', 'storage': 'safe',
             'accepts_new_sessions': True,
             'local_response_latency': {
+                'samples': 1,
                 'p95_upper_bound_ms': 101 if (root / 'alarm').exists() else 0},
             'daemon_process': {'rss_bytes': 1024},
         }).encode()
