@@ -168,7 +168,7 @@ async fn a_delivery_is_reported_as_local_exposure_and_never_as_peer_consumption(
 }
 
 #[tokio::test]
-async fn no_integration_client_leaves_latest_state_waiting_in_the_target_outbox() {
+async fn no_integration_client_leaves_state_or_durable_events_waiting_in_the_target_outbox() {
     let address = free_loopback_address();
     let target = target(&address).expect("configured target");
     let hosted = FakeTargetHost::<(), ()>::build(
@@ -190,12 +190,24 @@ async fn no_integration_client_leaves_latest_state_waiting_in_the_target_outbox(
     let mut host = hosted.host;
     let session = tokio::spawn(target.run(hosted.context));
 
-    // No client ever connects. Far more replaceable latest-state deliveries than the outbox can
+    // No client ever connects. More state and required durable deliveries than the outbox can
     // hold are still accepted and reported, so nothing accumulates behind an absent consumer.
     let total = 12;
     let mut reported = Vec::with_capacity(total);
     for index in 0..total {
-        let delivery = snapshot_delivery(&format!("delivery-{index}"));
+        let mut delivery = snapshot_delivery(&format!("delivery-{index}"));
+        if index % 2 == 0 {
+            let mut fixture: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../crates/contracts/tests/fixtures/event-envelope-v1.json"
+            ))
+            .unwrap();
+            fixture["resource"] = serde_json::to_value(&delivery.station_ordering_key).unwrap();
+            fixture["payload"] = serde_json::Value::Null;
+            delivery.message = Arc::new(TargetMessage::DomainEvent(
+                serde_json::from_value(fixture).unwrap(),
+            ));
+            delivery.class = TargetDeliveryClass::Durable;
+        }
         while host.try_deliver(clone_delivery(&delivery)).is_err() {
             let report = tokio::time::timeout(Duration::from_secs(5), host.next_report())
                 .await

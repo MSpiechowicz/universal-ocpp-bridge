@@ -70,14 +70,50 @@ impl CanonicalQuerySource<()> for HostState {
     fn subscribe_retained_events<'a>(
         &'a self,
         _authorization: &'a TargetQueryAuthorization,
-        _query: RetainedEventQuery,
+        query: RetainedEventQuery,
     ) -> TargetPortFuture<'a, TargetRetainedEventStream<()>> {
-        Box::pin(async {
-            Err(TargetPortError::new(
-                TargetPortErrorCode::Unsupported,
-                "query.unsupported",
-            ))
+        Box::pin(async move {
+            let cursor = uob_application::RetainedEventCursor::new("uob:event:42").unwrap();
+            let event = match query.after {
+                Some(after) if after == cursor => None,
+                Some(_) => {
+                    return Err(TargetPortError::new(
+                        TargetPortErrorCode::CursorExpired,
+                        "expired",
+                    ));
+                }
+                None => {
+                    let mut fixture: serde_json::Value = serde_json::from_str(include_str!(
+                        "../../../crates/contracts/tests/fixtures/event-envelope-v1.json"
+                    ))
+                    .unwrap();
+                    fixture["resource"] = serde_json::to_value(station_reference()).unwrap();
+                    fixture["payload"] = serde_json::Value::Null;
+                    Some(uob_application::RetainedEventItem {
+                        cursor,
+                        event: serde_json::from_value(fixture).unwrap(),
+                    })
+                }
+            };
+            Ok(Box::pin(Subscription(event)) as TargetRetainedEventStream<()>)
         })
+    }
+}
+
+struct Subscription(Option<uob_application::RetainedEventItem<()>>);
+impl uob_application::TargetSubscription<()> for Subscription {
+    fn poll_event(
+        self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<uob_application::RetainedEventItem<()>, TargetPortError>>>
+    {
+        std::task::Poll::Ready(self.get_mut().0.take().map(Ok))
+    }
+    fn capacity(&self) -> usize {
+        1
+    }
+    fn backlog(&self) -> usize {
+        usize::from(self.0.is_some())
     }
 }
 
@@ -86,7 +122,10 @@ fn scoped_query_port() -> Arc<ScopedTargetQueryPort<()>> {
         Arc::new(HostState),
         TargetQueryAuthorization::new(
             TargetInstanceId::new("main").expect("target instance"),
-            vec![TargetQueryPermission::StationSnapshots],
+            vec![
+                TargetQueryPermission::StationSnapshots,
+                TargetQueryPermission::RetainedEvents,
+            ],
             vec![TargetResourceScope::Station {
                 bridge_id: BridgeId::new("site-01").expect("bridge identity"),
                 station_id: StationId::new("station-a").expect("station identity"),
@@ -189,6 +228,32 @@ async fn a_started_listener_answers_station_reads_from_the_hosts_canonical_sourc
         "{anonymous}"
     );
     assert!(!anonymous.contains("station-a"), "{anonymous}");
+
+    let events = request(
+        &address,
+        "/bridge/v1/events?station_id=station-a",
+        Some(READER_TOKEN),
+    )
+    .await;
+    assert!(events.starts_with("HTTP/1.1 200"), "{events}");
+    assert!(events.contains("event: durable"), "{events}");
+    assert!(events.contains("id: uob:event:42"), "{events}");
+    let resumed = request(
+        &address,
+        "/bridge/v1/events?station_id=station-a&after=uob:event:42",
+        Some(READER_TOKEN),
+    )
+    .await;
+    assert!(resumed.starts_with("HTTP/1.1 200"), "{resumed}");
+    assert!(!resumed.contains("event: durable"), "{resumed}");
+    let expired = request(
+        &address,
+        "/bridge/v1/events?station_id=station-a&after=uob:event:expired",
+        Some(READER_TOKEN),
+    )
+    .await;
+    assert!(expired.starts_with("HTTP/1.1 410"), "{expired}");
+    assert!(expired.contains("fetch_fresh_snapshot"), "{expired}");
 
     host.request_shutdown();
     session

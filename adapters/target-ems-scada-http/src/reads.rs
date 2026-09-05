@@ -10,7 +10,7 @@ use crate::error::IntegrationErrorCode;
 
 /// Exactly the canonical reads this listener serves, with the host event payload type erased.
 ///
-/// The integration surface never renders a retained event, so erasing the
+/// Retained events use a separate bounded subscription surface; erasing the
 /// host's payload parameter here keeps the router and its handlers free of a type parameter that
 /// only the supervised session can name.
 pub(crate) enum CanonicalRead {
@@ -129,7 +129,7 @@ impl ReadExecutor {
 ///
 /// The port's own context string is deliberately dropped: integration clients branch on the
 /// documented `ems_scada_http.*` codes, and no host-internal reason reaches the wire.
-const fn integration_code(code: TargetPortErrorCode) -> IntegrationErrorCode {
+pub(crate) const fn integration_code(code: TargetPortErrorCode) -> IntegrationErrorCode {
     match code {
         TargetPortErrorCode::Unauthorized => IntegrationErrorCode::PermissionDenied,
         TargetPortErrorCode::Unsupported => IntegrationErrorCode::OperationNotSupported,

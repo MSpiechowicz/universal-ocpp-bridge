@@ -194,7 +194,7 @@ fn credential(
 
 impl<E, P> BridgeTargetFactory<E, P> for EmsScadaHttpTargetFactory
 where
-    E: Send + Sync + 'static,
+    E: serde::Serialize + Send + Sync + 'static,
     P: serde::de::DeserializeOwned + Send + 'static,
 {
     fn kind(&self) -> &'static str {
