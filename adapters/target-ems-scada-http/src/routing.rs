@@ -35,6 +35,7 @@ struct IntegrationInner {
     credentials: IntegrationCredentials,
     reads: reads::ReadExecutor,
     commands: Option<commands::CommandExecutor>,
+    events: Option<crate::events::EventService>,
     in_flight: Semaphore,
 }
 
@@ -53,6 +54,7 @@ impl IntegrationState {
                 credentials,
                 reads,
                 commands: None,
+                events: None,
             }),
         }
     }
@@ -62,6 +64,17 @@ impl IntegrationState {
             .expect("unshared listener state")
             .commands = Some(commands);
         self
+    }
+
+    pub(crate) fn with_events(mut self, events: crate::events::EventService) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("unshared listener state")
+            .events = Some(events);
+        self
+    }
+
+    pub(crate) fn events(&self) -> Option<&crate::events::EventService> {
+        self.inner.events.as_ref()
     }
 
     pub(crate) fn commands(&self) -> Option<&commands::CommandExecutor> {
@@ -111,6 +124,7 @@ pub(crate) fn integration_router(state: IntegrationState) -> Router {
     let body_limit = state.inner.limits.maximum_request_bytes;
     Router::new()
         .route("/bridge/v1/capabilities", get(capabilities))
+        .route("/bridge/v1/events", get(crate::events::events))
         .route("/bridge/v1/stations", get(stations::stations))
         .route("/bridge/v1/stations/{station_id}", get(stations::station))
         .route("/bridge/v1/points", get(points::points))

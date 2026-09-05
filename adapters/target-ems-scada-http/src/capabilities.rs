@@ -50,6 +50,11 @@ pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[
         operations: &["control"],
     },
     IntegrationResource {
+        name: "events",
+        path: "/bridge/v1/events",
+        operations: &["read"],
+    },
+    IntegrationResource {
         name: "command_status",
         path: "/bridge/v1/commands/{request_id}",
         operations: &["control"],
@@ -68,6 +73,7 @@ pub(crate) struct CapabilityDocument {
     optional_capabilities: Vec<String>,
     limits: LimitsView,
     caller: CallerView,
+    events: crate::events::EventPolicy,
 }
 
 #[derive(Serialize)]
@@ -139,6 +145,7 @@ impl CapabilityDocument {
     ) -> Self {
         Self {
             contract_version: descriptor.contract_version,
+            events: crate::events::EventPolicy::default(),
             target: TargetView {
                 kind: descriptor.kind.as_str().to_owned(),
                 instance_id: descriptor.instance_id.as_str().to_owned(),

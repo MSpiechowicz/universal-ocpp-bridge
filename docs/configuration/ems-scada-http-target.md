@@ -217,3 +217,43 @@ it. The applicable values are advertised under `limits` in the capability respon
 This build terminates no TLS. A non-loopback address is refused at bind time even when its
 configuration is complete, so the integration API can never be served in cleartext on a public
 address.
+
+## Resumable event subscriptions
+
+`GET /bridge/v1/events?station_id=station-a&types=station.changed.v1` opens an authenticated
+SSE stream from the host's retained-event port. Supply the configured integration bearer token;
+even an uncredentialed demo listener does not grant event access. The credential needs `read`
+permission for the selected resource and its station snapshot, which is required for gap recovery.
+An operator can subscribe when its credential also grants `read`; `control` alone does not grant it.
+
+Select a station and optionally `bridge_id`, `evse_id`, and `connector_id`, using the same canonical
+identifiers as point reads. A station selection addresses that exact durable resource stream;
+it does not implicitly combine descendant streams. Omit `bridge_id` only for a credential scoped
+to one bridge. `types` accepts up to eight comma-separated event types, each at most 128 bytes.
+
+Each `event: durable` contains a canonical event envelope and its exact opaque `uob:event:` cursor
+in the SSE `id` field. Save the cursor after processing the record. Resume with `Last-Event-ID` or
+`after`; supplying different values in both is a `400 ems_scada_http.invalid_request` error.
+Filtered records advance the cursor through an ID-only SSE frame without exposing their payload.
+Reusing a cursor with a different type filter does not replay previously skipped records.
+
+A cursor outside retention or from another resource returns `410 ems_scada_http.cursor_expired`.
+A retention gap during streaming emits `event: gap` and closes. Both carry explicit recovery data:
+fetch `recovery.snapshot_url`, then open `recovery.resubscribe_url` without the expired cursor.
+Recovery URLs retain the bridge, resource, and type selectors. Other source failures emit a
+sanitized `event: error` and close without advancing the cursor past the failed record.
+
+Two concurrent subscriptions each hold at most eight queued frames plus one pending frame.
+Each canonical payload is capped at 64 KiB during serialization; cursor overhead is at most
+512 bytes per frame. Source subscription and full-queue waits have two-second deadlines. An
+oversized event closes with a payload error. A subscriber that stalls beyond the deadline loses its
+source subscription and the stream ends after buffered frames; reconnect from the last processed
+cursor. Dropping the HTTP body cancels its producer, and target shutdown terminates open streams.
+Subscriptions have a separate concurrency budget so they cannot consume ordinary query slots.
+
+The capability document advertises these limits, `local_exposure` delivery, replay only within
+retention, and telemetry as `best_effort_not_in_durable_stream`. This endpoint carries durable
+records only: telemetry and diagnostics are not promoted to durable events or assigned resumable
+cursors. No SSE client acknowledgement or named EMS consumption is claimed. Host deliveries are
+reported independently of subscriber reads, and subscriber absence never extends journal retention
+or pins target outbox rows. The listening health reason is `ems_scada_http.local_exposure`.

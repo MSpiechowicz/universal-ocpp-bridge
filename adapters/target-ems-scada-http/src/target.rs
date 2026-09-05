@@ -69,7 +69,7 @@ impl EmsScadaHttpTarget {
 
 impl<E, P> BridgeTarget<E, P> for EmsScadaHttpTarget
 where
-    E: Send + Sync + 'static,
+    E: serde::Serialize + Send + Sync + 'static,
     P: serde::de::DeserializeOwned + Send + 'static,
 {
     fn descriptor(&self) -> TargetDescriptor {

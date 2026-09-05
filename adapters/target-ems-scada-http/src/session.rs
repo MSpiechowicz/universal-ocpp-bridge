@@ -30,7 +30,7 @@ pub(crate) struct Session<E, P> {
 
 impl<E, P> Session<E, P>
 where
-    E: Send + Sync + 'static,
+    E: serde::Serialize + Send + Sync + 'static,
     P: serde::de::DeserializeOwned + Send + 'static,
 {
     pub(crate) const fn new(target: EmsScadaHttpTarget, context: TargetContext<E, P>) -> Self {
@@ -51,12 +51,14 @@ where
             Arc::new(SupervisedReads::new(Arc::clone(&self.context.queries))),
             self.target.runtime.query_deadline,
         );
+        let events = crate::events::EventService::new(Arc::clone(&self.context.queries));
         let state = IntegrationState::new(
             self.target.descriptor(),
             self.target.listener_limits(),
             credentials,
             reads,
         )
+        .with_events(events.clone())
         .with_commands(crate::commands::CommandExecutor::new(
             Arc::new(crate::commands::SupervisedCommands::new(Arc::clone(
                 &self.context.commands,
@@ -73,10 +75,19 @@ where
                 })
                 .into_future(),
         );
-        self.emit_health(TargetHealthState::Ready, "ems_scada_http.listening", 1);
+        self.emit_health(TargetHealthState::Ready, "ems_scada_http.local_exposure", 1);
 
         let outcome = self.serve(&mut server).await;
+        events.shutdown();
         let _ = stop.send(());
+        if !server.is_finished()
+            && tokio::time::timeout(self.target.runtime.query_deadline, &mut server)
+                .await
+                .is_err()
+        {
+            server.abort();
+            let _ = server.await;
+        }
         self.emit_health(TargetHealthState::Stopped, "ems_scada_http.stopped", 0);
         outcome
     }

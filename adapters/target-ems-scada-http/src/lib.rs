@@ -9,6 +9,7 @@ mod capabilities;
 mod commands;
 mod configuration;
 mod error;
+mod events;
 mod points;
 mod reads;
 mod request;
