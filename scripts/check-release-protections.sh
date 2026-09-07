@@ -15,6 +15,7 @@ request() {
   local output="$2"
   local fixture="$3"
   local request_url="$api_url/repos/$repository"
+  local -a request_options=()
 
   if [[ -n "$fixture_directory" ]]; then
     cp "$fixture_directory/$fixture" "$output"
@@ -27,7 +28,13 @@ request() {
     exit 1
   fi
 
-  if [[ -n "$endpoint" ]]; then
+  if [[ "$endpoint" == graphql ]]; then
+    request_url="${GH_GRAPHQL_URL:-https://api.github.com/graphql}"
+    local payload
+    payload="$(jq --null-input --arg owner "${repository%%/*}" --arg name "${repository#*/}" \
+      '{query: "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { defaultBranchRef { name } squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed squashMergeCommitTitle } }", variables: {owner: $owner, name: $name}}')"
+    request_options=(--header 'Content-Type: application/json' --data "$payload")
+  elif [[ -n "$endpoint" ]]; then
     request_url="$request_url/$endpoint"
   fi
 
@@ -36,7 +43,7 @@ request() {
     --header 'Accept: application/vnd.github+json' \
     --header "Authorization: Bearer $token" \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
-    "$request_url" >"$output"; then
+    "${request_options[@]}" "$request_url" >"$output"; then
     echo "release protection check blocked: GitHub did not expose $endpoint" >&2
     echo "verify that RELEASE_PROTECTION_TOKEN has read-only Administration and Environments access" >&2
     exit 1
@@ -59,7 +66,29 @@ branch_document="$temporary_directory/branch.json"
 environment_document="$temporary_directory/environment.json"
 actions_document="$temporary_directory/actions.json"
 
-request '' "$repository_document" repository.json
+# REST omits merge settings for read-only tokens. GraphQL exposes these settings
+# without requiring us to grant the protection token repository write access.
+repository_response="$temporary_directory/repository-response.json"
+request graphql "$repository_response" repository.json
+if ! jq --exit-status '
+  ((.errors // []) | length == 0) and
+  (.data.repository | type == "object") and
+  (.data.repository.defaultBranchRef.name | type == "string") and
+  (.data.repository.squashMergeAllowed | type == "boolean") and
+  (.data.repository.mergeCommitAllowed | type == "boolean") and
+  (.data.repository.rebaseMergeAllowed | type == "boolean") and
+  (.data.repository.squashMergeCommitTitle | type == "string")
+' "$repository_response" >/dev/null; then
+  echo 'release protection check blocked: repository settings unavailable from GraphQL (errors or missing fields)' >&2
+  exit 1
+fi
+jq '.data.repository | {
+  default_branch: .defaultBranchRef.name,
+  allow_squash_merge: .squashMergeAllowed,
+  allow_merge_commit: .mergeCommitAllowed,
+  allow_rebase_merge: .rebaseMergeAllowed,
+  squash_merge_commit_title: .squashMergeCommitTitle
+}' "$repository_response" >"$repository_document"
 request "branches/$branch/protection" "$branch_document" branch.json
 request "environments/$environment" "$environment_document" environment.json
 request 'actions/permissions/workflow' "$actions_document" actions.json
