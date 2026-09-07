@@ -1,0 +1,9 @@
+{
+  "state_directory": "/var/lib/uob-release-manager",
+  "runtime_directory": "/run/uob-release-manager",
+  "artifact_store": "/var/lib/uob-releases",
+  "install_policy": "/etc/uob-release-manager/install-policy.json",
+  "grants": [
+    { "uid": 0, "permissions": ["read", "stage", "activate"] }
+  ]
+}

@@ -1,6 +1,6 @@
 //! Signed, bounded application bundle installation. Activation is a separate gate.
-mod filesystem;
-mod manifest;
+pub(crate) mod filesystem;
+pub(crate) mod manifest;
 mod store;
 
 pub use manifest::{BundleFile, BundleManifest, InstallPolicy, verify_manifest};
