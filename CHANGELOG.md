@@ -2,6 +2,30 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.26.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ff57b13eddd0cad094fda424c1675800b9bec925..v0.26.0) - 2026-09-07
+#### Features
+- (**ems-scada**) publish the versioned OpenAPI contract (#251) - ([61968ed](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/61968ed7c65ff1e3d31a0b483f6986757e2c7ef6)) - Maciej Spiechowicz
+- (**ems-scada**) expose resumable event subscriptions (#250) - ([b55c1f1](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b55c1f1ae818fdf647d06c16bb704171fe08946f)) - Maciej Spiechowicz
+- (**ems-scada**) expose command admission and status (#249) - ([93dc303](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/93dc303db9f490e9d7ba8fedffbb31bd60134ab1)) - Maciej Spiechowicz
+- (**ems-scada**) expose bounded station and point queries (#248) - ([4589cbf](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/4589cbf29f2ba4d61f979991c91135e80e4acc08)) - Maciej Spiechowicz, Claude Opus 5
+- (**ems-scada**) add the direct HTTP integration listener (#247) - ([c02ee55](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/c02ee55cf0f8b44215c11ddd674246f9bd9bd79f)) - Maciej Spiechowicz, Claude Opus 5
+- (**mqtt**) add the EMS/SCADA MQTT preset (#246) - ([3f7b04e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3f7b04ed992f17c9abb62d31e45655e87124d149)) - Maciej Spiechowicz, Claude Opus 5
+- (**ops**) reserve isolated staging disk capacity (#257) - ([b863b69](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b863b69b30ea65c58664fc58fd9b6d67dd6d49ca)) - Maciej Spiechowicz
+- (**ops**) report service readiness and worker-backed watchdog progress (#256) - ([fa4c285](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/fa4c285e493a9d9aa10bb091d0bdee8b99cfe433)) - Maciej Spiechowicz
+- (**ops**) govern staging resource admission and shedding (#255) - ([a269dc7](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/a269dc7f02775e854714f22390d85aec719d1cd5)) - Maciej Spiechowicz
+- (**ops**) isolate staging network access to test peers (#254) - ([304f23c](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/304f23c8692bcd60322b1c25c66bb037a74a8964)) - Maciej Spiechowicz
+- (**ops**) isolate production and staging filesystems (#253) - ([f6cfd5a](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/f6cfd5ad6b39954940f6b662361d8d57bcafcbe9)) - Maciej Spiechowicz
+- (**ops**) package non-root service and bound task shutdown (#252) - ([1a2a1ad](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/1a2a1ada366696090cd0129560833984d70dfdf4)) - Maciej Spiechowicz
+- (**protocol**) authorize OCPP 1.6 charging identities (#245) - ([888c2ff](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/888c2ff0c4277eef21fb9b0c432f654f03819007)) - Maciej Spiechowicz
+#### Bug Fixes
+- (**ci**) publish releases from reviewed main versions - ([7a054e1](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/7a054e1ada1504c32c842a63e70c7e1a58bd3459)) - Maciej Spiechowicz
+- (**ci**) query release merge settings through GraphQL (#259) - ([cfd1065](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/cfd1065330c8f8e829276f1fffd2c27e08b85c22)) - Maciej Spiechowicz
+- (**ci**) bootstrap release dependencies on clean runners (#258) - ([607059e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/607059e310e9808b69f6b227840e8579809d0870)) - Maciej Spiechowicz
+#### Continuous Integration
+- (**release**) enforce protected publication boundaries (#244) - ([ff57b13](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ff57b13eddd0cad094fda424c1675800b9bec925)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.25.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/8f34a19625d0230cfe824cbd79ffee1927103ce8..v0.25.0) - 2026-09-04
 #### Features
 - (**mqtt**) publish Home Assistant discovery - ([8f34a19](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/8f34a19625d0230cfe824cbd79ffee1927103ce8)) - Maciej Spiechowicz
