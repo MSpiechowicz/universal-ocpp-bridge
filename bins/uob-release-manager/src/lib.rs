@@ -1,11 +1,15 @@
 #![doc = "Independent release qualification and activation policy."]
 
+pub mod artifacts;
+
+use serde::{Deserialize, Serialize};
+
 use std::{collections::BTreeSet, error::Error, fmt};
 
 use uob_contracts::ArtifactDigest;
 
 /// Monotonic version of one persisted or externally visible format.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct SchemaVersion(u32);
 
 impl SchemaVersion {
@@ -23,7 +27,7 @@ impl SchemaVersion {
 }
 
 /// Inclusive schema-version interval supported by one artifact.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SchemaRange {
     minimum: SchemaVersion,
     maximum: SchemaVersion,
@@ -68,7 +72,7 @@ impl fmt::Display for ManifestError {
 impl Error for ManifestError {}
 
 /// Read and write support for one format surface.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FormatSupport {
     /// Versions this artifact can decode without losing required meaning.
     pub readable: SchemaRange,
@@ -77,7 +81,7 @@ pub struct FormatSupport {
 }
 
 /// Versions of every format that will exist after promotion.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FormatVersions {
     /// Canonical public contract version.
     pub public_contract: SchemaVersion,
@@ -90,7 +94,7 @@ pub struct FormatVersions {
 }
 
 /// Complete supported format surface of one immutable artifact.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FormatCompatibility {
     /// Public HTTP, MQTT, event, and export contracts.
     pub public_contract: FormatSupport,
@@ -103,7 +107,7 @@ pub struct FormatCompatibility {
 }
 
 /// Permitted database migration shape during the rollback support window.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum MigrationPolicy {
     /// New optional structures are added without removing or reinterpreting old ones.
     AdditiveExpand,
@@ -114,7 +118,7 @@ pub enum MigrationPolicy {
 }
 
 /// Signed compatibility claims attached to an immutable release artifact.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ArtifactCompatibilityManifest {
     /// Content digest of the artifact to which these claims apply.
     pub artifact_digest: ArtifactDigest,
@@ -223,7 +227,7 @@ pub struct RollbackCycleEvidence {
 }
 
 /// Signed policy constraints independent of semantic-version ordering.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SecurityCompatibilityPolicy {
     /// Oldest signed release sequence still eligible for activation.
     pub minimum_release_sequence: u64,

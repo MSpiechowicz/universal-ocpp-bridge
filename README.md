@@ -184,3 +184,6 @@ progress, bounded restart policy, and per-invocation termination evidence.
 
 See [disk budgets and installation admission](docs/operations/staging-disk-preflight.md) for
 fixed partition isolation, allocated installation capacity, and retained-artifact protection.
+
+See [signed application artifact installation](docs/operations/signed-artifact-store.md) for
+trusted manifests, bounded extraction, immutable candidates, and protected fallback retention.

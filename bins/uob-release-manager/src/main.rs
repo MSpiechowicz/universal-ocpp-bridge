@@ -1,5 +1,8 @@
+mod artifact_cli;
+
 fn main() {
-    eprintln!(
-        "uob-release-manager package boundary established; supervisor is not implemented yet"
-    );
+    if let Err(error) = artifact_cli::run() {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
 }
