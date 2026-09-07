@@ -19,9 +19,8 @@ Protect `main`, including administrators, with all of these rules:
 - Require `Format, lint, test, and architecture`,
   `PR title, commit range, and documentation`, `Rust advisories, licenses, and sources`,
   `Secret scanning`, `GitHub Actions policy`, and `Locked source SBOM`.
-- Do not grant a person a direct-push bypass. If the version job needs to write its generated
-  version commit and tag, grant only the GitHub Actions integration the narrow bypass used by the
-  protected release workflow; no other workflow may receive `contents: write`.
+- Do not grant a direct-push bypass. Version changes pass through a reviewed pull request;
+  the protected release job only pushes preparation branches and tags on verified main commits.
 
 Set the repository Actions default workflow permission to read-only and prohibit Actions from
 approving pull requests. The committed repository checks reject broad workflow permissions,
@@ -63,12 +62,11 @@ Run the focused offline acceptance fixtures with `./scripts/test-release-protect
 the complete policy is accepted and that removing a required check produces a named, blocking
 failure without requiring repository administration access.
 
-The protection check does not prove that the publishing identity can push a generated commit to
-`main`. In particular, `contents: write` does not bypass required pull requests or required status
-checks. A successful policy check must not be treated as a successful publication preflight.
-Where the publishing identity cannot satisfy those rules, version changes need to pass through a
-pull request before tagging the verified merged revision. Do not disable the required checks or
-grant a personal administrator token to the publication job to work around this restriction.
+The publication workflow never pushes generated commits directly to `main`. It prepares a version
+branch and writes a PR comparison link into the job summary. A maintainer opens that PR, allowing
+normal pull-request checks to run, and merges it through the existing protections. The next
+verified main run publishes only its version tag and GitHub Release. A successful preparation job
+means the version is ready for review; it does not mean that version has been published.
 
 ## Clean-runner version verification
 
@@ -83,9 +81,11 @@ package versions, the three generated files, unchanged third-party dependencies,
 second bump. It never pushes or accesses GitHub credentials. The conventional workflow runs this
 regression test on pull requests, before a release can reach its protected environment.
 
-Successful version generation does not provision `RELEASE_PROTECTION_TOKEN` or establish a
-publishing bypass. Both the live policy check and the publication path must be resolved before
-retrying a failed production release.
+Run `./scripts/test-stable-publication.sh` for the offline publication acceptance test. Its local
+remote rejects every direct main push. It exercises version preparation, repeated preparation,
+publication after a simulated reviewed merge, and recovery when the Release API fails after the
+tag is pushed. The real publisher uses only the existing job-scoped `GITHUB_TOKEN`; the protection
+check still needs `RELEASE_PROTECTION_TOKEN`.
 
 ## Publication acceptance
 
