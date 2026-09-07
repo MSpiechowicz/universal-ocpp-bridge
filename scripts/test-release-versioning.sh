@@ -14,6 +14,13 @@ git config --local user.email 'release-test@example.invalid'
 # Include the working copy of the hook when developers run this before committing.
 cp "$repository_root/scripts/update-workspace-version.sh" scripts/update-workspace-version.sh
 git add scripts/update-workspace-version.sh
+# A version PR already contains the next manifest version before its tag exists.
+# Establish that version as the test baseline so the injected fix bumps it again.
+manifest_version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+if ! git rev-parse --verify --quiet "refs/tags/v$manifest_version" >/dev/null; then
+  git -c user.name=Test -c user.email=test@example.invalid commit --quiet --allow-empty -m 'chore: version test baseline'
+  git tag "v$manifest_version"
+fi
 git commit --quiet --allow-empty -m 'fix: exercise release generation'
 readonly original_revision="$(git rev-parse HEAD)"
 export CARGO_HOME="$temporary_directory/cargo-home"

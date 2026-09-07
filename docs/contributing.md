@@ -77,13 +77,17 @@ uses the same reviewed Cocogitto 7.0.0 binary to calculate the next semantic ver
 since the latest `v*` tag. A breaking change increments the major version, `feat` increments the
 minor version, and `fix` increments the patch version.
 
-The release job updates `[workspace.package].version`, refreshes `Cargo.lock`, creates a generated
-changelog, verifies that `uob-service` still builds with the new embedded version, and records all
-three files in a `chore(version)` commit tagged with the new version. The commit and tag are pushed
-atomically before a GitHub Release is created. Its `[skip ci]` marker prevents the generated commit
-from starting the workflow again. The job has write permission only after the exact `main` revision
-has passed the complete workspace checks; pull request jobs remain read-only. Commit types that do
-not require a semantic-version increment finish successfully without creating a release.
+When the verified main revision still uses an already released version, the job prepares the
+workspace version, lockfile, and changelog on a separate `codex/release-*` branch. Open the PR using
+the comparison link in the job summary and merge it after all required checks pass. The generated
+commit has no skip-CI marker. Actions does not create or approve the PR, so no additional token or
+repository permission is needed.
+
+When main contains an unreleased workspace version, the protected job verifies its build and
+pushes only a version tag pointing to that exact main revision, then creates the GitHub Release.
+It never pushes a generated commit to main. Retries recover a missing GitHub Release after a
+successful tag push; superseded main runs skip publication. Changes that do not require a version
+increment finish successfully without preparing a branch.
 
 Preview the next version without modifying the repository:
 

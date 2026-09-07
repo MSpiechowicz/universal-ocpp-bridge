@@ -129,7 +129,7 @@ fn check_release_protection(root: &Path, errors: &mut Vec<String>) {
         .find("run: ./scripts/check-release-protections.sh")
         .unwrap_or(usize::MAX);
     let versioning = release
-        .find("cog bump --auto --skip-ci")
+        .find("./scripts/publish-stable-release.sh")
         .unwrap_or(usize::MAX);
     if protection_check >= versioning {
         errors.push("live release protections must be checked before versioning".into());
