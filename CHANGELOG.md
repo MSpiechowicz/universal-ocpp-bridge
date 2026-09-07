@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.27.1](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/a5d69aac8ee32fb9dc0e48d8cb36700203c2228d..v0.27.1) - 2026-09-07
+#### Bug Fixes
+- (**release**) publish version bumps after one stable approval (#264) - ([a5d69aa](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/a5d69aac8ee32fb9dc0e48d8cb36700203c2228d)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.27.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/391432e450bac38ee5b4e3075fd642127a49ce1e..v0.27.0) - 2026-09-07
 #### Features
 - (**release**) verify and retain signed application bundles (#261) - ([391432e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/391432e450bac38ee5b4e3075fd642127a49ce1e)) - Maciej Spiechowicz
