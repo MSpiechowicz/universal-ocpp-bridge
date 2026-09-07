@@ -1,6 +1,7 @@
 #![doc = "Independent release qualification and activation policy."]
 
 pub mod artifacts;
+pub mod supervisor;
 
 use serde::{Deserialize, Serialize};
 

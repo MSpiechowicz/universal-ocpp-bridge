@@ -187,3 +187,7 @@ fixed partition isolation, allocated installation capacity, and retained-artifac
 
 See [signed application artifact installation](docs/operations/signed-artifact-store.md) for
 trusted manifests, bounded extraction, immutable candidates, and protected fallback retention.
+
+See [independent release supervisor IPC](docs/operations/release-supervisor-ipc.md) for
+kernel-authenticated local permissions, private request/failure state, independent packaging,
+and fail-closed activation boundaries while the bridge is stopped.

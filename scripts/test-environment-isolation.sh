@@ -7,10 +7,13 @@ unit_directory="$(mktemp -d)"
 trap 'rm -f "$manifest"; rm -rf "$unit_directory"' EXIT
 cargo test --locked -p uob-service --test deployment --no-run --message-format=json >"$manifest"
 executable="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "deployment" and .executable != null)] | if length == 1 then .[0].executable else error("expected one deployment test executable") end' "$manifest")"
+cargo build --locked -p uob-release-manager --bin uob-release-manager --message-format=json >>"$manifest"
+manager_binary="$(jq -ser '[.[] | select(.reason == "compiler-artifact" and .target.name == "uob-release-manager" and (.target.kind | index("bin")) != null and .executable != null)] | if length == 1 then .[0].executable else error("expected one supervisor executable") end' "$manifest")"
 service_binary="$(dirname "$(dirname "$executable")")/uob"
 # Verify the shipped directives with the just-built executable; install nothing on the host.
 for unit in packaging/systemd/*.service; do
-  sed -e "s|/usr/local/bin/uob|$service_binary|g" \
+  sed -e "s|/usr/local/libexec/uob-release-manager|$manager_binary|g" \
+    -e "s|/usr/local/bin/uob|$service_binary|g" \
     -e "s|/usr/local/libexec/staging_governor.py|$PWD/packaging/resources/staging_governor.py|g" \
     -e "s|/usr/local/libexec/uob-staging-network|$PWD/packaging/network/uob-staging-network|g" "$unit" >"$unit_directory/$(basename "$unit")"
 done

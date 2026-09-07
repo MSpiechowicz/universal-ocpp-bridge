@@ -7,7 +7,7 @@ use std::{
 };
 use uob_release_manager::artifacts::{ArtifactStore, InstallPolicy};
 
-fn read(path: &Path, limit: u64, trusted: bool) -> Result<Vec<u8>, Box<dyn Error>> {
+pub(crate) fn read(path: &Path, limit: u64, trusted: bool) -> Result<Vec<u8>, Box<dyn Error>> {
     let file = OpenOptions::new()
         .read(true)
         .custom_flags(
@@ -37,7 +37,7 @@ fn read(path: &Path, limit: u64, trusted: bool) -> Result<Vec<u8>, Box<dyn Error
     Ok(bytes)
 }
 
-fn policy(path: &Path) -> Result<InstallPolicy, Box<dyn Error>> {
+pub(crate) fn policy(path: &Path) -> Result<InstallPolicy, Box<dyn Error>> {
     let policy: InstallPolicy = serde_json::from_slice(&read(path, 64 * 1024, true)?)?;
     let os = String::from_utf8(
         read(Path::new("/etc/os-release"), 16 * 1024, false)
