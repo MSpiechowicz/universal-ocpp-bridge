@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.27.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/391432e450bac38ee5b4e3075fd642127a49ce1e..v0.27.0) - 2026-09-07
+#### Features
+- (**release**) verify and retain signed application bundles (#261) - ([391432e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/391432e450bac38ee5b4e3075fd642127a49ce1e)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.26.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ff57b13eddd0cad094fda424c1675800b9bec925..v0.26.0) - 2026-09-07
 #### Features
 - (**ems-scada**) publish the versioned OpenAPI contract (#251) - ([61968ed](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/61968ed7c65ff1e3d31a0b483f6986757e2c7ef6)) - Maciej Spiechowicz
