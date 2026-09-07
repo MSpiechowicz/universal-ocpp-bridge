@@ -1,0 +1,15 @@
+[Unit]
+Description=Verify fixed UOB disk budgets before staging
+RequiresMountsFor=/var/lib/uob /var/lib/uob-staging /var/lib/uob-releases
+Before=uob-staging.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/disk_preflight.py --policy /etc/uob-staging/disk-policy.json check
+TimeoutStartSec=10s
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX

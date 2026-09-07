@@ -30,6 +30,8 @@ jobs:
           persist-credentials: false
       - name: Verify staging resource shedding on the disposable runner
         run: ./scripts/test-staging-resources.sh --disposable
+      - name: Verify disk exhaustion isolation on the disposable runner
+        run: python3 -B scripts/test-disk-isolation.py --disposable
       - name: Restore Cargo dependencies and build outputs
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
