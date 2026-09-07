@@ -53,6 +53,12 @@ Use a token with read-only Administration and Environments access. The script do
 token or mutate settings. It reports each missing protection separately. An authentication or API
 error is also a failure; it is never interpreted as an absent optional feature.
 
+The verifier reads repository merge settings through GraphQL because the REST repository response
+can omit those fields for read-only tokens. Branch protections, environment rules, and Actions
+permissions still use REST. Missing GraphQL fields or errors block verification with an unavailable
+settings diagnostic; they are not reported as incorrect merge settings. Keep the protection token
+read-only. `GH_GRAPHQL_URL` can override the default `https://api.github.com/graphql` endpoint.
+
 Run the focused offline acceptance fixtures with `./scripts/test-release-protections.sh`. They prove
 the complete policy is accepted and that removing a required check produces a named, blocking
 failure without requiring repository administration access.
