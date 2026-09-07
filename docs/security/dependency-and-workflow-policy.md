@@ -38,11 +38,16 @@ do not use privileged writable caches. The automatic version-release job receive
 contents write permission and starts only after the exact pushed `main` revision passes the Rust
 job and a reviewer authorizes the protected `stable-release` environment. It checks out without
 persisting its credential, restores no writable build cache, and consumes no pull-request artifact.
-The short-lived GitHub token is exposed to the publication shell step only after all
-repository-controlled versioning and build commands have finished. The separate
-`RELEASE_PROTECTION_TOKEN` secret is read-only, is exposed only to the live protection check, and
-must be a fine-grained token limited to repository Administration and Environments reads. The job
-publishes a source commit, tag, and GitHub Release, but no binary or deployable artifact. Future
+A dedicated GitHub App installation token authenticates the publication step. Its App has only
+repository Contents write access and the review/check ruleset bypass needed for the generated
+version commit. The App's private key is stored only in the protected environment and exposed only
+to the pinned token action after approval. The action limits the token to this repository and
+revokes it after the job. The separate `RELEASE_PROTECTION_TOKEN` secret is read-only, is exposed
+only to the live protection check, and must be limited to repository Administration and Environments
+reads. Version generation is constrained to workspace version metadata and the changelog, followed
+by a locked workspace check. Main and its tag are pushed atomically without force; the generated
+commit skips CI to avoid a second approval. The job publishes a source commit, tag, and GitHub
+Release, but no binary or deployable artifact. Future
 package, binary, signing, or deployment jobs must use separate protected environments, short-lived
 OIDC identities where supported, and isolated cache namespaces; they must never execute artifacts
 produced by untrusted jobs.

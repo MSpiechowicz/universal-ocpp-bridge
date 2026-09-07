@@ -60,7 +60,7 @@ jobs:
       group: stable-release-publication
       cancel-in-progress: false
     permissions:
-      contents: write # prepare a release branch or publish a verified tag and GitHub Release
+      contents: write # publish source tags and GitHub Releases after approval
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -73,6 +73,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}
           GH_REPOSITORY: ${{ github.repository }}
+          RELEASE_RULESET_ID: ${{ vars.RELEASE_RULESET_ID }}
+          RELEASE_APP_ID: ${{ vars.RELEASE_APP_ID }}
         run: ./scripts/check-release-protections.sh
       - name: Install the reviewed Cocogitto release
         env:
@@ -93,9 +95,16 @@ jobs:
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Prepare a reviewed version or publish the verified main tag
+      - name: Create the scoped release identity after approval
+        id: release-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Bump main and publish the stable release if needed
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           gh auth setup-git

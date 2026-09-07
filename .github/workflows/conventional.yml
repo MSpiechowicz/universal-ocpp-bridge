@@ -70,7 +70,9 @@ jobs:
         run: ./scripts/test-conventional-checks.sh
       - name: Test release versioning with an empty Cargo home
         run: ./scripts/test-release-versioning.sh
-      - name: Test publication against a protected main branch
+      - name: Test single-approval release publication
         run: ./scripts/test-stable-publication.sh
+      - name: Test release protection migration
+        run: ./scripts/test-release-setup.sh
       - name: Check documentation links and formatting
         run: cargo run --quiet --package uob-repository-checks
