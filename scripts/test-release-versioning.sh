@@ -25,12 +25,15 @@ git commit --quiet --allow-empty -m 'fix: exercise release generation'
 readonly original_revision="$(git rev-parse HEAD)"
 export CARGO_HOME="$temporary_directory/cargo-home"
 export CARGO_TARGET_DIR="$temporary_directory/target"
+# Application releases must preserve the supervisor's independent package version.
+manager_version="$(python3 -c 'import tomllib; print(tomllib.load(open("bins/uob-release-manager/Cargo.toml", "rb"))["package"]["version"])')"
 cog bump --auto --skip-ci
 release_tag="$(git tag --points-at HEAD --list 'v[0-9]*')"
 [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 cargo metadata --locked --offline --no-deps --format-version 1 >"$temporary_directory/metadata.json"
 jq --exit-status --arg version "${release_tag#v}" \
-  'all(.packages[]; .version == $version)' "$temporary_directory/metadata.json" >/dev/null
+  --arg manager_version "$manager_version" \
+  'all(.packages[]; .version == (if .name == "uob-release-manager" then $manager_version else $version end))' "$temporary_directory/metadata.json" >/dev/null
 git diff --exit-code
 git diff --name-only "$original_revision" HEAD | sort >"$temporary_directory/changed"
 printf '%s\n' CHANGELOG.md Cargo.lock Cargo.toml | sort >"$temporary_directory/expected"
