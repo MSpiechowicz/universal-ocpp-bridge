@@ -97,7 +97,7 @@ jobs:
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Create the scoped release identity after approval
         id: release-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
