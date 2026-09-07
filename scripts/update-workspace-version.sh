@@ -14,6 +14,10 @@ fi
 
 readonly repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly manifest="$repository_root/Cargo.toml"
+# A protected release starts without a shared Cargo cache. Fetch the existing
+# locked graph before changing package versions so the offline update can resolve it.
+cd "$repository_root"
+cargo fetch --locked
 temporary_manifest="$(mktemp "$repository_root/.Cargo.toml.version.XXXXXX")"
 trap 'rm -f "$temporary_manifest"' EXIT
 

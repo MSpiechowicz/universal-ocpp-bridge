@@ -57,6 +57,32 @@ Run the focused offline acceptance fixtures with `./scripts/test-release-protect
 the complete policy is accepted and that removing a required check produces a named, blocking
 failure without requiring repository administration access.
 
+The protection check does not prove that the publishing identity can push a generated commit to
+`main`. In particular, `contents: write` does not bypass required pull requests or required status
+checks. A successful policy check must not be treated as a successful publication preflight.
+Where the publishing identity cannot satisfy those rules, version changes need to pass through a
+pull request before tagging the verified merged revision. Do not disable the required checks or
+grant a personal administrator token to the publication job to work around this restriction.
+
+## Clean-runner version verification
+
+The version hook first fetches the existing locked dependency graph, then updates workspace
+versions offline. This bootstrap is required because the protected release job intentionally does
+not restore a shared Cargo cache. Its timeout includes dependency downloads and a fresh build.
+
+Run `./scripts/test-release-versioning.sh` with Cocogitto 7.0.0, Cargo, Python 3.11 or newer, Git,
+and jq installed. It clones into a temporary directory and uses an empty Cargo home, so network
+access to the locked dependencies is required. It checks the real version hook, all workspace
+package versions, the three generated files, unchanged third-party dependencies, and a no-op
+second bump. It never pushes or accesses GitHub credentials. The conventional workflow runs this
+regression test on pull requests, before a release can reach its protected environment.
+
+Successful version generation does not provision `RELEASE_PROTECTION_TOKEN` or establish a
+publishing bypass. Both the live policy check and the publication path must be resolved before
+retrying a failed production release.
+
+## Publication acceptance
+
 After the check succeeds, trigger two harmless release-eligible test runs before relying on the
 gate. Keep the first run awaiting environment approval, approve it, then start and approve the
 second. GitHub must leave the first publication running and queue the second behind the shared
