@@ -181,3 +181,6 @@ cgroup limits, production health alarms, and whole-slice shutdown under pressure
 
 See [service readiness and watchdog](docs/operations/service-watchdog.md) for worker-backed
 progress, bounded restart policy, and per-invocation termination evidence.
+
+See [disk budgets and installation admission](docs/operations/staging-disk-preflight.md) for
+fixed partition isolation, allocated installation capacity, and retained-artifact protection.

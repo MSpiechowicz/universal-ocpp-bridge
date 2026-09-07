@@ -74,6 +74,7 @@ The staging sample uses a synthetic bridge identity, a distinct loopback managem
 and no selected target, charger connection, production credential, or export destination.
 Do not copy production configuration/secrets. Follow [staging network isolation](environment-network-isolation.md)
 to install its mandatory loopback-only namespace and admit synthetic test peers before startup.
+Provision the mandatory [disk budgets and admission gate](staging-disk-preflight.md).
 Install the mandatory [staging resource governor](staging-resource-governor.md) before startup.
 It enforces slice-wide limits, verifies admission headroom, and sheds staging under pressure.
 

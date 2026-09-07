@@ -1,0 +1,5 @@
+{
+  "production": "/var/lib/uob",
+  "staging": "/var/lib/uob-staging",
+  "artifacts": "/var/lib/uob-releases"
+}
