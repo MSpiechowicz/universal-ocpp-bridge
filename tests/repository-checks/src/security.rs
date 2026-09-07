@@ -67,9 +67,14 @@ fn check_workflows(root: &Path, errors: &mut Vec<String>) {
             }
         }
 
-        let allowed_secret = "GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}";
+        let allowed_secrets = [
+            "GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}",
+            "private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+        ];
         for line in source.lines().filter(|line| line.contains("${{ secrets.")) {
-            if line.trim() != allowed_secret {
+            if path.file_name().is_none_or(|name| name != "rust.yml")
+                || !allowed_secrets.contains(&line.trim())
+            {
                 errors.push(format!(
                     "{display} contains an unapproved workflow secret reference"
                 ));
@@ -107,6 +112,10 @@ fn check_release_protection(root: &Path, errors: &mut Vec<String>) {
 
     for required in [
         "name: stable-release",
+        "app-id: ${{ vars.RELEASE_APP_ID }}",
+        "private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+        "GH_TOKEN: ${{ steps.release-token.outputs.token }}",
+        "permission-contents: write",
         "group: stable-release-publication",
         "cancel-in-progress: false",
         "GH_TOKEN: ${{ secrets.RELEASE_PROTECTION_TOKEN }}",
@@ -118,7 +127,13 @@ fn check_release_protection(root: &Path, errors: &mut Vec<String>) {
         }
     }
 
-    if workflow.matches("contents: write").count() != 1 || !release.contains("contents: write") {
+    if workflow
+        .lines()
+        .filter(|line| line.trim_start().starts_with("contents: write"))
+        .count()
+        != 1
+        || !release.contains("contents: write")
+    {
         errors.push("only the protected release job may receive contents write permission".into());
     }
     if release.contains("RELEASE_PROTECTION_FIXTURES_DIRECTORY") {
@@ -144,7 +159,7 @@ fn check_release_protection(root: &Path, errors: &mut Vec<String>) {
         "actions/permissions/workflow",
         "request_url=\"$api_url/repos/$repository\"",
         "allow_squash_merge == true",
-        "required_status_checks.strict == true",
+        "strict_required_status_checks_policy == true",
         "required_reviewers",
         "default_workflow_permissions == \"read\"",
         "RELEASE_PROTECTION_FIXTURES_DIRECTORY",

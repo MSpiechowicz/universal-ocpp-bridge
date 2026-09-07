@@ -89,6 +89,14 @@ jq '.data.repository | {
   allow_rebase_merge: .rebaseMergeAllowed,
   squash_merge_commit_title: .squashMergeCommitTitle
 }' "$repository_response" >"$repository_document"
+ruleset_id="${RELEASE_RULESET_ID:-}"
+app_id="${RELEASE_APP_ID:-}"
+if [[ ! "$ruleset_id" =~ ^[1-9][0-9]*$ || ! "$app_id" =~ ^[1-9][0-9]*$ ]]; then
+  echo 'release protection check blocked: RELEASE_RULESET_ID and RELEASE_APP_ID are required' >&2
+  exit 1
+fi
+ruleset_document="$temporary_directory/ruleset.json"
+request "rulesets/$ruleset_id" "$ruleset_document" ruleset.json
 request "branches/$branch/protection" "$branch_document" branch.json
 request "environments/$environment" "$environment_document" environment.json
 request 'actions/permissions/workflow' "$actions_document" actions.json
@@ -105,12 +113,27 @@ expect "$repository_document" \
   '.squash_merge_commit_title == "PR_TITLE"' \
   'squash commits must use the pull-request title'
 
+# Classic protection retains structural invariants with no bypass. Review and
+# check requirements live in a ruleset with a dedicated release App bypass.
 expect "$branch_document" \
-  '.required_status_checks.strict == true' \
-  'main must require an up-to-date branch before merging'
-expect "$branch_document" \
-  '.required_pull_request_reviews != null' \
-  'main must require changes to pass through a pull request'
+  '.required_status_checks == null and .required_pull_request_reviews == null' \
+  'move main review and status-check requirements into the release ruleset'
+expect "$ruleset_document" \
+  '.target == "branch" and .enforcement == "active" and
+   .conditions.ref_name.include == ["refs/heads/main"] and
+   .conditions.ref_name.exclude == []' \
+  'release ruleset must actively protect main'
+expect "$ruleset_document" \
+  'any(.rules[]; .type == "pull_request") and
+   any(.rules[]; .type == "required_status_checks" and .parameters.strict_required_status_checks_policy == true)' \
+  'release ruleset must require pull requests and up-to-date status checks'
+# GitHub can omit bypass actors for a read-only Administration token. If exposed,
+# require the sole exception to be our release App; setup verifies this as admin.
+if jq --exit-status 'has("bypass_actors")' "$ruleset_document" >/dev/null; then
+  expect "$ruleset_document" \
+    ".bypass_actors == [{\"actor_id\": $app_id, \"actor_type\": \"Integration\", \"bypass_mode\": \"always\"}]" \
+    'only the configured release App may bypass release review and checks'
+fi
 expect "$branch_document" \
   '.enforce_admins.enabled == true' \
   'main protections must include administrators'
@@ -134,8 +157,8 @@ required_checks=(
 )
 for check in "${required_checks[@]}"; do
   jq --arg check "$check" \
-    --exit-status '.required_status_checks.contexts | index($check) != null' \
-    "$branch_document" >/dev/null || {
+    --exit-status 'any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == $check))' \
+    "$ruleset_document" >/dev/null || {
       echo "release protection check blocked: main does not require check: $check" >&2
       status=1
     }
