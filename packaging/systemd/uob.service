@@ -5,7 +5,12 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-Type=exec
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=30s
+WatchdogSec=10s
+TimeoutAbortSec=5s
+LimitCORE=0
 User=uob
 Group=uob
 Slice=uob-production.slice
@@ -24,6 +29,8 @@ TimeoutStopSec=25s
 KillSignal=SIGTERM
 KillMode=control-group
 SendSIGKILL=yes
+# Preserve each termination before restart replaces the current unit status.
+ExecStopPost=/usr/bin/printf "uob_service_exit result=%%s code=%%s status=%%s invocation=%%s\n" "${SERVICE_RESULT}" "${EXIT_CODE}" "${EXIT_STATUS}" "${INVOCATION_ID}"
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal

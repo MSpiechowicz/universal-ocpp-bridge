@@ -7,6 +7,7 @@ mod event_stream;
 mod identity;
 mod lifecycle;
 mod staging_network;
+mod watchdog;
 
 use std::{error::Error, fmt};
 

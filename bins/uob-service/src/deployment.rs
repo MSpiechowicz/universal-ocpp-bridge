@@ -127,6 +127,13 @@ pub(crate) struct DeploymentState {
 }
 
 impl DeploymentState {
+    pub(crate) async fn probe_progress(&self) -> std::io::Result<()> {
+        self.store
+            .probe_progress()
+            .await
+            .map_err(std::io::Error::other)
+    }
+
     pub(crate) async fn shutdown(&self, deadline: Duration) -> Result<(), &'static str> {
         self.store
             .shutdown(deadline)

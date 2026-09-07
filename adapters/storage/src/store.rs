@@ -135,6 +135,15 @@ where
         self.sender.shutdown(deadline).await
     }
 
+    /// Completes a database read on the same bounded worker as operational writes.
+    ///
+    /// # Errors
+    /// Reports a full/stopped queue or database failure. Hosts must bound the wait;
+    /// no timer or cached health value can complete this probe for a stalled worker.
+    pub async fn probe_progress(&self) -> Result<(), StorageError> {
+        self.request(Request::Probe).await
+    }
+
     fn request<T>(
         &self,
         build: impl FnOnce(Reply<T>) -> Request<C, E, D, R>,
@@ -351,3 +360,7 @@ fn ready_error<T: Send + 'static>(
 ) -> StorageFuture<'static, T> {
     Box::pin(async move { Err(StorageError::new(code, detail)) })
 }
+
+#[cfg(test)]
+#[path = "progress_tests.rs"]
+mod progress_tests;
