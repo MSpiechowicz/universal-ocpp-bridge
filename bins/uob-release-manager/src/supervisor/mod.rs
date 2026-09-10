@@ -2,6 +2,7 @@
 pub mod ipc;
 mod storage;
 
+use crate::activation::ActivationJournal;
 use crate::artifacts::{ArtifactStore, InstallError, InstallPolicy, filesystem, manifest};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::Path};
@@ -103,6 +104,7 @@ impl Response {
 /// Sole owner of private persistent request/failure state.
 pub struct Supervisor {
     ledger: Ledger,
+    _activation: ActivationJournal,
     grants: Vec<Grant>,
     store: std::path::PathBuf,
     policy: InstallPolicy,
@@ -136,6 +138,7 @@ impl Supervisor {
         }
         Ok(Self {
             ledger: Ledger::open(state)?,
+            _activation: ActivationJournal::open(store, &policy)?,
             grants,
             store: store.to_owned(),
             policy,

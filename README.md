@@ -191,3 +191,7 @@ trusted manifests, bounded extraction, immutable candidates, and protected fallb
 See [independent release supervisor IPC](docs/operations/release-supervisor-ipc.md) for
 kernel-authenticated local permissions, private request/failure state, independent packaging,
 and fail-closed activation boundaries while the bridge is stopped.
+
+See [durable release transitions and ownership](docs/operations/release-activation-journal.md)
+for activation intent recovery, atomic artifact pointers, candidate retention, and
+the boundary between persistent observations and production process control.

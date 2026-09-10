@@ -9,8 +9,9 @@ This issue establishes the supervisor ownership and authorization boundary. Stag
 currently revalidates the installed candidate and persists `staged_verified_digest`.
 It does **not** claim that a staging process ran or passed qualification. Promote
 and rollback require the activation permission, then return
-`qualification_required`. The activation journal/recovery state machine (#153),
-qualification evidence (#154), production admission/activation (#155–#157), and
+`qualification_required`. The [activation journal and recovery state machine](release-activation-journal.md)
+now persist internal policy transitions and recover pointer operations before IPC starts.
+Qualification evidence (#154), production admission/activation (#155–#157), and
 automatic rollback (#160) must supply their gates before those operations can
 change a service or artifact pointer. Client permission is never qualification.
 
@@ -110,7 +111,7 @@ stale socket left by process death can be removed after acquiring that lock;
 regular files and links at the socket path are rejected without deletion.
 
 The private ledger retains one bounded last-operation record and aggregate
-counters; this is not a full audit history or the later activation state machine.
+counters; this is not a full audit history or the separate activation journal.
 An authorized operation is acknowledged only after writing `state.next`, syncing
 it, renaming it to `state.json`, and syncing the directory. Unauthorized operations
 cannot allocate ledger records or touch the artifact store. Sequence exhaustion

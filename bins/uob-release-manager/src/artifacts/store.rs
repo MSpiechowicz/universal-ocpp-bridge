@@ -31,6 +31,14 @@ impl ArtifactStore {
     /// # Errors
     /// Rejects unsafe paths, contention, malformed pointers and incomplete prior installs.
     pub fn open(root: &Path) -> Result<Self, InstallError> {
+        Self::open_inner(root, false)
+    }
+
+    pub(crate) fn open_for_recovery(root: &Path) -> Result<Self, InstallError> {
+        Self::open_inner(root, true)
+    }
+
+    fn open_inner(root: &Path, recovery: bool) -> Result<Self, InstallError> {
         disk::directory(root)?;
         // The same flock namespace as disk_preflight.py. Never replace the lock inode.
         let lock_path = root.join(".disk-admission.lock");
@@ -62,7 +70,16 @@ impl ArtifactStore {
                 "incomplete installation; inspect private temporary state before retrying",
             );
         }
-        store.prune()?;
+        if !recovery
+            && (fs::symlink_metadata(root.join(".activation-intent")).is_ok()
+                || fs::symlink_metadata(root.join(".activation-intent.next")).is_ok())
+        {
+            return reject("activation recovery required before artifact access");
+        }
+        if !recovery {
+            crate::activation::check_store_consistency(root)?;
+            store.prune()?;
+        }
         Ok(store)
     }
 
@@ -117,6 +134,9 @@ impl ArtifactStore {
         payload: &mut impl Read,
         policy: &InstallPolicy,
     ) -> Result<InstalledArtifact, InstallError> {
+        if crate::activation::installation_blocked(&self.root)? {
+            return reject("activation or probation owns the candidate slot");
+        }
         let manifest = verify_manifest(encoded, signature, policy)?;
         self.references()?;
         let destination = self

@@ -1,5 +1,9 @@
 #![doc = "Independent release qualification and activation policy."]
 
+#[cfg(test)]
+extern crate self as uob_release_manager;
+
+pub mod activation;
 pub mod artifacts;
 pub mod supervisor;
 
