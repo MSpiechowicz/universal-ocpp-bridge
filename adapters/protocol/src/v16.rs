@@ -1,11 +1,12 @@
 //! OCPP 1.6J model isolation and charger-to-application mappings.
 
 mod authorization;
+mod registration;
+pub use registration::{complete_registration, registration_call};
 
 pub use authorization::{Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call};
 
 use rust_ocpp::v1_6::messages::{
-    boot_notification::BootNotificationRequest, heart_beat::HeartbeatRequest,
     meter_values::MeterValuesRequest, start_transaction::StartTransactionRequest,
 };
 use rust_ocpp::v1_6::types::{
@@ -13,10 +14,7 @@ use rust_ocpp::v1_6::types::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use uob_application::{
-    ChargerObservation, MeasurementObservation, RegistrationObservation,
-    TransactionStartObservation,
-};
+use uob_application::{ChargerObservation, MeasurementObservation, TransactionStartObservation};
 use uob_contracts::{
     DataPointValue, ExactDecimal, ExactDecimalError, Freshness, MeasurementContext,
     MeasurementLocation, MeasurementMetadata, MeasurementPhase, NativeProtocolReference, PointId,
@@ -42,17 +40,14 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
     let (message_id, action, payload) = parse_frame(frame)?;
     let observation = match action.as_str() {
         "BootNotification" => {
-            let request: BootNotificationRequest = validated_payload(payload)?;
-            ChargerObservation::Registration(RegistrationObservation {
-                protocol: PROTOCOL,
-                vendor: request.charge_point_vendor,
-                model: request.charge_point_model,
-                boot_reason: None,
-            })
+            ChargerObservation::Registration(registration::boot_observation(payload)?)
         }
         "Heartbeat" => {
-            let _: HeartbeatRequest = validated_payload(payload)?;
+            registration::heartbeat_payload(payload)?;
             ChargerObservation::Heartbeat { protocol: PROTOCOL }
+        }
+        "StatusNotification" => {
+            ChargerObservation::ConnectorStatus(registration::status_observation(payload)?)
         }
         "MeterValues" => measurements(payload_as(payload)?)?,
         "StartTransaction" => {

@@ -11,6 +11,7 @@ mod health;
 mod payment;
 mod protocol;
 mod query;
+pub mod registration;
 mod resource;
 mod security;
 mod station;

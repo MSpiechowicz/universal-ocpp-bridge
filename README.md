@@ -210,3 +210,6 @@ for candidate configuration checks, bounded online SQLite backups, and disaster-
 See [persistent release failure classification](docs/operations/rollback-signal-policy.md)
 for reboot-safe trigger windows, external-outage exclusions, staging pressure ordering,
 and critical recovery decisions.
+
+See [OCPP 1.6 registration and status](docs/architecture/ocpp16-registration.md) for persisted boot
+decisions, heartbeat gating, native connector status, and reconnect behavior.

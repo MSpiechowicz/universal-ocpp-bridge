@@ -12,6 +12,8 @@ use uob_contracts::{
 pub enum ChargerObservation {
     /// A station has announced its identity and boot reason, when the edition defines one.
     Registration(RegistrationObservation),
+    /// Validated OCPP 1.6 connector/controller status, retaining exact error information.
+    ConnectorStatus(crate::registration::ConnectorStatusObservation),
     /// A station keepalive was received.
     Heartbeat {
         /// Negotiated protocol edition.
