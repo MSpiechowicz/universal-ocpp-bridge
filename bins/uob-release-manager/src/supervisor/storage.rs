@@ -34,7 +34,7 @@ impl Ledger {
             .map_err(|_| InstallError::Rejected("supervisor already running"))?;
         let path = root.join("state.json");
         let state = match fs::symlink_metadata(&path) {
-            Ok(_) => serde_json::from_slice(&disk::bounded_read(&path, 4096)?)?,
+            Ok(_) => serde_json::from_slice(&disk::bounded_read(&path, 65536)?)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Status::default(),
             Err(e) => return Err(e.into()),
         };
@@ -93,9 +93,27 @@ impl Ledger {
             request,
             result,
         });
+        self.persist(next)
+    }
+
+    pub fn record_failures(
+        &mut self,
+        failures: super::failures::State,
+    ) -> Result<(), InstallError> {
+        let mut next = self.state.clone();
+        next.failures = Some(failures);
+        self.persist(next)
+    }
+
+    fn persist(&mut self, next: Status) -> Result<(), InstallError> {
+        validate(&next)?;
+        let bytes = serde_json::to_vec(&next)?;
+        if bytes.len() > 65536 {
+            return Err(InstallError::Rejected("supervisor ledger exceeds bound"));
+        }
         let temporary = self.root.join("state.next");
         self.recovery = true;
-        disk::write_new(&temporary, &serde_json::to_vec(&next)?)?;
+        disk::write_new(&temporary, &bytes)?;
         fs::rename(&temporary, self.root.join("state.json"))?;
         disk::sync_dir(&self.root)?;
         self.state = next;
@@ -105,6 +123,9 @@ impl Ledger {
 }
 
 fn validate(state: &Status) -> Result<(), InstallError> {
+    if let Some(failures) = &state.failures {
+        failures.validate()?;
+    }
     let bad_digest = state
         .staged_verified_digest
         .as_ref()
