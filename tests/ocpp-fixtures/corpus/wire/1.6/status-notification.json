@@ -1,0 +1,1 @@
+[2,"fixture-16-status","StatusNotification",{"connectorId":1,"status":"Faulted","errorCode":"GroundFailure","timestamp":"2026-09-10T12:00:00Z","info":"ground check failed","vendorId":"Independent Vendor","vendorErrorCode":"E-GROUND"}]
