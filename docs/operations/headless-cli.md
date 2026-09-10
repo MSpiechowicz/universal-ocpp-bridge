@@ -39,6 +39,10 @@ Validate without binding a socket, resolving DNS, reading credentials, or starti
 uob config check --config bridge.toml
 ```
 
+Production release preflight can additionally read and validate secret references with
+`uob config check --config bridge.toml --secrets`. See
+[production preflight](release-preflight-backup.md) for reference restrictions and limits.
+
 Success writes one JSON object to stdout:
 
 ```json

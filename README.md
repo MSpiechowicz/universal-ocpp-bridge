@@ -199,3 +199,6 @@ the boundary between persistent observations and production process control.
 See [trusted candidate qualification](docs/operations/release-qualification.md) for
 signed acceptance/compatibility evidence, exact staging input bindings, the 24-hour
 soak requirement, and separate promotion authorization.
+
+See [production release preflight and backup](docs/operations/release-preflight-backup.md)
+for candidate configuration checks, bounded online SQLite backups, and disaster-recovery ownership.

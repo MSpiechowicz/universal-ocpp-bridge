@@ -11,6 +11,7 @@ enum Command {
     },
     Check {
         configuration: PathBuf,
+        secrets: bool,
     },
     Events {
         configuration: PathBuf,
@@ -35,7 +36,10 @@ pub async fn execute(
             configuration,
             no_ui,
         } => serve(&configuration, no_ui).await,
-        Command::Check { configuration } => check(&configuration, output),
+        Command::Check {
+            configuration,
+            secrets,
+        } => check(&configuration, secrets, output),
         Command::Events {
             configuration,
             after,
@@ -89,8 +93,15 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
     }
 }
 
-fn check(configuration_path: &std::path::Path, output: &mut impl Write) -> CliResult {
+fn check(
+    configuration_path: &std::path::Path,
+    secrets: bool,
+    output: &mut impl Write,
+) -> CliResult {
     if let Err(error) = configuration::load(configuration_path) {
+        return failure(2, error.to_string());
+    }
+    if secrets && let Err(error) = configuration::check_secrets(configuration_path) {
         return failure(2, error.to_string());
     }
     if serde_json::to_writer(&mut *output, &serde_json::json!({ "status": "valid" }))
@@ -160,10 +171,18 @@ fn parse_check(mut arguments: impl Iterator<Item = String>) -> Result<Command, (
         (Some("--config"), Some(path)) => PathBuf::from(path),
         _ => return Err(()),
     };
+    let secrets = match arguments.next().as_deref() {
+        None => false,
+        Some("--secrets") => true,
+        _ => return Err(()),
+    };
     if arguments.next().is_some() {
         return Err(());
     }
-    Ok(Command::Check { configuration })
+    Ok(Command::Check {
+        configuration,
+        secrets,
+    })
 }
 
 fn parse_events(mut arguments: impl Iterator<Item = String>) -> Result<Command, ()> {
@@ -207,7 +226,7 @@ fn failure(exit_code: u8, diagnostic: String) -> CliResult {
 }
 
 fn usage() -> String {
-    "usage: uob serve --config PATH [--no-ui] | uob config check --config PATH | uob events [--config PATH] [--after CURSOR] --format jsonl".to_owned()
+    "usage: uob serve --config PATH [--no-ui] | uob config check --config PATH [--secrets] | uob events [--config PATH] [--after CURSOR] --format jsonl".to_owned()
 }
 
 #[cfg(test)]
