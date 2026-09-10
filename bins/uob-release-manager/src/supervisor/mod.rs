@@ -1,4 +1,5 @@
 //! Independent local release-control boundary. No application process is required.
+pub mod failures;
 pub mod ipc;
 pub mod preflight;
 mod qualification;
@@ -86,6 +87,8 @@ pub struct Record {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
+    #[serde(default)]
+    pub failures: Option<failures::State>,
     pub sequence: u64,
     pub failed_operations: u64,
     pub staged_verified_digest: Option<String>,
@@ -179,13 +182,19 @@ impl Supervisor {
         if let Request::Status {} = request {
             let mut status = self.ledger.status().clone();
             status.qualification = self.current_qualification();
+            let code = if self.ledger.needs_recovery()
+                || status
+                    .failures
+                    .as_ref()
+                    .is_some_and(|s| s.decision == failures::Decision::RecoveryRequired)
+            {
+                Code::RecoveryRequired
+            } else {
+                Code::Ok
+            };
             return Response {
                 status: Some(status),
-                ..Response::code(if self.ledger.needs_recovery() {
-                    Code::RecoveryRequired
-                } else {
-                    Code::Ok
-                })
+                ..Response::code(code)
             };
         }
         if matches!(&request, Request::Stage { digest } | Request::Promote { digest } | Request::Qualify { digest, .. }
@@ -194,7 +203,14 @@ impl Supervisor {
         {
             return Response::code(Code::InvalidRequest);
         }
-        if self.ledger.needs_recovery() {
+        if self.ledger.needs_recovery()
+            || self
+                .ledger
+                .status()
+                .failures
+                .as_ref()
+                .is_some_and(|s| s.decision == failures::Decision::RecoveryRequired)
+        {
             return Response::code(Code::RecoveryRequired);
         }
         let code = match &request {
