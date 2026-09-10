@@ -1,5 +1,6 @@
 //! Independent local release-control boundary. No application process is required.
 pub mod ipc;
+pub mod preflight;
 mod qualification;
 mod storage;
 
@@ -65,6 +66,7 @@ pub enum Code {
     ArtifactRejected,
     QualificationRequired,
     EvidenceRejected,
+    PreflightRejected,
     ActivationBlocked,
     RecoveryRequired,
     StorageFailure,
@@ -123,6 +125,7 @@ pub struct Supervisor {
     policy: InstallPolicy,
     qualification_policy: Option<crate::qualification::Policy>,
     state_directory: std::path::PathBuf,
+    preflight_policy: Option<preflight::Policy>,
 }
 
 impl Supervisor {
@@ -158,12 +161,13 @@ impl Supervisor {
             store: store.to_owned(),
             policy,
             qualification_policy: None,
+            preflight_policy: None,
             state_directory: state.to_owned(),
         })
     }
 
     /// Handles a request after transport-derived authentication.
-    /// No request can change a pointer, execute code, or replace the supervisor.
+    /// No request can change a pointer or replace the supervisor.
     pub fn handle(&mut self, uid: u32, request: Request) -> Response {
         if !self
             .grants
@@ -206,8 +210,7 @@ impl Supervisor {
                     .current_qualification()
                     .is_some_and(|q| &q.candidate_digest == digest)
                 {
-                    // Idle/drain admission and production process control are separate work.
-                    Code::ActivationBlocked
+                    self.preflight(digest)
                 } else {
                     Code::QualificationRequired
                 }

@@ -132,7 +132,7 @@ fn qualification_survives_restart_but_never_activates_or_grants_permission() {
         digest: f.artifact.digest().into(),
     };
     assert_eq!(manager.handle(102, promote.clone()).code, Code::Forbidden);
-    assert_eq!(manager.handle(100, promote).code, Code::ActivationBlocked);
+    assert_eq!(manager.handle(100, promote).code, Code::PreflightRejected);
     assert_eq!(fs::read(f.store.join("active")).unwrap(), active);
 }
 

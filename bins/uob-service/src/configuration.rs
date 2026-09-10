@@ -420,6 +420,7 @@ const fn initial_revision() -> u64 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigurationLoadError {
     Unavailable,
+    UnavailableSecret,
     InvalidDocument,
     InvalidIdentity,
     MissingTargetSelection,
@@ -446,4 +447,9 @@ impl Error for ConfigurationLoadError {}
 #[cfg(test)]
 mod tests;
 
+mod secrets;
 mod staging;
+
+pub(crate) fn check_secrets(path: &Path) -> Result<(), ConfigurationLoadError> {
+    secrets::check(path)
+}

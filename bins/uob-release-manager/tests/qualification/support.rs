@@ -24,7 +24,12 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
+        Self::with_candidate(None)
+    }
+
+    pub fn with_candidate(binary: Option<&[u8]>) -> Self {
         let mut artifact = artifacts::Fixture::new();
+        configure_schema(&mut artifact, binary.is_some());
         let store = artifact.root.join("store");
         let state = artifact.root.join("state");
         for path in [&store, &state, &state.join("evidence")] {
@@ -37,6 +42,8 @@ impl Fixture {
         fs::write(store.join("active"), artifact.digest()).unwrap();
         fs::write(store.join("previous-good"), artifact.digest()).unwrap();
         artifact.next_payload();
+        configure_payload(&mut artifact, binary);
+        artifact.policy.backup_reserve_bytes = 4 * 1024 * 1024;
         install(&artifact, &store);
         let key = Ed25519KeyPair::from_seed_unchecked(&[42; 32]).unwrap();
         let policy = Policy {
@@ -177,4 +184,29 @@ pub fn install(f: &artifacts::Fixture, store: &std::path::Path) {
         .unwrap()
         .install(&bytes, &signature, &mut f.payload.as_slice(), &f.policy)
         .unwrap();
+}
+
+fn configure_schema(artifact: &mut artifacts::Fixture, preflight: bool) {
+    if preflight {
+        let version = uob_release_manager::SchemaVersion::new(5);
+        let range = uob_release_manager::SchemaRange::new(version, version).unwrap();
+        artifact.manifest.compatibility.formats.operational_sqlite =
+            uob_release_manager::FormatSupport {
+                readable: range,
+                writable: range,
+            };
+        artifact.policy.current_formats.operational_sqlite = version;
+    }
+}
+
+fn configure_payload(artifact: &mut artifacts::Fixture, binary: Option<&[u8]>) {
+    if let Some(binary) = binary {
+        artifact.payload = binary.to_vec();
+        artifact.manifest.files = vec![uob_release_manager::artifacts::BundleFile {
+            path: "bin/uob".into(),
+            bytes: binary.len() as u64,
+        }];
+        artifact.manifest.compatibility.artifact_digest =
+            uob_contracts::ArtifactDigest::new(qualification::digest(binary)).unwrap();
+    }
 }
