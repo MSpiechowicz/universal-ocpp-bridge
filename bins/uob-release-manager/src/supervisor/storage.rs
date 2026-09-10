@@ -73,6 +73,19 @@ impl Ledger {
         if let Request::Stage { digest } = &request {
             // A failed recheck invalidates the previous staging observation.
             next.staged_verified_digest = (result == Code::Ok).then(|| digest.clone());
+            next.qualification = None;
+        }
+        if let Request::Qualify {
+            digest,
+            evidence_digest,
+        } = &request
+        {
+            next.qualification = (result == Code::Ok).then(|| crate::qualification::Qualified {
+                candidate_digest: digest.clone(),
+                evidence_digest: evidence_digest.clone(),
+                // Recomputed from authenticated evidence for every status/promotion read.
+                pi_measurements_digest: None,
+            });
         }
         next.last_operation = Some(Record {
             sequence: next.sequence,
@@ -98,9 +111,12 @@ fn validate(state: &Status) -> Result<(), InstallError> {
         .is_some_and(|d| !manifest::digest_name(d));
     let bad_record = state.last_operation.as_ref().is_some_and(|r| {
         r.sequence != state.sequence || matches!(&r.request,
-            Request::Stage { digest } | Request::Promote { digest } if !manifest::digest_name(digest))
+            Request::Stage { digest } | Request::Promote { digest } | Request::Qualify { digest, .. } if !manifest::digest_name(digest))
+            || matches!(&r.request, Request::Qualify { evidence_digest, .. } if !manifest::digest_name(evidence_digest))
     });
-    if bad_digest
+    if state.qualification.as_ref().is_some_and(|q| {
+        !manifest::digest_name(&q.candidate_digest) || !manifest::digest_name(&q.evidence_digest)
+    }) || bad_digest
         || bad_record
         || state.failed_operations > state.sequence
         || (state.sequence == 0) != state.last_operation.is_none()

@@ -7,11 +7,13 @@ change it. The existing offline `install` and `verify` commands remain available
 
 This issue establishes the supervisor ownership and authorization boundary. Staging
 currently revalidates the installed candidate and persists `staged_verified_digest`.
-It does **not** claim that a staging process ran or passed qualification. Promote
-and rollback require the activation permission, then return
-`qualification_required`. The [activation journal and recovery state machine](release-activation-journal.md)
+It does **not** claim that a staging process ran or passed qualification. Qualification now verifies signed harness evidence; see the
+[qualification gate](release-qualification.md). Promote and rollback require the
+activation permission. Unqualified promotion returns `qualification_required`; a
+qualified promotion returns `activation_blocked` pending production admission and
+process control. Rollback remains `qualification_required`. The [activation journal and recovery state machine](release-activation-journal.md)
 now persist internal policy transitions and recover pointer operations before IPC starts.
-Qualification evidence (#154), production admission/activation (#155–#157), and
+Production admission/activation (#155–#157) and
 automatic rollback (#160) must supply their gates before those operations can
 change a service or artifact pointer. Client permission is never qualification.
 
@@ -78,7 +80,8 @@ response line. Example requests:
 | --- | --- | --- |
 | `status` | `read` | Read private supervisor evidence without querying the bridge |
 | `stage` | `stage` | Under the artifact-store lock, require the current candidate and reverify its signature, host/security/schema eligibility, ownership, sealed layout and bytes; persist verification evidence |
-| `promote` / `rollback` | `activate` | Record `qualification_required`; leave application pointers and services unchanged |
+| `qualify` | `stage` | Verify signed evidence from the private inbox and persist an exact candidate/evidence reference |
+| `promote` / `rollback` | `activate` | Record `qualification_required` (or `activation_blocked` for qualified promotion); leave application pointers and services unchanged |
 
 Permissions are independent. Read does not grant stage or activate; stage does
 not grant read or activate; activate does not grant read or stage. Linux
@@ -90,7 +93,7 @@ must be exactly 64 lowercase hexadecimal characters.
 Responses contain `protocol: 1`, `manager_version`, a safe `code`, and, only for
 authorized status requests, `status`. Codes are `ok`, `forbidden`,
 `invalid_request`, `busy`, `artifact_rejected`, `qualification_required`,
-`recovery_required`, and `storage_failure`. No raw request or OS error text is
+`evidence_rejected`, `activation_blocked`, `recovery_required`, and `storage_failure`. No raw request or OS error text is
 echoed. Status reports a monotonic request sequence, failed authorized operation
 count, last operation and authenticated UID, and the last successfully verified
 staging digest. That digest is a historical observation, not a current
