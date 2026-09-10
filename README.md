@@ -195,3 +195,7 @@ and fail-closed activation boundaries while the bridge is stopped.
 See [durable release transitions and ownership](docs/operations/release-activation-journal.md)
 for activation intent recovery, atomic artifact pointers, candidate retention, and
 the boundary between persistent observations and production process control.
+
+See [trusted candidate qualification](docs/operations/release-qualification.md) for
+signed acceptance/compatibility evidence, exact staging input bindings, the 24-hour
+soak requirement, and separate promotion authorization.

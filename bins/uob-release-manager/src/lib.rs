@@ -5,6 +5,7 @@ extern crate self as uob_release_manager;
 
 pub mod activation;
 pub mod artifacts;
+pub mod qualification;
 pub mod supervisor;
 
 use serde::{Deserialize, Serialize};
@@ -138,7 +139,7 @@ pub struct ArtifactCompatibilityManifest {
 }
 
 /// Durable record classes that an actual downgrade cycle must exercise.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum DurableRecordClass {
     /// Charging transaction state created after upgrade.
     Transaction,
@@ -166,7 +167,7 @@ impl DurableRecordClass {
 }
 
 /// Evidence that configuration was projected without rewriting persisted state.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ConfigurationProjectionEvidence {
     /// Configuration schema read after promotion.
     pub source_version: SchemaVersion,
@@ -179,7 +180,7 @@ pub struct ConfigurationProjectionEvidence {
 }
 
 /// Result of one mandatory qualification assertion.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum EvidenceResult {
     /// The qualification harness observed the required behavior.
     Passed,
@@ -188,7 +189,7 @@ pub enum EvidenceResult {
 }
 
 /// How one database was handled during the artifact downgrade.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum DatabaseContinuity {
     /// The old binary reopened the same post-upgrade database in place.
     ReusedInPlace,
@@ -203,7 +204,7 @@ pub enum DatabaseContinuity {
 }
 
 /// Results from executing a real old-to-new-to-old qualification cycle.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RollbackCycleEvidence {
     /// Artifact that ran before promotion.
     pub old_artifact: ArtifactDigest,

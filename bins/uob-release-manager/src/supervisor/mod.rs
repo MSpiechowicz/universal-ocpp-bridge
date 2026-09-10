@@ -1,5 +1,6 @@
 //! Independent local release-control boundary. No application process is required.
 pub mod ipc;
+mod qualification;
 mod storage;
 
 use crate::activation::ActivationJournal;
@@ -30,8 +31,16 @@ pub struct Grant {
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Request {
     Status {},
-    Stage { digest: String },
-    Promote { digest: String },
+    Stage {
+        digest: String,
+    },
+    Qualify {
+        digest: String,
+        evidence_digest: String,
+    },
+    Promote {
+        digest: String,
+    },
     Rollback {},
 }
 
@@ -39,7 +48,7 @@ impl Request {
     const fn permission(&self) -> Permission {
         match self {
             Self::Status {} => Permission::Read,
-            Self::Stage { .. } => Permission::Stage,
+            Self::Stage { .. } | Self::Qualify { .. } => Permission::Stage,
             Self::Promote { .. } | Self::Rollback {} => Permission::Activate,
         }
     }
@@ -55,6 +64,8 @@ pub enum Code {
     Busy,
     ArtifactRejected,
     QualificationRequired,
+    EvidenceRejected,
+    ActivationBlocked,
     RecoveryRequired,
     StorageFailure,
 }
@@ -77,6 +88,8 @@ pub struct Status {
     pub failed_operations: u64,
     pub staged_verified_digest: Option<String>,
     pub last_operation: Option<Record>,
+    #[serde(default)]
+    pub qualification: Option<crate::qualification::Qualified>,
 }
 
 /// One bounded response. Status is returned only after the read permission check.
@@ -104,10 +117,12 @@ impl Response {
 /// Sole owner of private persistent request/failure state.
 pub struct Supervisor {
     ledger: Ledger,
-    _activation: ActivationJournal,
+    activation: ActivationJournal,
     grants: Vec<Grant>,
     store: std::path::PathBuf,
     policy: InstallPolicy,
+    qualification_policy: Option<crate::qualification::Policy>,
+    state_directory: std::path::PathBuf,
 }
 
 impl Supervisor {
@@ -138,10 +153,12 @@ impl Supervisor {
         }
         Ok(Self {
             ledger: Ledger::open(state)?,
-            _activation: ActivationJournal::open(store, &policy)?,
+            activation: ActivationJournal::open(store, &policy)?,
             grants,
             store: store.to_owned(),
             policy,
+            qualification_policy: None,
+            state_directory: state.to_owned(),
         })
     }
 
@@ -156,8 +173,10 @@ impl Supervisor {
             return Response::code(Code::Forbidden);
         }
         if let Request::Status {} = request {
+            let mut status = self.ledger.status().clone();
+            status.qualification = self.current_qualification();
             return Response {
-                status: Some(self.ledger.status().clone()),
+                status: Some(status),
                 ..Response::code(if self.ledger.needs_recovery() {
                     Code::RecoveryRequired
                 } else {
@@ -165,8 +184,9 @@ impl Supervisor {
                 })
             };
         }
-        if matches!(&request, Request::Stage { digest } | Request::Promote { digest }
+        if matches!(&request, Request::Stage { digest } | Request::Promote { digest } | Request::Qualify { digest, .. }
             if !manifest::digest_name(digest))
+            || matches!(&request, Request::Qualify { evidence_digest, .. } if !manifest::digest_name(evidence_digest))
         {
             return Response::code(Code::InvalidRequest);
         }
@@ -175,9 +195,24 @@ impl Supervisor {
         }
         let code = match &request {
             Request::Stage { digest } => self.stage(digest),
+            Request::Qualify {
+                digest,
+                evidence_digest,
+            } => self.qualify(digest, evidence_digest),
             // Neither operator permission nor signed bytes prove qualification,
             // idle admission, compatible rollback, or activation recovery ownership.
-            Request::Promote { .. } | Request::Rollback {} => Code::QualificationRequired,
+            Request::Promote { digest } => {
+                if self
+                    .current_qualification()
+                    .is_some_and(|q| &q.candidate_digest == digest)
+                {
+                    // Idle/drain admission and production process control are separate work.
+                    Code::ActivationBlocked
+                } else {
+                    Code::QualificationRequired
+                }
+            }
+            Request::Rollback {} => Code::QualificationRequired,
             Request::Status {} => unreachable!(),
         };
         match self.ledger.record(uid, request, code) {
