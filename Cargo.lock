@@ -3006,6 +3006,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "subtle",
  "tokio",
  "toml",
  "tower",

@@ -26,6 +26,8 @@ use crate::{ServiceComposition, StartupIdentityConfiguration, compose_with_data_
 struct FileConfiguration {
     bridge: BridgeConfiguration,
     #[serde(default)]
+    diagnostics: crate::diagnostics::Configuration,
+    #[serde(default)]
     management: ManagementConfiguration,
     #[serde(default)]
     events: EventClientConfiguration,
@@ -107,6 +109,7 @@ struct DataExportSection {
 }
 
 pub(crate) struct ValidatedServiceConfiguration {
+    pub diagnostics: crate::diagnostics::Validated,
     pub service: ServiceComposition<(), ()>,
     pub management_address: SocketAddr,
     pub events: ValidatedEventClientConfiguration,
@@ -193,9 +196,14 @@ fn validate(
         DestinationTransition::Preserve,
     )
     .map_err(|_| ConfigurationLoadError::Composition)?;
+    let diagnostics = configuration
+        .diagnostics
+        .validate(&service.application.identity().bridge_id)
+        .map_err(|_| ConfigurationLoadError::InvalidDocument)?;
     let events = validate_event_client(configuration.events, configuration.management.listen_addr)?;
 
     Ok(ValidatedServiceConfiguration {
+        diagnostics,
         service,
         management_address: configuration.management.listen_addr,
         shutdown_timeout,

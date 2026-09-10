@@ -30,6 +30,7 @@ impl LifecycleConfiguration {
 pub(crate) async fn serve(
     address: SocketAddr,
     application: Application,
+    diagnostics: uob_management_adapter::ManagementCaptureConfiguration,
     options: ManagementRouterOptions,
     deadline: Duration,
     deployment: Option<crate::deployment::DeploymentState>,
@@ -52,10 +53,11 @@ pub(crate) async fn serve(
             })??;
     }
     let (stop, stopped) = oneshot::channel();
-    let server = uob_management_adapter::serve_with_readiness(
+    let server = uob_management_adapter::serve_with_capture_readiness(
         address,
         application,
         options,
+        Some(diagnostics),
         async move {
             let _ = stopped.await;
         },

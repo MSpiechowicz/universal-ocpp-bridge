@@ -9,6 +9,12 @@ pub(super) fn check(path: &Path) -> Result<(), ConfigurationLoadError> {
     if config.bridge.environment != uob_contracts::Environment::Production {
         return Err(fail());
     }
+    config
+        .diagnostics
+        .validate(&uob_contracts::BridgeId::new(config.bridge.id.clone()).map_err(|_| fail())?)
+        .map_err(|_| fail())?
+        .resolve()
+        .map_err(|_| fail())?;
     let mut references = Vec::new();
     if let Some(path) = config.events.credentials_file {
         references.push(path);

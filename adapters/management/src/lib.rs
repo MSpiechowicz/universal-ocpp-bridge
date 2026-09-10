@@ -1,6 +1,10 @@
 #![doc = "Axum-based management adapter."]
 
 mod assets;
+mod capture_api;
+pub use capture_api::{
+    ManagementCaptureAuthenticator, ManagementCaptureConfiguration, capture_router,
+};
 mod command_api;
 mod event_api;
 mod health_view;
@@ -11,7 +15,10 @@ mod security;
 use std::fmt::Write;
 
 mod serving;
-pub use serving::{serve, serve_with_options, serve_with_readiness, serve_with_shutdown};
+pub use serving::{
+    serve, serve_with_capture_readiness, serve_with_options, serve_with_readiness,
+    serve_with_shutdown,
+};
 
 use axum::{Json, extract::State, http::header, response::IntoResponse};
 use uob_application::{

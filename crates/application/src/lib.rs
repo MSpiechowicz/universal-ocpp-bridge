@@ -3,6 +3,7 @@
 mod access;
 mod admission;
 mod authorization;
+pub mod capture;
 mod command;
 mod database;
 mod diagnostic;

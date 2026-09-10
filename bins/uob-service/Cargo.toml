@@ -12,6 +12,7 @@ name = "uob"
 path = "src/main.rs"
 
 [dependencies]
+subtle.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
 rustls.workspace = true
