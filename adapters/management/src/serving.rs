@@ -49,6 +49,21 @@ pub async fn serve_with_readiness(
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
     ready: impl FnOnce() -> io::Result<()>,
 ) -> io::Result<()> {
+    serve_with_capture_readiness(address, application, options, None, shutdown, ready).await
+}
+
+/// Serves with optional explicit capture credentials and the same host readiness/shutdown hooks.
+///
+/// # Errors
+/// Returns an I/O error for unsafe binding, readiness failure, or listener failure.
+pub async fn serve_with_capture_readiness(
+    address: SocketAddr,
+    application: Application,
+    options: ManagementRouterOptions,
+    capture: Option<crate::ManagementCaptureConfiguration>,
+    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+    ready: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
     if !address.ip().is_loopback() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -56,7 +71,11 @@ pub async fn serve_with_readiness(
         ));
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
-    let router = router_with_options(application, options);
+    let identity = application.identity().clone();
+    let mut router = router_with_options(application, options);
+    if let Some(capture) = capture {
+        router = router.merge(crate::capture_router(identity, capture));
+    }
     ready()?;
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown)
