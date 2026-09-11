@@ -2,6 +2,27 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.28.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ed717999f4be4f380c9d93ee346040fe54e1a34d..v0.28.0) - 2026-09-11
+#### Features
+- (**diagnostics**) stream bounded redacted capture exports (#276) - ([d49492c](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/d49492c0a1feb7af849e6359ffc1d545cde8bc2b)) - Maciej Spiechowicz
+- (**diagnostics**) retain bounded debug traces with explicit gaps (#275) - ([2ebd2ab](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/2ebd2aba74cc7aeebde5f901e4b75aa4d3b661eb)) - Maciej Spiechowicz
+- (**diagnostics**) correlate bounded asynchronous flow events (#274) - ([96171fb](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/96171fb94d4152afb1a880702f0d23e9955a06f2)) - Maciej Spiechowicz
+- (**diagnostics**) add scoped expiring capture sessions (#270) - ([489ec12](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/489ec12fdf7ceb87637a4b7b5a666a7b44d04b44)) - Maciej Spiechowicz
+- (**ocpp**) add bounded multipart report collection (#279) - ([7d127e1](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/7d127e1fd284a482933bdf9d8e86cc7d9c4d2775)) - Maciej Spiechowicz
+- (**protocol**) persist OCPP 1.6 transaction lifecycle (#277) - ([3d2137a](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3d2137a8fb21a76b7fce8abbf4133dc6a31fa010)) - Maciej Spiechowicz
+- (**protocol**) implement OCPP 2.0.1 charger authorization (#273) - ([dece52a](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/dece52a2bff8ca2460c924ff56a34b2f85552413)) - Maciej Spiechowicz
+- (**protocol**) persist OCPP 2.0.1 registration and status (#272) - ([2f6eb8e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/2f6eb8ecefa71793331f0d569d13909a34c72303)) - Maciej Spiechowicz
+- (**protocol**) persist OCPP 1.6 registration and status (#271) - ([7435d71](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/7435d71d123fa00a8eb67c44915ba7a0590bed20)) - Maciej Spiechowicz
+- (**release**) gate promotion on a race-safe idle drain (#278) - ([31e7246](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/31e7246a010c3b9e43f15ddfd79f7eecd0386e99)) - Maciej Spiechowicz
+- (**release**) persist rollback signal classification (#269) - ([354cb19](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/354cb19115142e8ebe46dedcded1ba32de638ec0)) - Maciej Spiechowicz
+- (**release**) validate production preflight and back up SQLite (#268) - ([6d95dab](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/6d95dabe680ad06cc718c9ee4b08694dfaa4c74b)) - Maciej Spiechowicz
+- (**release**) verify trusted candidate qualification evidence (#267) - ([7b8b5e0](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/7b8b5e066b325cf92f219cabcc878bf5ea9d9ac6)) - Maciej Spiechowicz
+- (**release**) persist recoverable activation transitions (#266) - ([8d9ce9b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/8d9ce9bacdb3f8632a05830d20b6d9c08824382e)) - Maciej Spiechowicz
+#### Continuous Integration
+- upgrade release token action to Node 24 (#265) - ([ed71799](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ed717999f4be4f380c9d93ee346040fe54e1a34d)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.27.1](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/a5d69aac8ee32fb9dc0e48d8cb36700203c2228d..v0.27.1) - 2026-09-07
 #### Bug Fixes
 - (**release**) publish version bumps after one stable approval (#264) - ([a5d69aa](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/a5d69aac8ee32fb9dc0e48d8cb36700203c2228d)) - Maciej Spiechowicz
