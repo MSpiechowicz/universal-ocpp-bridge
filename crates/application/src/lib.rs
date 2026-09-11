@@ -46,6 +46,9 @@ pub use database::{
     DatabaseRetryClassification, DatabaseRuntimeLimits, DatabaseShutdown, DatabaseTask,
     DeduplicationCapability, TransactionCapability, ValidatedDatabaseConfiguration,
 };
+pub use diagnostic::flow::{FlowDiagnostics, FlowEvidence, FlowSpan, FlowStage};
+pub use diagnostic::state::DiagnosticState;
+pub use diagnostic::store::DiagnosticStore;
 pub use diagnostic::{
     DiagnosticAttribute, DiagnosticBoundary, DiagnosticDisclosureAudit, DiagnosticObservation,
     DiagnosticOutcome, DiagnosticSerializationError, DiagnosticSummary, DiagnosticTraceContext,
@@ -117,6 +120,7 @@ use uob_contracts::{ContractVersion, RuntimeIdentity, ServiceIdentity};
 pub struct Application {
     identity: ServiceIdentity,
     health: HealthMonitor,
+    diagnostics: FlowDiagnostics,
 }
 
 impl Application {
@@ -144,7 +148,21 @@ impl Application {
         Ok(Self {
             identity,
             health: HealthMonitor::new(budget),
+            diagnostics: FlowDiagnostics::default(),
         })
+    }
+
+    /// Attaches the process-owned optional diagnostic emitter.
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: FlowDiagnostics) -> Self {
+        self.diagnostics = diagnostics;
+        self
+    }
+
+    /// Shared optional instrumentation boundary.
+    #[must_use]
+    pub const fn diagnostics(&self) -> &FlowDiagnostics {
+        &self.diagnostics
     }
 
     /// Reports the contract version supported by the domain layer.

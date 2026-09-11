@@ -6,12 +6,42 @@ use uob_contracts::Environment;
 use uob_hostile_websocket_peer::{Peer, PeerConfig};
 use uob_protocol_adapter::{
     CallSessionConfiguration, OcppEndpoint, StationAuthenticationMode, spawn_call_session,
-    v16::complete_registration,
 };
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)] // Keep the complete wire scenario and evidence assertions together.
 async fn authenticated_wire_replies_follow_durable_decisions() {
     let application = endpoint_support::application(Environment::Demo, None);
+    let capture = uob_application::capture::CaptureManager::new(true);
+    let grant = uob_application::capture::CaptureGrant::new(
+        application.identity().bridge_id.clone(),
+        vec![uob_application::capture::CapturePermission::Capture],
+        None,
+        None,
+    )
+    .unwrap();
+    capture
+        .start(
+            &grant,
+            uob_application::capture::CaptureFilter {
+                bridge: application.identity().bridge_id.clone(),
+                station: None,
+                target: None,
+            },
+            uob_application::capture::CaptureLevel::Metadata,
+            None,
+        )
+        .unwrap();
+    let (flow, traces) = uob_application::FlowDiagnostics::channel(
+        application.runtime_identity().process_instance_id.clone(),
+        application.identity().bridge_id.clone(),
+        capture,
+        std::sync::Arc::new(TraceClock),
+        128,
+    )
+    .unwrap();
+    let application = application.with_diagnostics(flow);
+
     let (endpoint, mut connections) = OcppEndpoint::new(
         endpoint_support::authenticator(StationAuthenticationMode::Credential, None),
         &application,
@@ -80,14 +110,12 @@ async fn authenticated_wire_replies_follow_durable_decisions() {
                 .is_err(),
             "no speculative response while application is delayed"
         );
-        match complete_registration(incoming.call, &store, &mut state, decision, 10, now(second))
-            .await
-        {
-            Ok(reply) => {
-                assert_eq!(persisted(&store).await, state);
-                incoming.responder.respond(&reply[2]).unwrap();
-            }
-            Err(error) => incoming.responder.reject(error).unwrap(),
+        let correlation = incoming.correlation_id.clone();
+        let result = incoming
+            .complete_registration(&store, &mut state, decision, 10, now(second))
+            .await;
+        if result.is_ok() {
+            assert_eq!(persisted(&store).await, state);
         }
         let response = timeout(TEST_BOUND, peer.receive())
             .await
@@ -97,6 +125,35 @@ async fn authenticated_wire_replies_follow_durable_decisions() {
             .unwrap();
         let response: Value = serde_json::from_str(&response).unwrap();
         assert_eq!(response[1], value[1]);
+        let records = traces
+            .try_iter()
+            .map(|r| {
+                serde_json::from_slice::<uob_contracts::TraceRecord>(r.encoded_json()).unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            records
+                .iter()
+                .all(|r| r.correlation_id.as_ref() == Some(&correlation))
+        );
+        for stage in ["ocpp.receive", "validation", "application", "ocpp.send"] {
+            assert!(
+                records.iter().any(|r| r.stage.as_str() == stage),
+                "missing {stage}"
+            );
+        }
+        assert_eq!(
+            records.iter().any(|r| r.stage.as_str() == "storage.commit"),
+            second != 1
+        );
+        if second == 11 {
+            assert!(
+                records
+                    .iter()
+                    .any(|r| r.stage.as_str() == "state.changed_fields")
+            );
+        }
+
         if second == 1 {
             assert_eq!(response[0], 4);
             assert_eq!(response[2], "ProtocolError");
@@ -107,4 +164,11 @@ async fn authenticated_wire_replies_follow_durable_decisions() {
     assert_eq!(state.resources[0].availability, AvailabilityState::Faulted);
     task.shutdown(TEST_BOUND).await.unwrap();
     server.abort();
+}
+
+struct TraceClock;
+impl uob_application::CommandClock for TraceClock {
+    fn now(&self) -> UtcTimestamp {
+        now(0)
+    }
 }

@@ -207,6 +207,22 @@ impl CaptureManager {
         })
     }
 
+    /// Best-effort producer check that never waits for capture control or lease ownership.
+    /// Contention, poisoning, expiry and missing authorization all shed optional work.
+    #[must_use]
+    pub fn try_accepts(&self, record: &CaptureFilter, level: CaptureLevel) -> bool {
+        let Ok(state) = self.state.try_lock() else {
+            return false;
+        };
+        state.session.as_ref().is_some_and(|s| {
+            !s.stopped
+                && Instant::now() < s.deadline
+                && s.status.filter.includes(record)
+                && (level == CaptureLevel::Metadata
+                    || s.status.level == CaptureLevel::RedactedPayload)
+        })
+    }
+
     /// Reserves one of two shared live subscriber slots, or one of two thirty-second exports.
     /// The same complete selection check protects both sinks before any trace can be read.
     ///

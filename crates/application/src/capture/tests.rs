@@ -303,3 +303,21 @@ fn abandoned_export_has_absolute_deadline_and_cannot_pin_new_captures() {
     drop(state);
     assert!(!export.permits(&filter("a")));
 }
+
+#[test]
+fn instrumentation_never_waits_for_capture_control_lock() {
+    let manager = CaptureManager::new(true);
+    manager
+        .start(
+            &grant(CapturePermission::Capture, "a"),
+            filter("a"),
+            CaptureLevel::Metadata,
+            None,
+        )
+        .unwrap();
+    assert!(manager.try_accepts(&filter("a"), CaptureLevel::Metadata));
+    let owner = manager.state.lock().unwrap();
+    assert!(!manager.try_accepts(&filter("a"), CaptureLevel::Metadata));
+    drop(owner);
+    assert!(manager.try_accepts(&filter("a"), CaptureLevel::Metadata));
+}

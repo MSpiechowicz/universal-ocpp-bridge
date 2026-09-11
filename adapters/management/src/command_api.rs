@@ -110,39 +110,54 @@ pub(crate) async fn submit(
     {
         return error(StatusCode::BAD_REQUEST, code);
     }
+    let trace = state.application.diagnostics().span(
+        request.correlation_id.clone(),
+        Some(request.resource.station_id.clone()),
+        None,
+    );
     let request_id = request.request_id.as_str().to_owned();
     match commands
         .admission
         .submit(ExternalCommand::authenticated(request, commands.origin))
         .await
     {
-        Ok(result) => match &result.lifecycle {
-            CommandLifecycle::Rejected {
-                error: command_error,
-            } => {
-                let status = match command_error.code {
-                    uob_contracts::CommandErrorCode::Unauthorized => StatusCode::FORBIDDEN,
-                    uob_contracts::CommandErrorCode::Expired => StatusCode::GONE,
-                    uob_contracts::CommandErrorCode::UnsupportedOperation => {
-                        StatusCode::UNPROCESSABLE_ENTITY
-                    }
-                    uob_contracts::CommandErrorCode::StationDisconnected => StatusCode::CONFLICT,
-                    uob_contracts::CommandErrorCode::InvalidParameters
-                    | uob_contracts::CommandErrorCode::PolicyRejected
-                    | uob_contracts::CommandErrorCode::ProtocolRejected => StatusCode::BAD_REQUEST,
-                };
-                (status, Json(result)).into_response()
+        Ok(result) => {
+            trace.emit(
+                uob_application::FlowStage::ManagementDelivery,
+                uob_application::FlowEvidence::LocallyExposed,
+            );
+            match &result.lifecycle {
+                CommandLifecycle::Rejected {
+                    error: command_error,
+                } => {
+                    let status = match command_error.code {
+                        uob_contracts::CommandErrorCode::Unauthorized => StatusCode::FORBIDDEN,
+                        uob_contracts::CommandErrorCode::Expired => StatusCode::GONE,
+                        uob_contracts::CommandErrorCode::UnsupportedOperation => {
+                            StatusCode::UNPROCESSABLE_ENTITY
+                        }
+                        uob_contracts::CommandErrorCode::StationDisconnected => {
+                            StatusCode::CONFLICT
+                        }
+                        uob_contracts::CommandErrorCode::InvalidParameters
+                        | uob_contracts::CommandErrorCode::PolicyRejected
+                        | uob_contracts::CommandErrorCode::ProtocolRejected => {
+                            StatusCode::BAD_REQUEST
+                        }
+                    };
+                    (status, Json(result)).into_response()
+                }
+                _ => (
+                    StatusCode::ACCEPTED,
+                    Json(AcceptedCommand {
+                        status_url: format!("/api/v1/commands/{request_id}"),
+                        request_id,
+                        result,
+                    }),
+                )
+                    .into_response(),
             }
-            _ => (
-                StatusCode::ACCEPTED,
-                Json(AcceptedCommand {
-                    status_url: format!("/api/v1/commands/{request_id}"),
-                    request_id,
-                    result,
-                }),
-            )
-                .into_response(),
-        },
+        }
         Err(error_value) => admission_error(&error_value),
     }
 }

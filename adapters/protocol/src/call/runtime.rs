@@ -1,14 +1,19 @@
+mod support;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     time::Duration,
 };
+use support::{emit, expire_calls, finish_not_transmitted, retain_recent, uncertain_all};
 
 use axum::extract::ws::Message;
 use tokio::{
     sync::{mpsc, oneshot},
     time::{Instant, sleep_until},
 };
-use uob_application::{Application, RuntimeResourceBudget, WorkClass};
+use uob_application::{
+    Application, FlowDiagnostics, FlowEvidence, FlowSpan, FlowStage, RuntimeResourceBudget,
+    WorkClass,
+};
 use uob_contracts::{CorrelationId, ProtocolEdition};
 
 use super::{
@@ -45,6 +50,12 @@ pub fn spawn_call_session(
         connection,
         configuration,
         actor_budget,
+        application.diagnostics().clone(),
+        application
+            .runtime_identity()
+            .process_instance_id
+            .as_str()
+            .to_owned(),
         outbound_receiver,
         incoming_sender,
         reply_sender,
@@ -71,6 +82,8 @@ pub fn spawn_call_session(
 }
 
 struct SessionState {
+    trace: FlowDiagnostics,
+    correlation_prefix: String,
     protocol: ProtocolEdition,
     station_id: String,
     pending: BTreeMap<String, PendingEntry>,
@@ -86,6 +99,8 @@ async fn run_session(
     mut connection: StationConnection,
     configuration: CallSessionConfiguration,
     budget: RuntimeResourceBudget,
+    trace: FlowDiagnostics,
+    process_id: String,
     mut outbound: mpsc::Receiver<QueuedOutbound>,
     incoming: mpsc::Sender<IncomingCall>,
     replies: mpsc::Sender<QueuedReply>,
@@ -93,7 +108,11 @@ async fn run_session(
     diagnostics: mpsc::Sender<CallSessionDiagnostic>,
     mut shutdown: oneshot::Receiver<()>,
 ) {
+    static SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let session = SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut state = SessionState {
+        trace,
+        correlation_prefix: format!("{process_id}:{session}"),
         protocol: connection.station().protocol,
         station_id: connection.station().station_id.as_str().to_owned(),
         pending: BTreeMap::new(),
@@ -150,7 +169,9 @@ async fn run_session(
             }
             Some(reply) = reply_receiver.recv() => {
                 state.incoming_ids.remove(&reply.message_id);
-                if connection.send(Message::Text(reply.encoded.into())).await.is_err() {
+                let sent = connection.send(Message::Text(reply.encoded.into())).await;
+                reply.trace.emit(FlowStage::OcppSend, if sent.is_ok() { FlowEvidence::Completed } else { FlowEvidence::Uncertain });
+                if sent.is_err() {
                     uncertain_all(&mut state.pending, TransmissionUncertainReason::Disconnected);
                     return;
                 }
@@ -186,6 +207,7 @@ async fn send_outbound(
         finish_not_transmitted(queued, "duplicate or retired message ID");
         return;
     }
+    let trace = state.span(Some(queued.request.correlation_id.clone()));
     let message_id = queued.request.message_id.clone();
     let correlation_id = queued.request.correlation_id.clone();
     if connection
@@ -193,6 +215,7 @@ async fn send_outbound(
         .await
         .is_err()
     {
+        trace.emit(FlowStage::OcppSend, FlowEvidence::Uncertain);
         let _ = queued
             .result
             .send(SessionCallOutcome::TransmissionUncertain {
@@ -205,37 +228,17 @@ async fn send_outbound(
         );
         return;
     }
+    trace.emit(FlowStage::OcppSend, FlowEvidence::Completed);
     state.pending.insert(
         message_id,
         PendingEntry {
+            trace,
             result: queued.result,
             correlation_id,
             deadline: Instant::now() + configuration.response_timeout,
             _reservation: queued.reservation,
         },
     );
-}
-
-fn expire_calls(state: &mut SessionState, history_capacity: usize) {
-    let now = Instant::now();
-    let expired = state
-        .pending
-        .iter()
-        .filter(|(_, entry)| entry.deadline <= now)
-        .map(|(id, _)| id.clone())
-        .collect::<Vec<_>>();
-    for id in expired {
-        if let Some(entry) = state.pending.remove(&id) {
-            let correlation_id = entry.correlation_id.clone();
-            let _ = entry.result.send(SessionCallOutcome::TimedOut {
-                correlation_id: correlation_id.clone(),
-            });
-            if state.timed_out.len() == history_capacity {
-                state.timed_out.pop_front();
-            }
-            state.timed_out.push_back((id, correlation_id));
-        }
-    }
 }
 
 async fn process_frame(
@@ -250,6 +253,9 @@ async fn process_frame(
     let parsed = match frame::decode(bytes) {
         Ok(frame) => frame,
         Err(error) => {
+            state
+                .span(None)
+                .emit(FlowStage::Validation, FlowEvidence::Rejected);
             emit(
                 diagnostics,
                 CallSessionDiagnostic::MalformedFrame {
@@ -320,7 +326,13 @@ async fn process_incoming_call(
     replies: &mpsc::Sender<QueuedReply>,
     diagnostics: &mpsc::Sender<CallSessionDiagnostic>,
 ) {
+    let correlation_id =
+        CorrelationId::new(format!("ocpp:{}:{message_id}", state.correlation_prefix))
+            .expect("correlation ID");
+    let trace = state.span(Some(correlation_id.clone()));
+    trace.emit(FlowStage::OcppReceive, FlowEvidence::Completed);
     if state.incoming_ids.contains(&message_id) || state.recent_incoming.contains(&message_id) {
+        trace.emit(FlowStage::Deduplication, FlowEvidence::Duplicate);
         emit(
             diagnostics,
             CallSessionDiagnostic::DuplicateIncomingCall {
@@ -347,6 +359,7 @@ async fn process_incoming_call(
     let decoded = match decoded {
         Ok(decoded) => decoded,
         Err(error) => {
+            trace.emit(FlowStage::Validation, FlowEvidence::Rejected);
             send_error(connection, &message_id, error.call_error()).await;
             return;
         }
@@ -355,12 +368,13 @@ async fn process_incoming_call(
         send_capacity_error(connection, &message_id, state.protocol).await;
         return;
     };
-    let correlation_id = CorrelationId::new(format!("ocpp:{}:{message_id}", state.station_id))
-        .expect("station and nonempty OCPP message ID form a correlation ID");
+    trace.emit(FlowStage::Validation, FlowEvidence::Completed);
     let call = IncomingCall {
+        trace: trace.clone(),
         call: decoded,
         correlation_id,
         responder: IncomingCallResponder {
+            trace,
             message_id: message_id.clone(),
             protocol: state.protocol,
             sender: Some(replies.clone()),
@@ -392,6 +406,9 @@ fn finish_response(
     outcome: impl FnOnce(CorrelationId) -> SessionCallOutcome,
 ) {
     if let Some(entry) = state.pending.remove(&message_id) {
+        entry
+            .trace
+            .emit(FlowStage::OcppReceive, FlowEvidence::Completed);
         let result = outcome(entry.correlation_id);
         let _ = entry.result.send(result);
         retain_recent(
@@ -409,6 +426,9 @@ fn finish_response(
             message_id.clone(),
             state.history_capacity,
         );
+        state
+            .span(Some(correlation_id.clone()))
+            .emit(FlowStage::OcppReceive, FlowEvidence::Stale);
         emit(
             diagnostics,
             CallSessionDiagnostic::LateResponse {
@@ -417,6 +437,9 @@ fn finish_response(
             },
         );
     } else {
+        state
+            .span(None)
+            .emit(FlowStage::OcppReceive, FlowEvidence::Uncorrelated);
         emit(
             diagnostics,
             CallSessionDiagnostic::UnmatchedResponse { message_id },
@@ -448,34 +471,12 @@ async fn send_error(connection: &mut StationConnection, message_id: &str, error:
         .await;
 }
 
-fn finish_not_transmitted(queued: QueuedOutbound, reason: &'static str) {
-    let _ = queued.result.send(SessionCallOutcome::NotTransmitted {
-        reason,
-        correlation_id: queued.request.correlation_id,
-    });
-}
-
-fn uncertain_all(
-    pending: &mut BTreeMap<String, PendingEntry>,
-    reason: TransmissionUncertainReason,
-) {
-    for (_, entry) in std::mem::take(pending) {
-        let _ = entry
-            .result
-            .send(SessionCallOutcome::TransmissionUncertain {
-                reason,
-                correlation_id: entry.correlation_id,
-            });
+impl SessionState {
+    fn span(&self, correlation: Option<CorrelationId>) -> FlowSpan {
+        self.trace.span(
+            correlation,
+            Some(uob_contracts::StationId::new(self.station_id.clone()).expect("station")),
+            Some(self.protocol),
+        )
     }
-}
-
-fn emit(sender: &mpsc::Sender<CallSessionDiagnostic>, event: CallSessionDiagnostic) {
-    let _ = sender.try_send(event);
-}
-
-fn retain_recent(history: &mut VecDeque<String>, message_id: String, capacity: usize) {
-    if history.len() == capacity {
-        history.pop_front();
-    }
-    history.push_back(message_id);
 }
