@@ -1,5 +1,8 @@
 #![doc = "External provider boundary for authorization, PKI, artifacts, and payments."]
 
+mod charging_identity;
+pub use charging_identity::LocalChargingIdentityProvider;
+
 use sha2::{Digest, Sha256};
 use uob_application::{
     AuthorizationProvider, AuthorizationProviderDescriptor, AuthorizationProviderFuture,

@@ -67,10 +67,10 @@ fn copy_directory(source: &Path, destination: &Path) {
 #[test]
 fn canonical_corpus_is_valid_but_not_release_complete() {
     let report = check_corpus(&corpus_root(), CheckMode::Development).unwrap();
-    assert_eq!(report.fixtures, 13);
+    assert_eq!(report.fixtures, 17);
     assert_eq!(report.requirements, 38);
-    assert_eq!(report.verified_requirements, 12);
-    assert_eq!(report.required_remaining, 25);
+    assert_eq!(report.verified_requirements, 13);
+    assert_eq!(report.required_remaining, 24);
 
     let errors = check_corpus(&corpus_root(), CheckMode::Release).unwrap_err();
     assert!(
@@ -171,5 +171,24 @@ fn bridge_generated_expected_payloads_are_rejected() {
         errors
             .iter()
             .any(|error| error.contains("is not independently authored"))
+    );
+}
+
+#[test]
+fn invalid_authorization_response_is_rejected_even_with_updated_digest() {
+    let corpus = TempCorpus::copy();
+    let relative = "wire/2.0.1/authorize-accepted.json";
+    let mut wire = corpus.json(relative);
+    wire[2]["idTokenInfo"]["status"] = Value::String("InventedSuccess".into());
+    corpus.write_json(relative, &wire);
+    corpus.update_wire_digest(
+        "wire.ocpp201.authorization.accepted",
+        &fs::read(corpus.root.join(relative)).unwrap(),
+    );
+    let errors = check_corpus(&corpus.root, CheckMode::Development).unwrap_err();
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("authorization.accepted payload fails"))
     );
 }

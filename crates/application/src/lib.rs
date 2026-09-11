@@ -4,6 +4,7 @@ mod access;
 mod admission;
 mod authorization;
 pub mod capture;
+pub mod charging_identity;
 mod command;
 mod database;
 mod diagnostic;

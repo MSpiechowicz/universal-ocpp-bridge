@@ -1,5 +1,9 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
+mod authorization;
+mod authorization_input;
+pub use authorization::{authorize_call, complete_authorization};
+
 mod registration;
 pub use registration::{complete_registration, registration_call};
 
@@ -34,6 +38,9 @@ const PROTOCOL: ProtocolEdition = ProtocolEdition::Ocpp201;
 pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
     let (message_id, action, payload) = parse_frame(frame)?;
     let observation = match action.as_str() {
+        "Authorize" => {
+            ChargerObservation::ChargingIdentity(authorization_input::observation(payload)?)
+        }
         "BootNotification" => {
             ChargerObservation::Registration(registration::boot_observation(payload)?)
         }

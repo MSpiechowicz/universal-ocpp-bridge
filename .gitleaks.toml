@@ -1,2 +1,12 @@
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Synthetic OCPP eMAID shared by the certificate fixture and its assertion"
+condition = "AND"
+paths = [
+  '''^tests/ocpp-fixtures/corpus/wire/2\.0\.1/authorize-certificate\.json$''',
+  '''^adapters/protocol/tests/ocpp201_authorization\.rs$''',
+]
+regexTarget = "secret"
+regexes = ['''^DE-TEST-C12345678$''']

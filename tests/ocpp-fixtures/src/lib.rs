@@ -243,9 +243,26 @@ fn validate_wire(fixture: &Fixture, schema: &Value, wire: &Value, errors: &mut V
         errors.push(format!("fixture {} is not an OCPP-J array", fixture.id));
         return;
     };
-    if frame.len() != 4
-        || frame.first().and_then(Value::as_u64) != Some(fixture.message_type)
-        || frame.get(2).and_then(Value::as_str) != Some(fixture.action.as_str())
+    let payload_index = match fixture.message_type {
+        2 if frame.len() == 4
+            && frame.get(2).and_then(Value::as_str) == Some(fixture.action.as_str()) =>
+        {
+            3
+        }
+        3 if frame.len() == 3 => 2,
+        _ => {
+            errors.push(format!(
+                "fixture {} envelope does not match its registry entry",
+                fixture.id
+            ));
+            return;
+        }
+    };
+    if frame.first().and_then(Value::as_u64) != Some(fixture.message_type)
+        || frame
+            .get(1)
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
     {
         errors.push(format!(
             "fixture {} envelope does not match its registry entry",
@@ -253,10 +270,7 @@ fn validate_wire(fixture: &Fixture, schema: &Value, wire: &Value, errors: &mut V
         ));
         return;
     }
-    let Some(payload) = frame.get(3) else {
-        errors.push(format!("fixture {} has no request payload", fixture.id));
-        return;
-    };
+    let payload = &frame[payload_index];
     let draft = match schema.get("$schema").and_then(Value::as_str) {
         Some(value) if value.contains("draft-04") => Draft::Draft4,
         Some(value) if value.contains("draft-06") => Draft::Draft6,

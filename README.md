@@ -144,6 +144,10 @@ allowlist, so target and internet outages do not disable authorized charging. Se
 [local authorization policy](docs/security/local-authorization.md) for expiry, revocation, resource
 scope, restart recovery, command-ingress enforcement, and production test-provider guards.
 
+OCPP 2.0.1 charger authorization preserves typed identity and certificate evidence, applies current
+durable local policy after bounded provider resolution, and retains native status/expiry semantics.
+See [OCPP 2.0.1 authorization](docs/security/ocpp201-authorization.md) for provider boundaries and tests.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.
