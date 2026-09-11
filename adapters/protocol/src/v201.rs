@@ -1,25 +1,25 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
+mod registration;
+pub use registration::{complete_registration, registration_call};
+
 use std::fmt::Write as _;
 
 use rust_ocpp::v2_0_1::datatypes::meter_value_type::MeterValueType;
 use rust_ocpp::v2_0_1::messages::{
-    boot_notification::BootNotificationRequest, heartbeat::HeartbeatRequest,
     meter_values::MeterValuesRequest, transaction_event::TransactionEventRequest,
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use uob_application::{
-    ChargerObservation, MeasurementObservation, RegistrationObservation, TransactionEventKind,
-    TransactionEventObservation,
+    ChargerObservation, MeasurementObservation, TransactionEventKind, TransactionEventObservation,
 };
 use uob_contracts::{
     DataPointValue, ExactDecimal, Freshness, MeasurementContext, MeasurementLocation,
     MeasurementMetadata, MeasurementPhase, NativeProtocolReference, PointId, ProtocolActionName,
     ProtocolEdition, Quality, QualityLevel, SemanticName, TypedValue, UtcTimestamp,
 };
-use validator::Validate;
 
 use crate::{DecodeError, DecodeErrorKind, DecodedCall};
 
@@ -35,23 +35,14 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
     let (message_id, action, payload) = parse_frame(frame)?;
     let observation = match action.as_str() {
         "BootNotification" => {
-            let request: BootNotificationRequest = payload_as(payload)?;
-            if request.charging_station.vendor_name.trim().is_empty()
-                || request.charging_station.model.trim().is_empty()
-                || request.charging_station.validate().is_err()
-            {
-                return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
-            }
-            ChargerObservation::Registration(RegistrationObservation {
-                protocol: PROTOCOL,
-                vendor: request.charging_station.vendor_name,
-                model: request.charging_station.model,
-                boot_reason: Some(format!("{:?}", request.reason)),
-            })
+            ChargerObservation::Registration(registration::boot_observation(payload)?)
         }
         "Heartbeat" => {
-            let _: HeartbeatRequest = payload_as(payload)?;
+            registration::heartbeat_payload(&payload)?;
             ChargerObservation::Heartbeat { protocol: PROTOCOL }
+        }
+        "StatusNotification" => {
+            ChargerObservation::EvseConnectorStatus(registration::status_observation(payload)?)
         }
         "MeterValues" => {
             let request: MeterValuesRequest = payload_as(payload)?;
