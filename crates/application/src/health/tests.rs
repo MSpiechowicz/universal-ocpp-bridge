@@ -96,3 +96,12 @@ fn latency_and_process_metrics_are_bounded_and_separated() {
         30
     );
 }
+
+#[test]
+fn maintenance_preserves_readiness_and_disables_new_session_admission() {
+    let monitor = monitor();
+    monitor.report_core_loop(CoreLoopState::Ready);
+    monitor.report_storage(StorageHealthState::Maintenance, None);
+    assert_eq!(monitor.snapshot().readiness, ReadinessState::Ready);
+    assert!(!monitor.snapshot().accepts_new_sessions);
+}

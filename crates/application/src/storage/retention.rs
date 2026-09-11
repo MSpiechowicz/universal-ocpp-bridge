@@ -26,6 +26,8 @@ pub enum StorageAdmissionState {
     Available,
     /// New sessions are refused so existing sessions retain completion capacity.
     CriticalCapacityExhausted,
+    /// An owned maintenance window temporarily refuses new bridge-issued starts.
+    ReleaseDraining,
 }
 
 /// Retention and pressure counters exposed without leaking physical storage details.

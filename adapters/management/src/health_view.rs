@@ -177,6 +177,7 @@ const fn storage(value: StorageHealthState) -> &'static str {
         StorageHealthState::Safe => "safe",
         StorageHealthState::CapacityProtected => "capacity_protected",
         StorageHealthState::Failed => "failed",
+        StorageHealthState::Maintenance => "maintenance",
     }
 }
 

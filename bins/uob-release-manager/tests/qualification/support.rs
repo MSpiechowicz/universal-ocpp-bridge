@@ -188,7 +188,7 @@ pub fn install(f: &artifacts::Fixture, store: &std::path::Path) {
 
 fn configure_schema(artifact: &mut artifacts::Fixture, preflight: bool) {
     if preflight {
-        let version = uob_release_manager::SchemaVersion::new(5);
+        let version = uob_release_manager::SchemaVersion::new(6);
         let range = uob_release_manager::SchemaRange::new(version, version).unwrap();
         artifact.manifest.compatibility.formats.operational_sqlite =
             uob_release_manager::FormatSupport {

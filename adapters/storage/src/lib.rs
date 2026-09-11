@@ -5,6 +5,7 @@ mod codec;
 mod command;
 mod configuration;
 mod delivery;
+mod drain;
 mod lifecycle;
 mod recovery;
 mod retention;

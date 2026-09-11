@@ -218,6 +218,9 @@ soak requirement, and separate promotion authorization.
 See [production release preflight and backup](docs/operations/release-preflight-backup.md)
 for candidate configuration checks, bounded online SQLite backups, and disaster-recovery ownership.
 
+See [release drain and the idle boundary](docs/operations/release-drain.md) for shared start
+admission, durable work inventory, deadline deferral, and staging-stop ordering.
+
 See [persistent release failure classification](docs/operations/rollback-signal-policy.md)
 for reboot-safe trigger windows, external-outage exclusions, staging pressure ordering,
 and critical recovery decisions.
