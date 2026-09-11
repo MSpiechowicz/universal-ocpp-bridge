@@ -13,6 +13,7 @@ mod payment;
 mod protocol;
 mod query;
 pub mod registration;
+pub mod release_drain;
 mod resource;
 mod security;
 mod station;

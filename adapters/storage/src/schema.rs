@@ -7,14 +7,15 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     create_schema(connection)?;
     upgrade_columns(connection)?;
     connection
-        .execute_batch("PRAGMA user_version = 5;")
+        .execute_batch("PRAGMA user_version = 6;")
         .map_err(unavailable)
 }
 
 fn create_schema(connection: &Connection) -> Result<(), StorageError> {
     connection
         .execute_batch(
-            "CREATE TABLE IF NOT EXISTS transaction_id_counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL);\n\
+            "CREATE TABLE IF NOT EXISTS release_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL);\n\
+             CREATE TABLE IF NOT EXISTS transaction_id_counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL);\n\
              INSERT OR IGNORE INTO transaction_id_counter VALUES (1, 0);\n\
              CREATE TABLE IF NOT EXISTS station_snapshots (\n\
                  station_key TEXT PRIMARY KEY, payload TEXT NOT NULL\n\
@@ -66,7 +67,7 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
                  category TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0\n\
                      CHECK (count >= 0)\n\
              );\n\
-             PRAGMA user_version = 5;",
+             PRAGMA user_version = 6;",
         )
         .map_err(unavailable)
 }

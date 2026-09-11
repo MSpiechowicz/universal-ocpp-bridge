@@ -15,6 +15,7 @@ use uob_contracts::{
 #[derive(Debug)]
 pub(crate) struct EncodedWrite {
     pub purpose: StorageWritePurpose,
+    pub requires_start_admission: bool,
     pub snapshot: Option<(String, String)>,
     pub authorization: Vec<EncodedAuthorization>,
     pub command: Option<EncodedCommand>,
@@ -108,6 +109,13 @@ where
     D: Serialize,
     R: Serialize,
 {
+    let requires_start_admission = write.command.as_ref().is_some_and(|c| {
+        matches!(
+            c.operation,
+            uob_contracts::CommandOperation::Start { .. }
+                | uob_contracts::CommandOperation::Ocpp(_)
+        )
+    });
     let snapshot = write
         .station_snapshot
         .map(|value| Ok((json(&value.station)?, json(&value)?)))
@@ -187,6 +195,7 @@ where
         })
         .collect::<Result<_, StorageError>>()?;
     Ok(EncodedWrite {
+        requires_start_admission,
         purpose: write.purpose,
         snapshot,
         authorization,

@@ -372,3 +372,9 @@ fn block_on<F: Future>(future: F) -> F::Output {
         }
     }
 }
+
+#[path = "release_drain/commands.rs"]
+mod release_drain;
+
+#[path = "release_drain/coordinator.rs"]
+mod drain_command_path;

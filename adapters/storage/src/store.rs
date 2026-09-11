@@ -144,7 +144,7 @@ where
         self.request(Request::Probe).await
     }
 
-    fn request<T>(
+    pub(crate) fn request<T>(
         &self,
         build: impl FnOnce(Reply<T>) -> Request<C, E, D, R>,
     ) -> StorageFuture<'static, T>

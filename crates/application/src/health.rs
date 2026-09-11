@@ -32,6 +32,7 @@ pub enum StorageHealthState {
     Starting,
     Safe,
     CapacityProtected,
+    Maintenance,
     Failed,
 }
 
@@ -257,10 +258,12 @@ impl HealthMonitor {
     }
 
     pub fn report_storage_retention(&self, status: StorageRetentionStatus) {
-        let state = if status.new_session_admission == StorageAdmissionState::Available {
-            StorageHealthState::Safe
-        } else {
-            StorageHealthState::CapacityProtected
+        let state = match status.new_session_admission {
+            StorageAdmissionState::Available => StorageHealthState::Safe,
+            StorageAdmissionState::CriticalCapacityExhausted => {
+                StorageHealthState::CapacityProtected
+            }
+            StorageAdmissionState::ReleaseDraining => StorageHealthState::Maintenance,
         };
         self.report_storage(state, Some(status));
     }
@@ -366,7 +369,9 @@ impl HealthMonitor {
         let readiness = if state.core_loop == CoreLoopState::Ready
             && matches!(
                 state.storage,
-                StorageHealthState::Safe | StorageHealthState::CapacityProtected
+                StorageHealthState::Safe
+                    | StorageHealthState::CapacityProtected
+                    | StorageHealthState::Maintenance
             ) {
             ReadinessState::Ready
         } else {

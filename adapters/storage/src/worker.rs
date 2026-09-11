@@ -23,6 +23,7 @@ use crate::{
 };
 
 pub(crate) enum Request<C, E, D, R> {
+    Drain(crate::drain::Operation, Reply<crate::drain::Outcome>),
     Probe(Reply<()>),
     TransactionId(Reply<i32>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -61,8 +62,10 @@ pub(crate) fn run<C, E, D, R>(
     D: DeserializeOwned,
     R: DeserializeOwned,
 {
+    let mut drain = crate::drain::Drain::default();
     for request in requests {
         match request {
+            Request::Drain(operation, reply) => respond(reply, drain.operation(&connection, operation)),
             Request::TransactionId(reply) => respond(reply, connection.query_row(
                 "UPDATE transaction_id_counter SET value = value + 1 WHERE id = 1 AND value < 2147483647 RETURNING value",
                 [], |row| row.get(0)).map_err(unavailable)),
@@ -75,7 +78,7 @@ pub(crate) fn run<C, E, D, R>(
             ),
             Request::Write(write, reply) => respond(
                 reply,
-                write_atomic(&mut connection, retention_policy, write),
+                drain.check_write(&write).and_then(|()| drain.changed()).and_then(|()| write_atomic(&mut connection, retention_policy, write)),
             ),
             Request::Snapshots(after, limit, reply) => {
                 respond(reply, read_snapshots(&connection, after, limit));
@@ -100,10 +103,10 @@ pub(crate) fn run<C, E, D, R>(
             }
             Request::MaintainRetention(now, reply) => respond(
                 reply,
-                retention::maintain(&mut connection, retention_policy, now),
+                retention::maintain(&mut connection, retention_policy, now).map(|status| drain.admission_status(status)),
             ),
             Request::RetentionStatus(reply) => {
-                respond(reply, retention::status(&connection, retention_policy));
+                respond(reply, retention::status(&connection, retention_policy).map(|status| drain.admission_status(status)));
             }
             Request::PendingDeliveries(target, revision, ready_at, limit, reply) => respond(
                 reply,

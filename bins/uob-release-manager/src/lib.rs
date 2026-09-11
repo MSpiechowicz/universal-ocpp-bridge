@@ -5,6 +5,7 @@ extern crate self as uob_release_manager;
 
 pub mod activation;
 pub mod artifacts;
+pub mod drain;
 pub mod qualification;
 pub mod supervisor;
 
