@@ -57,6 +57,10 @@ Diagnostic observations are centrally redacted and serialized before any downstr
 them. See [the diagnostic redaction boundary](docs/security/diagnostic-redaction.md) for the typed
 safe-field policy, fail-closed vendor payload handling, and inert-renderer requirement.
 
+Optional diagnostic hooks preserve correlation across socket, application, commit, command and
+target boundaries. See [correlated diagnostic instrumentation](docs/architecture/correlated-diagnostics.md)
+for exact evidence semantics, bounded state changes and process-local timing.
+
 Diagnostic capture requires explicit enablement and scoped read/capture permissions. See
 [diagnostic capture controls](docs/security/diagnostic-capture.md) for session deadlines,
 control routes, and subscriber/export lifetime boundaries.

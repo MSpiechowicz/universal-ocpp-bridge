@@ -190,6 +190,7 @@ impl CallSessionHandle {
 }
 
 pub(super) struct QueuedReply {
+    pub trace: uob_application::FlowSpan,
     pub message_id: String,
     pub encoded: String,
     pub _reservation: RuntimeReservation,
@@ -197,6 +198,7 @@ pub(super) struct QueuedReply {
 
 /// Single-use response capability for a validated charger-originated call.
 pub struct IncomingCallResponder {
+    pub(super) trace: uob_application::FlowSpan,
     pub(super) message_id: String,
     pub(super) protocol: ProtocolEdition,
     pub(super) sender: Option<mpsc::Sender<QueuedReply>>,
@@ -250,6 +252,7 @@ impl IncomingCallResponder {
         if let Some(sender) = self.sender.take() {
             sender
                 .try_send(QueuedReply {
+                    trace: self.trace.clone(),
                     message_id: self.message_id.clone(),
                     encoded,
                     _reservation: reservation,
@@ -281,6 +284,8 @@ impl Drop for IncomingCallResponder {
 
 /// Validated charger operation delivered only after envelope, direction, and schema checks.
 pub struct IncomingCall {
+    /// Process-local context carried across the socket/application queue.
+    pub trace: uob_application::FlowSpan,
     pub call: DecodedCall,
     pub correlation_id: CorrelationId,
     pub responder: IncomingCallResponder,
@@ -373,6 +378,7 @@ impl Drop for CallSessionTask {
 }
 
 pub(super) struct PendingEntry {
+    pub trace: uob_application::FlowSpan,
     pub result: oneshot::Sender<SessionCallOutcome>,
     pub correlation_id: CorrelationId,
     pub deadline: Instant,

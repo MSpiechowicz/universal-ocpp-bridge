@@ -8,6 +8,10 @@ use uob_contracts::{
     TraceSequence, TraceStage, TraceTarget, UtcTimestamp,
 };
 
+pub mod flow;
+pub mod state;
+pub mod store;
+
 const REDACTED: &str = "[REDACTED]";
 const OMITTED_VENDOR_PAYLOAD: &str = "[OMITTED: unknown_vendor_payload]";
 
@@ -154,6 +158,22 @@ impl Error for SafeEndpointLabelError {}
 /// Explicitly safe scalar fields supported by diagnostic rendering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SafeDiagnosticField {
+    /// Availability transition in stable snapshot resource order.
+    AvailabilityChange {
+        index: usize,
+        before: uob_contracts::AvailabilityState,
+        after: uob_contracts::AvailabilityState,
+    },
+    /// Resource details exceed the bounded projection.
+    StateDetailsOmitted,
+    /// Closed diagnostic stage evidence.
+    Evidence(flow::FlowEvidence),
+    /// No established causal link is available.
+    CorrelationMissing,
+    /// Independently reported device time.
+    SourceTime(UtcTimestamp),
+    /// Validated wire protocol edition.
+    Protocol(uob_contracts::ProtocolEdition),
     /// Stable protocol operation name.
     Action(ProtocolActionName),
     /// Canonical station identity.
@@ -167,14 +187,33 @@ pub enum SafeDiagnosticField {
 }
 
 impl SafeDiagnosticField {
-    fn render(&self) -> (&'static str, String) {
-        match self {
+    fn render(&self) -> (String, String) {
+        let (key, value) = match self {
+            Self::AvailabilityChange {
+                index,
+                before,
+                after,
+            } => {
+                return (
+                    format!("resources.{index}.availability"),
+                    format!("{before:?} -> {after:?}"),
+                );
+            }
+            Self::StateDetailsOmitted => ("state_details_omitted", "true".to_owned()),
+            Self::Evidence(value) => ("evidence", value.name().to_owned()),
+            Self::CorrelationMissing => ("correlation", "uncorrelated".to_owned()),
+            Self::SourceTime(value) => (
+                "source_time",
+                serde_json::to_string(value).expect("timestamp"),
+            ),
+            Self::Protocol(value) => ("protocol", format!("{value:?}")),
             Self::Action(value) => ("action", value.as_str().to_owned()),
             Self::Station(value) => ("station_id", value.as_str().to_owned()),
             Self::Correlation(value) => ("correlation_id", value.as_str().to_owned()),
             Self::EndpointLabel(value) => ("endpoint_label", value.as_str().to_owned()),
             Self::PayloadBytes(value) => ("payload_bytes", value.to_string()),
-        }
+        };
+        (key.to_owned(), value)
     }
 }
 
@@ -224,6 +263,8 @@ pub enum DiagnosticOutcome {
     PolicyDenied,
     /// A bounded operation timed out.
     Timeout,
+    /// Transmission or outcome cannot be established.
+    Uncertain,
     /// Optional diagnostic work was dropped under resource pressure.
     ResourcePressure,
 }
@@ -240,6 +281,9 @@ impl DiagnosticOutcome {
             },
             Self::Timeout => TraceOutcome::Uncertain {
                 reason: Some("timeout".to_owned()),
+            },
+            Self::Uncertain => TraceOutcome::Uncertain {
+                reason: Some("outcome_unknown".to_owned()),
             },
             Self::ResourcePressure => TraceOutcome::Dropped {
                 reason: Some("resource_pressure".to_owned()),
@@ -287,7 +331,7 @@ pub struct DiagnosticObservation {
 /// Safe evidence of every disclosure decision made for a record.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DiagnosticDisclosureAudit {
-    exposed_fields: Vec<&'static str>,
+    exposed_fields: Vec<String>,
     redacted_classes: Vec<&'static str>,
     omitted_unknown_vendor_payloads: usize,
 }
@@ -295,7 +339,7 @@ pub struct DiagnosticDisclosureAudit {
 impl DiagnosticDisclosureAudit {
     /// Names the safe field classes exposed in the inert record.
     #[must_use]
-    pub fn exposed_fields(&self) -> &[&'static str] {
+    pub fn exposed_fields(&self) -> &[String] {
         &self.exposed_fields
     }
 
@@ -356,8 +400,8 @@ impl DiagnosticBoundary {
             match attribute {
                 DiagnosticAttribute::Safe(field) => {
                     let (name, value) = field.render();
-                    fields.insert(name.to_owned(), value);
-                    audit.exposed_fields.push(name);
+                    fields.insert(name.clone(), value);
+                    audit.exposed_fields.push(name.clone());
                 }
                 DiagnosticAttribute::Sensitive(value) => {
                     let class = value.class.audit_name();
@@ -436,3 +480,6 @@ impl Error for DiagnosticSerializationError {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod flow_tests;

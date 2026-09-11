@@ -28,4 +28,5 @@ pub use security::{
 pub use session::{
     TargetDeliveryIngress, TargetDeliveryIngressError, TargetSessionError, TargetSessionOptions,
     TargetSessionPorts, TargetSessionTask, spawn_target_session,
+    spawn_target_session_with_diagnostics,
 };

@@ -8,8 +8,8 @@ use uob_contracts::{
 
 use crate::{
     AtomicStoreWrite, CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture,
-    CommandAdmissionOutcome, CommandAdmissionPort, OperationalStore, PageLimit, RecoveryQuery,
-    StorageError, StorageWritePurpose,
+    CommandAdmissionOutcome, CommandAdmissionPort, FlowDiagnostics, FlowEvidence, FlowStage,
+    OperationalStore, PageLimit, RecoveryQuery, StorageError, StorageWritePurpose,
 };
 
 /// Future returned by the station command boundary.
@@ -111,9 +111,17 @@ pub struct CommandCoordinator<P, E, D, R> {
     store: Arc<dyn OperationalStore<P, E, D, R>>,
     stations: Arc<dyn StationCommandPort<P>>,
     clock: Arc<dyn CommandClock>,
+    diagnostics: FlowDiagnostics,
 }
 
 impl<P, E, D, R> CommandCoordinator<P, E, D, R> {
+    /// Attaches the same process emitter used by protocol and target hosts.
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: FlowDiagnostics) -> Self {
+        self.diagnostics = diagnostics;
+        self
+    }
+
     /// Creates a coordinator from application-owned ports.
     #[must_use]
     pub fn new(
@@ -125,6 +133,7 @@ impl<P, E, D, R> CommandCoordinator<P, E, D, R> {
             store,
             stations,
             clock,
+            diagnostics: FlowDiagnostics::default(),
         }
     }
 }
@@ -208,16 +217,30 @@ where
             {
                 result.observed_effects.push(effect);
                 self.persist_result(result.clone()).await?;
+                self.diagnostics
+                    .span(
+                        result.correlation_id.clone(),
+                        Some(result.resource.station_id.clone()),
+                        None,
+                    )
+                    .emit(FlowStage::ObservedEffect, FlowEvidence::Observed);
             }
             Ok(Some(result))
         })
     }
 
+    #[allow(clippy::too_many_lines)] // Keep the ordered admission/dispatch evidence beside each decision.
     async fn submit_at(
         &self,
         external: ExternalCommand<P>,
         now: UtcTimestamp,
     ) -> Result<CommandResult, CommandAdmissionError> {
+        let trace = self.diagnostics.span(
+            external.request.correlation_id.clone(),
+            Some(external.request.resource.station_id.clone()),
+            None,
+        );
+        trace.emit(FlowStage::CommandIngress, FlowEvidence::Completed);
         let context = self
             .stations
             .context(external.request.resource.clone())
@@ -227,6 +250,7 @@ where
             .as_ref()
             .is_some_and(|value| matches!(value.connectivity, Connectivity::Connected { .. }));
         if !connected {
+            trace.emit(FlowStage::Application, FlowEvidence::NotTransmitted);
             return Ok(rejected_external(
                 &external,
                 CommandErrorCode::StationDisconnected,
@@ -238,8 +262,10 @@ where
         if let Err(error) =
             command.validate_for_dispatch(&context.expect("connected context").capabilities, now)
         {
+            trace.emit(FlowStage::Validation, FlowEvidence::Rejected);
             return Ok(validation_rejection(&command, &error, now));
         }
+        trace.emit(FlowStage::Validation, FlowEvidence::Completed);
         let admitted = command_result(&command, CommandLifecycle::Admitted, now);
         let mut write = AtomicStoreWrite::empty();
         write.purpose = match command.operation {
@@ -259,8 +285,12 @@ where
         match outcome.command {
             Some(CommandAdmissionOutcome::Duplicate {
                 result: Some(result),
-            }) => return Ok(*result),
+            }) => {
+                trace.emit(FlowStage::Deduplication, FlowEvidence::Duplicate);
+                return Ok(*result);
+            }
             Some(CommandAdmissionOutcome::Duplicate { result: None }) => {
+                trace.emit(FlowStage::Deduplication, FlowEvidence::Duplicate);
                 return Ok(self
                     .store
                     .command_result_by_request_id(command.request_id.clone())
@@ -272,8 +302,10 @@ where
             None => return Err(integrity_error("storage omitted command admission outcome")),
         }
 
+        trace.emit(FlowStage::DurableCommit, FlowEvidence::Completed);
         let dispatched = command_result(&command, CommandLifecycle::Dispatched, now);
         self.persist_result(dispatched).await?;
+        trace.emit(FlowStage::CommandDispatch, FlowEvidence::Completed);
         let lifecycle = match self
             .stations
             .dispatch(command.clone())
@@ -281,12 +313,22 @@ where
             .map_err(|error| map_station_error(&error))?
         {
             CommandDispatchOutcome::NotTransmitted { error } => {
+                trace.emit(FlowStage::ProtocolResponse, FlowEvidence::NotTransmitted);
                 CommandLifecycle::Rejected { error }
             }
             CommandDispatchOutcome::ProtocolResponse { accepted, error } => {
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
+                trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
             }
         };

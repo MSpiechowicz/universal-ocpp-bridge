@@ -60,12 +60,14 @@ pub(super) fn guarded_commands<P>(
     target_instance_id: TargetInstanceId,
     supported_operations: Vec<Operation>,
     limits: TargetRuntimeLimits,
+    diagnostics: uob_application::FlowDiagnostics,
 ) -> Arc<dyn CommandAdmissionPort<P>>
 where
     P: Serialize + Send + 'static,
 {
-    let inner: Arc<dyn CommandAdmissionPort<P>> =
-        Arc::new(ScopedCommandAdmissionPort::new(inner, authorization));
+    let inner: Arc<dyn CommandAdmissionPort<P>> = Arc::new(
+        ScopedCommandAdmissionPort::new(inner, authorization).with_diagnostics(diagnostics),
+    );
     Arc::new(GuardedCommandPort {
         inner,
         target_instance_id,

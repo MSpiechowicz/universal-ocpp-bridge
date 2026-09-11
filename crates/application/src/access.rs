@@ -196,13 +196,25 @@ impl AccessPolicy {
 pub struct ScopedCommandAdmissionPort<P> {
     inner: Arc<dyn CommandAdmissionPort<P>>,
     policy: AccessPolicy,
+    diagnostics: crate::FlowDiagnostics,
 }
 
 impl<P> ScopedCommandAdmissionPort<P> {
     /// Wraps the common application command path with an immutable credential grant.
     #[must_use]
     pub fn new(inner: Arc<dyn CommandAdmissionPort<P>>, policy: AccessPolicy) -> Self {
-        Self { inner, policy }
+        Self {
+            inner,
+            policy,
+            diagnostics: crate::FlowDiagnostics::default(),
+        }
+    }
+
+    /// Attaches optional process diagnostics without altering the authorization decision.
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: crate::FlowDiagnostics) -> Self {
+        self.diagnostics = diagnostics;
+        self
     }
 
     /// Returns the transport grant enforced by this port.
@@ -214,7 +226,16 @@ impl<P> ScopedCommandAdmissionPort<P> {
 
 impl<P: Send + 'static> CommandAdmissionPort<P> for ScopedCommandAdmissionPort<P> {
     fn submit(&self, command: ExternalCommand<P>) -> CommandAdmissionFuture<'_, CommandResult> {
+        let trace = self.diagnostics.span(
+            command.request.correlation_id.clone(),
+            Some(command.request.resource.station_id.clone()),
+            None,
+        );
         if let Err(error) = self.policy.authorize_command(&command) {
+            trace.emit(
+                crate::FlowStage::Authorization,
+                crate::FlowEvidence::Rejected,
+            );
             let context = match error {
                 AccessPolicyError::OriginMismatch => "access.command_origin_mismatch",
                 AccessPolicyError::PermissionDenied => "access.command_permission_denied",
@@ -231,6 +252,10 @@ impl<P: Send + 'static> CommandAdmissionPort<P> for ScopedCommandAdmissionPort<P
                 ))
             });
         }
+        trace.emit(
+            crate::FlowStage::Authorization,
+            crate::FlowEvidence::Completed,
+        );
         self.inner.submit(command)
     }
 }

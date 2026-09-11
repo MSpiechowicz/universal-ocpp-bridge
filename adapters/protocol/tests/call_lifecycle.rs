@@ -1,3 +1,5 @@
+#[path = "call_lifecycle/diagnostics.rs"]
+mod diagnostics;
 mod endpoint_support;
 
 use std::time::Duration;
@@ -25,7 +27,21 @@ struct RunningSession {
 }
 
 async fn session(protocol: &str, response_timeout: Duration) -> RunningSession {
-    let application = endpoint_support::application(Environment::Demo, None);
+    session_with_diagnostics(
+        protocol,
+        response_timeout,
+        uob_application::FlowDiagnostics::default(),
+    )
+    .await
+}
+
+async fn session_with_diagnostics(
+    protocol: &str,
+    response_timeout: Duration,
+    diagnostics: uob_application::FlowDiagnostics,
+) -> RunningSession {
+    let application =
+        endpoint_support::application(Environment::Demo, None).with_diagnostics(diagnostics);
     let (endpoint, mut accepted) = OcppEndpoint::new(
         endpoint_support::authenticator(
             uob_protocol_adapter::StationAuthenticationMode::Credential,

@@ -264,7 +264,12 @@ async fn expire_in_flight<E>(
         .collect::<Vec<_>>();
     for delivery_id in expired {
         expire(store, delivery_id.clone(), now).await?;
-        in_flight.remove(&delivery_id);
+        if let Some(state) = in_flight.remove(&delivery_id) {
+            state.trace.emit(
+                uob_application::FlowStage::TargetReport,
+                uob_application::FlowEvidence::Uncertain,
+            );
+        }
     }
     Ok(())
 }
@@ -282,12 +287,16 @@ fn enqueue<E: Serialize>(
         Durability::BestEffortTelemetry => TargetDeliveryClass::ReplaceableLatestState,
     };
     let delivery_id = scheduled.delivery.delivery_id.clone();
-    let state = InFlight {
-        attempt_count: scheduled.attempt_count,
-        durability: scheduled.delivery.durability,
-        deadline: scheduled.delivery.deadline,
-    };
+    let attempt_count = scheduled.attempt_count;
+    let durability = scheduled.delivery.durability;
+    let deadline = scheduled.delivery.deadline;
     let target_delivery = into_target_delivery(scheduled.delivery, class);
+    let state = InFlight {
+        trace: ingress.trace_for(&target_delivery),
+        attempt_count,
+        durability,
+        deadline,
+    };
     if ingress.try_deliver(target_delivery, encoded_bytes).is_ok() {
         in_flight.insert(delivery_id, state);
     }
@@ -332,6 +341,19 @@ async fn record_report<E>(
             Err(TargetDeliveryWorkerError::UnexpectedReport)
         };
     };
+    let evidence = match &report.outcome {
+        DeliveryOutcome::LocallyExposed { .. } => uob_application::FlowEvidence::LocallyExposed,
+        DeliveryOutcome::Acknowledged { peer, scope }
+            if !peer.trim().is_empty() && !scope.0.trim().is_empty() =>
+        {
+            uob_application::FlowEvidence::PeerAcknowledged
+        }
+        DeliveryOutcome::Uncertain { .. } => uob_application::FlowEvidence::Uncertain,
+        _ => uob_application::FlowEvidence::Failed,
+    };
+    state
+        .trace
+        .emit(uob_application::FlowStage::TargetReport, evidence);
     let policy = match state.durability {
         Durability::Critical => options.durable,
         Durability::BestEffortTelemetry => options.replaceable_latest_state,
@@ -411,6 +433,7 @@ fn validate_options(options: TargetDeliveryWorkerOptions) -> Result<(), TargetDe
 }
 
 struct InFlight {
+    trace: uob_application::FlowSpan,
     attempt_count: u32,
     durability: Durability,
     deadline: UtcTimestamp,

@@ -1,3 +1,5 @@
+#[path = "support/flow.rs"]
+mod flow;
 use std::{
     collections::VecDeque,
     sync::{

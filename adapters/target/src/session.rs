@@ -54,6 +54,8 @@ pub struct TargetDeliveryIngress<E> {
     sender: mpsc::Sender<QueuedDelivery<E>>,
     destination: TargetDestination,
     budget: Arc<RuntimeResourceBudget>,
+    diagnostics: uob_application::FlowDiagnostics,
+    kind: uob_contracts::TargetKind,
 }
 
 impl<E> Clone for TargetDeliveryIngress<E> {
@@ -62,6 +64,8 @@ impl<E> Clone for TargetDeliveryIngress<E> {
             sender: self.sender.clone(),
             destination: self.destination.clone(),
             budget: Arc::clone(&self.budget),
+            diagnostics: self.diagnostics.clone(),
+            kind: self.kind.clone(),
         }
     }
 }
@@ -100,7 +104,13 @@ impl<E> TargetDeliveryIngress<E> {
                 });
             }
         };
-        self.sender
+        let trace = self.trace_for(&delivery);
+        trace.emit(
+            uob_application::FlowStage::TargetMapping,
+            uob_application::FlowEvidence::Completed,
+        );
+        let result = self
+            .sender
             .try_send(QueuedDelivery {
                 delivery,
                 _reservation: reservation,
@@ -112,7 +122,34 @@ impl<E> TargetDeliveryIngress<E> {
                 mpsc::error::TrySendError::Closed(queued) => {
                     TargetDeliveryIngressError::Closed(Box::new(queued.delivery))
                 }
-            })
+            });
+        trace.emit(
+            uob_application::FlowStage::TargetEnqueue,
+            if result.is_ok() {
+                uob_application::FlowEvidence::Completed
+            } else {
+                uob_application::FlowEvidence::Failed
+            },
+        );
+        result
+    }
+
+    pub(crate) fn trace_for(&self, delivery: &TargetDelivery<E>) -> uob_application::FlowSpan {
+        let correlation = match delivery.message.as_ref() {
+            uob_application::TargetMessage::DomainEvent(event) => event.correlation_id.clone(),
+            uob_application::TargetMessage::CommandResult(result) => result.correlation_id.clone(),
+            _ => None,
+        };
+        self.diagnostics
+            .span(
+                correlation,
+                Some(delivery.station_ordering_key.station_id.clone()),
+                None,
+            )
+            .with_target(
+                self.destination.target_instance_id.clone(),
+                self.kind.clone(),
+            )
     }
 
     /// Exact target instance and configuration revision accepted by this ingress.
@@ -228,6 +265,29 @@ where
     E: Send + Sync + 'static,
     P: Serialize + Send + 'static,
 {
+    spawn_target_session_with_diagnostics(
+        selection,
+        ports,
+        budget,
+        options,
+        uob_application::FlowDiagnostics::default(),
+    )
+}
+
+/// Starts a selected target with the host's shared process instrumentation.
+/// # Errors
+/// Returns the same configuration/construction failures as `spawn_target_session`.
+pub fn spawn_target_session_with_diagnostics<E, P>(
+    selection: &ValidatedTargetSelection<E, P>,
+    ports: TargetSessionPorts<E, P>,
+    budget: Arc<RuntimeResourceBudget>,
+    options: TargetSessionOptions,
+    diagnostics: uob_application::FlowDiagnostics,
+) -> Result<(TargetDeliveryIngress<E>, TargetSessionTask), TargetSessionError>
+where
+    E: Send + Sync + 'static,
+    P: Serialize + Send + 'static,
+{
     validate_options(&budget, options)?;
     let target = selection
         .create()
@@ -244,6 +304,7 @@ where
         destination.target_instance_id.clone(),
         descriptor.inbound_operations,
         options.runtime_limits,
+        diagnostics.clone(),
     );
     let reports = bounded_reports(
         ports.critical_reports,
@@ -266,11 +327,14 @@ where
         TargetHealthState::Starting,
         "target.session_starting",
     );
+    let flow_diagnostics = diagnostics;
     let diagnostics = ports.diagnostics;
     let join = tokio::spawn(run_target(target, context, diagnostics));
     Ok((
         TargetDeliveryIngress {
             sender: delivery_sender,
+            diagnostics: flow_diagnostics,
+            kind: descriptor.kind,
             destination,
             budget,
         },

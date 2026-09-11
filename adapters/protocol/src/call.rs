@@ -1,6 +1,7 @@
 //! Bounded bidirectional OCPP CALL lifecycle for one authenticated station socket.
 
 mod frame;
+mod registration;
 mod runtime;
 mod types;
 
