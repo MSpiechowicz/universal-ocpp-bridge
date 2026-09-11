@@ -1,4 +1,5 @@
 //! Persisted registration and status transitions owned by the station's ordered task.
+pub mod v201;
 use crate::{AtomicStoreWrite, OperationalStore, RegistrationObservation, StorageError};
 use uob_contracts::{
     AvailabilityState, Connectivity, DataPointValue, Freshness, NativeProtocolReference, PointId,
@@ -63,8 +64,8 @@ pub async fn register<
     interval_seconds: u32,
     now: UtcTimestamp,
 ) -> Result<RegistrationDecision, RegistrationError> {
-    connected(snapshot)?;
-    if observation.protocol != ProtocolEdition::Ocpp16j || interval_seconds == 0 {
+    connected_for(snapshot, observation.protocol)?;
+    if interval_seconds == 0 {
         return Err(RegistrationError::InvalidState);
     }
     let mut next = snapshot.clone();
@@ -79,8 +80,17 @@ pub async fn register<
     ] {
         set(
             &mut next.current_values,
-            &format!("ocpp16/registration/{name}"),
+            &format!("{}/registration/{name}", namespace(observation.protocol)),
             Some(value),
+            None,
+            now,
+        );
+    }
+    if observation.protocol == ProtocolEdition::Ocpp201 {
+        set(
+            &mut next.current_values,
+            "ocpp201/registration/boot_reason",
+            observation.boot_reason.clone().map(TypedValue::Text),
             None,
             now,
         );
@@ -183,13 +193,22 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     commit(store, snapshot, next).await
 }
 
-fn connected(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
+fn namespace(protocol: ProtocolEdition) -> &'static str {
+    match protocol {
+        ProtocolEdition::Ocpp16j => "ocpp16",
+        ProtocolEdition::Ocpp201 => "ocpp201",
+    }
+}
+fn connected_for(
+    snapshot: &StationSnapshot,
+    edition: ProtocolEdition,
+) -> Result<(), RegistrationError> {
     if matches!(
         snapshot.connectivity,
         Connectivity::Connected {
-            protocol: ProtocolEdition::Ocpp16j,
+            protocol,
             ..
-        }
+        } if protocol == edition
     ) {
         Ok(())
     } else {
@@ -197,9 +216,15 @@ fn connected(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
     }
 }
 fn accepted(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
-    connected(snapshot)?;
+    accepted_for(snapshot, ProtocolEdition::Ocpp16j)
+}
+fn accepted_for(
+    snapshot: &StationSnapshot,
+    edition: ProtocolEdition,
+) -> Result<(), RegistrationError> {
+    connected_for(snapshot, edition)?;
     if snapshot.current_values.iter().any(|v| {
-        v.point_id.as_str() == "ocpp16/registration/status"
+        v.point_id.as_str() == format!("{}/registration/status", namespace(edition))
             && v.value == Some(TypedValue::Text("Accepted".to_owned()))
     }) {
         Ok(())

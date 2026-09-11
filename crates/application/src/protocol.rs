@@ -14,6 +14,8 @@ pub enum ChargerObservation {
     Registration(RegistrationObservation),
     /// Validated OCPP 1.6 connector/controller status, retaining exact error information.
     ConnectorStatus(crate::registration::ConnectorStatusObservation),
+    /// Validated OCPP 2.0.1 EVSE/connector status.
+    EvseConnectorStatus(crate::registration::v201::StatusObservation),
     /// A station keepalive was received.
     Heartbeat {
         /// Negotiated protocol edition.

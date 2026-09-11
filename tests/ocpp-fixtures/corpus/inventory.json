@@ -36,6 +36,7 @@
     {"id":"ocpp201.certificates-iso15118","feature":"certificates_iso15118","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.tariff-display","feature":"tariff_display","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.data-transfer","feature":"data_transfer","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
-    {"id":"ocpp16.status","feature":"status","protocol_version":"1.6","direction":"charging_station_to_csms","required":true,"applicable":true}
+    {"id":"ocpp16.status","feature":"status","protocol_version":"1.6","direction":"charging_station_to_csms","required":true,"applicable":true},
+    {"id":"ocpp201.status","feature":"status","protocol_version":"2.0.1","direction":"charging_station_to_csms","required":true,"applicable":true}
   ]
 }

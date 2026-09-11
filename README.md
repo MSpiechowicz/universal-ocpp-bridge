@@ -213,3 +213,6 @@ and critical recovery decisions.
 
 See [OCPP 1.6 registration and status](docs/architecture/ocpp16-registration.md) for persisted boot
 decisions, heartbeat gating, native connector status, and reconnect behavior.
+
+See [OCPP 2.0.1 registration and status](docs/architecture/ocpp201-registration.md) for durable boot
+policy decisions, heartbeat gating, native EVSE/connector status, and reconnect recovery.

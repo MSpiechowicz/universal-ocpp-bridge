@@ -57,7 +57,9 @@ pub async fn complete_registration<
     now: UtcTimestamp,
 ) -> Result<Value, OcppCallError> {
     let response = match call.observation {
-        uob_application::ChargerObservation::Registration(observation) => {
+        uob_application::ChargerObservation::Registration(observation)
+            if observation.protocol == PROTOCOL =>
+        {
             let status = registration::register(
                 store,
                 snapshot,
