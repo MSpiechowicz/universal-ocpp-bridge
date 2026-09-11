@@ -1,20 +1,21 @@
 //! OCPP 1.6J model isolation and charger-to-application mappings.
 
 mod authorization;
+mod transaction_input;
+mod transactions;
+pub use transactions::{TransactionServices, complete_transaction, transaction_call};
 mod registration;
 pub use registration::{complete_registration, registration_call};
 
 pub use authorization::{Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call};
 
-use rust_ocpp::v1_6::messages::{
-    meter_values::MeterValuesRequest, start_transaction::StartTransactionRequest,
-};
+use rust_ocpp::v1_6::messages::meter_values::MeterValuesRequest;
 use rust_ocpp::v1_6::types::{
     MeterValue, ReadingContext, SampledValue, UnitOfMeasure, ValueFormat,
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use uob_application::{ChargerObservation, MeasurementObservation, TransactionStartObservation};
+use uob_application::{ChargerObservation, MeasurementObservation};
 use uob_contracts::{
     DataPointValue, ExactDecimal, ExactDecimalError, Freshness, MeasurementContext,
     MeasurementLocation, MeasurementMetadata, MeasurementPhase, NativeProtocolReference, PointId,
@@ -37,6 +38,9 @@ const PROTOCOL: ProtocolEdition = ProtocolEdition::Ocpp16j;
 /// Returns [`DecodeError`] when the CALL envelope is malformed, the action has no implemented
 /// mapping, or the payload fails typed or field validation.
 pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
+    if frame.len() > 256 * 1024 {
+        return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
+    }
     let (message_id, action, payload) = parse_frame(frame)?;
     let observation = match action.as_str() {
         "BootNotification" => {
@@ -51,15 +55,10 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         }
         "MeterValues" => measurements(payload_as(payload)?)?,
         "StartTransaction" => {
-            let request: StartTransactionRequest = validated_payload(payload)?;
-            ChargerObservation::TransactionStarted(TransactionStartObservation {
-                protocol: PROTOCOL,
-                native_transaction_id: None,
-                native_resource: NativeProtocolReference::Ocpp16 {
-                    connector_id: request.connector_id,
-                },
-                occurred_at: timestamp(request.timestamp)?,
-            })
+            ChargerObservation::TransactionStarted(transaction_input::start(payload)?)
+        }
+        "StopTransaction" => {
+            ChargerObservation::TransactionStopped(transaction_input::stop(payload)?)
         }
         _ => {
             return Err(DecodeError::new(

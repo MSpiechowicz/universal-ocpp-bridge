@@ -30,6 +30,10 @@ impl<'a, C, E, D, R> DiagnosticStore<'a, C, E, D, R> {
 impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
     OperationalStore<C, E, D, R> for DiagnosticStore<'_, C, E, D, R>
 {
+    fn reserve_transaction_id(&self) -> StorageFuture<'_, i32> {
+        self.inner.reserve_transaction_id()
+    }
+
     fn write_atomic(
         &self,
         write: AtomicStoreWrite<C, E, D, R>,

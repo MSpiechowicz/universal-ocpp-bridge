@@ -215,7 +215,7 @@ fn connected_for(
         Err(RegistrationError::InvalidState)
     }
 }
-fn accepted(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
+pub(crate) fn accepted(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
     accepted_for(snapshot, ProtocolEdition::Ocpp16j)
 }
 fn accepted_for(
@@ -232,7 +232,7 @@ fn accepted_for(
         Err(RegistrationError::NotRegistered)
     }
 }
-fn activity(snapshot: &mut StationSnapshot, now: UtcTimestamp) {
+pub(crate) fn activity(snapshot: &mut StationSnapshot, now: UtcTimestamp) {
     snapshot.observed_at = now;
     if let Connectivity::Connected {
         last_message_at, ..
@@ -241,7 +241,7 @@ fn activity(snapshot: &mut StationSnapshot, now: UtcTimestamp) {
         *last_message_at = Some(now);
     }
 }
-fn set(
+pub(crate) fn set(
     values: &mut Vec<DataPointValue>,
     id: &str,
     value: Option<TypedValue>,

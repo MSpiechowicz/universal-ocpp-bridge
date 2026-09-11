@@ -7,6 +7,8 @@ mod identity;
 mod point;
 mod snapshot;
 mod timestamp;
+mod transaction16;
+pub use transaction16::Ocpp16TransactionEvidence;
 mod trace;
 
 pub use command::{

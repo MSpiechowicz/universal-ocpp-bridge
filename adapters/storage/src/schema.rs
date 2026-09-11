@@ -14,7 +14,9 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
 fn create_schema(connection: &Connection) -> Result<(), StorageError> {
     connection
         .execute_batch(
-            "CREATE TABLE IF NOT EXISTS station_snapshots (\n\
+            "CREATE TABLE IF NOT EXISTS transaction_id_counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL);\n\
+             INSERT OR IGNORE INTO transaction_id_counter VALUES (1, 0);\n\
+             CREATE TABLE IF NOT EXISTS station_snapshots (\n\
                  station_key TEXT PRIMARY KEY, payload TEXT NOT NULL\n\
              );\n\
              CREATE TABLE IF NOT EXISTS authorization_changes (\n\

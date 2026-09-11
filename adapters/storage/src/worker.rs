@@ -24,6 +24,7 @@ use crate::{
 
 pub(crate) enum Request<C, E, D, R> {
     Probe(Reply<()>),
+    TransactionId(Reply<i32>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
     Snapshots(
         Option<String>,
@@ -62,6 +63,9 @@ pub(crate) fn run<C, E, D, R>(
 {
     for request in requests {
         match request {
+            Request::TransactionId(reply) => respond(reply, connection.query_row(
+                "UPDATE transaction_id_counter SET value = value + 1 WHERE id = 1 AND value < 2147483647 RETURNING value",
+                [], |row| row.get(0)).map_err(unavailable)),
             Request::Probe(reply) => respond(
                 reply,
                 connection

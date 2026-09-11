@@ -227,3 +227,6 @@ decisions, heartbeat gating, native connector status, and reconnect behavior.
 
 See [OCPP 2.0.1 registration and status](docs/architecture/ocpp201-registration.md) for durable boot
 policy decisions, heartbeat gating, native EVSE/connector status, and reconnect recovery.
+
+See [OCPP 1.6 durable transactions](docs/architecture/ocpp-16-transactions.md) for committed
+start/stop replies, CSMS IDs, local authorization, meter evidence and bounded retry recovery.

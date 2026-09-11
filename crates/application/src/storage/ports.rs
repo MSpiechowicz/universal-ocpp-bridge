@@ -13,6 +13,17 @@ use super::{
 /// `dyn OperationalStore<C, E, D, R>`. Methods deliberately expose no driver connection,
 /// statement, or physical-layout types.
 pub trait OperationalStore<C, E, D, R>: Send + Sync {
+    /// Reserves a globally unique positive OCPP 1.6 transaction ID in this operational store.
+    /// Reservations survive restart; unused IDs may be skipped but must never be reused.
+    fn reserve_transaction_id(&self) -> StorageFuture<'_, i32> {
+        Box::pin(async {
+            Err(super::StorageError::new(
+                super::StorageErrorCode::Unavailable,
+                "transaction ID allocation unavailable",
+            ))
+        })
+    }
+
     /// Atomically persists one application operation and performs command deduplication.
     /// An identical duplicate returns `CommandAdmissionOutcome::Duplicate` without applying
     /// the bundled state, journal, delivery, or committed-record mutations again. Reusing a
