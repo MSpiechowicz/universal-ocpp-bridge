@@ -255,6 +255,9 @@ pub enum TransactionState {
 /// Observed transaction state associated with a canonical charging resource.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct TransactionSnapshot {
+    /// Durable OCPP 1.6 start/stop evidence; absent for other protocol editions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ocpp16: Option<Box<crate::Ocpp16TransactionEvidence>>,
     /// Stable transaction identity.
     pub transaction_id: TransactionId,
     /// Resource associated with the transaction.

@@ -1,0 +1,1 @@
+[2,"fixture-16-stop-001","StopTransaction",{"transactionId":1,"idTag":"INDEPENDENT-001","meterStop":1500,"timestamp":"2026-09-01T01:02:00Z","reason":"Remote","transactionData":[{"timestamp":"2026-09-01T01:01:00Z","sampledValue":[{"value":"1500","context":"Transaction.End","measurand":"Energy.Active.Import.Register","unit":"Wh"}]}]}]

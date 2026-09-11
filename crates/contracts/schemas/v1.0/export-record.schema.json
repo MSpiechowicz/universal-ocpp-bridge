@@ -968,6 +968,104 @@
       ],
       "type": "object"
     },
+    "Ocpp16TransactionEvidence": {
+      "description": "Version-specific durable facts, separate from observed charging and command acceptance.\nRaw idTags are never stored here. Fingerprints refer to canonical validated wire payloads.",
+      "properties": {
+        "authorization_expiry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization_status": {
+          "type": "string"
+        },
+        "identity_reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meter_start": {
+          "description": "Native meter register in Wh; signed integer semantics are preserved.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "meter_stop": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reservation_id": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "signed_values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "start_fingerprint": {
+          "type": "string"
+        },
+        "start_message_id": {
+          "type": "string"
+        },
+        "stop_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stop_identity_fingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stop_message_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stop_reason": {
+          "description": "Absent means the OCPP default Local; explicit values retain their native spelling.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transaction_data": {
+          "items": {
+            "$ref": "#/$defs/DataPointValue"
+          },
+          "type": "array"
+        },
+        "transaction_id": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "transaction_id",
+        "start_message_id",
+        "start_fingerprint",
+        "authorization_status",
+        "meter_start"
+      ],
+      "type": "object"
+    },
     "PointId": {
       "description": "Stable identity of a canonical data point.",
       "type": "string"
@@ -1190,6 +1288,17 @@
             }
           ],
           "description": "Observed end time, when the transaction has ended."
+        },
+        "ocpp16": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Ocpp16TransactionEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Durable OCPP 1.6 start/stop evidence; absent for other protocol editions."
         },
         "protocol_state": {
           "anyOf": [

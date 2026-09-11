@@ -180,6 +180,10 @@ where
     D: Serialize + DeserializeOwned + Send + Sync + 'static,
     R: Serialize + DeserializeOwned + Send + Sync + 'static,
 {
+    fn reserve_transaction_id(&self) -> StorageFuture<'_, i32> {
+        self.request(Request::TransactionId)
+    }
+
     fn write_atomic(
         &self,
         write: AtomicStoreWrite<C, E, D, R>,

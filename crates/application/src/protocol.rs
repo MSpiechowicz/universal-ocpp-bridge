@@ -25,6 +25,8 @@ pub enum ChargerObservation {
     },
     /// A transaction start was reported by the station.
     TransactionStarted(TransactionStartObservation),
+    /// OCPP 1.6 stop report, including final meter evidence.
+    TransactionStopped(crate::transaction16::StopObservation),
     /// An OCPP 2.0.1 transaction lifecycle event.
     TransactionEvent(TransactionEventObservation),
     /// One or more exact meter samples reported by the station.
@@ -146,6 +148,7 @@ pub fn apply_transaction_event(
         transaction.protocol_state = Some(protocol_state);
     } else {
         snapshot.transactions.push(TransactionSnapshot {
+            ocpp16: None,
             transaction_id,
             resource,
             state,
@@ -272,6 +275,11 @@ pub struct RegistrationObservation {
 /// Application-owned transaction-start evidence without model-library types.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransactionStartObservation {
+    /// Sensitive presented identity; Debug is redacted and it is never persisted.
+    pub identity: crate::charging_identity::PresentedChargingIdentity,
+    pub meter_start: i32,
+    pub reservation_id: Option<i32>,
+    pub fingerprint: String,
     /// Negotiated protocol edition.
     pub protocol: ProtocolEdition,
     /// Charger-assigned transaction identity when the edition supplies it at start.
