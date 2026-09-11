@@ -90,8 +90,10 @@ ring one record at a time for at most thirty seconds from acquisition, including
 stops. These are bounded read leases, not copied capture snapshots. While an admitted export
 retains a stopped session, another capture cannot start. No export can begin after stop. The last
 export release or its absolute deadline releases stopped session ownership; independently held
-record references remain charged until dropped. HTTP capture-file export/import is separate #66
-work and is not provided by the trace SSE route.
+record references remain charged until dropped. The separate
+[HTTP capture-file export](../security/diagnostic-capture-export.md) route uses these leases
+with stricter stop/cancellation and stalled-body cleanup. It does not change the trace SSE
+route; browser import remains separate work.
 
 ## Verification scope
 

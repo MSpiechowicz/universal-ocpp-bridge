@@ -56,6 +56,10 @@ pub fn capture_router(
             "/api/v1/diagnostics/capture/{process_id}/{id}/traces",
             get(crate::trace_api::traces),
         )
+        .route(
+            "/api/v1/diagnostics/capture/{process_id}/{id}/export",
+            get(crate::capture_export::export),
+        )
         .layer(DefaultBodyLimit::max(4096))
         .with_state(CaptureState {
             configuration,
