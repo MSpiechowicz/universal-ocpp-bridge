@@ -31,9 +31,9 @@ pub struct ManagementCaptureConfiguration {
 }
 
 #[derive(Clone)]
-struct CaptureState {
-    configuration: ManagementCaptureConfiguration,
-    identity: ServiceIdentity,
+pub(crate) struct CaptureState {
+    pub(crate) configuration: ManagementCaptureConfiguration,
+    pub(crate) identity: ServiceIdentity,
 }
 
 /// Builds independently authenticated control routes, mergeable with any management router.
@@ -51,6 +51,10 @@ pub fn capture_router(
         .route(
             "/api/v1/diagnostics/capture/{process_id}/{id}/stop",
             post(stop),
+        )
+        .route(
+            "/api/v1/diagnostics/capture/{process_id}/{id}/traces",
+            get(crate::trace_api::traces),
         )
         .layer(DefaultBodyLimit::max(4096))
         .with_state(CaptureState {
@@ -81,7 +85,7 @@ struct Extension {
     duration_seconds: u64,
 }
 
-fn authenticate(state: &CaptureState, headers: &HeaderMap) -> Result<CaptureGrant, ()> {
+pub(crate) fn authenticate(state: &CaptureState, headers: &HeaderMap) -> Result<CaptureGrant, ()> {
     let values = headers.get_all(header::AUTHORIZATION);
     let mut values = values.iter();
     let token = values
@@ -102,7 +106,7 @@ fn authenticate(state: &CaptureState, headers: &HeaderMap) -> Result<CaptureGran
         .and_then(|token| state.configuration.authenticator.authenticate(token))
         .ok_or(())
 }
-fn unauthenticated() -> Response {
+pub(crate) fn unauthenticated() -> Response {
     (
         StatusCode::UNAUTHORIZED,
         [(header::CACHE_CONTROL, "no-store")],
@@ -110,7 +114,7 @@ fn unauthenticated() -> Response {
     )
         .into_response()
 }
-fn failure(error: CaptureError) -> Response {
+pub(crate) fn failure(error: CaptureError) -> Response {
     let (status, code) = match error {
         CaptureError::Disabled => (StatusCode::FORBIDDEN, "capture.disabled"),
         CaptureError::Forbidden => (StatusCode::FORBIDDEN, "capture.forbidden"),

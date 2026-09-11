@@ -74,7 +74,14 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
     let options = uob_management_adapter::ManagementRouterOptions {
         static_assets: !no_ui,
     };
-    let diagnostics = match configuration.diagnostics.resolve() {
+    let diagnostics = match configuration.diagnostics.resolve_with_resources(
+        configuration
+            .service
+            .application
+            .health()
+            .resources()
+            .clone(),
+    ) {
         Ok(value) => value,
         Err(error) => return failure(1, error.to_string()),
     };
@@ -85,7 +92,10 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
     );
     let result = crate::lifecycle::serve(
         configuration.management_address,
-        configuration.service.application,
+        crate::diagnostics::instrument(
+            configuration.service.application,
+            diagnostics.manager.clone(),
+        ),
         diagnostics,
         options,
         configuration.shutdown_timeout,

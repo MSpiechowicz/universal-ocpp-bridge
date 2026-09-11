@@ -1,16 +1,20 @@
 //! Single diagnostic serialization boundary.
 
-use std::{collections::BTreeMap, error::Error, fmt, sync::Arc};
+use std::{borrow::Cow, error::Error, fmt, sync::Arc};
 
 use uob_contracts::{
-    ContractVersion, CorrelationId, ProcessInstanceId, ProtocolActionName, RedactedTraceDetails,
-    StationId, TargetInstanceId, TargetKind, TraceDirection, TraceId, TraceOutcome, TraceRecord,
-    TraceSequence, TraceStage, TraceTarget, UtcTimestamp,
+    CorrelationId, ProcessInstanceId, ProtocolActionName, StationId, TargetInstanceId, TargetKind,
+    TraceDirection, TraceId, TraceOutcome, TraceSequence, TraceStage, UtcTimestamp,
 };
+
+mod encoding;
 
 pub mod flow;
 pub mod state;
 pub mod store;
+
+/// Hard ceiling for one complete encoded diagnostic, including metadata and audit fields.
+pub const MAX_DIAGNOSTIC_RECORD_BYTES: usize = 64 * 1024;
 
 const REDACTED: &str = "[REDACTED]";
 const OMITTED_VENDOR_PAYLOAD: &str = "[OMITTED: unknown_vendor_payload]";
@@ -187,7 +191,7 @@ pub enum SafeDiagnosticField {
 }
 
 impl SafeDiagnosticField {
-    fn render(&self) -> (String, String) {
+    fn render(&self) -> (Cow<'_, str>, Cow<'_, str>) {
         let (key, value) = match self {
             Self::AvailabilityChange {
                 index,
@@ -195,25 +199,25 @@ impl SafeDiagnosticField {
                 after,
             } => {
                 return (
-                    format!("resources.{index}.availability"),
-                    format!("{before:?} -> {after:?}"),
+                    Cow::Owned(format!("resources.{index}.availability")),
+                    Cow::Owned(format!("{before:?} -> {after:?}")),
                 );
             }
-            Self::StateDetailsOmitted => ("state_details_omitted", "true".to_owned()),
-            Self::Evidence(value) => ("evidence", value.name().to_owned()),
-            Self::CorrelationMissing => ("correlation", "uncorrelated".to_owned()),
+            Self::StateDetailsOmitted => ("state_details_omitted", Cow::Borrowed("true")),
+            Self::Evidence(value) => ("evidence", Cow::Borrowed(value.name())),
+            Self::CorrelationMissing => ("correlation", Cow::Borrowed("uncorrelated")),
             Self::SourceTime(value) => (
                 "source_time",
-                serde_json::to_string(value).expect("timestamp"),
+                Cow::Owned(serde_json::to_string(value).expect("timestamp")),
             ),
-            Self::Protocol(value) => ("protocol", format!("{value:?}")),
-            Self::Action(value) => ("action", value.as_str().to_owned()),
-            Self::Station(value) => ("station_id", value.as_str().to_owned()),
-            Self::Correlation(value) => ("correlation_id", value.as_str().to_owned()),
-            Self::EndpointLabel(value) => ("endpoint_label", value.as_str().to_owned()),
-            Self::PayloadBytes(value) => ("payload_bytes", value.to_string()),
+            Self::Protocol(value) => ("protocol", Cow::Owned(format!("{value:?}"))),
+            Self::Action(value) => ("action", Cow::Borrowed(value.as_str())),
+            Self::Station(value) => ("station_id", Cow::Borrowed(value.as_str())),
+            Self::Correlation(value) => ("correlation_id", Cow::Borrowed(value.as_str())),
+            Self::EndpointLabel(value) => ("endpoint_label", Cow::Borrowed(value.as_str())),
+            Self::PayloadBytes(value) => ("payload_bytes", Cow::Owned(value.to_string())),
         };
-        (key.to_owned(), value)
+        (Cow::Borrowed(key), value)
     }
 }
 
@@ -360,7 +364,7 @@ impl DiagnosticDisclosureAudit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SanitizedDiagnostic {
     encoded_json: Arc<[u8]>,
-    audit: DiagnosticDisclosureAudit,
+    audit: Arc<DiagnosticDisclosureAudit>,
 }
 
 impl SanitizedDiagnostic {
@@ -372,7 +376,7 @@ impl SanitizedDiagnostic {
 
     /// Returns safe disclosure evidence without source values.
     #[must_use]
-    pub const fn audit(&self) -> &DiagnosticDisclosureAudit {
+    pub fn audit(&self) -> &DiagnosticDisclosureAudit {
         &self.audit
     }
 }
@@ -386,79 +390,15 @@ impl DiagnosticBoundary {
     ///
     /// # Errors
     ///
-    /// Returns [`DiagnosticSerializationError`] if the closed trace contract cannot serialize.
+    /// Returns [`DiagnosticSerializationError`] if required metadata exceeds the record limit
+    /// or the closed trace contract cannot serialize. Excess safe details are omitted before
+    /// copying them; original source byte counts and truncation evidence remain visible.
     pub fn serialize(
         self,
         context: DiagnosticTraceContext,
         observation: DiagnosticObservation,
     ) -> Result<SanitizedDiagnostic, DiagnosticSerializationError> {
-        let mut fields = BTreeMap::new();
-        let mut audit = DiagnosticDisclosureAudit::default();
-        let mut omitted = false;
-
-        for attribute in observation.attributes {
-            match attribute {
-                DiagnosticAttribute::Safe(field) => {
-                    let (name, value) = field.render();
-                    fields.insert(name.clone(), value);
-                    audit.exposed_fields.push(name.clone());
-                }
-                DiagnosticAttribute::Sensitive(value) => {
-                    let class = value.class.audit_name();
-                    fields.insert(format!("redacted.{class}"), REDACTED.to_owned());
-                    audit.redacted_classes.push(class);
-                }
-                DiagnosticAttribute::UnknownVendorPayload(_) => {
-                    fields.insert(
-                        "vendor_payload".to_owned(),
-                        OMITTED_VENDOR_PAYLOAD.to_owned(),
-                    );
-                    audit.omitted_unknown_vendor_payloads += 1;
-                    omitted = true;
-                }
-            }
-        }
-
-        fields.insert(
-            "audit.exposed_fields".to_owned(),
-            audit.exposed_fields.join(","),
-        );
-        fields.insert(
-            "audit.redacted_classes".to_owned(),
-            audit.redacted_classes.join(","),
-        );
-        fields.insert(
-            "audit.omitted_unknown_vendor_payloads".to_owned(),
-            audit.omitted_unknown_vendor_payloads.to_string(),
-        );
-
-        let target = context
-            .target
-            .map(|(instance_id, kind)| TraceTarget { instance_id, kind });
-        let record = TraceRecord {
-            schema_version: ContractVersion::V1_INITIAL,
-            trace_id: context.trace_id,
-            process_instance_id: context.process_instance_id,
-            trace_sequence: context.trace_sequence,
-            target,
-            correlation_id: context.correlation_id,
-            parent_trace_id: context.parent_trace_id,
-            stage: context.stage,
-            direction: context.direction,
-            observed_at: context.observed_at,
-            duration_micros: context.duration_micros,
-            outcome: context.outcome.into_contract(),
-            redacted_details: Some(RedactedTraceDetails {
-                summary: Some(observation.summary.as_str().to_owned()),
-                fields,
-                truncated: omitted,
-            }),
-        };
-        let encoded_json = serde_json::to_vec(&record).map_err(DiagnosticSerializationError)?;
-        Ok(SanitizedDiagnostic {
-            encoded_json: Arc::from(encoded_json),
-            audit,
-        })
+        encoding::serialize(context, observation)
     }
 }
 
@@ -483,3 +423,6 @@ mod tests;
 
 #[cfg(test)]
 mod flow_tests;
+
+#[cfg(test)]
+mod encoding_tests;

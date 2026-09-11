@@ -17,12 +17,12 @@ metadata is shed before serialization; output is capped at 64 KiB, with at most
 counter when full or closed. A slow diagnostic receiver cannot suspend a command,
 SQLite write, socket task or critical target report.
 
-The receiver is a host instrumentation boundary, not a public stream, persistent
-archive or durable event cursor. It must not be copied to normal logs or SQLite.
-The shared retained ring, authenticated subscriber leases, gap reporting and export
-transport are subsequent #65/#66 work. Consumers of that transport must enforce the
-existing capture lifetime/read scopes again; possession of the internal receiver
-is not an operator read grant.
+The channel receiver remains an internal host instrumentation boundary. The service uses
+`FlowDiagnostics::retained` to feed the [shared bounded trace ring and authenticated SSE](bounded-debug-traces.md)
+directly through the capture manager. That path shares the daemon's resource budget, sheds
+optional details under pressure, and rechecks scoped leases for every live/export read. Trace
+bytes do not enter normal logs, SQLite or durable-event replay. HTTP capture-file export remains
+#66 work; possession of an internal receiver is not an operator read grant.
 
 ## Evidence and causality
 

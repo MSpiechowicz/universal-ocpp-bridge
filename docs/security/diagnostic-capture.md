@@ -39,6 +39,7 @@ not accepted. Control bodies are capped at 4 KiB and reject unknown fields.
 | --- | --- |
 | `POST /api/v1/diagnostics/capture` | Start an explicit session |
 | `GET /api/v1/diagnostics/capture` | Read authorized active status without extending it |
+| `GET /api/v1/diagnostics/capture/{process_id}/{id}/traces` | Stream the authorized retained trace window over SSE |
 | `POST /api/v1/diagnostics/capture/{process_id}/{id}/extend` | Explicitly set a new deadline |
 | `POST /api/v1/diagnostics/capture/{process_id}/{id}/stop` | Stop the exact session |
 
@@ -76,11 +77,14 @@ absolute deadline, preventing overlapping capture allocations. Stale leases cann
 session. Dropping the last export releases stopped session state; abandoned exports are reaped
 without further requests.
 
-This change implements session controls and the scoped sink/retention contract. Actual trace
-instrumentation (#63), the shared bounded ring and SSE (#65), and capture-file streaming (#66)
-remain separate backlog items. The controls do not create a durable trace store or claim to
-collect wire traffic before those integrations exist. Ring owners must release retained storage
-when `wake_after(session_id)` returns `None`; leases carry permissions, never copied trace data.
+The existing diagnostic hooks feed one shared ring bounded to 8 MiB / 2,000 records, with at most
+64 KiB per centrally sanitized record. Live SSE reports retained-window, gap and trace events;
+slow readers lose their subscriber lease after five seconds without consuming notifications.
+Every read rechecks the capture lease and returns at most one shared record. See
+[bounded best-effort debug traces](../architecture/bounded-debug-traces.md) for shared resource
+accounting, reconnect cursors, omission metadata and exact stream semantics. Application export
+leases provide bounded access to this same ring; HTTP capture-file streaming remains #66 work.
+No trace replay is durable, and a stale lease cannot read a later capture.
 
 ## Verification
 

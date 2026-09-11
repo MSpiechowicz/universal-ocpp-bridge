@@ -1,11 +1,24 @@
 //! Process-local capture controls. Trace storage/transport implement the separate ring contract.
+mod lease;
+mod ring;
+#[cfg(test)]
+mod ring_tests;
 #[cfg(test)]
 mod tests;
+pub use lease::CaptureLease;
 mod types;
+pub use ring::{MAX_TRACE_RECORD_BYTES, RetainedTrace, TraceRead, TraceWindow};
 pub use types::*;
 
+use crate::{
+    DiagnosticDropReason, RuntimeResourceBudget, RuntimeResourceLimits, SanitizedDiagnostic,
+};
+use ring::{RingLimits, TraceMemory, TraceRing};
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -23,6 +36,8 @@ struct Session {
     stopped: bool,
     subscribers: usize,
     exports: Vec<(u64, Instant)>,
+    ring: TraceRing,
+    dropped_at_start: u64,
 }
 
 #[derive(Debug, Default)]
@@ -30,6 +45,7 @@ struct State {
     worker_running: bool,
     next_id: u64,
     next_export: u64,
+    next_trace_sequence: u64,
     session: Option<Session>,
 }
 
@@ -38,16 +54,108 @@ struct State {
 pub struct CaptureManager {
     enabled: bool,
     state: Arc<Mutex<State>>,
+    dropped: Arc<AtomicU64>,
+    resources: RuntimeResourceBudget,
+    ring_limits: RingLimits,
+    memory: Arc<TraceMemory>,
 }
 
 impl CaptureManager {
     /// Creates a host-configured authority; production and demo must opt in explicitly.
+    /// # Panics
+    /// Only if the compile-time default runtime resource limits are invalid.
     #[must_use]
     pub fn new(allow_capture: bool) -> Self {
+        Self::with_resources(
+            allow_capture,
+            RuntimeResourceBudget::new(RuntimeResourceLimits::default())
+                .expect("default runtime limits"),
+        )
+    }
+
+    /// Uses the daemon's existing shared resource pool for all retained diagnostics.
+    #[must_use]
+    pub fn with_resources(allow_capture: bool, resources: RuntimeResourceBudget) -> Self {
         Self {
             enabled: allow_capture,
             state: Arc::default(),
+            dropped: Arc::default(),
+            ring_limits: RingLimits::for_resources(&resources),
+            resources,
+            memory: Arc::default(),
         }
+    }
+
+    /// Creates lower-only ring limits for constrained hosts and deterministic checks.
+    /// # Errors
+    /// Rejects zero limits or limits above 8 MiB and 2,000 retained records.
+    pub fn with_ring_limits(
+        allow_capture: bool,
+        bytes: usize,
+        records: usize,
+    ) -> Result<Self, CaptureError> {
+        let mut manager = Self::new(allow_capture);
+        manager.ring_limits = RingLimits::new(bytes, records)?;
+        Ok(manager)
+    }
+
+    /// Filters and admits one record without waiting for capture controls or shared resources.
+    /// The formatter is invoked only for the active selection, with a process-local sequence
+    /// and a flag requesting optional-detail shedding. Returning `None` records a visible drop.
+    pub fn try_record(
+        &self,
+        filter: &CaptureFilter,
+        build: impl FnOnce(u64, bool) -> Option<SanitizedDiagnostic>,
+    ) -> bool {
+        if !self.enabled {
+            return false;
+        }
+        let Ok(mut state) = self.state.try_lock() else {
+            self.record_drop();
+            return false;
+        };
+        let Some(session) = state.session.as_ref().filter(|s| {
+            !s.stopped && Instant::now() < s.deadline && s.status.filter.includes(filter)
+        }) else {
+            return false;
+        };
+        let shed = session.ring.pressured() || self.resources.try_diagnostic_pressure();
+        let sequence = state.next_trace_sequence;
+        let Some(next) = sequence.checked_add(1) else {
+            self.record_drop();
+            return false;
+        };
+        state.next_trace_sequence = next;
+        let Some(record) = build(sequence, shed) else {
+            self.record_drop();
+            return false;
+        };
+        let Some(session) = state.session.as_mut() else {
+            return false;
+        };
+        if session.ring.push(sequence, record, shed, &self.resources) {
+            true
+        } else {
+            self.record_drop();
+            false
+        }
+    }
+
+    fn record_drop(&self) {
+        let _ = self
+            .dropped
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                Some(value.saturating_add(1))
+            });
+        self.resources
+            .record_diagnostic_drop(DiagnosticDropReason::Full);
+    }
+
+    /// Process-lifetime producer drops, including contention and failed retained admission.
+    /// Reading this counter does not require an active capture or acquire the capture lock.
+    #[must_use]
+    pub fn dropped(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
     }
 
     /// Starts one immutable selection after permission checks and before allocating a session.
@@ -89,6 +197,8 @@ impl CaptureManager {
             stopped: false,
             subscribers: 0,
             exports: vec![],
+            ring: TraceRing::new(self.ring_limits, Arc::clone(&self.memory)),
+            dropped_at_start: self.dropped.load(Ordering::Relaxed),
         });
         if !state.worker_running {
             let weak = Arc::downgrade(&self.state);
@@ -242,6 +352,7 @@ impl CaptureManager {
             .ok_or(CaptureError::Capacity)?;
         let session = active(&mut state, id)?;
         authorize(session, grant, CapturePermission::Read)?;
+        let filter = session.status.filter.clone();
         if export {
             if session.exports.len() >= 2 {
                 return Err(CaptureError::Capacity);
@@ -260,45 +371,8 @@ impl CaptureManager {
             manager: self.clone(),
             id,
             export_id: export.then_some(export_id),
+            filter,
         })
-    }
-}
-
-/// Revocable sink permission, not a copy of retained trace memory. Sinks must check each read.
-#[derive(Debug)]
-pub struct CaptureLease {
-    manager: CaptureManager,
-    id: u64,
-    export_id: Option<u64>,
-}
-
-impl CaptureLease {
-    /// Checks session lifetime and exact record selection for every streamed/exported record.
-    #[must_use]
-    pub fn permits(&self, record: &CaptureFilter) -> bool {
-        let mut state = lock(&self.manager.state);
-        reap(&mut state, Instant::now());
-        state.session.as_ref().is_some_and(|s| {
-            s.status.id == self.id
-                && s.status.filter.includes(record)
-                && self
-                    .export_id
-                    .map_or(!s.stopped, |id| s.exports.iter().any(|(v, _)| *v == id))
-        })
-    }
-}
-
-impl Drop for CaptureLease {
-    fn drop(&mut self) {
-        let mut state = lock(&self.manager.state);
-        if let Some(session) = state.session.as_mut().filter(|s| s.status.id == self.id) {
-            if let Some(id) = self.export_id {
-                session.exports.retain(|(v, _)| *v != id);
-            } else {
-                session.subscribers = session.subscribers.saturating_sub(1);
-            }
-        }
-        reap(&mut state, Instant::now());
     }
 }
 

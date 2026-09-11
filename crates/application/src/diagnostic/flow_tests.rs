@@ -140,3 +140,61 @@ fn oversized_metadata_is_shed_and_state_projection_never_copies_raw_values() {
     assert!(!text.contains("current_values"));
     assert!(record.encoded_json().len() < 2048);
 }
+
+#[test]
+fn retained_emitter_reports_process_lifetime_formatting_and_admission_drops() {
+    let manager = CaptureManager::with_ring_limits(true, 1, 1).unwrap();
+    let bridge = BridgeId::new("bridge").unwrap();
+    let filter = CaptureFilter {
+        bridge: bridge.clone(),
+        station: None,
+        target: None,
+    };
+    let grant = CaptureGrant::new(
+        bridge.clone(),
+        vec![CapturePermission::Capture, CapturePermission::Read],
+        None,
+        None,
+    )
+    .unwrap();
+    let flow = FlowDiagnostics::retained(
+        ProcessInstanceId::new("process").unwrap(),
+        bridge,
+        manager.clone(),
+        Arc::new(Clock),
+    );
+    flow.span(None, None, None)
+        .emit(FlowStage::Application, FlowEvidence::Completed);
+    assert_eq!(flow.dropped(), 0);
+    let capture = manager
+        .start(&grant, filter.clone(), CaptureLevel::Metadata, None)
+        .unwrap();
+    flow.span(
+        Some(CorrelationId::new("x".repeat(2048)).unwrap()),
+        None,
+        None,
+    )
+    .emit(FlowStage::Application, FlowEvidence::Completed);
+    assert_eq!(flow.dropped(), 1);
+    flow.span(None, None, None)
+        .emit(FlowStage::Application, FlowEvidence::Completed);
+    assert_eq!(flow.dropped(), 2);
+    let lease = manager.lease(&grant, capture.id, false).unwrap();
+    assert_eq!(lease.read_after(None).unwrap().window.dropped_records, 2);
+    manager.stop(&grant, capture.id).unwrap();
+    assert_eq!(flow.dropped(), 2);
+    let next = manager
+        .start(&grant, filter, CaptureLevel::Metadata, None)
+        .unwrap();
+    assert_eq!(flow.dropped(), 2);
+    assert_eq!(
+        manager
+            .lease(&grant, next.id, false)
+            .unwrap()
+            .read_after(None)
+            .unwrap()
+            .window
+            .dropped_records,
+        0
+    );
+}
