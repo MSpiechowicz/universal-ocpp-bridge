@@ -3,6 +3,7 @@
 mod call;
 mod endpoint;
 mod error;
+pub mod multipart;
 mod security;
 mod station;
 pub mod v16;
