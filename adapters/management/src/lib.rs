@@ -2,6 +2,7 @@
 
 mod assets;
 mod capture_api;
+mod capture_export;
 mod trace_api;
 pub use capture_api::{
     ManagementCaptureAuthenticator, ManagementCaptureConfiguration, capture_router,

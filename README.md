@@ -65,7 +65,8 @@ Diagnostic capture requires explicit enablement and scoped read/capture permissi
 [diagnostic capture controls](docs/security/diagnostic-capture.md) for session deadlines and permissions.
 The [shared bounded trace ring and authenticated SSE](docs/architecture/bounded-debug-traces.md)
 retain at most 8 MiB / 2,000 records, expose explicit best-effort gaps, and release slow subscribers
-without blocking producers. Capture-file export remains separate work.
+without blocking producers. [Bounded capture-file export](docs/security/diagnostic-capture-export.md)
+streams a finite redacted window with provenance, gaps and independently enforced download limits.
 
 Normal release promotion is fail-closed on real old-to-new-to-old data evidence. See the
 [reversible release compatibility policy](docs/operations/release-compatibility.md) for schema

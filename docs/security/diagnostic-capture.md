@@ -83,7 +83,9 @@ slow readers lose their subscriber lease after five seconds without consuming no
 Every read rechecks the capture lease and returns at most one shared record. See
 [bounded best-effort debug traces](../architecture/bounded-debug-traces.md) for shared resource
 accounting, reconnect cursors, omission metadata and exact stream semantics. Application export
-leases provide bounded access to this same ring; HTTP capture-file streaming remains #66 work.
+leases provide bounded access to this same ring; the
+[HTTP capture-file export](diagnostic-capture-export.md) adds finite JSONL downloads with
+independent deadline, stop, permission and cancellation checks.
 No trace replay is durable, and a stale lease cannot read a later capture.
 
 ## Verification
@@ -93,3 +95,6 @@ concurrent starts, two-subscriber limits, bounded exports, stale IDs, and autono
 Management tests exercise real router requests, production-disabled behavior, inert monitoring,
 process-bound control paths, and expiry after the initiating response has been dropped. Service
 tests verify offline configuration and private startup credential resolution.
+
+See [bounded capture-file export](diagnostic-capture-export.md) for the authenticated JSONL
+download, versioned provenance, explicit gaps, and download resource limits.

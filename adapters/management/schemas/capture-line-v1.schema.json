@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.universal-ocpp-bridge.dev/diagnostics/v1.0/capture-line.schema.json",
+  "title": "One line of a bounded diagnostic capture export v1.0",
+  "description": "File order is one manifest, zero to 2000 trace lines, and one summary. A missing manifest or summary is an incomplete download. Sequence cutoff and byte limits are additional whole-file rules.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "schema_version",
+        "trace_schema_version",
+        "build_version",
+        "identity",
+        "capture_id",
+        "filters",
+        "configuration",
+        "window",
+        "limits",
+        "replay",
+        "history_complete"
+      ],
+      "properties": {
+        "type": {
+          "const": "manifest"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "trace_schema_version": {
+          "const": {
+            "major": 1,
+            "revision": 0
+          }
+        },
+        "build_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identity": {
+          "$ref": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/service-identity.schema.json"
+        },
+        "capture_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "station_id",
+            "target_id"
+          ],
+          "properties": {
+            "station_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "target_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          }
+        },
+        "configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "capture_level",
+            "persistence"
+          ],
+          "properties": {
+            "capture_level": {
+              "enum": [
+                "metadata",
+                "redacted_payload"
+              ]
+            },
+            "persistence": {
+              "const": "memory_only"
+            }
+          }
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bytes",
+            "records",
+            "lifetime_ms",
+            "idle_ms"
+          ],
+          "properties": {
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9437184
+            },
+            "records": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            },
+            "lifetime_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30000
+            },
+            "idle_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          }
+        },
+        "replay": {
+          "const": "best_effort"
+        },
+        "history_complete": {
+          "const": false
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "record"
+      ],
+      "properties": {
+        "type": {
+          "const": "trace"
+        },
+        "record": {
+          "$ref": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/trace-record.schema.json"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "schema_version",
+        "reason",
+        "history_complete",
+        "retained_window_complete",
+        "exported_records",
+        "bytes_before_summary",
+        "last_sequence",
+        "unexported_initial_records",
+        "missing_sequences",
+        "truncated_records",
+        "last_observed_window"
+      ],
+      "properties": {
+        "type": {
+          "const": "summary"
+        },
+        "schema_version": {
+          "const": "1.0"
+        },
+        "reason": {
+          "enum": [
+            "window_end",
+            "timeout",
+            "slow_reader",
+            "capture_stopped_or_expired",
+            "permission_revoked",
+            "byte_limit",
+            "record_limit"
+          ]
+        },
+        "history_complete": {
+          "const": false
+        },
+        "retained_window_complete": {
+          "type": "boolean"
+        },
+        "exported_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes_before_summary": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_sequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unexported_initial_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_sequences": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_observed_window": {
+          "$ref": "#/$defs/window"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "first_sequence",
+        "next_sequence",
+        "retained_records",
+        "retained_bytes",
+        "evicted_records",
+        "dropped_records",
+        "shed_records"
+      ],
+      "properties": {
+        "first_sequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "next_sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retained_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retained_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evicted_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dropped_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shed_records": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
