@@ -62,8 +62,10 @@ target boundaries. See [correlated diagnostic instrumentation](docs/architecture
 for exact evidence semantics, bounded state changes and process-local timing.
 
 Diagnostic capture requires explicit enablement and scoped read/capture permissions. See
-[diagnostic capture controls](docs/security/diagnostic-capture.md) for session deadlines,
-control routes, and subscriber/export lifetime boundaries.
+[diagnostic capture controls](docs/security/diagnostic-capture.md) for session deadlines and permissions.
+The [shared bounded trace ring and authenticated SSE](docs/architecture/bounded-debug-traces.md)
+retain at most 8 MiB / 2,000 records, expose explicit best-effort gaps, and release slow subscribers
+without blocking producers. Capture-file export remains separate work.
 
 Normal release promotion is fail-closed on real old-to-new-to-old data evidence. See the
 [reversible release compatibility policy](docs/operations/release-compatibility.md) for schema

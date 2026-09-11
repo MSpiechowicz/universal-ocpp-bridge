@@ -9,18 +9,31 @@ use uob_protocol_adapter::{
 };
 
 #[tokio::test]
-#[allow(clippy::too_many_lines)] // Keep the complete wire scenario and evidence assertions together.
 async fn authenticated_wire_replies_follow_durable_decisions() {
+    exercise(false).await;
+}
+
+#[tokio::test]
+async fn capture_pressure_and_unread_subscribers_preserve_wire_and_storage_outcomes() {
+    exercise(true).await;
+}
+
+#[allow(clippy::too_many_lines)] // Keep wire scenario and authoritative evidence together.
+async fn exercise(pressure: bool) {
     let application = endpoint_support::application(Environment::Demo, None);
-    let capture = uob_application::capture::CaptureManager::new(true);
+    let resources = application.health().resources().clone();
+    let capture = uob_application::capture::CaptureManager::with_resources(true, resources.clone());
     let grant = uob_application::capture::CaptureGrant::new(
         application.identity().bridge_id.clone(),
-        vec![uob_application::capture::CapturePermission::Capture],
+        vec![
+            uob_application::capture::CapturePermission::Capture,
+            uob_application::capture::CapturePermission::Read,
+        ],
         None,
         None,
     )
     .unwrap();
-    capture
+    let session = capture
         .start(
             &grant,
             uob_application::capture::CaptureFilter {
@@ -32,14 +45,41 @@ async fn authenticated_wire_replies_follow_durable_decisions() {
             None,
         )
         .unwrap();
-    let (flow, traces) = uob_application::FlowDiagnostics::channel(
+    let flow = uob_application::FlowDiagnostics::retained(
         application.runtime_identity().process_instance_id.clone(),
         application.identity().bridge_id.clone(),
-        capture,
+        capture.clone(),
         std::sync::Arc::new(TraceClock),
-        128,
-    )
-    .unwrap();
+    );
+    let traces = capture.lease(&grant, session.id, false).unwrap();
+    let _unread = capture.lease(&grant, session.id, false).unwrap();
+    let _pressure = pressure.then(|| {
+        resources
+            .try_reserve(uob_application::WorkClass::TargetIngress, 12 * 1024 * 1024)
+            .unwrap()
+    });
+    if pressure {
+        let span = flow.span(None, None, None);
+        for _ in 0..2200 {
+            span.emit_fields(
+                uob_application::FlowStage::StateChange,
+                uob_application::FlowEvidence::Completed,
+                vec![uob_application::SafeDiagnosticField::PayloadBytes(
+                    256 * 1024,
+                )],
+            );
+        }
+        let window = traces.read_after(None).unwrap().window;
+        assert!(window.evicted_records > 0);
+        assert!(window.shed_records > 0);
+        assert!(window.retained_bytes <= 8 * 1024 * 1024);
+    }
+    let mut after = traces
+        .read_after(None)
+        .unwrap()
+        .window
+        .next_sequence
+        .checked_sub(1);
     let application = application.with_diagnostics(flow);
 
     let (endpoint, mut connections) = OcppEndpoint::new(
@@ -125,12 +165,16 @@ async fn authenticated_wire_replies_follow_durable_decisions() {
             .unwrap();
         let response: Value = serde_json::from_str(&response).unwrap();
         assert_eq!(response[1], value[1]);
-        let records = traces
-            .try_iter()
-            .map(|r| {
-                serde_json::from_slice::<uob_contracts::TraceRecord>(r.encoded_json()).unwrap()
-            })
-            .collect::<Vec<_>>();
+        let mut records = Vec::new();
+        while let Some(record) = traces.read_after(after).unwrap().record {
+            after = Some(record.sequence);
+            records.push(
+                serde_json::from_slice::<uob_contracts::TraceRecord>(
+                    record.diagnostic.encoded_json(),
+                )
+                .unwrap(),
+            );
+        }
         assert!(
             records
                 .iter()

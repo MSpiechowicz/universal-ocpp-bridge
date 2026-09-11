@@ -91,6 +91,18 @@ impl ManagementCaptureAuthenticator for Credentials {
 }
 impl Validated {
     pub(crate) fn resolve(&self) -> io::Result<ManagementCaptureConfiguration> {
+        self.resolve_with_resources(
+            uob_application::RuntimeResourceBudget::new(
+                uob_application::RuntimeResourceLimits::default(),
+            )
+            .expect("default limits"),
+        )
+    }
+
+    pub(crate) fn resolve_with_resources(
+        &self,
+        resources: uob_application::RuntimeResourceBudget,
+    ) -> io::Result<ManagementCaptureConfiguration> {
         let fail = || {
             io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -127,10 +139,30 @@ impl Validated {
             entries.push((bytes, grant.clone()));
         }
         Ok(ManagementCaptureConfiguration {
-            manager: CaptureManager::new(self.enabled),
+            manager: CaptureManager::with_resources(self.enabled, resources),
             authenticator: Arc::new(Credentials(entries)),
         })
     }
+}
+
+struct Clock;
+impl uob_application::CommandClock for Clock {
+    fn now(&self) -> uob_contracts::UtcTimestamp {
+        uob_contracts::UtcTimestamp::new(time::OffsetDateTime::now_utc())
+    }
+}
+
+pub(crate) fn instrument(
+    application: uob_application::Application,
+    manager: CaptureManager,
+) -> uob_application::Application {
+    let flow = uob_application::FlowDiagnostics::retained(
+        application.identity().runtime.process_instance_id.clone(),
+        application.identity().bridge_id.clone(),
+        manager,
+        Arc::new(Clock),
+    );
+    application.with_diagnostics(flow)
 }
 
 #[cfg(test)]
@@ -208,5 +240,70 @@ mod tests {
         fs::write(&path, "short").unwrap();
         assert!(validated.resolve().is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn startup_emitter_shares_capture_authority_and_daemon_budget() {
+        use uob_application::{
+            FlowEvidence, FlowStage,
+            capture::{CaptureFilter, CaptureLevel},
+        };
+        use uob_contracts::{ArtifactDigest, ReleaseId};
+        let startup = crate::StartupIdentityConfiguration::production(
+            BridgeId::new("bridge").unwrap(),
+            ReleaseId::new("release").unwrap(),
+            ArtifactDigest::new("sha256:release").unwrap(),
+        );
+        let app = crate::compose(
+            uob_target_adapter::TargetRegistry::<(), ()>::new(),
+            startup,
+            None,
+        )
+        .unwrap()
+        .application;
+        let resources = app.health().resources().clone();
+        let manager = CaptureManager::with_resources(true, resources.clone());
+        let app = instrument(app, manager.clone());
+        let span = app.diagnostics().span(None, None, None);
+        span.emit(FlowStage::Application, FlowEvidence::Completed);
+        assert_eq!(resources.snapshot().trace_ring_bytes, 0);
+        let grant = CaptureGrant::new(
+            app.identity().bridge_id.clone(),
+            vec![CapturePermission::Read, CapturePermission::Capture],
+            None,
+            None,
+        )
+        .unwrap();
+        let status = manager
+            .start(
+                &grant,
+                CaptureFilter {
+                    bridge: app.identity().bridge_id.clone(),
+                    station: None,
+                    target: None,
+                },
+                CaptureLevel::Metadata,
+                None,
+            )
+            .unwrap();
+        span.emit(FlowStage::Application, FlowEvidence::Completed);
+        let read = manager
+            .lease(&grant, status.id, false)
+            .unwrap()
+            .read_after(None)
+            .unwrap();
+        let record = read.record.unwrap();
+        let decoded: uob_contracts::TraceRecord =
+            serde_json::from_slice(record.diagnostic.encoded_json()).unwrap();
+        assert_eq!(
+            decoded.process_instance_id,
+            app.runtime_identity().process_instance_id
+        );
+        assert_eq!(
+            resources.snapshot().trace_ring_bytes,
+            record.diagnostic.encoded_json().len()
+        );
+        drop(record);
+        manager.stop(&grant, status.id).unwrap();
+        assert_eq!(resources.snapshot().trace_ring_bytes, 0);
     }
 }

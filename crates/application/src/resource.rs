@@ -1,8 +1,12 @@
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+mod admission;
+mod diagnostics;
 mod metrics;
 mod policy;
 
+use admission::{grow, release, reserve, shrink};
+use diagnostics::DiagnosticAccounting;
 pub use metrics::RuntimeQueueSnapshot;
 pub use policy::{
     LaggingConsumer, LaggingConsumerAction, ReplaceableTelemetrySlot, TelemetryReplaceOutcome,
@@ -143,7 +147,6 @@ struct Usage {
     queued_payload_bytes: usize,
     trace_ring_bytes: usize,
     items: [usize; WorkClass::COUNT],
-    dropped_diagnostics: u64,
 }
 
 /// Observable capacity counters suitable for sanitized health reporting.
@@ -160,6 +163,7 @@ pub struct RuntimeResourceSnapshot {
 struct Inner {
     limits: RuntimeResourceLimits,
     usage: Mutex<Usage>,
+    diagnostics: DiagnosticAccounting,
 }
 
 /// Cloneable process-wide admission authority shared by every producer.
@@ -184,8 +188,8 @@ impl RuntimeResourceBudget {
                     queued_payload_bytes: 0,
                     trace_ring_bytes: 0,
                     items: [0; WorkClass::COUNT],
-                    dropped_diagnostics: 0,
                 }),
+                diagnostics: DiagnosticAccounting::default(),
             }),
         })
     }
@@ -256,8 +260,7 @@ impl RuntimeResourceBudget {
 
     /// Records an intentionally shed best-effort diagnostic.
     pub fn record_diagnostic_drop(&self, _reason: DiagnosticDropReason) {
-        let mut usage = lock_usage(&self.inner);
-        usage.dropped_diagnostics = usage.dropped_diagnostics.saturating_add(1);
+        self.inner.diagnostics.record_drop();
     }
 
     /// Returns current sanitized aggregate use.
@@ -268,7 +271,7 @@ impl RuntimeResourceBudget {
             connected_stations: usage.connected_stations,
             queued_payload_bytes: usage.queued_payload_bytes,
             trace_ring_bytes: usage.trace_ring_bytes,
-            dropped_diagnostics: usage.dropped_diagnostics,
+            dropped_diagnostics: self.inner.diagnostics.dropped(),
             queues: RuntimeQueueSnapshot {
                 charger_requests: usage.items[WorkClass::ChargerRequest.index()],
                 database_work: usage.items[WorkClass::DatabaseWork.index()],
@@ -403,88 +406,13 @@ fn item_limit(limits: RuntimeResourceLimits, class: WorkClass) -> usize {
     }
 }
 
-fn reserve(inner: &Arc<Inner>, class: WorkClass, bytes: usize) -> Result<(), AdmissionError> {
-    let mut usage = lock_usage(inner);
-    let maximum_items = item_limit(inner.limits, class);
-    if usage.items[class.index()] >= maximum_items {
-        return Err(AdmissionError {
-            limit: AdmissionLimit::QueueItems(class),
-            maximum: maximum_items,
-            requested: usage.items[class.index()].saturating_add(1),
-        });
-    }
-    admit_bytes(inner.limits, &usage, class, bytes)?;
-    usage.items[class.index()] += 1;
-    usage.queued_payload_bytes += bytes;
-    if class == WorkClass::CaptureTrace {
-        usage.trace_ring_bytes += bytes;
-    }
-    Ok(())
-}
-
-fn grow(inner: &Arc<Inner>, class: WorkClass, bytes: usize) -> Result<(), AdmissionError> {
-    let mut usage = lock_usage(inner);
-    admit_bytes(inner.limits, &usage, class, bytes)?;
-    usage.queued_payload_bytes += bytes;
-    if class == WorkClass::CaptureTrace {
-        usage.trace_ring_bytes += bytes;
-    }
-    Ok(())
-}
-
-fn admit_bytes(
-    limits: RuntimeResourceLimits,
-    usage: &Usage,
-    class: WorkClass,
-    bytes: usize,
-) -> Result<(), AdmissionError> {
-    if class == WorkClass::CaptureTrace
-        && usage.trace_ring_bytes.saturating_add(bytes) > limits.trace_ring_bytes
-    {
-        return Err(AdmissionError {
-            limit: AdmissionLimit::TraceRingBytes,
-            maximum: limits.trace_ring_bytes,
-            requested: usage.trace_ring_bytes.saturating_add(bytes),
-        });
-    }
-    let maximum = if class.is_critical() {
-        limits.aggregate_queued_payload_bytes
-    } else {
-        limits
-            .aggregate_queued_payload_bytes
-            .saturating_sub(limits.reserved_critical_payload_bytes)
-    };
-    let requested = usage.queued_payload_bytes.saturating_add(bytes);
-    if requested > maximum {
-        return Err(AdmissionError {
-            limit: AdmissionLimit::AggregatePayloadBytes,
-            maximum,
-            requested,
-        });
-    }
-    Ok(())
-}
-
-fn shrink(inner: &Arc<Inner>, class: WorkClass, bytes: usize) {
-    let mut usage = lock_usage(inner);
-    usage.queued_payload_bytes = usage.queued_payload_bytes.saturating_sub(bytes);
-    if class == WorkClass::CaptureTrace {
-        usage.trace_ring_bytes = usage.trace_ring_bytes.saturating_sub(bytes);
-    }
-}
-
-fn release(inner: &Arc<Inner>, class: WorkClass, bytes: usize) {
-    let mut usage = lock_usage(inner);
-    usage.items[class.index()] = usage.items[class.index()].saturating_sub(1);
-    usage.queued_payload_bytes = usage.queued_payload_bytes.saturating_sub(bytes);
-    if class == WorkClass::CaptureTrace {
-        usage.trace_ring_bytes = usage.trace_ring_bytes.saturating_sub(bytes);
-    }
-}
-
 fn lock_usage(inner: &Inner) -> MutexGuard<'_, Usage> {
-    inner.usage.lock().unwrap_or_else(PoisonError::into_inner)
+    let mut usage = inner.usage.lock().unwrap_or_else(PoisonError::into_inner);
+    inner.diagnostics.drain_released(&mut usage);
+    usage
 }
 
+#[cfg(test)]
+mod diagnostic_tests;
 #[cfg(test)]
 mod tests;

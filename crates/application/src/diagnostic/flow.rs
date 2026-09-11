@@ -110,7 +110,7 @@ struct Shared {
     bridge: BridgeId,
     capture: CaptureManager,
     clock: Arc<dyn CommandClock>,
-    sender: SyncSender<SanitizedDiagnostic>,
+    sender: Option<SyncSender<SanitizedDiagnostic>>,
     sequence: AtomicU64,
     dropped: AtomicU64,
 }
@@ -143,12 +143,31 @@ impl FlowDiagnostics {
                 bridge,
                 capture,
                 clock,
-                sender,
+                sender: Some(sender),
                 sequence: AtomicU64::new(0),
                 dropped: AtomicU64::new(0),
             }))),
             receiver,
         ))
+    }
+    /// Sends directly into the service's single capture-owned memory ring.
+    /// Producer lock contention sheds diagnostics; no task or durable store is created.
+    #[must_use]
+    pub fn retained(
+        process: ProcessInstanceId,
+        bridge: BridgeId,
+        capture: CaptureManager,
+        clock: Arc<dyn CommandClock>,
+    ) -> Self {
+        Self(Some(Arc::new(Shared {
+            process,
+            bridge,
+            capture,
+            clock,
+            sender: None,
+            sequence: AtomicU64::new(0),
+            dropped: AtomicU64::new(0),
+        })))
     }
     /// Starts metadata-only context; source time is never used to calculate elapsed duration.
     #[must_use]
@@ -170,9 +189,13 @@ impl FlowDiagnostics {
     /// Number of records shed because serialization, bounds, or the nonblocking sink rejected them.
     #[must_use]
     pub fn dropped(&self) -> u64 {
-        self.0
-            .as_ref()
-            .map_or(0, |s| s.dropped.load(Ordering::Relaxed))
+        self.0.as_ref().map_or(0, |s| {
+            if s.sender.is_none() {
+                s.capture.dropped()
+            } else {
+                s.dropped.load(Ordering::Relaxed)
+            }
+        })
     }
 }
 /// Small owned context carried through queues and awaits; no retained per-request lookup table.
@@ -213,9 +236,39 @@ impl FlowSpan {
             station: self.station.clone(),
             target: self.target.as_ref().map(|(id, _)| id.clone()),
         };
+        if shared.sender.is_none() {
+            shared
+                .capture
+                .try_record(&filter, |sequence, shed_details| {
+                    self.record(shared, stage, evidence, fields, sequence, shed_details)
+                });
+            return;
+        }
         if !shared.capture.try_accepts(&filter, CaptureLevel::Metadata) {
             return;
         }
+        let sequence = shared.sequence.fetch_add(1, Ordering::Relaxed);
+        if let Some(record) = self.record(shared, stage, evidence, fields, sequence, false)
+            && shared
+                .sender
+                .as_ref()
+                .is_some_and(|sender| sender.try_send(record).is_ok())
+        {
+            return;
+        }
+        shared.dropped.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record(
+        &self,
+        shared: &Shared,
+        stage: FlowStage,
+        evidence: FlowEvidence,
+        fields: Vec<SafeDiagnosticField>,
+        sequence: u64,
+        shed_details: bool,
+    ) -> Option<SanitizedDiagnostic> {
         let oversized = shared.process.as_str().len() > 256
             || self
                 .correlation
@@ -236,8 +289,7 @@ impl FlowSpan {
                 _ => false,
             });
         if oversized {
-            shared.dropped.fetch_add(1, Ordering::Relaxed);
-            return;
+            return None;
         }
         let mut attributes = vec![DiagnosticAttribute::Safe(SafeDiagnosticField::Evidence(
             evidence,
@@ -257,8 +309,13 @@ impl FlowSpan {
                 protocol,
             )));
         }
-        attributes.extend(fields.into_iter().take(16).map(DiagnosticAttribute::Safe));
-        let sequence = shared.sequence.fetch_add(1, Ordering::Relaxed);
+        if shed_details {
+            attributes.push(DiagnosticAttribute::Safe(
+                SafeDiagnosticField::StateDetailsOmitted,
+            ));
+        } else {
+            attributes.extend(fields.into_iter().take(16).map(DiagnosticAttribute::Safe));
+        }
         let outcome = match evidence {
             FlowEvidence::Rejected | FlowEvidence::Failed | FlowEvidence::NotTransmitted => {
                 DiagnosticOutcome::PolicyDenied
@@ -289,13 +346,9 @@ impl FlowSpan {
                 attributes,
             },
         );
-        if let Ok(record) = record
-            && record.encoded_json().len() <= 64 * 1024
-            && shared.sender.try_send(record).is_ok()
-        {
-            return;
-        }
-        shared.dropped.fetch_add(1, Ordering::Relaxed);
+        record
+            .ok()
+            .filter(|record| record.encoded_json().len() <= 64 * 1024)
     }
     /// Device timestamp remains explicitly named source time in safe details.
     pub fn source_time(&self, stage: FlowStage, time: UtcTimestamp) {
