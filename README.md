@@ -218,6 +218,9 @@ See [production and staging filesystem isolation](docs/operations/environment-fi
 for separate service accounts, units/slices, configuration, databases, runtime locks and journals,
 with same-Pi and separate-Linux-host staging layouts.
 
+See [staging data isolation](docs/operations/staging-data-isolation.md) for separate PostgreSQL
+roles/databases and explicit, reidentified status-only imports into isolated test peers.
+
 See [staging network isolation](docs/operations/environment-network-isolation.md) for the mandatory
 loopback-only test namespace, production-socket denial, and fail-closed staging configuration.
 

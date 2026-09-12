@@ -3,7 +3,7 @@ use crate::scenario::{
 };
 use serde::Deserialize;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::File,
     io::Read,
     net::{IpAddr, SocketAddr},
@@ -28,6 +28,8 @@ struct Document {
 struct ScenarioFile {
     id: String,
     path: String,
+    #[serde(default)]
+    sanitized_import: bool,
 }
 
 /// Trusted startup configuration. Fields are private so validation cannot be bypassed.
@@ -37,6 +39,7 @@ pub struct ControlConfiguration {
     pub(super) bind: SocketAddr,
     pub(super) simulator: SimulatorConfiguration,
     pub(super) scenarios: BTreeMap<String, ScenarioDefinition>,
+    pub(super) imports: BTreeSet<String>,
 }
 
 impl ControlConfiguration {
@@ -72,12 +75,18 @@ impl ControlConfiguration {
             return Err("catalog_limit");
         }
         let mut scenarios = BTreeMap::new();
+        let mut imports = BTreeSet::new();
         for entry in document.scenarios {
             if !valid_id(&entry.id) {
                 return Err("invalid_scenario_id");
             }
-            let scenario = parse_scenario(&read_bounded(&parent.join(entry.path), DOCUMENT_LIMIT)?)
-                .map_err(|failure| failure.code)?;
+            let input = read_bounded(&parent.join(entry.path), DOCUMENT_LIMIT)?;
+            let scenario = if entry.sanitized_import {
+                imports.insert(entry.id.clone());
+                super::import::parse(&input, &simulator, &document.environment)?
+            } else {
+                parse_scenario(&input).map_err(|failure| failure.code)?
+            };
             if scenario
                 .steps
                 .iter()
@@ -124,6 +133,7 @@ impl ControlConfiguration {
             bind,
             simulator,
             scenarios,
+            imports,
         })
     }
 }
@@ -155,7 +165,7 @@ pub(super) fn read_bounded(path: &Path, limit: usize) -> Result<String, &'static
     Ok(text)
 }
 
-fn validate_simulator(
+pub(super) fn validate_simulator(
     simulator: &SimulatorConfiguration,
     environment: &str,
 ) -> Result<(), &'static str> {

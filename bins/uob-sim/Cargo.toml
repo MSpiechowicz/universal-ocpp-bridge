@@ -8,6 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+uuid.workspace = true
 axum.workspace = true
 subtle.workspace = true
 url.workspace = true
