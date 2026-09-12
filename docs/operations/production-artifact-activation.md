@@ -51,7 +51,9 @@ preflight/drain. If the intent selected the candidate, recovery resumes that can
 probation. It never reconstructs or reuses the old process-local seal. Changed configuration,
 replaced database, unsafe metadata, a failed stop/start, or a second interrupted recovery leaves
 `RecoveryRequired`; it does not loop through versions. Automatic failure-driven rollback and
-probation completion remain the separately owned failure-policy workflows.
+probation completion remain separately owned policy workflows. The
+[production probation collector boundary](production-probation.md) persists the required 24-hour
+health/resource evidence before allowing the healthy transition.
 
 The existing preflight backup slot is retained on failed/deferred attempts. It requires the
 existing explicit retention handling before another preflight; activation never silently deletes

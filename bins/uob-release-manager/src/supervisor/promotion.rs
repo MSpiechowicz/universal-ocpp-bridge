@@ -331,7 +331,7 @@ impl Supervisor {
             .iter()
             .any(|g| g.uid == uid && g.permissions.contains(&Permission::Activate))
     }
-    fn failure_blocks_activation(&self) -> bool {
+    pub(super) fn failure_blocks_activation(&self) -> bool {
         self.ledger.status().failures.as_ref().is_some_and(|s| {
             matches!(
                 s.decision,

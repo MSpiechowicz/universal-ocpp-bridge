@@ -110,7 +110,19 @@ impl Ledger {
         promotion: super::promotion::Record,
     ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
+        if promotion.step == super::promotion::Step::Stopping {
+            next.probation = None;
+        }
         next.promotion = Some(promotion);
+        self.persist(next)
+    }
+
+    pub fn record_probation(
+        &mut self,
+        evidence: super::probation::State,
+    ) -> Result<(), InstallError> {
+        let mut next = self.state.clone();
+        next.probation = Some(evidence);
         self.persist(next)
     }
 
@@ -132,6 +144,15 @@ impl Ledger {
 }
 
 fn validate(state: &Status) -> Result<(), InstallError> {
+    if let Some(evidence) = &state.probation {
+        evidence.validate()?;
+        if state.promotion.as_ref().is_none_or(|p| {
+            p.candidate != evidence.last.candidate
+                || p.configuration_digest != evidence.last.configuration_digest
+        }) {
+            return Err(InstallError::Rejected("probation activation mismatch"));
+        }
+    }
     if let Some(promotion) = &state.promotion {
         promotion.validate()?;
     }

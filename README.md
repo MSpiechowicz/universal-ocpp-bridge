@@ -228,6 +228,9 @@ for candidate configuration checks, bounded online SQLite backups, and disaster-
 See [release drain and the idle boundary](docs/operations/release-drain.md) for shared start
 admission, durable work inventory, deadline deferral, and staging-stop ordering.
 
+See [production probation](docs/operations/production-probation.md) for the durable 24-hour
+health/resource gate, missing-evidence behavior, restart accounting and fallback retention.
+
 See [persistent release failure classification](docs/operations/rollback-signal-policy.md)
 for reboot-safe trigger windows, external-outage exclusions, staging pressure ordering,
 and critical recovery decisions.

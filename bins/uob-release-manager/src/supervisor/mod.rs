@@ -2,6 +2,7 @@
 pub mod failures;
 pub mod ipc;
 pub mod preflight;
+pub mod probation;
 pub mod production_systemd;
 pub mod promotion;
 mod qualification;
@@ -90,6 +91,8 @@ pub struct Record {
 #[serde(deny_unknown_fields)]
 pub struct Status {
     #[serde(default)]
+    pub probation: Option<probation::State>,
+    #[serde(default)]
     pub promotion: Option<promotion::Record>,
     #[serde(default)]
     pub failures: Option<failures::State>,
@@ -125,6 +128,7 @@ impl Response {
 
 /// Sole owner of private persistent request/failure state.
 pub struct Supervisor {
+    probation_continuous: bool,
     ledger: Ledger,
     activation: ActivationJournal,
     grants: Vec<Grant>,
@@ -163,6 +167,7 @@ impl Supervisor {
         }
         Ok(Self {
             ledger: Ledger::open(state)?,
+            probation_continuous: false,
             activation: ActivationJournal::open(store, &policy)?,
             grants,
             store: store.to_owned(),

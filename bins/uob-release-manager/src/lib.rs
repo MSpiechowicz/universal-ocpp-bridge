@@ -3,6 +3,11 @@
 #[cfg(test)]
 extern crate self as uob_release_manager;
 
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../tests/qualification/support.rs"]
+mod test_support;
+
 pub mod activation;
 pub mod artifacts;
 pub mod drain;
