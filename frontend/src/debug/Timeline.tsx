@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Inspector } from './Inspector';
 import { filterNames, matches, TraceBuffer } from './buffer';
 import type { Filters } from './buffer';
 
@@ -52,7 +53,7 @@ export function Timeline({ buffer, tick, paused, ceiling }: { buffer: TraceBuffe
     {!rows.length && <p>No matching retained traces. Opening this view does not enable capture.</p>}
     {selected !== undefined && <section className="trace-detail" aria-label="Trace detail">
       <button className="secondary" onClick={() => setSelected(undefined)}>Close detail</button>
-      <pre>{detail ?? 'This record was evicted or cleared. Its details are no longer retained.'}</pre>
+      <Inspector key={selected} inspection={buffer.inspection(selected)} raw={detail}/>
     </section>}
   </>;
 }

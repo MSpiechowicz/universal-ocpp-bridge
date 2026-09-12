@@ -61,3 +61,45 @@ explicit start/stop, pause with autonomous expiry, detail rendering, buffer clea
 and desktop/mobile layout. `UOB_BROWSER_EXECUTABLE` can select an installed compatible Chrome.
 The fixture producer is not included in the production daemon. These tests do not claim complete
 OCPP-to-browser acceptance, soak coverage or Raspberry Pi resource qualification.
+
+## Message and state inspection
+
+Opening a retained row lazily builds a read-only inspector with redacted source, canonical and
+target metadata alongside each other. It shows validation field paths/codes, mapping metadata,
+units/quality, opaque or unsupported fields, and original-size/omitted-field indicators. JSON
+highlighting uses text children only; strings containing HTML, scripts or URLs are never executed
+or made into links. Nested JSON inside a scalar is kept as text. Unknown fields are explicitly
+listed as unsupported, and missing sections say unavailable.
+
+The inspector consumes the existing `redacted_details.fields` scalar map. The current safe
+producer supplies protocol/action/source time, station identity, target identity, availability
+changes, decision evidence, redaction markers and size information. Optional approved producer
+metadata is presented using these names; absence never causes reconstruction or another request:
+
+| Scalar field names | Presentation |
+| --- | --- |
+| `source.*`, `canonical.*`, `target.*` | Respective redacted representation |
+| `validation.*` (for example `validation.field_path`, `validation.code`) | Literal field path and validation evidence |
+| `mapping.*` (for example `mapping.topic`, `mapping.api`, `mapping.node`, `mapping.register`) | Reported destination mapping; no protocol implementation implied |
+| `unit`, `quality`, or names ending in `.unit` / `.quality` | Original units and quality |
+| `opaque.*`, `unsupported.*`, `redacted.*`, `vendor_payload` | Explicit opaque/unsupported/redacted evidence |
+| `decision.reason`, `reason_code` | Safe producer reason, without inferred explanations |
+
+These optional display names do not widen the server's closed safe-field allowlist. Current
+production instrumentation does not emit detailed validation paths or payload mappings; those
+sections remain unavailable until an approved producer supplies them. Browser fixtures exercise
+that optional metadata, while real-router tests exercise the existing emitted evidence.
+
+`resources.N.availability` values in the existing `Before -> After` format become a table capped
+at 16 changes. The index is the producer's stable resource order, not an inferred connector ID.
+Malformed changes remain unsupported. No full station snapshot or adjacent-event diff is built.
+The inspector displays the supplied parent trace as the trigger, correlation separately, safe
+reason and stage evidence. Missing parents stay unavailable. Rejection, duplicate, stale,
+reconciliation and uncertain evidence receive conservative explanations without inventing effects.
+
+The shared four-entry / 256 KiB detail cache accounts for both formatted JSON and the serialized
+inspection model, removes both on row eviction or clearing, and caches formatting-limit failures.
+There are at most 128 inspected fields, 4,096 characters per displayed scalar and 1,024 syntax spans
+per JSON view. Unknown JSON is checked against a 32-level / 4,096-node formatting budget. Partial views are marked; the bounded raw redacted record remains available on
+explicit expansion. Details never reparse or sort all timeline rows. These limits bound retained
+encoded representations and rendered nodes, not total browser heap size.

@@ -77,3 +77,14 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .debug-panel p { overflow-wrap: anywhere; }
 .debug-panel > .destination-confirmation { flex-direction: row; align-items: flex-start; gap: 10px; line-height: 1.6; overflow-wrap: anywhere; }
 .destination-confirmation input { flex: none; margin: 3px 0 0; }
+.inspector { margin-top: 24px; overflow-wrap: anywhere; }
+.inspector h3 { font-size: 14px; margin: 24px 0 8px; }
+.representation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.inspector table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.inspector th, .inspector td { text-align: left; border-bottom: 1px solid var(--line); padding: 12px 8px; }
+.inspector summary { cursor: pointer; margin-top: 20px; }
+.json-key { color: #354ba0; }
+.json-string { color: #206442; }
+.json-literal { color: #8d3b17; }
+@media (max-width: 900px) { .representation-grid { grid-template-columns: 1fr; } }
+@media (prefers-color-scheme: dark) { .json-key { color: #afbdff; } .json-string { color: #a2ddae; } .json-literal { color: #ffc39e; } }
