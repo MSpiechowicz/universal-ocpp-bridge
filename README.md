@@ -53,6 +53,9 @@ confirmation for controls, and shows bounded authenticated SSE connection and st
 The [browser and API diagnostics panel](docs/operations/browser-diagnostics.md) exposes bounded,
 sanitized failure counters and correlation lookup alongside stream staleness and reconnect evidence.
 
+The [offline capture inspector](docs/operations/offline-capture-inspector.md) opens bounded JSONL
+exports locally with file provenance, gaps and inert inspection, without a live API connection.
+
 The [bounded Debug timeline](docs/operations/debug-timeline.md) adds explicit scoped capture controls,
 virtualized read-only traces, retained-window filters/bookmarks and visible gap/eviction evidence.
 

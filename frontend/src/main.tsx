@@ -2,6 +2,7 @@ import { diagnostics } from './diagnostics/store';
 import { Component } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Offline } from './debug/Offline';
 import { App } from './App';
 import './style.css';
 
@@ -20,4 +21,4 @@ createRoot(document.getElementById('root')!, {
   onCaughtError: () => diagnostics.exception('render'),
   onUncaughtError: () => diagnostics.exception('uncaught'),
   onRecoverableError: () => diagnostics.exception('recoverable'),
-}).render(<Boundary><App/></Boundary>);
+}).render(<Boundary>{new URLSearchParams(location.search).get('offline') === '1' ? <Offline/> : <App/>}</Boundary>);

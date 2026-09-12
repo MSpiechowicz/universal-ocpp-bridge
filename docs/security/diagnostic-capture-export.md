@@ -57,7 +57,9 @@ only a terminal summary is produced, with no identity-bearing manifest or record
 
 Readers must enforce the documented byte/line/record limits before parsing, treat payloads as inert
 untrusted data, and reject unsupported major versions. Importing a file must not execute content
-or automatically issue commands. The offline browser inspector remains separate backlog work.
+or automatically issue commands. The
+[offline browser inspector](../operations/offline-capture-inspector.md) validates these files locally
+without live API access.
 
 ## Resource ownership and cancellation
 
@@ -91,4 +93,4 @@ central secret/vendor omission, process/capture identity, empty and overflowing 
 cutoffs under new arrivals, bounded metadata, byte/record termination, concurrent admission,
 cancellation, and unpolled timeout/stop memory reclamation. The tests validate file lines against
 the checked-in schema and inspect the shared runtime's retained-record accounting. They do not
-claim Raspberry Pi performance or browser-import coverage.
+claim Raspberry Pi performance. Frontend tests separately cover offline browser import.
