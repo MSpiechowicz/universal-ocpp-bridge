@@ -39,6 +39,8 @@ pub fn spawn_call_session(
 ) -> Result<(CallSessionHandle, CallSessionOutputs, CallSessionTask), CallSessionConfigurationError>
 {
     let configuration = configuration.validate(application)?;
+    let station_id = connection.station().station_id.clone();
+    let protocol = connection.station().protocol;
     let budget = application.health().resources().clone();
     let (outbound_sender, outbound_receiver) = mpsc::channel(configuration.pending_call_capacity);
     let (incoming_sender, incoming_receiver) = mpsc::channel(configuration.incoming_call_capacity);
@@ -66,6 +68,8 @@ pub fn spawn_call_session(
     Ok((
         CallSessionHandle {
             sender: outbound_sender,
+            station_id,
+            protocol,
             budget,
         },
         CallSessionOutputs {
@@ -193,6 +197,13 @@ async fn send_outbound(
     queued: QueuedOutbound,
     configuration: CallSessionConfiguration,
 ) {
+    if queued
+        .send_before
+        .is_some_and(|deadline| Instant::now() >= deadline)
+    {
+        finish_not_transmitted(queued, "command expired before socket send");
+        return;
+    }
     if state.pending.len() == configuration.pending_call_capacity {
         finish_not_transmitted(queued, "pending call capacity exhausted");
         return;
