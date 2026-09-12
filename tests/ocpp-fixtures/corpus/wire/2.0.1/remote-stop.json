@@ -1,0 +1,8 @@
+[
+  2,
+  "remote-stop",
+  "RequestStopTransaction",
+  {
+    "transactionId": "independent-transaction-001"
+  }
+]

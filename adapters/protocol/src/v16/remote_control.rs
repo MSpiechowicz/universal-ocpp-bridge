@@ -1,5 +1,5 @@
 //! OCPP 1.6 remote operations behind the ordinary durable application command path.
-mod constraints;
+use crate::remote_constraints as constraints;
 mod identity;
 mod mapping;
 pub use identity::LocalRemoteStartIdentity;

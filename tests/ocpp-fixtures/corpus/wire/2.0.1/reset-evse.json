@@ -1,0 +1,9 @@
+[
+  2,
+  "reset-evse",
+  "Reset",
+  {
+    "type": "OnIdle",
+    "evseId": 1
+  }
+]

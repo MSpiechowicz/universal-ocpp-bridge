@@ -31,5 +31,10 @@ the new one; never rewrite a released snapshot.
 Regenerate snapshots from the repository root with:
 
 ```text
-cargo run --package uob-contracts --example export_public_schemas -- crates/contracts/schemas/v1.0
+cargo run --package uob-contracts --example export_public_schemas -- crates/contracts/schemas
 ```
+
+The optional OCPP 2.0.1 `remote_start_id` in transaction protocol evidence is published in
+v1.1 station-snapshot, export-record and export-batch schemas. Their v1.0 snapshots remain
+unchanged and compatibility tests compare the revisions. The generator takes the schema root
+and writes each contract to its current revision directory.

@@ -36,6 +36,7 @@ pub enum ChargerObservation {
 /// OCPP 2.0.1 transaction lifecycle event with version-specific sequencing evidence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransactionEventObservation {
+    pub remote_start_id: Option<i32>,
     pub protocol: ProtocolEdition,
     pub event: TransactionEventKind,
     pub native_transaction_id: String,
@@ -99,6 +100,12 @@ pub fn apply_transaction_event(
             .protocol_state
             .as_ref()
             .ok_or(TransactionApplyError::InvalidTransition)?;
+        if observation
+            .remote_start_id
+            .is_some_and(|id| state.remote_start_id.is_some_and(|old| id != old))
+        {
+            return Err(TransactionApplyError::ConflictingReplay);
+        }
         if observation.sequence_number == state.last_sequence_number {
             let same = state.native_resource == observation.native_resource
                 && state.last_event == event_name(observation.event)
@@ -131,7 +138,16 @@ pub fn apply_transaction_event(
     let state = transaction_state(observation);
     let ended_at =
         (observation.event == TransactionEventKind::Ended).then_some(observation.occurred_at);
+    let remote_start_id = observation.remote_start_id.or_else(|| {
+        current.and_then(|index| {
+            snapshot.transactions[index]
+                .protocol_state
+                .as_ref()?
+                .remote_start_id
+        })
+    });
     let protocol_state = TransactionProtocolState {
+        remote_start_id,
         protocol: observation.protocol,
         native_transaction_id: observation.native_transaction_id.clone(),
         native_resource: observation.native_resource,

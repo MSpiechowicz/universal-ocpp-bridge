@@ -1,5 +1,7 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
+pub mod remote_control;
+
 mod authorization;
 mod authorization_input;
 pub use authorization::{authorize_call, complete_authorization};
@@ -90,7 +92,12 @@ fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservat
     let payload_fingerprint = serde_json::to_vec(&request)
         .map(|bytes| hex_digest(&bytes))
         .map_err(|_| DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload))?;
-    if request.seq_no < 0 {
+    if request.seq_no < 0
+        || request
+            .transaction_info
+            .remote_start_id
+            .is_some_and(|id| id < 0)
+    {
         return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
     }
     let evse = request
@@ -138,6 +145,7 @@ fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservat
         });
     Ok(ChargerObservation::TransactionEvent(
         TransactionEventObservation {
+            remote_start_id: request.transaction_info.remote_start_id,
             protocol: PROTOCOL,
             event,
             native_transaction_id,

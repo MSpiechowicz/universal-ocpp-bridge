@@ -14,6 +14,7 @@ mod protocol;
 mod query;
 pub mod registration;
 pub mod release_drain;
+pub mod remote_control;
 mod resource;
 mod security;
 mod station;

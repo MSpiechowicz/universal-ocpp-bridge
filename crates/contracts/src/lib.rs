@@ -81,3 +81,6 @@ mod tests {
         assert_eq!(ContractVersion::V1_INITIAL.major, 1);
     }
 }
+
+mod remote_control;
+pub use remote_control::RemoteControlEvidence;

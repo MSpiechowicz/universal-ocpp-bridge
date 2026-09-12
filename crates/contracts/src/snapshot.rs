@@ -277,6 +277,9 @@ pub struct TransactionSnapshot {
 /// Persisted protocol evidence for the latest accepted transaction event.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct TransactionProtocolState {
+    /// CSMS remote-start correlation echoed by OCPP 2.0.1, retained across later updates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_start_id: Option<i32>,
     /// Protocol edition that owns the sequence semantics.
     pub protocol: ProtocolEdition,
     /// Charger-assigned transaction identity.

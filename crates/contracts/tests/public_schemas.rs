@@ -11,7 +11,7 @@ use uob_contracts::{
 const SCHEMAS: &[(&str, &str)] = &[
     (
         "station-snapshot",
-        include_str!("../schemas/v1.0/station-snapshot.schema.json"),
+        include_str!("../schemas/v1.1/station-snapshot.schema.json"),
     ),
     (
         "resource-ref",
@@ -55,11 +55,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.0/export-record.schema.json"),
+        include_str!("../schemas/v1.1/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.0/export-batch.schema.json"),
+        include_str!("../schemas/v1.1/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -76,17 +76,21 @@ fn published(name: &str) -> Value {
 }
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
+    let revision = u8::from(matches!(
+        name,
+        "station-snapshot" | "export-record" | "export-batch"
+    ));
     let mut value = serde_json::to_value(schema_for!(T)).expect("serialize generated schema");
     let object = value.as_object_mut().expect("schema object");
     object.insert(
         "$id".to_owned(),
         Value::String(format!(
-            "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/{name}.schema.json"
+            "https://schemas.universal-ocpp-bridge.dev/contracts/v1.{revision}/{name}.schema.json"
         )),
     );
     object.insert(
         "x-uob-contract-version".to_owned(),
-        json!({ "major": 1, "revision": 0 }),
+        json!({ "major": 1, "revision": revision }),
     );
     value
 }
@@ -421,4 +425,34 @@ fn older_readers_tolerate_optional_response_and_event_fields() {
     result[0]["future_optional_result_field"] = json!("new metadata");
     serde_json::from_value::<CommandResult>(result[0].clone())
         .expect("older result reader accepts optional field");
+}
+
+#[test]
+fn remote_correlation_is_an_additive_revision_of_released_schemas() {
+    for (name, previous) in [
+        (
+            "station-snapshot",
+            include_str!("../schemas/v1.0/station-snapshot.schema.json"),
+        ),
+        (
+            "export-record",
+            include_str!("../schemas/v1.0/export-record.schema.json"),
+        ),
+        (
+            "export-batch",
+            include_str!("../schemas/v1.0/export-batch.schema.json"),
+        ),
+    ] {
+        let old: Value = serde_json::from_str(previous).unwrap();
+        let new = published(name);
+        assert!(compatibility_errors(&old, &new, "$").is_empty());
+        for (definition, previous) in old["$defs"].as_object().unwrap() {
+            assert!(
+                compatibility_errors(previous, &new["$defs"][definition], definition).is_empty()
+            );
+        }
+        let state = &new["$defs"]["TransactionProtocolState"];
+        assert!(state["properties"].get("remote_start_id").is_some());
+        assert!(!strings(state.get("required")).contains("remote_start_id"));
+    }
 }
