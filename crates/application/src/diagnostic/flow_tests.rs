@@ -198,3 +198,43 @@ fn retained_emitter_reports_process_lifetime_formatting_and_admission_drops() {
         0
     );
 }
+
+#[test]
+fn command_metadata_is_typed_bounded_and_survives_cloned_spans() {
+    let (flow, rx, manager, grant, filter) = setup(8);
+    manager
+        .start(&grant, filter, CaptureLevel::Metadata, None)
+        .unwrap();
+    let span = flow
+        .span(None, None, None)
+        .with_request(RequestId::new("request-1").unwrap());
+    span.clone().emit_fields(
+        FlowStage::Application,
+        FlowEvidence::NotTransmitted,
+        vec![
+            SafeDiagnosticField::CommandReason(CommandErrorCode::StationDisconnected),
+            SafeDiagnosticField::AccessReason(AccessPolicyError::ResourceDenied),
+            SafeDiagnosticField::ObservedEvent(EventId::new("event-1").unwrap()),
+        ],
+    );
+    let record: TraceRecord =
+        serde_json::from_slice(rx.try_recv().unwrap().encoded_json()).unwrap();
+    let fields = record.redacted_details.unwrap().fields;
+    assert_eq!(fields["command.request_id"], "request-1");
+    assert_eq!(fields["reason_code"], "ResourceDenied");
+    assert_eq!(fields["command.event_id"], "event-1");
+    flow.span(None, None, None)
+        .with_request(RequestId::new("r".repeat(257)).unwrap())
+        .emit(FlowStage::CommandIngress, FlowEvidence::Completed);
+    span.emit_fields(
+        FlowStage::CommandIngress,
+        FlowEvidence::Completed,
+        vec![SafeDiagnosticField::CommandOrigin(
+            AuthenticatedCommandOrigin::Management {
+                principal_id: PrincipalId::new("p".repeat(257)).unwrap(),
+            },
+        )],
+    );
+    assert!(rx.try_recv().is_err());
+    assert_eq!(flow.dropped(), 2);
+}

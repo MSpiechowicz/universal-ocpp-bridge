@@ -115,6 +115,7 @@ pub(crate) async fn submit(
         Some(request.resource.station_id.clone()),
         None,
     );
+    let trace = trace.with_request(request.request_id.clone());
     let request_id = request.request_id.as_str().to_owned();
     match commands
         .admission

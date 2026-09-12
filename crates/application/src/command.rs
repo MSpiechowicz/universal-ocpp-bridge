@@ -215,6 +215,7 @@ where
                 .iter()
                 .any(|existing| existing.event_id == effect.event_id)
             {
+                let event_id = effect.event_id.clone();
                 result.observed_effects.push(effect);
                 self.persist_result(result.clone()).await?;
                 self.diagnostics
@@ -223,7 +224,12 @@ where
                         Some(result.resource.station_id.clone()),
                         None,
                     )
-                    .emit(FlowStage::ObservedEffect, FlowEvidence::Observed);
+                    .with_request(command.request_id.clone())
+                    .emit_fields(
+                        FlowStage::ObservedEffect,
+                        FlowEvidence::Observed,
+                        vec![crate::SafeDiagnosticField::ObservedEvent(event_id)],
+                    );
             }
             Ok(Some(result))
         })
@@ -240,7 +246,14 @@ where
             Some(external.request.resource.station_id.clone()),
             None,
         );
-        trace.emit(FlowStage::CommandIngress, FlowEvidence::Completed);
+        let trace = trace.with_request(external.request.request_id.clone());
+        trace.emit_fields(
+            FlowStage::CommandIngress,
+            FlowEvidence::Completed,
+            vec![crate::SafeDiagnosticField::CommandOrigin(
+                external.origin.clone(),
+            )],
+        );
         let context = self
             .stations
             .context(external.request.resource.clone())
@@ -250,7 +263,13 @@ where
             .as_ref()
             .is_some_and(|value| matches!(value.connectivity, Connectivity::Connected { .. }));
         if !connected {
-            trace.emit(FlowStage::Application, FlowEvidence::NotTransmitted);
+            trace.emit_fields(
+                FlowStage::Application,
+                FlowEvidence::NotTransmitted,
+                vec![crate::SafeDiagnosticField::CommandReason(
+                    CommandErrorCode::StationDisconnected,
+                )],
+            );
             return Ok(rejected_external(
                 &external,
                 CommandErrorCode::StationDisconnected,
@@ -313,17 +332,26 @@ where
             .map_err(|error| map_station_error(&error))?
         {
             CommandDispatchOutcome::NotTransmitted { error } => {
-                trace.emit(FlowStage::ProtocolResponse, FlowEvidence::NotTransmitted);
+                trace.emit_fields(
+                    FlowStage::ProtocolResponse,
+                    FlowEvidence::NotTransmitted,
+                    vec![crate::SafeDiagnosticField::CommandReason(error.code)],
+                );
                 CommandLifecycle::Rejected { error }
             }
             CommandDispatchOutcome::ProtocolResponse { accepted, error } => {
-                trace.emit(
+                trace.emit_fields(
                     FlowStage::ProtocolResponse,
                     if accepted {
                         FlowEvidence::Accepted
                     } else {
                         FlowEvidence::Rejected
                     },
+                    error
+                        .as_ref()
+                        .map(|error| crate::SafeDiagnosticField::CommandReason(error.code))
+                        .into_iter()
+                        .collect(),
                 );
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }

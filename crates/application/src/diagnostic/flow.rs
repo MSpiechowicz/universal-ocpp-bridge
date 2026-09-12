@@ -183,6 +183,7 @@ impl FlowDiagnostics {
             station,
             protocol,
             target: None,
+            request: None,
             start: Instant::now(),
         }
     }
@@ -206,9 +207,17 @@ pub struct FlowSpan {
     station: Option<StationId>,
     protocol: Option<ProtocolEdition>,
     target: Option<(TargetInstanceId, TargetKind)>,
+    request: Option<uob_contracts::RequestId>,
     start: Instant,
 }
 impl FlowSpan {
+    /// Carries an explicit request identity across command stages.
+    #[must_use]
+    pub fn with_request(mut self, request: uob_contracts::RequestId) -> Self {
+        self.request = Some(request);
+        self
+    }
+
     /// Attaches an exact configured destination, never an endpoint or inferred target.
     #[must_use]
     pub fn with_target(mut self, id: TargetInstanceId, kind: TargetKind) -> Self {
@@ -269,7 +278,11 @@ impl FlowSpan {
         sequence: u64,
         shed_details: bool,
     ) -> Option<SanitizedDiagnostic> {
-        let oversized = shared.process.as_str().len() > 256
+        let oversized = self
+            .request
+            .as_ref()
+            .is_some_and(|id| id.as_str().len() > 256)
+            || shared.process.as_str().len() > 256
             || self
                 .correlation
                 .as_ref()
@@ -282,18 +295,18 @@ impl FlowSpan {
                 .target
                 .as_ref()
                 .is_some_and(|(id, kind)| id.as_str().len() > 256 || kind.as_str().len() > 256)
-            || fields.iter().take(16).any(|field| match field {
-                SafeDiagnosticField::Action(v) => v.as_str().len() > 256,
-                SafeDiagnosticField::Station(v) => v.as_str().len() > 256,
-                SafeDiagnosticField::Correlation(v) => v.as_str().len() > 1024,
-                _ => false,
-            });
+            || fields.iter().take(16).any(oversized_field);
         if oversized {
             return None;
         }
         let mut attributes = vec![DiagnosticAttribute::Safe(SafeDiagnosticField::Evidence(
             evidence,
         ))];
+        if let Some(request) = &self.request {
+            attributes.push(DiagnosticAttribute::Safe(SafeDiagnosticField::Request(
+                request.clone(),
+            )));
+        }
         if self.correlation.is_none() {
             attributes.push(DiagnosticAttribute::Safe(
                 SafeDiagnosticField::CorrelationMissing,
@@ -357,5 +370,26 @@ impl FlowSpan {
             FlowEvidence::Completed,
             vec![SafeDiagnosticField::SourceTime(time)],
         );
+    }
+}
+
+fn oversized_field(field: &SafeDiagnosticField) -> bool {
+    match field {
+        SafeDiagnosticField::Request(v) => v.as_str().len() > 256,
+        SafeDiagnosticField::ObservedEvent(v) => v.as_str().len() > 256,
+        SafeDiagnosticField::CommandOrigin(v) => match v {
+            uob_contracts::AuthenticatedCommandOrigin::Management { principal_id }
+            | uob_contracts::AuthenticatedCommandOrigin::Bridge { principal_id } => {
+                principal_id.as_str().len() > 256
+            }
+            uob_contracts::AuthenticatedCommandOrigin::Target {
+                principal_id,
+                target_instance_id,
+            } => principal_id.as_str().len() > 256 || target_instance_id.as_str().len() > 256,
+        },
+        SafeDiagnosticField::Action(v) => v.as_str().len() > 256,
+        SafeDiagnosticField::Station(v) => v.as_str().len() > 256,
+        SafeDiagnosticField::Correlation(v) => v.as_str().len() > 1024,
+        _ => false,
     }
 }

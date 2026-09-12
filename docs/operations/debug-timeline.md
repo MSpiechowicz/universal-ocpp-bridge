@@ -103,3 +103,6 @@ There are at most 128 inspected fields, 4,096 characters per displayed scalar an
 per JSON view. Unknown JSON is checked against a 32-level / 4,096-node formatting budget. Partial views are marked; the bounded raw redacted record remains available on
 explicit expansion. Details never reparse or sort all timeline rows. These limits bound retained
 encoded representations and rendered nodes, not total browser heap size.
+
+See [command evidence](debug-command-trace.md) for request-scoped authorization, dispatch, response,
+observed-effect and delivery evidence, safe reason codes, local links and timing limitations.

@@ -88,3 +88,8 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .json-literal { color: #8d3b17; }
 @media (max-width: 900px) { .representation-grid { grid-template-columns: 1fr; } }
 @media (prefers-color-scheme: dark) { .json-key { color: #afbdff; } .json-string { color: #a2ddae; } .json-literal { color: #ffc39e; } }
+
+.command-links { padding-left: 22px; max-height: 360px; overflow: auto; }
+.command-links li { margin: 16px 0; font-size: 12px; }
+.command-links span { display: block; margin-top: 6px; }
+.command-trace table p { font-size: 12px; margin: 6px 0; }
