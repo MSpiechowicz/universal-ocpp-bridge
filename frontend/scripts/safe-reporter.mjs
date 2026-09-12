@@ -25,6 +25,7 @@ export default class SafeReporter {
     this.rows.push({
       file_sha256: createHash('sha256').update(basename(test.location.file)).digest('hex'),
       line: integer(test.location.line),
+      failure_line: integer(result.error?.location?.line),
       status: statuses.has(result.status) ? result.status : 'failed',
       duration_ms: integer(Math.round(result.duration)),
     });

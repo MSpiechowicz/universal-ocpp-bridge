@@ -12,7 +12,7 @@ test('report boundary discards credentials and caps retained results', () => {
   reporter.onBegin({}, { allTests: () => Array(MAX_RESULTS + 10) });
   for (let index = 0; index < MAX_RESULTS + 10; index++) {
     reporter.onTestEnd({ title: 'private-token', location: { file: '/private-token/secret.browser.ts', line: 3 } }, {
-      status: 'failed', duration: 4, error: { message: 'private-token' },
+      status: 'failed', duration: 4, error: { message: 'private-token', location: { file: 'private-token', line: 25 } },
       stdout: ['private-token'], stderr: ['private-token'], attachments: [{ body: 'private-token' }],
     });
   }
@@ -20,6 +20,7 @@ test('report boundary discards credentials and caps retained results', () => {
   assert.equal(summary.results.length, MAX_RESULTS);
   assert.equal(summary.omitted, 10);
   assert.equal(summary.status, 'failed');
+  assert.equal(summary.results[0].failure_line, 25);
   assert.ok(Buffer.byteLength(JSON.stringify(summary)) < MAX_REPORT_BYTES);
   assert.equal(JSON.stringify(summary).includes('private-token'), false);
 });
