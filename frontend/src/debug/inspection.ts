@@ -39,6 +39,8 @@ export function inspectRecord(value: unknown): Inspection {
     else if (/^resources\.\d+\.availability$/.test(key)) { result.unsupported.push(entry); result.omitted = true; }
     else if (key === 'decision.reason' || key === 'reason_code') result.reason = display;
     else if (/^(unit|quality)$|\.(unit|quality)$/.test(key)) result.measurements.push(entry);
+    else if (key === 'command.origin') result.target.push(entry);
+    else if (['command.request_id', 'command.event_id'].includes(key)) result.canonical.push(entry);
     else if (key.startsWith('source.')) result.source.push(entry);
     else if (key.startsWith('target.')) result.target.push(entry);
     else if (key.startsWith('canonical.') || ['station_id', 'evse_id', 'connector_id', 'transaction_id'].includes(key)) result.canonical.push(entry);

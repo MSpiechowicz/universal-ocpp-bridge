@@ -71,3 +71,13 @@ test('deep or expansive unknown JSON is refused once without repeatedly formatti
   assert.equal(buffer.inspection(0), undefined);
   assert.ok(buffer.detailBytes < 100);
 });
+
+
+test('typed command identities and origin are approved metadata rather than opaque payloads', () => {
+  const inspection = inspectRecord(record(1, {
+    'command.request_id': 'request-1', 'command.event_id': 'event-1', 'command.origin': '{"kind":"management"}',
+  }));
+  assert.equal(inspection.canonical.length, 2);
+  assert.ok(inspection.target.some(([key]) => key === 'command.origin'));
+  assert.equal(inspection.unsupported.length, 0);
+});

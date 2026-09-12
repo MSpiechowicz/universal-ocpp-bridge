@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Inspector } from './Inspector';
+import { CommandTrace } from './CommandTrace';
 import { filterNames, matches, TraceBuffer } from './buffer';
 import type { Filters } from './buffer';
 
@@ -53,6 +54,7 @@ export function Timeline({ buffer, tick, paused, ceiling }: { buffer: TraceBuffe
     {!rows.length && <p>No matching retained traces. Opening this view does not enable capture.</p>}
     {selected !== undefined && <section className="trace-detail" aria-label="Trace detail">
       <button className="secondary" onClick={() => setSelected(undefined)}>Close detail</button>
+      <CommandTrace rows={buffer.rows} selected={selected} ceiling={paused ? ceiling : Infinity} select={setSelected}/>
       <Inspector key={selected} inspection={buffer.inspection(selected)} raw={detail}/>
     </section>}
   </>;

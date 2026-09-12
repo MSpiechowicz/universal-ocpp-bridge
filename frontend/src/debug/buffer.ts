@@ -1,3 +1,5 @@
+import { commandMetadata } from './command';
+import type { CommandMetadata } from './command';
 import { canFormat, inspectRecord } from './inspection';
 import type { Inspection } from './inspection';
 import { ApiError } from '../http';
@@ -10,6 +12,7 @@ export const filterNames = ['target', 'kind', 'station', 'protocol', 'evse', 'co
 export type FilterName = typeof filterNames[number];
 export type Filters = Partial<Record<FilterName | 'search' | 'from' | 'until', string>>;
 export interface Row {
+  command: CommandMetadata;
   sequence: number; raw: string; bytes: number; stage: string; time: string; deviceTime: string;
   evidence: string; outcome: string; truncated: boolean; index: Record<FilterName, string>;
 }
@@ -32,6 +35,7 @@ export function parseRow(raw: string, process: string): Row {
   const time = boundedText(record.observed_at);
   if (!Number.isFinite(Date.parse(time))) throw new ApiError(0, 'format');
   return {
+    command: commandMetadata(record),
     sequence: sequence as number, raw, bytes, stage: boundedText(record.stage), time,
     deviceTime: scalar(fields.source_time), evidence: scalar(fields.evidence), outcome, truncated: details.truncated === true,
     index: {

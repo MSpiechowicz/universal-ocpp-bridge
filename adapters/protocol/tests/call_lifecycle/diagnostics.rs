@@ -189,6 +189,31 @@ async fn target_command_trace_crosses_durable_and_socket_awaits_for_both_edition
             for stage in [
                 "command.authorization",
                 "command.ingress",
+                "command.dispatch",
+                "command.protocol_response",
+            ] {
+                assert!(traces.iter().any(|trace| {
+                    trace.stage.as_str() == stage
+                        && trace
+                            .redacted_details
+                            .as_ref()
+                            .unwrap()
+                            .fields
+                            .get("command.request_id")
+                            .is_some_and(|request| request == id)
+                }));
+            }
+            assert!(traces.iter().any(|trace| {
+                trace
+                    .redacted_details
+                    .as_ref()
+                    .unwrap()
+                    .fields
+                    .contains_key("command.origin")
+            }));
+            for stage in [
+                "command.authorization",
+                "command.ingress",
                 "storage.commit",
                 "command.dispatch",
                 "ocpp.send",

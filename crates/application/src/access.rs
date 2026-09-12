@@ -231,10 +231,15 @@ impl<P: Send + 'static> CommandAdmissionPort<P> for ScopedCommandAdmissionPort<P
             Some(command.request.resource.station_id.clone()),
             None,
         );
+        let trace = trace.with_request(command.request.request_id.clone());
         if let Err(error) = self.policy.authorize_command(&command) {
-            trace.emit(
+            trace.emit_fields(
                 crate::FlowStage::Authorization,
                 crate::FlowEvidence::Rejected,
+                vec![
+                    crate::SafeDiagnosticField::AccessReason(error),
+                    crate::SafeDiagnosticField::CommandOrigin(command.origin.clone()),
+                ],
             );
             let context = match error {
                 AccessPolicyError::OriginMismatch => "access.command_origin_mismatch",

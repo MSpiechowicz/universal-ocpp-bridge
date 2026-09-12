@@ -162,6 +162,16 @@ impl Error for SafeEndpointLabelError {}
 /// Explicitly safe scalar fields supported by diagnostic rendering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SafeDiagnosticField {
+    /// Stable command identity, never its payload.
+    Request(uob_contracts::RequestId),
+    /// Authenticated routing identity, without credentials.
+    CommandOrigin(uob_contracts::AuthenticatedCommandOrigin),
+    /// Closed command failure category, without raw error detail.
+    CommandReason(uob_contracts::CommandErrorCode),
+    /// Closed access-policy rejection category.
+    AccessReason(crate::AccessPolicyError),
+    /// Explicitly reconciled durable event identity.
+    ObservedEvent(uob_contracts::EventId),
     /// Availability transition in stable snapshot resource order.
     AvailabilityChange {
         index: usize,
@@ -193,6 +203,14 @@ pub enum SafeDiagnosticField {
 impl SafeDiagnosticField {
     fn render(&self) -> (Cow<'_, str>, Cow<'_, str>) {
         let (key, value) = match self {
+            Self::Request(value) => ("command.request_id", Cow::Borrowed(value.as_str())),
+            Self::CommandOrigin(value) => (
+                "command.origin",
+                Cow::Owned(serde_json::to_string(value).expect("origin")),
+            ),
+            Self::CommandReason(value) => ("reason_code", Cow::Owned(format!("{value:?}"))),
+            Self::AccessReason(value) => ("reason_code", Cow::Owned(format!("{value:?}"))),
+            Self::ObservedEvent(value) => ("command.event_id", Cow::Borrowed(value.as_str())),
             Self::AvailabilityChange {
                 index,
                 before,
