@@ -1,0 +1,53 @@
+[Unit]
+Description=Universal OCPP Bridge selected production artifact
+# Started only by the activation owner after journal recovery.
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=30s
+WatchdogSec=10s
+TimeoutAbortSec=5s
+LimitCORE=0
+User=uob
+Group=uob
+Slice=uob-production.slice
+MemoryMax=256M
+Environment=UOB_DEPLOYMENT_ENVIRONMENT=production
+InaccessiblePaths=-/etc/uob-staging -/var/lib/uob-staging -/run/uob-staging
+ExecStartPre=/var/lib/uob-releases/artifacts/%i/bin/uob config check --config /etc/uob/bridge.toml
+ExecStart=/var/lib/uob-releases/artifacts/%i/bin/uob serve --config /etc/uob/bridge.toml --no-ui
+WorkingDirectory=/var/lib/uob
+StateDirectory=uob
+StateDirectoryMode=0700
+RuntimeDirectory=uob
+RuntimeDirectoryMode=0700
+UMask=0077
+TimeoutStopSec=25s
+KillSignal=SIGTERM
+KillMode=control-group
+SendSIGKILL=yes
+# Preserve each termination before restart replaces the current unit status.
+ExecStopPost=/usr/bin/printf "uob_service_exit result=%%s code=%%s status=%%s invocation=%%s\n" "${SERVICE_RESULT}" "${EXIT_CODE}" "${EXIT_STATUS}" "${INVOCATION_ID}"
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+LogNamespace=uob
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

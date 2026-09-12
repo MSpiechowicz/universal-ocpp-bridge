@@ -105,6 +105,15 @@ impl Ledger {
         self.persist(next)
     }
 
+    pub fn record_promotion(
+        &mut self,
+        promotion: super::promotion::Record,
+    ) -> Result<(), InstallError> {
+        let mut next = self.state.clone();
+        next.promotion = Some(promotion);
+        self.persist(next)
+    }
+
     fn persist(&mut self, next: Status) -> Result<(), InstallError> {
         validate(&next)?;
         let bytes = serde_json::to_vec(&next)?;
@@ -123,6 +132,9 @@ impl Ledger {
 }
 
 fn validate(state: &Status) -> Result<(), InstallError> {
+    if let Some(promotion) = &state.promotion {
+        promotion.validate()?;
+    }
     if let Some(failures) = &state.failures {
         failures.validate()?;
     }
