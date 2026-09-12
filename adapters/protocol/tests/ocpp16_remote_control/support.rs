@@ -258,7 +258,14 @@ pub async fn setup(
         .unwrap(),
     );
     let port = Arc::new(
-        RemoteControlSession::new(handle, snapshot.clone(), identity, Arc::new(Clock)).unwrap(),
+        RemoteControlSession::new(
+            handle,
+            snapshot.clone(),
+            identity,
+            Arc::new(Clock),
+            Arc::new(store.clone()),
+        )
+        .unwrap(),
     );
     let coordinator = Arc::new(Coordinator::new(
         Arc::new(store.clone()),

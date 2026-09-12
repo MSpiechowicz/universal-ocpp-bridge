@@ -40,6 +40,7 @@ pub struct RemoteControlSession {
     snapshot: RwLock<StationSnapshot>,
     identity: Arc<dyn RemoteStartIdentity>,
     clock: Arc<dyn CommandClock>,
+    evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
 }
 
 impl RemoteControlSession {
@@ -51,6 +52,7 @@ impl RemoteControlSession {
         snapshot: StationSnapshot,
         identity: Arc<dyn RemoteStartIdentity>,
         clock: Arc<dyn CommandClock>,
+        evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
     ) -> Result<Self, StationCommandError> {
         validate_snapshot(&handle, &snapshot)?;
         Ok(Self {
@@ -58,6 +60,7 @@ impl RemoteControlSession {
             snapshot: RwLock::new(snapshot),
             identity,
             clock,
+            evidence,
         })
     }
 
@@ -151,7 +154,27 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 }
             };
             Ok(match pending.receive().await {
-                SessionCallOutcome::Result { payload, .. } => mapping::response(action, &payload),
+                SessionCallOutcome::Result { payload, .. } => {
+                    let outcome = mapping::response(action, &payload);
+                    if action == "ChangeAvailability"
+                        && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })
+                        && self
+                            .evidence
+                            .record_remote_response(
+                                command.request_id.clone(),
+                                payload["status"]
+                                    .as_str()
+                                    .expect("validated status")
+                                    .to_owned(),
+                                None,
+                            )
+                            .await
+                            .is_err()
+                    {
+                        return Ok(mapping::uncertain());
+                    }
+                    outcome
+                }
                 SessionCallOutcome::Error { .. } => mapping::rejected_response(),
                 SessionCallOutcome::NotTransmitted { reason, .. } => {
                     mapping::not_sent(if reason == "command expired before socket send" {
