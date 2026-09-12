@@ -4,7 +4,15 @@ use uob_sim::scenario::execute;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let result = execute(std::env::args().skip(1)).await;
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.first().map(String::as_str) == Some("serve") {
+        if let Err(code) = uob_sim::control::serve_arguments(arguments).await {
+            eprintln!("simulator control: {code}");
+            std::process::exit(2);
+        }
+        return;
+    }
+    let result = execute(arguments).await;
     let stdout = io::stdout();
     let mut output = stdout.lock();
     for event in &result.report.events {

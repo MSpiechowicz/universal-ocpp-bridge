@@ -174,6 +174,9 @@ OCPP 2.0.1 charger authorization preserves typed identity and certificate eviden
 durable local policy after bounded provider resolution, and retains native status/expiry semantics.
 See [OCPP 2.0.1 authorization](docs/security/ocpp201-authorization.md) for provider boundaries and tests.
 
+The simulator also offers an explicitly enabled [loopback control API](docs/simulator/control-api.md)
+for bounded demo/staging scenario runs, scoped cancellation and pending-step fault controls.
+
 The standalone simulator has a versioned deterministic TOML scenario contract and a machine-readable
 JSONL runner. See the [scenario runner guide](docs/simulator/scenario-runner.md) for its actions,
 failure categories, timeout model, and checked-in example.

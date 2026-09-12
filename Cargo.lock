@@ -3030,13 +3030,17 @@ dependencies = [
 name = "uob-sim"
 version = "0.28.0"
 dependencies = [
+ "axum",
  "futures",
  "ocpp-client",
  "serde",
  "serde_json",
+ "subtle",
  "tokio",
  "tokio-tungstenite 0.30.0",
  "toml",
+ "tower",
+ "url",
 ]
 
 [[package]]
