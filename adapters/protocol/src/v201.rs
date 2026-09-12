@@ -1,5 +1,6 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
+pub mod availability;
 pub mod remote_control;
 
 mod authorization;
