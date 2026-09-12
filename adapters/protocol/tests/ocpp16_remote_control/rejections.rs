@@ -245,7 +245,16 @@ async fn snapshot_identity_epoch_and_protocol_are_bound_to_the_actual_socket() {
         uob_protocol_adapter::v16::remote_control::LocalRemoteStartIdentity::new(vec![], auth)
             .unwrap(),
     );
-    assert!(RemoteControlSession::new(other.handle, snapshot, identity, Arc::new(Clock)).is_err());
+    assert!(
+        RemoteControlSession::new(
+            other.handle,
+            snapshot,
+            identity,
+            Arc::new(Clock),
+            Arc::new(store.clone())
+        )
+        .is_err()
+    );
     running.task.shutdown(Duration::from_secs(1)).await.unwrap();
     running.server.abort();
     other.task.shutdown(Duration::from_secs(1)).await.unwrap();

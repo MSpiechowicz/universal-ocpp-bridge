@@ -1,5 +1,6 @@
 use super::RemoteStartIdentity;
 use rust_ocpp::v1_6::messages::{
+    change_availability::{ChangeAvailabilityRequest, ChangeAvailabilityResponse},
     remote_start_transaction::{RemoteStartTransactionRequest, RemoteStartTransactionResponse},
     remote_stop_transaction::{RemoteStopTransactionRequest, RemoteStopTransactionResponse},
     reset::{ResetRequest, ResetResponse},
@@ -118,6 +119,20 @@ fn privileged(
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     match operation.action.as_str() {
+        "ChangeAvailability"
+            if operation.payload_schema.as_str()
+                == "urn:OCPP:1.6:2019:12:ChangeAvailabilityRequest" =>
+        {
+            exact_fields(&operation.payload, &["connectorId", "type"])?;
+            let request: ChangeAvailabilityRequest =
+                serde_json::from_value(operation.payload.clone()).map_err(|_| InvalidParameters)?;
+            // Connector zero widens control to the station and every connector. Never allow
+            // a connector-scoped command to acquire that authority through its wire payload.
+            if request.connector_id != native || (native == 0) != (resource == station) {
+                return Err(InvalidParameters);
+            }
+            Ok(("ChangeAvailability", encode(request)?))
+        }
         "Reset" if operation.payload_schema.as_str() == "urn:OCPP:1.6:2019:12:ResetRequest" => {
             if resource != station || native != 0 {
                 return Err(InvalidParameters);
@@ -144,6 +159,12 @@ fn privileged(
     }
 }
 fn available(snapshot: &StationSnapshot, resource: &ResourceRef) -> bool {
+    if snapshot.current_values.iter().any(|value| {
+        value.point_id.as_str() == "ocpp16/connector-0/status/status"
+            && matches!(&value.value, Some(uob_contracts::TypedValue::Text(status)) if status == "Unavailable" || status == "Faulted")
+    }) {
+        return false;
+    }
     snapshot.resources.iter().any(|entry| {
         (resource == &snapshot.station || &entry.resource == resource)
             && entry.availability == AvailabilityState::Available
@@ -178,6 +199,9 @@ pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome 
         "RemoteStopTransaction" => {
             serde_json::from_value::<RemoteStopTransactionResponse>(payload.clone()).is_ok()
         }
+        "ChangeAvailability" => {
+            serde_json::from_value::<ChangeAvailabilityResponse>(payload.clone()).is_ok()
+        }
         "Reset" => serde_json::from_value::<ResetResponse>(payload.clone()).is_ok(),
         "UnlockConnector" => {
             serde_json::from_value::<UnlockConnectorResponse>(payload.clone()).is_ok()
@@ -188,6 +212,7 @@ pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome 
         return uncertain();
     }
     if payload["status"] == "Accepted"
+        || (action == "ChangeAvailability" && payload["status"] == "Scheduled")
         || (action == "UnlockConnector" && payload["status"] == "Unlocked")
     {
         CommandDispatchOutcome::ProtocolResponse {

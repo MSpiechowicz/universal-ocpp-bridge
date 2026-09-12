@@ -333,7 +333,12 @@ fn validate_row(
         match fixtures.get(fixture_id.as_str()) {
             Some(fixture)
                 if fixture.protocol_version == requirement.protocol_version
-                    && fixture.direction == requirement.direction => {}
+                    && (fixture.direction == requirement.direction
+                        || (requirement.direction == "bidirectional"
+                            && matches!(
+                                fixture.direction.as_str(),
+                                "csms_to_charging_station" | "charging_station_to_csms"
+                            ))) => {}
             Some(_) => errors.push(format!(
                 "{} references fixture {fixture_id} for another version or direction",
                 requirement.id

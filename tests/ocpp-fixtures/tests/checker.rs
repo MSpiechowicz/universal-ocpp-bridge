@@ -67,10 +67,10 @@ fn copy_directory(source: &Path, destination: &Path) {
 #[test]
 fn canonical_corpus_is_valid_but_not_release_complete() {
     let report = check_corpus(&corpus_root(), CheckMode::Development).unwrap();
-    assert_eq!(report.fixtures, 56);
+    assert_eq!(report.fixtures, 63);
     assert_eq!(report.requirements, 38);
-    assert_eq!(report.verified_requirements, 16);
-    assert_eq!(report.required_remaining, 21);
+    assert_eq!(report.verified_requirements, 17);
+    assert_eq!(report.required_remaining, 20);
 
     let errors = check_corpus(&corpus_root(), CheckMode::Release).unwrap_err();
     assert!(
@@ -191,4 +191,35 @@ fn invalid_authorization_response_is_rejected_even_with_updated_digest() {
             .iter()
             .any(|e| e.contains("authorization.accepted payload fails"))
     );
+}
+
+#[test]
+fn bidirectional_rows_accept_both_wire_directions_without_accepting_other_versions() {
+    let corpus = TempCorpus::copy();
+    assert!(check_corpus(&corpus.root, CheckMode::Development).is_ok());
+    for (field, wrong) in [("direction", "unknown"), ("protocol_version", "2.0.1")] {
+        let mut manifest = corpus.json("fixtures.json");
+        let fixture = manifest["fixtures"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|fixture| fixture["id"] == "wire.ocpp16.availability-inoperative")
+            .unwrap();
+        let previous = fixture[field].clone();
+        fixture[field] = Value::String(wrong.to_owned());
+        corpus.write_json("fixtures.json", &manifest);
+        let errors = check_corpus(&corpus.root, CheckMode::Development).unwrap_err();
+        assert!(errors.iter().any(
+            |error| error.contains("ocpp16.availability references fixture")
+                && error.contains("another version or direction")
+        ));
+        let fixture = manifest["fixtures"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|fixture| fixture["id"] == "wire.ocpp16.availability-inoperative")
+            .unwrap();
+        fixture[field] = previous;
+        corpus.write_json("fixtures.json", &manifest);
+    }
 }

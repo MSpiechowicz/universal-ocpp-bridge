@@ -188,7 +188,7 @@ fn only_fields(payload: &Value, allowed: &[&str]) -> Result<(), OcppCallError> {
         ))
     }
 }
-fn lifecycle_error(value: &RegistrationError) -> OcppCallError {
+pub(super) fn lifecycle_error(value: &RegistrationError) -> OcppCallError {
     match value {
         RegistrationError::Storage(_) => error(
             OcppErrorCode::InternalError,

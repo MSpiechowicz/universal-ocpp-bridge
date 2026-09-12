@@ -1,4 +1,4 @@
-//! Durable native correlation and safe response evidence for OCPP 2.0.1 commands.
+//! Durable native correlation and safe response evidence for OCPP commands.
 use crate::StorageFuture;
 use uob_contracts::RequestId;
 

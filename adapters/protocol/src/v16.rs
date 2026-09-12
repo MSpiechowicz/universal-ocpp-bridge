@@ -1,6 +1,7 @@
 //! OCPP 1.6J model isolation and charger-to-application mappings.
 
 mod authorization;
+pub mod availability;
 pub mod remote_control;
 mod transaction_input;
 mod transactions;

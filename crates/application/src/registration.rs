@@ -1,4 +1,5 @@
 //! Persisted registration and status transitions owned by the station's ordered task.
+pub mod availability;
 pub mod v201;
 use crate::{AtomicStoreWrite, OperationalStore, RegistrationObservation, StorageError};
 use uob_contracts::{
@@ -132,6 +133,15 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     observation: &ConnectorStatusObservation,
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
+    let next = status_snapshot(snapshot, observation, now)?;
+    commit(store, snapshot, next).await
+}
+
+fn status_snapshot(
+    snapshot: &StationSnapshot,
+    observation: &ConnectorStatusObservation,
+    now: UtcTimestamp,
+) -> Result<StationSnapshot, RegistrationError> {
     accepted(snapshot)?;
     let availability = match observation.status.as_str() {
         "Available" => AvailabilityState::Available,
@@ -190,7 +200,7 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
         }
     }
     activity(&mut next, now);
-    commit(store, snapshot, next).await
+    Ok(next)
 }
 
 fn namespace(protocol: ProtocolEdition) -> &'static str {

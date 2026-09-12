@@ -103,6 +103,10 @@ OCPP 1.6 remote start, stop, reset and unlock use the authorized durable command
 separate protocol responses and observed effects. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
 for native validation, local identity resolution, deadlines and recovery.
 
+OCPP 1.6 availability commands retain scheduled intent separately from committed connector and
+station observations. See [OCPP 1.6 availability](docs/architecture/ocpp16-availability.md) for
+scoped control, transaction completion, durable evidence, and reconnect behavior.
+
 OCPP 2.0.1 remote commands preserve EVSE targeting, durable remote-start correlation and native
 scheduled-reset evidence. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md)
 for scoped dispatch, response/effect separation and restart behavior.
