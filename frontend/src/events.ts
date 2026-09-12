@@ -1,3 +1,4 @@
+import { increment } from './diagnostics/store';
 import { ApiClient, ApiError, readJson } from './http';
 import { boundedText, object } from './identity';
 import { SseParser } from './sse';
@@ -39,7 +40,7 @@ export function subscribe(
     if (station && selected !== station) throw new ApiError(0, 'identity');
     await api.station(selected);
     cursor = undefined;
-    state.gaps++;
+    state.gaps = increment(state.gaps);
   }
 
   async function run() {
@@ -112,6 +113,7 @@ export function subscribe(
         }
         state.status = 'stale';
         state.message = 'Connection interrupted. Displayed data is stale; reconnecting…';
+        publish({ ...state });
         // Release the old socket before fetching recovery data or starting another subscription.
         current.abort();
         if (gap !== undefined) {
@@ -127,7 +129,7 @@ export function subscribe(
         await reader?.cancel().catch(() => {});
         reader?.releaseLock();
       }
-      state.attempts++;
+      state.attempts = increment(state.attempts);
       const delay = Math.min(30000, 1000 * 2 ** Math.min(failures - 1, 5));
       await pause(delay, lifetime.signal);
     }

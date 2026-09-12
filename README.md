@@ -50,6 +50,9 @@ with no Node runtime on the Raspberry Pi. It verifies destination identity, keep
 credentials in tab memory, binds diagnostic tokens to their environment, requires explicit destination
 confirmation for controls, and shows bounded authenticated SSE connection and stale-state evidence.
 
+The [browser and API diagnostics panel](docs/operations/browser-diagnostics.md) exposes bounded,
+sanitized failure counters and correlation lookup alongside stream staleness and reconnect evidence.
+
 The [bounded Debug timeline](docs/operations/debug-timeline.md) adds explicit scoped capture controls,
 virtualized read-only traces, retained-window filters/bookmarks and visible gap/eviction evidence.
 

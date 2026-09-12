@@ -1,3 +1,5 @@
+import { DiagnosticsPanel } from './diagnostics/Panel';
+import { diagnostics } from './diagnostics/store';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ApiClient, ApiError } from './http';
@@ -18,6 +20,7 @@ export function App() {
   const credential = useRef<HTMLInputElement>(null);
   const active = useRef<ApiClient | undefined>(undefined);
   const operation = useRef(0);
+  useEffect(() => { diagnostics.commit('app'); });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,6 +63,7 @@ export function App() {
   }
 
   function disconnect() {
+    diagnostics.clear();
     operation.current++; active.current?.close(); active.current = undefined;
     setClient(undefined); setConnection(undefined); setPage(undefined); setPending(false);
     setFailure('');
@@ -119,6 +123,7 @@ export function App() {
           </dl>
           <p className="field-note">Stream activity confirms connectivity. It does not confirm a charger action or refresh the inventory query.</p>
         </section>}
+        <DiagnosticsPanel connection={connection} hidden={hidden}/>
         {identity && <Debug key={JSON.stringify(identity)} identity={identity} hidden={hidden}/>}
         <footer>Independent management interface <span>Bound to the destination shown above</span></footer>
       </main>
