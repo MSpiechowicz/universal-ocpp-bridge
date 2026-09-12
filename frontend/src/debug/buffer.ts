@@ -1,3 +1,5 @@
+import { canFormat, inspectRecord } from './inspection';
+import type { Inspection } from './inspection';
 import { ApiError } from '../http';
 import { boundedText, object } from '../identity';
 
@@ -55,7 +57,7 @@ export function matches(row: Row, filters: Filters): boolean {
 export class TraceBuffer {
   readonly rows: Row[] = [];
   readonly bookmarks = new Set<number>();
-  private readonly details = new Map<number, { text: string; bytes: number }>();
+  private readonly details = new Map<number, { text: string; inspection?: Inspection; bytes: number }>();
   bytes = 0;
   detailBytes = 0;
   evicted = 0;
@@ -86,16 +88,34 @@ export class TraceBuffer {
     if (cached) { this.detailBytes -= cached.bytes; this.details.delete(sequence); }
   }
 
+  inspection(sequence: number): Inspection | undefined {
+    this.detail(sequence);
+    return this.details.get(sequence)?.inspection;
+  }
+
   detail(sequence: number): string | undefined {
     const cached = this.details.get(sequence);
     if (cached) return cached.text;
     const row = this.rows.find(row => row.sequence === sequence);
     if (!row) return undefined;
-    const text = JSON.stringify(JSON.parse(row.raw), null, 2);
-    const bytes = encoder.encode(text).length;
-    if (bytes > DETAIL_LIMIT) return 'Detail exceeds display limit.';
+    const record: unknown = JSON.parse(row.raw);
+    let text: string;
+    let inspection: Inspection | undefined;
+    try {
+      if (!canFormat(record)) throw new Error('detail depth/work limit');
+      text = JSON.stringify(record, null, 2);
+      inspection = inspectRecord(record);
+    } catch {
+      // Hostile nesting may exceed the engine's formatting stack. Cache a bounded failure.
+      text = 'Detail exceeds safe formatting depth.';
+    }
+    let bytes = encoder.encode(text).length + encoder.encode(JSON.stringify(inspection) ?? '').length;
+    if (bytes > DETAIL_LIMIT) {
+      text = 'Detail exceeds display limit.'; inspection = undefined;
+      bytes = encoder.encode(text).length;
+    }
     while (this.details.size >= 4 || this.detailBytes + bytes > DETAIL_LIMIT) this.removeDetail(this.details.keys().next().value!);
-    this.details.set(sequence, { text, bytes }); this.detailBytes += bytes;
+    this.details.set(sequence, { text, inspection, bytes }); this.detailBytes += bytes;
     return text;
   }
 
