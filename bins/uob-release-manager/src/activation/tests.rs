@@ -1,7 +1,6 @@
-#[path = "../../tests/artifact_store/support.rs"]
-mod support;
 use super::{ActivationJournal, Phase, Transition, disk};
 use crate::artifacts::ArtifactStore;
+use crate::test_support::artifacts as support;
 use std::fs;
 use support::Fixture;
 
