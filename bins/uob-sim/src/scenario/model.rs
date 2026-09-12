@@ -1,6 +1,6 @@
 use std::{collections::HashSet, time::Duration};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::{ActionKind, FailureCategory, RunFailure, SCHEMA_VERSION};
 use crate::{OcppVersion, SimulatorClientConfig};
@@ -166,7 +166,7 @@ pub struct FaultDefinition {
     pub delay_ms: u64,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum FaultKind {
     Disconnect,
@@ -268,7 +268,7 @@ fn validate_configuration(configuration: &SimulatorConfiguration) -> Result<(), 
     Ok(())
 }
 
-fn validate_scenario(scenario: &ScenarioDefinition) -> Result<(), RunFailure> {
+pub(super) fn validate_scenario(scenario: &ScenarioDefinition) -> Result<(), RunFailure> {
     validate_version(scenario.schema_version, "scenario")?;
     if scenario.steps.is_empty() {
         return Err(setup_failure(

@@ -3,7 +3,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
+
+use super::LiveRun;
+pub use super::cancellation::{CancellationHandle, CancellationToken, cancellation_pair};
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 
@@ -56,48 +59,6 @@ impl ScenarioClock for RealClock {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct CancellationHandle {
-    sender: watch::Sender<bool>,
-}
-
-#[derive(Clone, Debug)]
-pub struct CancellationToken {
-    receiver: watch::Receiver<bool>,
-}
-
-#[must_use]
-pub fn cancellation_pair() -> (CancellationHandle, CancellationToken) {
-    let (sender, receiver) = watch::channel(false);
-    (
-        CancellationHandle { sender },
-        CancellationToken { receiver },
-    )
-}
-
-impl CancellationHandle {
-    pub fn cancel(&self) {
-        self.sender.send_replace(true);
-    }
-}
-
-impl CancellationToken {
-    fn is_cancelled(&self) -> bool {
-        *self.receiver.borrow()
-    }
-
-    async fn cancelled(&mut self) {
-        loop {
-            if self.is_cancelled() {
-                return;
-            }
-            if self.receiver.changed().await.is_err() {
-                std::future::pending::<()>().await;
-            }
-        }
-    }
-}
-
 pub struct ScenarioRunner {
     connector: Arc<dyn ScenarioConnector>,
     clock: Arc<dyn ScenarioClock>,
@@ -120,7 +81,25 @@ impl ScenarioRunner {
         configuration: &SimulatorConfiguration,
         scenario: &ScenarioDefinition,
         seed: u64,
+        cancellation: CancellationToken,
+    ) -> RunReport {
+        self.run_controlled(
+            configuration,
+            scenario,
+            seed,
+            cancellation,
+            LiveRun::new(scenario),
+        )
+        .await
+    }
+
+    pub async fn run_controlled(
+        &self,
+        configuration: &SimulatorConfiguration,
+        scenario: &ScenarioDefinition,
+        seed: u64,
         mut cancellation: CancellationToken,
+        live: LiveRun,
     ) -> RunReport {
         let mut report = RunReport::new(seed);
         let grouped = match validate_and_group_steps(configuration, scenario) {
@@ -159,6 +138,7 @@ impl ScenarioRunner {
                 receiver,
                 seed,
                 stop_token.clone(),
+                live.clone(),
             ));
         }
 
@@ -242,6 +222,7 @@ async fn run_station(
     mut steps: mpsc::Receiver<StepWork>,
     seed: u64,
     mut cancellation: CancellationToken,
+    live: LiveRun,
 ) -> StationRun {
     let mut state = StationState::from_definition(&station);
     let mut client = None;
@@ -249,7 +230,8 @@ async fn run_station(
     let mut failure = None;
     let mut diagnostics = DiagnosticCounts::default();
 
-    while let Some(work) = steps.recv().await {
+    while let Some(mut work) = steps.recv().await {
+        work.step = live.begin(&work.step);
         let selected_fault = work
             .step
             .fault
@@ -284,6 +266,7 @@ async fn run_station(
                 }
             }
         };
+        live.finish(&work.step.id, result.is_ok());
         if let Err(step_failure) = &result {
             failure = Some(step_failure.clone());
         }

@@ -1,3 +1,4 @@
+pub mod control;
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
