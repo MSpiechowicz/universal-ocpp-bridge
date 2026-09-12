@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { BYTE_LIMIT, DETAIL_LIMIT, matches, parseRow, TraceBuffer } from '../src/debug/buffer';
 import { ApiClient } from '../src/http';
 import { parseIdentity } from '../src/identity';
+import type { TraceState } from '../src/debug/capture';
 import { capturePath, parseCapture, traceStream } from '../src/debug/capture';
 
 const identity = parseIdentity({ bridge_id: 'bridge', runtime: { environment: 'production', release_id: 'r1', release_digest: 'sha256:1', process_instance_id: 'p1' } });
@@ -59,7 +60,7 @@ test('status rejects a different destination and controls accept an empty 204 re
 
 test('trace gap, cursor resume and expiry stay independent of browser rendering', async () => {
   const buffer = new TraceBuffer();
-  const state = { message: '', gaps: 0, evicted: 0, dropped: 0, shed: 0, terminal: false };
+  const state: TraceState = { message: '', gaps: 0, evicted: 0, dropped: 0, shed: 0, terminal: false };
   let streams = 0;
   const api = new ApiClient('http://localhost', identity, 'diagnostic-fixture', async (url, init) => {
     if (String(url).endsWith('/identity')) return Response.json(identity);
@@ -73,6 +74,7 @@ test('trace gap, cursor resume and expiry stay independent of browser rendering'
   const stop = traceStream(api, parseCapture(captureValue, api), buffer, state);
   try {
     await new Promise(resolve => setTimeout(resolve, 1150));
+    assert.equal(state.attempts, 1); assert.ok(state.lastActivity);
     assert.equal(streams, 2); assert.equal(buffer.rows.length, 1); assert.equal(state.evicted, 4);
     assert.ok(state.gaps >= 2); assert.equal(state.terminal, true); assert.match(state.message, /expired/);
   } finally { stop(); api.close(); }

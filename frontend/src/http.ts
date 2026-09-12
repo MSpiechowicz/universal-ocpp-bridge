@@ -1,3 +1,4 @@
+import { diagnostics, requestArea } from './diagnostics/store';
 import { boundedText, identityKey, object, parseIdentity } from './identity';
 import type { Identity } from './identity';
 
@@ -53,7 +54,7 @@ export class ApiClient {
   close() { this.token = ''; this.lifetime.abort(); }
 
   static async identify(origin: string, signal?: AbortSignal, transport: typeof fetch = fetch): Promise<Identity> {
-    const response = await transport(`${origin}/api/v1/identity`, {
+    const response = await observedFetch(transport, `${origin}/api/v1/identity`, {
       cache: 'no-store', credentials: 'omit', redirect: 'error',
       signal: AbortSignal.any([AbortSignal.timeout(5000), ...(signal ? [signal] : [])]),
     });
@@ -90,7 +91,7 @@ export class ApiClient {
     try {
       const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(5000), ...(options.signal ? [options.signal] : [])]);
       await this.verifyIdentity(signal);
-      const response = await this.transport(url, {
+      const response = await observedFetch(this.transport, url, {
         ...options, cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
         headers: { Authorization: `Bearer ${commandToken === undefined ? this.token : credential(commandToken)}`,
           ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
@@ -136,7 +137,7 @@ export class ApiClient {
   async openStream(path: string, cursor: string | undefined, signal: AbortSignal) {
     const url = this.path(path);
     await this.verifyIdentity(signal);
-    return this.transport(url, {
+    return observedFetch(this.transport, url, {
       cache: 'no-store', credentials: 'omit', redirect: 'error',
       signal: AbortSignal.any([signal, this.lifetime.signal]),
       headers: { Authorization: `Bearer ${this.token}`, Accept: 'text/event-stream',
@@ -148,4 +149,18 @@ export class ApiClient {
 function credential(value: string): string {
   if (typeof value !== 'string' || !/^[\x21-\x7e]{1,8000}$/.test(value)) throw new ApiError(401);
   return value;
+}
+
+async function observedFetch(transport: typeof fetch, url: string, options: RequestInit): Promise<Response> {
+  const area = requestArea(new URL(url).pathname);
+  diagnostics.request();
+  try {
+    const response = await transport(url, options);
+    if (!response.ok) diagnostics.fail(area, response.status, response.headers.get('x-correlation-id') ?? undefined);
+    return response;
+  } catch (error) {
+    const timeout = options.signal?.reason instanceof DOMException && options.signal.reason.name === 'TimeoutError';
+    if (!options.signal?.aborted || timeout) diagnostics.fail(area, 0);
+    throw error;
+  }
 }

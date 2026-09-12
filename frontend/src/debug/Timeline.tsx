@@ -1,3 +1,4 @@
+import { correlationId } from '../diagnostics/store';
 import { useEffect, useRef, useState } from 'react';
 import { Inspector } from './Inspector';
 import { CommandTrace } from './CommandTrace';
@@ -12,6 +13,14 @@ export function Timeline({ buffer, tick, paused, ceiling }: { buffer: TraceBuffe
   const [auto, setAuto] = useState(true);
   const [selected, setSelected] = useState<number>();
   const [, redraw] = useState(0);
+  useEffect(() => {
+    const selectCorrelation = (event: Event) => {
+      const correlation = correlationId((event as CustomEvent<unknown>).detail);
+      if (correlation) { setFilters({ correlation }); setScroll(0); setSelected(undefined); }
+    };
+    window.addEventListener('uob-correlation', selectCorrelation);
+    return () => window.removeEventListener('uob-correlation', selectCorrelation);
+  }, []);
   const viewport = useRef<HTMLDivElement>(null);
   // Index matching does not parse or sort payloads; only the viewport is mounted in React.
   const rows = buffer.rows.filter(row => (!paused || row.sequence <= ceiling) && matches(row, filters));
@@ -26,7 +35,7 @@ export function Timeline({ buffer, tick, paused, ceiling }: { buffer: TraceBuffe
     setScroll(0); if (viewport.current) viewport.current.scrollTop = 0;
   }
   return <>
-    <details className="debug-filters"><summary>Filter retained traces</summary>
+    <details className="debug-filters" open={!!filters.correlation}><summary>Filter retained traces</summary>
       <div className="filter-grid">
         {filterNames.map(name => <label key={name}>{name}<input aria-label={`Filter ${name}`} value={filters[name] ?? ''} onChange={event => filter(name, event.target.value)} maxLength={128}/></label>)}
         {(['from', 'until'] as const).map(name => <label key={name}>{name} (local time)<input aria-label={`Filter ${name}`} type="datetime-local" onChange={event => filter(name, event.target.value)}/></label>)}

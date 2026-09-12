@@ -1,3 +1,4 @@
+import { increment } from '../diagnostics/store';
 import { ApiClient, ApiError } from '../http';
 import { identityKey, object, parseIdentity } from '../identity';
 import { SseParser } from '../sse';
@@ -19,7 +20,7 @@ export function parseCapture(value: unknown, api: ApiClient): Capture {
     level: data.level, deadline: Date.now() + data.remaining_seconds * 1000 };
 }
 export const sessionPath = (capture: Capture) => `${capturePath}/${encodeURIComponent(capture.process)}/${capture.id}`;
-export interface TraceState { message: string; gaps: number; evicted: number; dropped: number; shed: number; terminal: boolean }
+export interface TraceState { attempts?: number; lastActivity?: number; message: string; gaps: number; evicted: number; dropped: number; shed: number; terminal: boolean }
 const count = (value: unknown) => {
   if (!Number.isSafeInteger(value) || Number(value) < 0) throw new ApiError(0, 'format');
   return Number(value);
@@ -51,6 +52,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
     let failures = 0;
     try {
       while (!lifetime.signal.aborted) {
+        if (failures) state.attempts = increment(state.attempts ?? 0);
         current = new AbortController();
         const signal = AbortSignal.any([lifetime.signal, current.signal]);
         let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -76,7 +78,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
             } else if (record.event === 'trace_gap') {
               const data = object(JSON.parse(record.data));
               if (!['overflow', 'dropped', 'expiry', 'slow_reader'].includes(String(data.reason))) throw new ApiError(0, 'format');
-              state.gaps++; state.message = `Trace gap: ${String(data.reason)}. History is incomplete.`;
+              state.gaps = increment(state.gaps); state.message = `Trace gap: ${String(data.reason)}. History is incomplete.`;
               if (data.window) window(data.window);
               if (data.reason === 'expiry') throw new ApiError(410);
               if (data.reason === 'slow_reader') throw new ApiError(0, 'gap');
@@ -86,6 +88,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
             clearTimeout(watchdog); watchdog = setTimeout(() => current?.abort(), 45000);
             const part = await reader.read();
             if (part.done) break;
+            state.lastActivity = Date.now();
             parser.push(part.value);
           }
           throw new ApiError(0);
@@ -96,7 +99,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
             state.message = error instanceof ApiError && error.status === 410 ? 'Capture stopped, expired or process restarted. Retained history is incomplete.' : 'Trace access or validation failed. Reconnect explicitly.';
             state.terminal = true; break;
           }
-          state.gaps++; state.message = 'Trace connection interrupted. Reconnecting with a best-effort cursor; data may be missing.';
+          state.gaps = increment(state.gaps); state.message = 'Trace connection interrupted. Reconnecting with a best-effort cursor; data may be missing.';
           failures++;
         } finally {
           clearTimeout(watchdog); current.abort(); signal.removeEventListener('abort', cancel);

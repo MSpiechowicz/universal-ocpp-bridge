@@ -1,3 +1,4 @@
+import { diagnostics } from '../diagnostics/store';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ApiClient, ApiError } from '../http';
@@ -25,6 +26,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
   const credential = useRef<HTMLInputElement>(null);
   const active = useRef<ApiClient | undefined>(undefined);
   const generation = useRef(0);
+  useEffect(() => { diagnostics.commit('debug'); });
   useEffect(() => {
     const leave = () => { generation.current++; active.current?.close(); };
     window.addEventListener('pagehide', leave);
@@ -122,6 +124,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
     {failure && <p className="notice error" role="alert">{failure}</p>}
     <p className="notice" role="status">{state.message} {hidden ? 'Hidden tab: display is stale.' : ''}</p>
     {capture && <p>Capture #{capture.id} · {capture.level} · station {capture.station ?? 'all authorized'} · target {capture.target ?? 'all authorized'} · {Math.max(0, Math.ceil((capture.deadline - Date.now()) / 1000))} seconds remaining (estimate; server enforces expiry).</p>}
+    <p>Trace reconnect attempts: {state.attempts ?? 0} · last activity: {state.lastActivity ? new Date(state.lastActivity).toLocaleTimeString() : 'Unavailable'}. {paused ? 'Display paused; capture continues.' : hidden ? 'Hidden display; observations may be stale.' : 'Best-effort stream; reconnect or restart can lose history.'}</p>
     <p>Stream gaps: {state.gaps} · server evictions: {state.evicted} · dropped: {state.dropped} · details shed: {state.shed}</p>
     <button className="secondary" onClick={() => { setCeiling(buffer.rows.at(-1)?.sequence ?? -1); setPaused(value => !value); }}>{paused ? 'Resume display' : 'Pause display'}</button>
     {paused && <p className="notice">Display paused at trace {ceiling}. Capture and expiry continue. Evicted rows disappear; resume shows the current retained window.</p>}
