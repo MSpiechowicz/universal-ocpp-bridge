@@ -138,6 +138,7 @@ pub(super) struct QueuedOutbound {
     pub encoded: String,
     pub result: oneshot::Sender<SessionCallOutcome>,
     pub reservation: RuntimeReservation,
+    pub send_before: Option<Instant>,
 }
 
 /// Nonblocking producer for bridge-originated calls.
@@ -145,6 +146,8 @@ pub(super) struct QueuedOutbound {
 pub struct CallSessionHandle {
     pub(super) sender: mpsc::Sender<QueuedOutbound>,
     pub(super) budget: uob_application::RuntimeResourceBudget,
+    pub(super) station_id: uob_contracts::StationId,
+    pub(super) protocol: ProtocolEdition,
 }
 
 impl CallSessionHandle {
@@ -154,6 +157,43 @@ impl CallSessionHandle {
     ///
     /// Rejects malformed, over-budget, full, or stopped submissions before transmission.
     pub fn try_call(&self, request: OutboundCall) -> Result<PendingCall, SessionSubmitError> {
+        self.enqueue(request, None)
+    }
+
+    /// Admits work with a monotonic last-send deadline checked by the socket owner.
+    /// # Errors
+    /// Returns the same bounded admission failures as `try_call`.
+    pub fn try_call_before(
+        &self,
+        request: OutboundCall,
+        deadline: Instant,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        self.enqueue(request, Some(deadline))
+    }
+
+    /// Exact authenticated socket identity; a handle never follows a reconnect.
+    #[must_use]
+    pub fn station_id(&self) -> &uob_contracts::StationId {
+        &self.station_id
+    }
+
+    /// Protocol negotiated by the authenticated socket.
+    #[must_use]
+    pub const fn protocol(&self) -> ProtocolEdition {
+        self.protocol
+    }
+
+    /// Whether the socket owner has stopped accepting work.
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.sender.is_closed()
+    }
+
+    fn enqueue(
+        &self,
+        request: OutboundCall,
+        send_before: Option<Instant>,
+    ) -> Result<PendingCall, SessionSubmitError> {
         if request.message_id.trim().is_empty() || !request.payload.is_object() {
             return Err(SessionSubmitError::InvalidRequest);
         }
@@ -177,6 +217,7 @@ impl CallSessionHandle {
                 encoded,
                 result,
                 reservation,
+                send_before,
             })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => SessionSubmitError::Full,

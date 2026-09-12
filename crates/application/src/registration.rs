@@ -215,7 +215,10 @@ fn connected_for(
         Err(RegistrationError::InvalidState)
     }
 }
-pub(crate) fn accepted(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
+/// Requires the station to have a currently accepted registration.
+/// # Errors
+/// Rejects disconnected, pending, rejected or unregistered station state.
+pub fn accepted(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
     accepted_for(snapshot, ProtocolEdition::Ocpp16j)
 }
 fn accepted_for(
