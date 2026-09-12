@@ -23,12 +23,18 @@ pub(super) struct Run {
 
 impl ControlServer {
     pub(super) fn start(&self, scenario_id: &str, seed: Option<u64>) -> Result<u64, &'static str> {
-        let scenario = self
+        let mut scenario = self
             .configuration
             .scenarios
             .get(scenario_id)
             .ok_or("unknown_scenario")?
             .clone();
+        let import_identity = if self.configuration.imports.contains(scenario_id) {
+            super::import_network::verify()?;
+            Some(super::import::reidentify(&mut scenario))
+        } else {
+            None
+        };
         let seed = seed.unwrap_or(scenario.seed);
         let mut runs = self.runs.lock().expect("runs lock");
         if runs.stopping {
@@ -68,6 +74,9 @@ impl ControlServer {
                 .await;
             // Keep only finite, payload-free browser evidence after the runner completes.
             for event in &mut report.events {
+                if let Some(identity) = &import_identity {
+                    event.id = format!("{identity}-{}", event.sequence);
+                }
                 event.detail = None;
             }
             if let Some(failure) = &mut report.failure {
