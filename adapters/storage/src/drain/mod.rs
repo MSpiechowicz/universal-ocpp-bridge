@@ -63,6 +63,14 @@ impl Drain {
             .ok_or_else(|| busy("drain revision exhausted"))?;
         Ok(())
     }
+    pub(crate) fn check_remote_write(&mut self, start: bool) -> Result<(), StorageError> {
+        self.expire();
+        if self.window.as_ref().is_some_and(|w| w.sealed || start) {
+            self.changed()?;
+            return Err(busy("remote command blocked by release drain"));
+        }
+        self.changed()
+    }
     pub(crate) fn check_write(&mut self, write: &EncodedWrite) -> Result<(), StorageError> {
         self.expire();
         if let Some(window) = &self.window {

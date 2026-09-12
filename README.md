@@ -103,6 +103,10 @@ OCPP 1.6 remote start, stop, reset and unlock use the authorized durable command
 separate protocol responses and observed effects. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
 for native validation, local identity resolution, deadlines and recovery.
 
+OCPP 2.0.1 remote commands preserve EVSE targeting, durable remote-start correlation and native
+scheduled-reset evidence. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md)
+for scoped dispatch, response/effect separation and restart behavior.
+
 Native report workflows can use [bounded multipart collection](docs/architecture/multipart-reports.md)
 for correlated ordered fragments, shared memory admission, cancellation, and absolute deadlines.
 

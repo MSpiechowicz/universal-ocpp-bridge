@@ -4,7 +4,7 @@ use uob_contracts::{
     Command, CommandErrorCode, CommandOperation, SupportedOperation, TypedValue, ValueType,
 };
 
-pub(super) fn validate(
+pub(crate) fn validate(
     command: &Command<Value>,
     descriptor: &SupportedOperation,
 ) -> Result<(), CommandErrorCode> {

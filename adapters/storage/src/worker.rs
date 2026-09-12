@@ -24,6 +24,10 @@ use crate::{
 
 pub(crate) enum Request<C, E, D, R> {
     Drain(crate::drain::Operation, Reply<crate::drain::Outcome>),
+    RemoteControl(
+        crate::remote_control::Operation,
+        Reply<crate::remote_control::Outcome>,
+    ),
     Probe(Reply<()>),
     TransactionId(Reply<i32>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -69,6 +73,14 @@ pub(crate) fn run<C, E, D, R>(
             Request::TransactionId(reply) => respond(reply, connection.query_row(
                 "UPDATE transaction_id_counter SET value = value + 1 WHERE id = 1 AND value < 2147483647 RETURNING value",
                 [], |row| row.get(0)).map_err(unavailable)),
+            Request::RemoteControl(operation, reply) => {
+                let guard = match &operation {
+                    crate::remote_control::Operation::Read(_) => Ok(()),
+                    crate::remote_control::Operation::Reserve(_) => drain.check_remote_write(true),
+                    crate::remote_control::Operation::Response(..) => drain.check_remote_write(false),
+                };
+                respond(reply, guard.and_then(|()| crate::remote_control::apply(&mut connection, &operation)));
+            },
             Request::Probe(reply) => respond(
                 reply,
                 connection

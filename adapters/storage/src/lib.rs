@@ -8,6 +8,7 @@ mod delivery;
 mod drain;
 mod lifecycle;
 mod recovery;
+mod remote_control;
 mod retention;
 mod schema;
 mod store;

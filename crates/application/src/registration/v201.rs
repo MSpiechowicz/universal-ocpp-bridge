@@ -88,3 +88,10 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     activity(&mut next, now);
     commit(store, snapshot, next).await
 }
+
+/// Requires accepted OCPP 2.0.1 registration on a live 2.0.1 connection.
+/// # Errors
+/// Rejects a disconnected, mismatched or unregistered station.
+pub fn accepted(snapshot: &StationSnapshot) -> Result<(), RegistrationError> {
+    super::accepted_for(snapshot, ProtocolEdition::Ocpp201)
+}

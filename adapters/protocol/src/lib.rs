@@ -61,3 +61,5 @@ pub fn protocol_for_subprotocol(value: &str) -> Option<uob_contracts::ProtocolEd
         _ => None,
     }
 }
+
+mod remote_constraints;

@@ -9,6 +9,12 @@ use uob_contracts::{
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
+    let revision = u8::from(matches!(
+        name,
+        "station-snapshot" | "export-record" | "export-batch"
+    ));
+    let output = output.join(format!("v1.{revision}"));
+    fs::create_dir_all(&output)?;
     let schema = schema_for!(T);
     let mut document = serde_json::to_value(schema)?;
     let object = document
@@ -17,12 +23,12 @@ fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error
     object.insert(
         "$id".to_owned(),
         Value::String(format!(
-            "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/{name}.schema.json"
+            "https://schemas.universal-ocpp-bridge.dev/contracts/v1.{revision}/{name}.schema.json"
         )),
     );
     object.insert(
         "x-uob-contract-version".to_owned(),
-        serde_json::json!({ "major": 1, "revision": 0 }),
+        serde_json::json!({ "major": 1, "revision": revision }),
     );
     fs::write(
         output.join(format!("{name}.schema.json")),
@@ -34,7 +40,7 @@ fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error
 fn main() -> Result<(), Box<dyn Error>> {
     let output = env::args_os()
         .nth(1)
-        .ok_or("usage: export_public_schemas <output-directory>")?;
+        .ok_or("usage: export_public_schemas <schemas-root>")?;
     let output = Path::new(&output);
     fs::create_dir_all(output)?;
 

@@ -1,0 +1,8 @@
+[
+  2,
+  "reset-immediate",
+  "Reset",
+  {
+    "type": "Immediate"
+  }
+]
