@@ -2,6 +2,8 @@
 pub mod failures;
 pub mod ipc;
 pub mod preflight;
+pub mod production_systemd;
+pub mod promotion;
 mod qualification;
 mod storage;
 
@@ -87,6 +89,8 @@ pub struct Record {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
+    #[serde(default)]
+    pub promotion: Option<promotion::Record>,
     #[serde(default)]
     pub failures: Option<failures::State>,
     pub sequence: u64,
@@ -182,7 +186,8 @@ impl Supervisor {
         if let Request::Status {} = request {
             let mut status = self.ledger.status().clone();
             status.qualification = self.current_qualification();
-            let code = if self.ledger.needs_recovery()
+            let code = if self.promotion_needs_recovery()
+                || self.ledger.needs_recovery()
                 || status
                     .failures
                     .as_ref()
@@ -203,7 +208,8 @@ impl Supervisor {
         {
             return Response::code(Code::InvalidRequest);
         }
-        if self.ledger.needs_recovery()
+        if self.promotion_blocks_mutation()
+            || self.ledger.needs_recovery()
             || self
                 .ledger
                 .status()

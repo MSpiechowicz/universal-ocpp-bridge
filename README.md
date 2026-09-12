@@ -197,6 +197,10 @@ loopback-only test namespace, production-socket denial, and fail-closed staging 
 See [staging resource admission and shedding](docs/operations/staging-resource-governor.md) for
 cgroup limits, production health alarms, and whole-slice shutdown under pressure.
 
+Qualified artifacts can cross the live idle boundary through the
+[production activation coordinator](docs/operations/production-artifact-activation.md), with confirmed
+process shutdown, durable interruption recovery, and production state retained in place.
+
 See [service readiness and watchdog](docs/operations/service-watchdog.md) for worker-backed
 progress, bounded restart policy, and per-invocation termination evidence.
 

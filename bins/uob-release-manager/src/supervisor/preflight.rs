@@ -72,12 +72,12 @@ impl Supervisor {
 
     pub(super) fn preflight(&self, digest: &str) -> Code {
         match self.run_preflight(digest) {
-            Ok(()) => Code::ActivationBlocked, // idle/drain/process control remain separate gates
+            Ok(_) => Code::ActivationBlocked, // idle/drain/process control remain separate gates
             Err(_) => Code::PreflightRejected,
         }
     }
 
-    fn run_preflight(&self, digest: &str) -> Result<(), InstallError> {
+    pub(super) fn run_preflight(&self, digest: &str) -> Result<BackupMetadata, InstallError> {
         let fail = || InstallError::Rejected("production preflight rejected");
         let policy = self.preflight_policy.as_ref().ok_or_else(fail)?;
         let qualified = self
@@ -161,11 +161,11 @@ impl Supervisor {
             &serde_json::to_vec(&metadata)?,
         )?;
         disk::sync_dir(&directory)?;
-        Ok(())
+        Ok(metadata)
     }
 }
 
-fn validate_candidate(
+pub(super) fn validate_candidate(
     binary: &Path,
     policy: &Policy,
     deadline: Instant,

@@ -1,4 +1,4 @@
-//! Maintenance admission policy, independent of artifact activation (#157).
+//! Maintenance admission policy consumed by the production activation coordinator.
 use std::{
     future::Future,
     pin::Pin,
@@ -19,7 +19,7 @@ pub trait StagingStopPort: Send + Sync {
 }
 
 /// Process-local frozen boundary. This is neither qualification nor promotion authorization.
-/// The future activation owner must validate it immediately before stopping production and
+/// The activation owner must validate it immediately before stopping production and
 /// bound that stop by `remaining()`. Never serialize it, restore it after restart, or switch
 /// artifacts on an expired boundary. Dropping it defers promotion and reopens admissions.
 pub struct IdleBoundary {

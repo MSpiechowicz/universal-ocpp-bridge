@@ -28,8 +28,15 @@ impl Fixture {
     }
 
     pub fn with_candidate(binary: Option<&[u8]>) -> Self {
+        Self::with_binaries(None, binary)
+    }
+
+    pub fn with_binaries(previous_binary: Option<&[u8]>, binary: Option<&[u8]>) -> Self {
         let mut artifact = artifacts::Fixture::new();
         configure_schema(&mut artifact, binary.is_some());
+        if previous_binary.is_some() {
+            configure_payload(&mut artifact, previous_binary);
+        }
         let store = artifact.root.join("store");
         let state = artifact.root.join("state");
         for path in [&store, &state, &state.join("evidence")] {
