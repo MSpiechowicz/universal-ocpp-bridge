@@ -1,6 +1,8 @@
 #![doc = "Axum-based management adapter."]
 
 mod assets;
+mod environment;
+pub use environment::token_matches_environment;
 mod capture_api;
 mod capture_export;
 mod trace_api;

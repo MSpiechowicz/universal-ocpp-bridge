@@ -10,11 +10,23 @@ use uob_management_adapter::{ManagementCaptureAuthenticator, ManagementCaptureCo
 struct Auth(ServiceIdentity);
 impl ManagementCaptureAuthenticator for Auth {
     fn authenticate(&self, token: &str) -> Option<CaptureGrant> {
+        if !uob_management_adapter::token_matches_environment(token, self.0.runtime.environment) {
+            return None;
+        }
+        let environment = match self.0.runtime.environment {
+            uob_contracts::Environment::Production => "production",
+            uob_contracts::Environment::Staging => "staging",
+            uob_contracts::Environment::Demo => "demo",
+        };
+        let operator =
+            format!("uob1.{environment}.browser-fixture-diagnostics-{environment}-secret");
+        let reader =
+            format!("uob1.{environment}.browser-fixture-diagnostics-reader-{environment}-secret");
         let permissions = match token {
-            "browser-fixture-diagnostics" => {
+            value if value == operator => {
                 vec![CapturePermission::Read, CapturePermission::Capture]
             }
-            "browser-fixture-diagnostics-reader" => vec![CapturePermission::Read],
+            value if value == reader => vec![CapturePermission::Read],
             _ => return None,
         };
         CaptureGrant::new(self.0.bridge_id.clone(), permissions, None, None).ok()

@@ -14,7 +14,7 @@ test('real router authenticates, resumes SSE and renders untrusted event text in
   await expect(page.getByText('production', { exact: true })).toBeVisible();
   await expect(page.getByText('bridge-browser-fixture', { exact: true })).toBeVisible();
   expect(eventRequests).toHaveLength(0);
-  await page.getByLabel('Management read credential').fill('browser-fixture-reader');
+  await page.getByLabel('Management read credential').fill('uob1.production.browser-fixture-reader-production-secret');
   await page.getByRole('button', { name: 'Connect to production' }).click();
   await expect(page.getByText('Connection interrupted.', { exact: false })).toBeVisible();
   await expect(page.locator('.status')).toHaveText('live', { timeout: 10000 });
@@ -22,9 +22,9 @@ test('real router authenticates, resumes SSE and renders untrusted event text in
   expect(await page.locator('img').count()).toBe(0);
   await expect(page.getByLabel('Management read credential')).toHaveValue('');
   expect(eventRequests.some(headers => headers['last-event-id'] === 'uob:event:1')).toBe(true);
-  expect(eventRequests.every(headers => headers.authorization === 'Bearer browser-fixture-reader')).toBe(true);
-  expect(urls.every(url => !url.includes('browser-fixture-reader'))).toBe(true);
-  expect(logs.every(log => !log.includes('browser-fixture-reader'))).toBe(true);
+  expect(eventRequests.every(headers => headers.authorization === 'Bearer uob1.production.browser-fixture-reader-production-secret')).toBe(true);
+  expect(urls.every(url => !url.includes('uob1.production.browser-fixture-reader-production-secret'))).toBe(true);
+  expect(logs.every(log => !log.includes('uob1.production.browser-fixture-reader-production-secret'))).toBe(true);
   expect(urls.some(url => /diagnostics|debug|mqtt|websocket/.test(url))).toBe(false);
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
   await page.screenshot({ path: 'test-results/console-desktop.png', fullPage: true });
@@ -42,7 +42,7 @@ test('invalid credentials are denied and staging never inherits production login
   await page.getByLabel('Management read credential').fill('wrong-fixture-credential');
   await page.getByRole('button', { name: 'Connect to production' }).click();
   await expect(page.getByRole('alert')).toContainText('Access denied');
-  await page.getByLabel('Management read credential').fill('browser-fixture-reader');
+  await page.getByLabel('Management read credential').fill('uob1.production.browser-fixture-reader-production-secret');
   await page.getByRole('button', { name: 'Connect to production' }).click();
   await expect(page.locator('.status')).toHaveText('live', { timeout: 10000 });
   const staging = await context.newPage();
@@ -63,8 +63,8 @@ test('no-ui disables all compiled assets but preserves real authenticated reads 
   }
   expect((await request.get(`${base}/api/v1/identity`)).status()).toBe(200);
   expect((await request.get(`${base}/api/v1/stations`)).status()).toBe(401);
-  expect((await request.get(`${base}/api/v1/stations`, { headers: { Authorization: 'Bearer browser-fixture-reader' } })).status()).toBe(200);
-  const stream = await request.get(`${base}/api/v1/events`, { headers: { Authorization: 'Bearer browser-fixture-reader' } });
+  expect((await request.get(`${base}/api/v1/stations`, { headers: { Authorization: 'Bearer uob1.production.browser-fixture-reader-production-secret' } })).status()).toBe(200);
+  const stream = await request.get(`${base}/api/v1/events`, { headers: { Authorization: 'Bearer uob1.production.browser-fixture-reader-production-secret' } });
   expect(stream.status()).toBe(200);
   expect(await stream.text()).toContain('event: durable');
 });

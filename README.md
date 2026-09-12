@@ -47,7 +47,8 @@ codes.
 
 The optional [browser console](docs/operations/browser-console.md) embeds compiled static assets
 with no Node runtime on the Raspberry Pi. It verifies destination identity, keeps scoped
-credentials in tab memory, and shows bounded authenticated SSE connection and stale-state evidence.
+credentials in tab memory, binds diagnostic tokens to their environment, requires explicit destination
+confirmation for controls, and shows bounded authenticated SSE connection and stale-state evidence.
 
 The [bounded Debug timeline](docs/operations/debug-timeline.md) adds explicit scoped capture controls,
 virtualized read-only traces, retained-window filters/bookmarks and visible gap/eviction evidence.

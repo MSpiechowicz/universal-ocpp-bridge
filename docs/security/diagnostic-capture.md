@@ -15,8 +15,12 @@ stations = ["station-a"]
 targets = ["mqtt-main"]
 ```
 
-Credential files contain a unique random bearer secret of 32–128 printable ASCII characters,
-optionally followed by one newline. Use a private file readable by the service account, with no
+Credential files contain `uob1.<environment>.<secret>`, where environment is exactly
+`production`, `staging`, or `demo` and secret is a unique random value of 32–128 printable ASCII
+characters, optionally followed by one newline. Generate an independent secret for each environment.
+Startup rejects a token whose environment differs from the configured service identity. The entire
+token is compared in constant time; changing its environment label does not grant access. Legacy
+unqualified token files must be rotated to this format before upgrading. Use a private file readable by the service account, with no
 world permissions, symlinks, or additional hard links. Configuration checking validates references
 without reading them; startup and production `config check --secrets` resolve them. Duplicate
 paths and duplicate resolved secrets fail closed. No credential material appears in responses or

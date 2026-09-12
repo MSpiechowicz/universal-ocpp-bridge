@@ -15,6 +15,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
   const [capture, setCapture] = useState<Capture>();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const [paused, setPaused] = useState(false);
   const [ceiling, setCeiling] = useState(-1);
   const [station, setStation] = useState('');
@@ -68,15 +69,17 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
     finally { if (operation === generation.current) setPending(false); }
   }
   async function control(action: 'start' | 'stop' | 'status') {
-    if (!api || pending) return;
+    if (!api || pending || (action !== 'status' && !confirmed)) return;
+    const destination = action === 'status' ? undefined : api.destinationKey;
+    setConfirmed(false);
     const operation = generation.current;
     setPending(true); setFailure('');
     try {
       let current: Capture | undefined;
       if (action === 'start') {
-        current = parseCapture(await api.request(capturePath, { method: 'POST', body: JSON.stringify({ station_id: station || null, target_id: target || null, level, duration_seconds: duration }) }), api);
+        current = parseCapture(await api.request(capturePath, { method: 'POST', body: JSON.stringify({ station_id: station || null, target_id: target || null, level, duration_seconds: duration }) }, undefined, destination), api);
       } else if (action === 'stop' && capture) {
-        await api.request(`${sessionPath(capture)}/stop`, { method: 'POST' });
+        await api.request(`${sessionPath(capture)}/stop`, { method: 'POST' }, undefined, destination);
       } else current = await status(api);
       if (operation !== generation.current) return;
       if (current && current.id !== capture?.id) buffer.clear();
@@ -87,7 +90,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
   }
   function disconnect() {
     generation.current++; active.current?.close(); active.current = undefined;
-    setApi(undefined); setCapture(undefined); setPending(false); setFailure(''); buffer.clear();
+    setConfirmed(false); setApi(undefined); setCapture(undefined); setPending(false); setFailure(''); buffer.clear();
     state.message = 'Disconnected. Credentials and display buffer cleared. A server capture keeps its own deadline.';
   }
   return <section id="debug" className="debug-panel" aria-labelledby="debug-heading">
@@ -106,9 +109,12 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
         <label>Capture level<select value={level} onChange={event => setLevel(event.target.value)} disabled={!!capture || pending}><option value="metadata">Metadata</option><option value="redacted_payload">Redacted payload</option></select></label>
         <label>Capture seconds<input type="number" value={duration} min={1} max={1800} onChange={event => setDuration(Number(event.target.value))} disabled={!!capture || pending}/></label>
       </div>
+      <label className="destination-confirmation"><input type="checkbox" checked={confirmed} disabled={pending} onChange={event => setConfirmed(event.target.checked)}/>
+        Confirm next control destination: {identity.runtime.environment.toUpperCase()} · {identity.bridge_id} · release {identity.runtime.release_id} · target {identity.selected_target_id ?? 'none selected'} · {location.origin}
+      </label>
       <div className="debug-actions">
-        <button disabled={pending || !!capture || !Number.isInteger(duration) || duration < 1 || duration > 1800 || (level === 'redacted_payload' && !station)} onClick={() => void control('start')}>Start capture on {identity.runtime.environment}</button>
-        <button className="secondary" disabled={pending || !capture} onClick={() => void control('stop')}>Stop capture on {identity.runtime.environment}</button>
+        <button disabled={!confirmed || pending || !!capture || !Number.isInteger(duration) || duration < 1 || duration > 1800 || (level === 'redacted_payload' && !station)} onClick={() => void control('start')}>Start capture on {identity.runtime.environment}</button>
+        <button className="secondary" disabled={!confirmed || pending || !capture} onClick={() => void control('stop')}>Stop capture on {identity.runtime.environment}</button>
         <button className="secondary" disabled={pending} onClick={() => void control('status')}>Refresh capture status</button>
       </div>
     </>}

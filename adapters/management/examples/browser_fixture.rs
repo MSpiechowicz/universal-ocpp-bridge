@@ -19,11 +19,19 @@ use uob_management_adapter::{
     router_with_authenticated_events,
 };
 
-struct Authenticator;
+struct Authenticator(Environment);
 impl ManagementEventAuthenticator for Authenticator {
     fn authenticate(&self, token: &str) -> Option<AuthenticatedEventAccess> {
         // Public deterministic fixture credential, never a deployed credential.
-        (token == "browser-fixture-reader").then(|| AuthenticatedEventAccess {
+        (token
+            == match self.0 {
+                Environment::Production => {
+                    "uob1.production.browser-fixture-reader-production-secret"
+                }
+                Environment::Staging => "uob1.staging.browser-fixture-reader-staging-secret",
+                Environment::Demo => "uob1.demo.browser-fixture-reader-demo-secret",
+            })
+        .then(|| AuthenticatedEventAccess {
             authorization: TargetQueryAuthorization::new(
                 TargetInstanceId::new("browser-fixture").unwrap(),
                 vec![
@@ -46,7 +54,9 @@ async fn main() {
         .unwrap_or_else(|_| "39189".into())
         .parse()
         .unwrap();
-    let environment = if port == 39190 {
+    let environment = if port == 39192 {
+        Environment::Demo
+    } else if port == 39190 {
         Environment::Staging
     } else {
         Environment::Production
@@ -68,7 +78,7 @@ async fn main() {
         Arc::new(source::Source { runtime }),
         ManagementReadLimits::default(),
         ManagementEventConfiguration {
-            authenticator: Arc::new(Authenticator),
+            authenticator: Arc::new(Authenticator(environment)),
             limits: ManagementEventLimits {
                 keep_alive_interval: Duration::from_secs(1),
                 ..ManagementEventLimits::default()

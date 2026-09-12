@@ -11,7 +11,10 @@ pub(super) fn check(path: &Path) -> Result<(), ConfigurationLoadError> {
     }
     config
         .diagnostics
-        .validate(&uob_contracts::BridgeId::new(config.bridge.id.clone()).map_err(|_| fail())?)
+        .validate(
+            &uob_contracts::BridgeId::new(config.bridge.id.clone()).map_err(|_| fail())?,
+            config.bridge.environment,
+        )
         .map_err(|_| fail())?
         .resolve()
         .map_err(|_| fail())?;

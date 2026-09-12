@@ -198,7 +198,10 @@ fn validate(
     .map_err(|_| ConfigurationLoadError::Composition)?;
     let diagnostics = configuration
         .diagnostics
-        .validate(&service.application.identity().bridge_id)
+        .validate(
+            &service.application.identity().bridge_id,
+            service.application.runtime_identity().environment,
+        )
         .map_err(|_| ConfigurationLoadError::InvalidDocument)?;
     let events = validate_event_client(configuration.events, configuration.management.listen_addr)?;
 
