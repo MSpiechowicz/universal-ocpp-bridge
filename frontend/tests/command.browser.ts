@@ -60,10 +60,10 @@ test('command panel separates exposure, responses, uncertain rejection and obser
   await select('r-observed');
   await expect(panel.getByRole('row', { name: /^Observed charging effect/ })).toContainText('explicitly linked and persisted');
   await expect(panel.locator('.command-links').first()).toContainText('event-observed');
-  await page.screenshot({ path: 'test-results/command-desktop.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/command-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/command-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/command-mobile.png', fullPage: true });
   await panel.getByRole('button', { name: 'Inspect trace 0', exact: true }).click();
   await expect(panel.getByRole('row', { name: /^Observed charging effect/ })).toContainText('Not evidenced');
   expect(posts).toHaveLength(1); // Capture only: inspection creates no charging or polling work.

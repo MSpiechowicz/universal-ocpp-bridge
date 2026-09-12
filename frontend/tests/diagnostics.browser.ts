@@ -38,7 +38,7 @@ test('exception storm records bounded categories and panel does not recursively 
   await expect(updates).toHaveText(before!);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/diagnostics-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/diagnostics-mobile.png', fullPage: true });
 });
 
 test('severed actual router SSE exposes stale state and counted reconnects', async ({ page }) => {

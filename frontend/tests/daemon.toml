@@ -1,0 +1,9 @@
+[bridge]
+id = "browser-daemon-demo"
+environment = "demo"
+
+[management]
+listen_addr = "127.0.0.1:39193"
+
+[lifecycle]
+shutdown_timeout_seconds = 2

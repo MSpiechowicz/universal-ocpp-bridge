@@ -65,10 +65,10 @@ test('diagnostic reader cannot start and stop is explicit through the real captu
   await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
   expect((await request.get(endpoint, { headers })).status()).toBe(410);
   await expect(page.getByRole('button', { name: /replay|fault|remote start/i })).toHaveCount(0);
-  await page.screenshot({ path: 'test-results/debug-desktop.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/debug-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/debug-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/debug-mobile.png', fullPage: true });
 });
 
 test('high-volume hidden display retains bounded inert rows and virtualizes on visibility', async ({ page }) => {
@@ -138,8 +138,8 @@ test('message inspector exposes safe field evidence and renders hostile metadata
   await expect(detail.locator('.json-key').first()).toBeVisible();
   expect(await detail.locator('script, img, iframe, a').count()).toBe(0);
   expect(dialogs).toBe(0);
-  await page.screenshot({ path: 'test-results/inspector-desktop.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/inspector-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/inspector-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/inspector-mobile.png', fullPage: true });
 });

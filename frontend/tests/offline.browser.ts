@@ -61,10 +61,10 @@ test('hostile content stays inert; filters, bookmarks, inspector, clear and mobi
   await view.getByRole('button', { name: 'Trace 2', exact: true }).click();
   await expect(view.getByRole('region', { name: 'Redacted source', exact: true })).toContainText('<img src=x onerror=alert(1)>');
   expect(await view.locator('img,script,iframe').count()).toBe(0);
-  await page.screenshot({ path: 'test-results/offline-desktop.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/offline-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/offline-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/offline-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Clear offline capture', exact: true }).click();
   await expect(view).toHaveCount(0);
   expect(calls).toEqual([]);

@@ -3,19 +3,30 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "26.8.1", "npm": "12.0.2" },
+  "engines": {
+    "node": "26.8.1",
+    "npm": "12.0.2"
+  },
   "packageManager": "npm@12.0.2",
   "scripts": {
     "build": "node scripts/capture-schema.mjs --check && tsc --noEmit && vite build && node scripts/check-budget.mjs",
     "test": "node --import tsx --test --test-isolation=none tests/*.test.ts",
     "test:browser": "playwright test",
-    "check": "npm test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings src tests scripts *.ts",
+    "test:browser:ci": "node scripts/browser-ci.mjs",
+    "check:reproducible": "node scripts/check-reproducible.mjs"
   },
-  "dependencies": { "react": "19.3.0", "react-dom": "19.3.0" },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "oxlint": "1.82.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vite": "8.3.0"

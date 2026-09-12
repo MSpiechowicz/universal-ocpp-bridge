@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "categories": { "correctness": "error" },
+  "rules": { "no-debugger": "error" },
+  "ignorePatterns": ["src/debug/capture-schemas.ts", "node_modules", "test-results", "playwright-report"],
+  "overrides": [{
+    "files": ["src/identity.ts", "src/sse.ts"],
+    "rules": { "no-control-regex": "off" }
+  }]
+}

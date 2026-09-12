@@ -27,10 +27,10 @@ test('real router authenticates, resumes SSE and renders untrusted event text in
   expect(logs.every(log => !log.includes('uob1.production.browser-fixture-reader-production-secret'))).toBe(true);
   expect(urls.some(url => /diagnostics|debug|mqtt|websocket/.test(url))).toBe(false);
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
-  await page.screenshot({ path: 'test-results/console-desktop.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/console-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/console-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/console-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Disconnect and clear credential' }).click();
   await expect(page.getByRole('button', { name: 'Connect to production' })).toBeVisible();
   await page.reload();
