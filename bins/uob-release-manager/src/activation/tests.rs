@@ -42,6 +42,7 @@ fn established() -> (Fixture, ActivationJournal, String) {
 
 #[test]
 fn ordered_lifecycle_retains_previous_and_staging_failure_never_touches_production() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (mut f, mut journal, old) = established();
     assert!(
         journal
@@ -108,6 +109,7 @@ fn ordered_lifecycle_retains_previous_and_staging_failure_never_touches_producti
 
 #[test]
 fn every_promotion_boundary_recovers_to_one_verified_pointer_and_exclusive_owner() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     for stop in 0..22 {
         let (f, mut journal, old) = established();
         advance(
@@ -160,6 +162,7 @@ fn every_promotion_boundary_recovers_to_one_verified_pointer_and_exclusive_owner
 
 #[test]
 fn interrupted_recovery_and_rollback_are_idempotent_at_every_boundary() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     for stop in 0..12 {
         let (f, mut journal, old) = established();
         advance(
@@ -201,6 +204,7 @@ fn interrupted_recovery_and_rollback_are_idempotent_at_every_boundary() {
 
 #[test]
 fn stale_observations_corrupt_intents_and_unsafe_scratch_files_fail_closed() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (mut f, mut journal, old) = established();
     advance(
         &mut journal,
@@ -234,6 +238,7 @@ fn stale_observations_corrupt_intents_and_unsafe_scratch_files_fail_closed() {
 
 #[test]
 fn state_only_transitions_and_rollback_recover_at_every_write_boundary() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let scenarios: &[(Transition, &[Transition], usize)] = &[
         (Transition::BeginStaging, &[], 12),
         (Transition::Qualify, &[Transition::BeginStaging], 12),
@@ -313,6 +318,7 @@ fn state_only_transitions_and_rollback_recover_at_every_write_boundary() {
 
 #[test]
 fn initial_journal_and_replacement_observation_recover_without_changing_production() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     for stop in 0..5 {
         let f = Fixture::new();
         install(&f);
@@ -346,6 +352,7 @@ fn initial_journal_and_replacement_observation_recover_without_changing_producti
 
 #[test]
 fn pointer_drift_fails_before_pruning_and_revoked_intents_never_switch() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut journal, old) = established();
     fs::write(f.root.join("active"), f.digest()).unwrap();
     assert!(ArtifactStore::open(&f.root).is_err());

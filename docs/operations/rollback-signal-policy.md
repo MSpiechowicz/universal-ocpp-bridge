@@ -46,13 +46,11 @@ Authenticated status reads include `failures`; critical recovery also returns `r
 and blocks release mutations. Rollback/recovery decisions remain latched across reboot; new ready
 signals cannot erase an incident or cause repeated version selection.
 
-This change implements policy decisions and their durable host boundary. The executable does not
-yet collect systemd termination events or connect a production staging-stop driver to that boundary.
-It does not switch artifacts, clear incidents, restore backups, stop chargers, or claim an eligible
-fallback exists. The activation owner must consume a rollback decision only after its independent
-artifact, compatibility and one-switch-per-incident gates; those remain separate release work.
-The later host composition must connect authoritative observations and fixed staging control before
-claiming automatic on-device failure handling.
+The trusted host can connect this classifier directly to the guarded artifact switch through
+`Supervisor::observe_failure_and_rollback`; see [automatic rollback](automatic-rollback.md).
+The executable does not yet collect systemd termination events or connect a production staging-stop
+driver to that boundary. Host composition must supply authoritative observations and fixed staging
+control before claiming automatic on-device failure handling.
 
 Run `cargo test --locked -p uob-release-manager --test failure_policy` for threshold, reboot,
 degradation, resource-pressure ordering and interrupted-write evidence. The full workspace verifier

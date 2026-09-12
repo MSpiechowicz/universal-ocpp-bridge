@@ -115,5 +115,52 @@ fn copy(source: &Path, destination: &Path, limits: Limits) -> Result<u64, Backup
     work().map_err(|_| BackupFailed)
 }
 
+/// Validate current committed data in place without backup, migration or restoration.
+/// The caller must first stop all production writers and retain exclusive process ownership.
+///
+/// # Errors
+/// Rejects unsafe paths, schema mismatch, corruption, capacity excess and deadline expiry.
+pub fn validate_current(source: &Path, limits: Limits) -> Result<(), BackupFailed> {
+    if limits.maximum_bytes == 0
+        || limits.maximum_bytes > 64 * 1024 * 1024 * 1024
+        || limits.timeout.is_zero()
+        || limits.timeout > Duration::from_secs(300)
+    {
+        return Err(BackupFailed);
+    }
+    let meta = fs::symlink_metadata(source).map_err(|_| BackupFailed)?;
+    if !meta.is_file()
+        || meta.nlink() != 1
+        || fs::canonicalize(source).map_err(|_| BackupFailed)? != source
+    {
+        return Err(BackupFailed);
+    }
+    let deadline = Instant::now() + limits.timeout;
+    let check = || -> rusqlite::Result<()> {
+        let db = Connection::open_with_flags(
+            source,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+        )?;
+        db.busy_timeout(Duration::ZERO)?;
+        db.progress_handler(1000, Some(move || Instant::now() >= deadline))?;
+        db.execute_batch("PRAGMA cache_size=-1024; BEGIN;")?;
+        let version: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        let pages: u32 = db.query_row("PRAGMA page_count", [], |r| r.get(0))?;
+        let size: u32 = db.query_row("PRAGMA page_size", [], |r| r.get(0))?;
+        if version != limits.expected_schema_version
+            || pages == 0
+            || u64::from(pages) * u64::from(size) > limits.maximum_bytes
+        {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        let integrity: String = db.query_row("PRAGMA integrity_check(1)", [], |r| r.get(0))?;
+        if integrity != "ok" || Instant::now() >= deadline {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        Ok(())
+    };
+    check().map_err(|_| BackupFailed)
+}
+
 #[cfg(test)]
 mod tests;

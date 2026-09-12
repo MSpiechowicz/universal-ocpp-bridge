@@ -126,6 +126,12 @@ impl Ledger {
         self.persist(next)
     }
 
+    pub fn record_rollback(&mut self, record: super::rollback::Record) -> Result<(), InstallError> {
+        let mut next = self.state.clone();
+        next.rollback = Some(record);
+        self.persist(next)
+    }
+
     fn persist(&mut self, next: Status) -> Result<(), InstallError> {
         validate(&next)?;
         let bytes = serde_json::to_vec(&next)?;
@@ -144,6 +150,9 @@ impl Ledger {
 }
 
 fn validate(state: &Status) -> Result<(), InstallError> {
+    if let Some(record) = &state.rollback {
+        record.validate()?;
+    }
     if let Some(evidence) = &state.probation {
         evidence.validate()?;
         if state.promotion.as_ref().is_none_or(|p| {
