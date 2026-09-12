@@ -85,3 +85,16 @@ test('large valid imports virtualize; malformed replacement and cancellation cle
   await expect(page.getByRole('region', { name: 'Offline capture', exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+test('native capture picker fits narrow screens with wider font metrics', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/?offline=1');
+  const input = page.getByLabel('Capture file', { exact: true });
+  // Native file controls size themselves from platform font metrics. Make that
+  // intrinsic width exceed the panel on every runner, including local Noto Sans.
+  await input.evaluate(element => { element.style.fontSize = '20px'; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await input.setInputFiles({ name: 'capture.jsonl', mimeType: 'application/x-ndjson', buffer: Buffer.from(encodeCapture()) });
+  await expect(page.getByRole('region', { name: 'Offline capture', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
