@@ -93,3 +93,7 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .command-links li { margin: 16px 0; font-size: 12px; }
 .command-links span { display: block; margin-top: 6px; }
 .command-trace table p { font-size: 12px; margin: 6px 0; }
+
+.offline-panel { max-width: 1100px; margin: 0 auto; padding: 32px; overflow-wrap: anywhere; }
+.offline-panel dd { margin-left: 0; }
+.offline-panel pre { max-height: 240px; overflow: auto; }

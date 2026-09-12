@@ -7,20 +7,21 @@ import type { Filters } from './buffer';
 
 const rowHeight = 72;
 const viewportHeight = 432;
-export function Timeline({ buffer, tick, paused, ceiling }: { buffer: TraceBuffer; tick: number; paused: boolean; ceiling: number }) {
+export function Timeline({ buffer, tick, paused, ceiling, offline = false }: { offline?: boolean; buffer: TraceBuffer; tick: number; paused: boolean; ceiling: number }) {
   const [filters, setFilters] = useState<Filters>({});
   const [scroll, setScroll] = useState(0);
   const [auto, setAuto] = useState(true);
   const [selected, setSelected] = useState<number>();
   const [, redraw] = useState(0);
   useEffect(() => {
+    if (offline) return;
     const selectCorrelation = (event: Event) => {
       const correlation = correlationId((event as CustomEvent<unknown>).detail);
       if (correlation) { setFilters({ correlation }); setScroll(0); setSelected(undefined); }
     };
     window.addEventListener('uob-correlation', selectCorrelation);
     return () => window.removeEventListener('uob-correlation', selectCorrelation);
-  }, []);
+  }, [offline]);
   const viewport = useRef<HTMLDivElement>(null);
   // Index matching does not parse or sort payloads; only the viewport is mounted in React.
   const rows = buffer.rows.filter(row => (!paused || row.sequence <= ceiling) && matches(row, filters));
@@ -60,7 +61,7 @@ export function Timeline({ buffer, tick, paused, ceiling }: { buffer: TraceBuffe
         </div>)}
       </div>
     </div>
-    {!rows.length && <p>No matching retained traces. Opening this view does not enable capture.</p>}
+    {!rows.length && <p>No matching retained traces. {offline ? 'Offline inspection only.' : 'Opening this view does not enable capture.'}</p>}
     {selected !== undefined && <section className="trace-detail" aria-label="Trace detail">
       <button className="secondary" onClick={() => setSelected(undefined)}>Close detail</button>
       <CommandTrace rows={buffer.rows} selected={selected} ceiling={paused ? ceiling : Infinity} select={setSelected}/>

@@ -6,7 +6,7 @@
   "engines": { "node": "26.8.1", "npm": "12.0.2" },
   "packageManager": "npm@12.0.2",
   "scripts": {
-    "build": "tsc --noEmit && vite build && node scripts/check-budget.mjs",
+    "build": "node scripts/capture-schema.mjs --check && tsc --noEmit && vite build && node scripts/check-budget.mjs",
     "test": "node --import tsx --test --test-isolation=none tests/*.test.ts",
     "test:browser": "playwright test",
     "check": "npm test && npm run build"

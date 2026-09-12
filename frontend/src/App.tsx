@@ -83,6 +83,7 @@ export function App() {
         <p className="section-label">Workspace</p>
         <a className="nav-active" href="#connection" aria-current="page">Connection</a>
         <a href="#debug" className="debug-nav">Debug timeline</a>
+        <a href="/?offline=1">Offline capture inspector</a>
         <div className="sidebar-note">Local management<br/><span>HTTP / JSON + SSE</span></div>
       </aside>
       <main id="connection">
