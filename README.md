@@ -111,6 +111,10 @@ OCPP 2.0.1 remote commands preserve EVSE targeting, durable remote-start correla
 scheduled-reset evidence. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md)
 for scoped dispatch, response/effect separation and restart behavior.
 
+OCPP 2.0.1 availability retains station, EVSE and connector scope with durable scheduled intent.
+See [OCPP 2.0.1 availability](docs/architecture/ocpp201-availability.md) for atomic observations,
+independent connector state and conservative recovery.
+
 Native report workflows can use [bounded multipart collection](docs/architecture/multipart-reports.md)
 for correlated ordered fragments, shared memory admission, cancellation, and absolute deadlines.
 

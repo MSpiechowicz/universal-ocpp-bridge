@@ -33,10 +33,55 @@ where
     D: Send + 'static,
     R: Send + 'static,
 {
+    let next = status_snapshot(snapshot, observation, now)?;
+    commit_status(store, snapshot, next, observation.source_time, context, now).await
+}
+
+/// Atomically records native OCPP 2.0.1 connector status and journal evidence.
+/// # Errors
+/// Rejects invalid registration, topology, identity, or persistence failure.
+pub async fn record_status_201<C, E, D, R>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &super::v201::StatusObservation,
+    context: AvailabilityContext,
+    now: UtcTimestamp,
+) -> Result<(), RegistrationError>
+where
+    C: Send + 'static,
+    E: From<StationSnapshot> + Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+{
+    let next = super::v201::status_snapshot(snapshot, observation, now)?;
+    commit_status(
+        store,
+        snapshot,
+        next,
+        Some(observation.source_time),
+        context,
+        now,
+    )
+    .await
+}
+
+async fn commit_status<C, E, D, R>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    next: StationSnapshot,
+    source_time: Option<UtcTimestamp>,
+    context: AvailabilityContext,
+    now: UtcTimestamp,
+) -> Result<(), RegistrationError>
+where
+    C: Send + 'static,
+    E: From<StationSnapshot> + Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+{
     if context.identity.bridge_id != snapshot.station.bridge_id || context.sequence == 0 {
         return Err(RegistrationError::InvalidState);
     }
-    let next = status_snapshot(snapshot, observation, now)?;
     if serde_json::to_vec(&next)
         .map_err(|_| RegistrationError::InvalidState)?
         .len()
@@ -49,7 +94,7 @@ where
         schema_version: next.schema_version,
         runtime: context.identity.runtime,
         resource: next.station.clone(),
-        source_time: observation.source_time,
+        source_time,
         observed_at: now,
         event_type: EventType::new("station.availability.observed")
             .map_err(|_| RegistrationError::InvalidState)?,

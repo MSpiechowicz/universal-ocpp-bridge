@@ -197,7 +197,7 @@ fn error(code: OcppErrorCode, description: &'static str) -> OcppCallError {
         field_path: None,
     }
 }
-fn lifecycle_error(value: &RegistrationError) -> OcppCallError {
+pub(super) fn lifecycle_error(value: &RegistrationError) -> OcppCallError {
     match value {
         RegistrationError::Storage(_) => error(
             OcppErrorCode::InternalError,

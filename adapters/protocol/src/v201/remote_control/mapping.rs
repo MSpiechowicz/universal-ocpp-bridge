@@ -1,5 +1,6 @@
 use super::RemoteStartIdentity;
 use rust_ocpp::v2_0_1::messages::{
+    change_availability::ChangeAvailabilityResponse,
     request_start_transaction::{RequestStartTransactionRequest, RequestStartTransactionResponse},
     request_stop_transaction::{RequestStopTransactionRequest, RequestStopTransactionResponse},
     reset::{ResetRequest, ResetResponse},
@@ -140,6 +141,7 @@ fn privileged(
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     match operation.action.as_str() {
+        "ChangeAvailability" => super::super::availability::prepare(operation, resource, station),
         "Reset" if operation.payload_schema.as_str() == "urn:OCPP:Cp:2:2020:3:ResetRequest" => {
             fields(&operation.payload, &["type", "evseId"])?;
             let request: ResetRequest =
@@ -196,7 +198,7 @@ fn available(snapshot: &StationSnapshot, resource: &ResourceRef) -> bool {
         return false;
     }
     snapshot.resources.iter().any(|entry| {
-        let Some(NativeProtocolReference::Ocpp201 { evse_id, .. }) = entry.resource.native_protocol_reference else { return false; };
+        let Some(NativeProtocolReference::Ocpp201 { evse_id, connector_id: Some(_) }) = entry.resource.native_protocol_reference else { return false; };
         covers(resource, &entry.resource) && entry.availability == AvailabilityState::Available
             && !snapshot.transactions.iter().any(|tx| tx.state != TransactionState::Ended && matches!(tx.resource.native_protocol_reference, Some(NativeProtocolReference::Ocpp201 { evse_id: active, .. }) if active == evse_id))
     })
@@ -241,6 +243,9 @@ pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome 
         "RequestStopTransaction" => {
             serde_json::from_value::<RequestStopTransactionResponse>(payload.clone()).is_ok()
         }
+        "ChangeAvailability" => {
+            serde_json::from_value::<ChangeAvailabilityResponse>(payload.clone()).is_ok()
+        }
         "Reset" => serde_json::from_value::<ResetResponse>(payload.clone()).is_ok(),
         "UnlockConnector" => {
             serde_json::from_value::<UnlockConnectorResponse>(payload.clone()).is_ok()
@@ -251,7 +256,7 @@ pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome 
         return uncertain();
     }
     if payload["status"] == "Accepted"
-        || (action == "Reset" && payload["status"] == "Scheduled")
+        || (matches!(action, "Reset" | "ChangeAvailability") && payload["status"] == "Scheduled")
         || (action == "UnlockConnector" && payload["status"] == "Unlocked")
     {
         CommandDispatchOutcome::ProtocolResponse {

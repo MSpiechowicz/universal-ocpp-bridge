@@ -43,6 +43,15 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     observation: &StatusObservation,
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
+    let next = status_snapshot(snapshot, observation, now)?;
+    commit(store, snapshot, next).await
+}
+
+pub(super) fn status_snapshot(
+    snapshot: &StationSnapshot,
+    observation: &StatusObservation,
+    now: UtcTimestamp,
+) -> Result<StationSnapshot, RegistrationError> {
     accepted_for(snapshot, ProtocolEdition::Ocpp201)?;
     if observation.evse_id == 0 || observation.connector_id == 0 {
         return Err(RegistrationError::InvalidStatus);
@@ -86,7 +95,7 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
         );
     }
     activity(&mut next, now);
-    commit(store, snapshot, next).await
+    Ok(next)
 }
 
 /// Requires accepted OCPP 2.0.1 registration on a live 2.0.1 connection.
