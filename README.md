@@ -45,6 +45,10 @@ optional static-asset disabling, and authenticated JSONL event consumption. See 
 [headless CLI guide](docs/operations/headless-cli.md) for configuration, stream security, and exit
 codes.
 
+The optional [browser console](docs/operations/browser-console.md) embeds compiled static assets
+with no Node runtime on the Raspberry Pi. It verifies destination identity, keeps scoped
+credentials in tab memory, and shows bounded authenticated SSE connection and stale-state evidence.
+
 Runtime bridge, environment, release, process, and selected-target identity is owned by the
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
 for production defaults and isolated staging/demo examples.

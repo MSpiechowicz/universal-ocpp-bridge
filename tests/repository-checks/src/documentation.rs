@@ -18,7 +18,7 @@ fn scan_directory(root: &Path, directory: &Path, errors: &mut Vec<String>) {
         if path.is_dir() {
             if !matches!(
                 path.file_name().and_then(|name| name.to_str()),
-                Some(".git" | "target")
+                Some(".git" | "target" | "node_modules" | "playwright-report" | "test-results")
             ) {
                 scan_directory(root, &path, errors);
             }
@@ -125,5 +125,28 @@ mod tests {
         check_inline_links(root, &source, 4, "see [missing](other.md)", &mut errors);
         assert_eq!(errors.len(), 1);
         assert!(errors[0].contains("docs/check.md:4"));
+    }
+
+    #[test]
+    fn vendor_and_browser_outputs_are_excluded_but_owned_docs_are_checked() {
+        let root = std::env::temp_dir().join(format!("uob-console-docs-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        for directory in [
+            "frontend/node_modules/vendor",
+            "frontend/test-results",
+            "docs",
+        ] {
+            std::fs::create_dir_all(root.join(directory)).unwrap();
+            std::fs::write(
+                root.join(directory).join("README.md"),
+                "[missing](not-present.md)\n",
+            )
+            .unwrap();
+        }
+        let mut errors = Vec::new();
+        super::check(&root, &mut errors);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("docs/README.md"));
     }
 }
