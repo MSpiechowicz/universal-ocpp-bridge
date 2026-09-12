@@ -124,7 +124,10 @@ pub(crate) fn base_router(state: ManagementState, options: ManagementRouterOptio
         .route("/api/v1/commands", post(command_api::submit))
         .route("/api/v1/commands/{request_id}", get(command_api::status));
     let router = if options.static_assets {
-        router.route("/", get(assets::browser_entry))
+        router
+            .route("/", get(assets::browser_entry))
+            .route("/ui/assets/console.js", get(assets::browser_script))
+            .route("/ui/assets/console.css", get(assets::browser_style))
     } else {
         router
     };
