@@ -8,7 +8,11 @@ use uob_application::{
 use uob_protocol_adapter::{OcppErrorCode, v16};
 use uob_provider_adapter::LocalAuthorizationProvider;
 
-struct Delayed;
+#[derive(Default)]
+struct Delayed {
+    started: tokio::sync::Notify,
+    resume: tokio::sync::Notify,
+}
 impl AuthorizationProvider for Delayed {
     fn descriptor(&self) -> AuthorizationProviderDescriptor {
         LocalAuthorizationProvider.descriptor()
@@ -18,7 +22,8 @@ impl AuthorizationProvider for Delayed {
         token: &'a SensitiveAuthorizationToken,
     ) -> AuthorizationProviderFuture<'a> {
         Box::pin(async move {
-            tokio::time::sleep(Duration::from_millis(60)).await;
+            self.started.notify_one();
+            self.resume.notified().await;
             LocalAuthorizationProvider.resolve(token).await
         })
     }
@@ -30,14 +35,23 @@ async fn delayed_authorization_rechecks_policy_and_timeout_fails_closed() {
     let store = db.open();
     let (mut state, auth) = setup(&store).await;
     let before = state.clone();
+    let provider = Delayed::default();
     let mut services = services(&store, &auth);
-    services.provider = &Delayed;
+    services.provider = &provider;
+    services.authorization_timeout = Duration::from_secs(5);
     let result = v16::transaction_call(START, &mut state, &services, context(&before, 1));
     let revoke = async {
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        provider.started.notified().await;
         allow(&auth, &before, AuthorizationState::Revoked, 2, None).await;
+        // Release resolution only after the durable policy change has completed.
+        // Relative sleeps do not establish this ordering on a loaded CI runner.
+        provider.resume.notify_one();
     };
-    let (result, ()) = tokio::join!(result, revoke);
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(result, revoke)
+    })
+    .await
+    .expect("authorization and revocation must finish");
     assert_eq!(result.unwrap()[2]["idTagInfo"]["status"], "Blocked");
     call(&store, &auth, &mut state, STOP, 2).await.unwrap();
     services.authorization_timeout = Duration::from_millis(5);
