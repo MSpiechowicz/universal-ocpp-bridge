@@ -243,3 +243,7 @@ policy decisions, heartbeat gating, native EVSE/connector status, and reconnect 
 
 See [OCPP 1.6 durable transactions](docs/architecture/ocpp-16-transactions.md) for committed
 start/stop replies, CSMS IDs, local authorization, meter evidence and bounded retry recovery.
+
+Eligible release failures have a durable one-attempt fallback path that preserves current data.
+See [automatic rollback](docs/operations/automatic-rollback.md) for host integration, quarantine
+and operator-recovery behavior.

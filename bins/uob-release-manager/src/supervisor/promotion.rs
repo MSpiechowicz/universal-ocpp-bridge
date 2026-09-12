@@ -293,7 +293,7 @@ impl Supervisor {
         self.record_activation(uid, digest, code)
     }
 
-    fn production_start(&self, digest: &str) -> Result<Start, InstallError> {
+    pub(super) fn production_start(&self, digest: &str) -> Result<Start, InstallError> {
         let policy = self.preflight_policy.as_ref().ok_or_else(rejected)?;
         let record = self
             .ledger

@@ -107,3 +107,59 @@ fn corrupt_missing_or_symlink_sources_do_not_create_backups() {
     assert!(!output.exists());
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn current_validation_reads_wal_without_restoring_and_rejects_unsafe_inputs() {
+    let root = std::env::temp_dir().join(format!("uob-validate-{}", uuid::Uuid::new_v4()));
+    fs::create_dir(&root).unwrap();
+    let source = root.join("live.db");
+    let db = Connection::open(&source).unwrap();
+    db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; PRAGMA user_version=6; CREATE TABLE records(value); INSERT INTO records VALUES('after promotion');").unwrap();
+    let limits = Limits {
+        maximum_bytes: 1024 * 1024,
+        expected_schema_version: 6,
+        timeout: Duration::from_secs(1),
+    };
+    let before = fs::read(&source).unwrap();
+    let wal = fs::read(root.join("live.db-wal")).unwrap();
+    validate_current(&source, limits).unwrap();
+    assert_eq!(fs::read(&source).unwrap(), before);
+    assert_eq!(fs::read(root.join("live.db-wal")).unwrap(), wal);
+    assert!(
+        validate_current(
+            &source,
+            Limits {
+                expected_schema_version: 7,
+                ..limits
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        validate_current(
+            &source,
+            Limits {
+                maximum_bytes: 1,
+                ..limits
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        validate_current(
+            &source,
+            Limits {
+                timeout: Duration::ZERO,
+                ..limits
+            }
+        )
+        .is_err()
+    );
+    let link = root.join("link.db");
+    std::os::unix::fs::symlink(&source, &link).unwrap();
+    assert!(validate_current(&link, limits).is_err());
+    drop(db);
+    fs::write(&source, b"corrupt").unwrap();
+    assert!(validate_current(&source, limits).is_err());
+    fs::remove_dir_all(root).unwrap();
+}

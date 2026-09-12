@@ -8,6 +8,11 @@ extern crate self as uob_release_manager;
 #[path = "../tests/qualification/support.rs"]
 mod test_support;
 
+// Configuration-check subprocesses briefly inherit other threads' advisory locks before exec.
+// Serialize unit fixtures that create independent artifact stores while those checks run.
+#[cfg(test)]
+static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub mod activation;
 pub mod artifacts;
 pub mod drain;

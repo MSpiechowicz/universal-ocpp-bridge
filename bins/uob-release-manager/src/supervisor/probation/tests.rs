@@ -88,6 +88,7 @@ fn retained(f: &Fixture, manager: &Supervisor, phase: Phase) {
 
 #[test]
 fn full_day_of_all_checks_advances_and_retains_previous_across_restart() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     assert!(
         manager
@@ -116,6 +117,7 @@ fn full_day_of_all_checks_advances_and_retains_previous_across_restart() {
 
 #[test]
 fn every_missing_or_failed_check_resets_progress_after_nominal_day() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     let mut id = 0;
     for check in Check::REQUIRED {
@@ -140,6 +142,7 @@ fn every_missing_or_failed_check_resets_progress_after_nominal_day() {
 
 #[test]
 fn restart_preserves_committed_progress_but_never_credits_unobserved_time() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     for id in 1..=10 {
         manager.observe_probation(policy(), sample(&f, id)).unwrap();
@@ -167,6 +170,7 @@ fn restart_preserves_committed_progress_but_never_credits_unobserved_time() {
 
 #[test]
 fn gaps_clock_jumps_and_reordered_or_mismatched_evidence_cannot_qualify() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     manager.observe_probation(policy(), sample(&f, 1)).unwrap();
     manager.observe_probation(policy(), sample(&f, 2)).unwrap();
@@ -198,6 +202,7 @@ fn gaps_clock_jumps_and_reordered_or_mismatched_evidence_cannot_qualify() {
 
 #[test]
 fn failed_evidence_publication_never_changes_known_good() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     for id in 1..=288 {
         manager.observe_probation(policy(), sample(&f, id)).unwrap();
@@ -222,6 +227,7 @@ fn failed_evidence_publication_never_changes_known_good() {
 
 #[test]
 fn completed_evidence_before_activation_commit_recovers_conservatively() {
+    let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     // Fault boundary: evidence fsynced, healthy activation intent not yet published.
     manager

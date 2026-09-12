@@ -31,7 +31,34 @@ impl Supervisor {
             return Err(InstallError::Rejected("supervisor requires recovery"));
         }
         let mut next = self.ledger.status().failures.clone().unwrap_or_default();
-        let decision = next.observe(policy, observation)?;
+        let mut decision = next.observe(policy, observation)?;
+        // The incident latch remains intact after fallback. Any internal fallback failure
+        // now requires recovery, never another version change; external degradation is harmless.
+        if self
+            .ledger
+            .status()
+            .rollback
+            .as_ref()
+            .is_some_and(|r| r.step == super::rollback::Step::Restored)
+            && matches!(
+                observation.signal,
+                Signal::Watchdog
+                    | Signal::Oom
+                    | Signal::InternalReadinessFailure
+                    | Signal::StartupPending
+                    | Signal::FatalInvariant { .. }
+                    | Signal::Exit {
+                        desired_running: true,
+                        unexpected: true
+                    }
+            )
+        {
+            decision = Decision::RecoveryRequired;
+            next.decision = decision;
+            if let Some(last) = next.audit.last_mut() {
+                last.decision = decision;
+            }
+        }
         self.ledger.record_failures(next.clone())?;
         if decision == Decision::StopStaging {
             // Persist intent first. On a crash the next observation retries this idempotent

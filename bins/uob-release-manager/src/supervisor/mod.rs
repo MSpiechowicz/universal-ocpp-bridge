@@ -6,6 +6,7 @@ pub mod probation;
 pub mod production_systemd;
 pub mod promotion;
 mod qualification;
+pub mod rollback;
 mod storage;
 
 use crate::activation::ActivationJournal;
@@ -90,6 +91,8 @@ pub struct Record {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
+    #[serde(default)]
+    pub rollback: Option<rollback::Record>,
     #[serde(default)]
     pub probation: Option<probation::State>,
     #[serde(default)]
@@ -191,7 +194,8 @@ impl Supervisor {
         if let Request::Status {} = request {
             let mut status = self.ledger.status().clone();
             status.qualification = self.current_qualification();
-            let code = if self.promotion_needs_recovery()
+            let code = if self.rollback_needs_recovery()
+                || (status.rollback.is_none() && self.promotion_needs_recovery())
                 || self.ledger.needs_recovery()
                 || status
                     .failures
@@ -213,7 +217,9 @@ impl Supervisor {
         {
             return Response::code(Code::InvalidRequest);
         }
-        if self.promotion_blocks_mutation()
+        if self.ledger.status().rollback.is_some()
+            || self.failure_blocks_activation()
+            || self.promotion_blocks_mutation()
             || self.ledger.needs_recovery()
             || self
                 .ledger
