@@ -49,6 +49,9 @@ The optional [browser console](docs/operations/browser-console.md) embeds compil
 with no Node runtime on the Raspberry Pi. It verifies destination identity, keeps scoped
 credentials in tab memory, and shows bounded authenticated SSE connection and stale-state evidence.
 
+The [bounded Debug timeline](docs/operations/debug-timeline.md) adds explicit scoped capture controls,
+virtualized read-only traces, retained-window filters/bookmarks and visible gap/eviction evidence.
+
 Runtime bridge, environment, release, process, and selected-target identity is owned by the
 service at startup. See [runtime identity configuration](docs/configuration/runtime-identity.md)
 for production defaults and isolated staging/demo examples.

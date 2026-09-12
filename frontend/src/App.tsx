@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ApiClient, ApiError } from './http';
+import { Debug } from './debug/Debug';
 import type { Identity } from './identity';
 import { subscribe } from './events';
 import type { ConnectionState } from './events';
@@ -77,6 +78,7 @@ export function App() {
       <aside aria-label="Console navigation">
         <p className="section-label">Workspace</p>
         <a className="nav-active" href="#connection" aria-current="page">Connection</a>
+        <a href="#debug" className="debug-nav">Debug timeline</a>
         <div className="sidebar-note">Local management<br/><span>HTTP / JSON + SSE</span></div>
       </aside>
       <main id="connection">
@@ -116,6 +118,7 @@ export function App() {
           </dl>
           <p className="field-note">Stream activity confirms connectivity. It does not confirm a charger action or refresh the inventory query.</p>
         </section>}
+        {identity && <Debug key={JSON.stringify(identity)} identity={identity} hidden={hidden}/>}
         <footer>Independent management interface <span>Bound to the destination shown above</span></footer>
       </main>
     </div>
