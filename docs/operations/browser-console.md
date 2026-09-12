@@ -1,7 +1,7 @@
 # Optional browser console
 
 The management adapter embeds the compiled TypeScript/React console in the Rust binary. Open the
-management origin in a browser to see its bridge, environment, release and process identity before
+management origin in a browser to see its bridge, environment, release and process and selected-target identity before
 connecting. The shell implements connection/authentication and a bounded event-connection summary.
 The [bounded Debug timeline](debug-timeline.md) adds explicit diagnostic capture and trace inspection.
 Station/EVSE/transaction views, command widgets and configuration screens remain separate work.
@@ -34,6 +34,11 @@ console does not add remote-listener enablement or weaken the existing TLS polic
 Vite development server or an unauthenticated reverse proxy to expose the production API.
 
 Deploy production, staging and demo on distinct origins as required by the environment policy.
+For example, use `https://uob.example`, `https://uob-staging.example`, and
+`https://uob-demo.example`, each terminating TLS at its own management listener with independent
+credentials. For local SSH tunnels use separate ports (for example 8080, 8081, 8082). A different
+path on one origin is insufficient. Never reassign a live production origin to a test instance.
+Keep staging's existing isolated network namespace and listener restrictions in force.
 There is no cross-origin URL selector, shared credential storage, cookie authentication, redirect
 following or automatic login. Enter a scoped management read credential explicitly in each tab.
 The input is cleared on submission; the credential lives only in that client's memory. Disconnect,
@@ -46,6 +51,21 @@ target invalidate the session. A connected stream also rechecks identity every 1
 origins are still required: client identity checks cannot make reassigning one live origin between
 production and staging safe against races. Browser permission checks supplement server checks;
 they never grant access. Server data is rendered through React text nodes, never HTML injection.
+
+Diagnostic token provisioning now binds the complete bearer secret to the configured environment;
+see [capture credential migration](../security/diagnostic-capture.md). Host compositions supplying
+management read/command authenticators must likewise provision independent complete tokens for each
+origin/environment and validate their audience with `token_matches_environment` before verifying the
+**entire** secret and its normal scoped grant. This helper checks syntax/audience only and never
+supplies command authorization. Custom external token verifiers must enforce an equivalent audience
+binding. Host-configured command authentication remains required by `ManagementCommandConfiguration`.
+
+Every browser mutation requires confirmation of the visible origin, environment, bridge, release,
+and selected target. Capture start/stop consume the checkbox confirmation even on failure; status
+inspection needs no confirmation. The common client rejects mutations without a matching destination
+key and rechecks live identity before sending credentials. Future command/release widgets must use
+this same boundary, collect a fresh confirmation per operation and keep their existing server
+permission checks. Those widgets are not implemented by this issue.
 
 The reusable API client submits commands only with an explicitly supplied control credential,
 request ID, expiry and matching bridge. It does not retry POSTs, follow a returned status URL, or
@@ -99,10 +119,10 @@ asset budgets. Commit the generated `adapters/management/ui` files together with
 A second build should produce no asset diff. Rust release jobs consume those files and do not
 install frontend tooling. Automated frontend workflow gates remain issue #97.
 
-Browser acceptance launches three loopback-only Rust fixture servers on ports 39189–39191,
+Browser acceptance launches four loopback-only Rust fixture servers on ports 39189–39192,
 exercises the actual authenticated management router and compiled assets, forces an initial SSE
 EOF then verifies durable cursor resume, and checks denied credentials, inert hostile text,
-production/staging separation, desktop/mobile layout and `--no-ui` route equivalence. Fixture
+production/staging/demo token rejection, navigation and history credential isolation, desktop/mobile layout and `--no-ui` route equivalence. Fixture
 credentials are public deterministic test values; the fixture is not part of the production
 binary. Set `UOB_BROWSER_EXECUTABLE` to use an already installed compatible Chrome executable.
 

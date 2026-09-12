@@ -75,3 +75,5 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .filter-grid label, .filter-grid select { min-width: 0; }
 .filter-grid input, .filter-grid select { width: 100%; }
 .debug-panel p { overflow-wrap: anywhere; }
+.debug-panel > .destination-confirmation { flex-direction: row; align-items: flex-start; gap: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.destination-confirmation input { flex: none; margin: 3px 0 0; }

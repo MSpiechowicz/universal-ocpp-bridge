@@ -11,7 +11,7 @@ export default defineConfig({
     trace: 'off',
     launchOptions: process.env.UOB_BROWSER_EXECUTABLE ? { executablePath: process.env.UOB_BROWSER_EXECUTABLE } : {},
   },
-  webServer: [39189, 39190, 39191].map(port => ({
+  webServer: [39189, 39190, 39191, 39192].map(port => ({
     command: 'cargo run --locked -p uob-management-adapter --example browser_fixture',
     cwd: '..',
     env: { UOB_BROWSER_TEST_PORT: String(port) },

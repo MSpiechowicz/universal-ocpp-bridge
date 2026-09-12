@@ -52,7 +52,7 @@ test('status rejects a different destination and controls accept an empty 204 re
     assert.equal(init?.credentials, 'omit');
     return new Response(null, { status: 204 });
   });
-  assert.equal(await api.request(`${capturePath}/p1/1/stop`, { method: 'POST' }), undefined);
+  assert.equal(await api.request(`${capturePath}/p1/1/stop`, { method: 'POST' }, undefined, api.destinationKey), undefined);
   assert.equal(calls.length, 2);
   assert.throws(() => parseCapture({ ...captureValue, identity: { ...identity, bridge_id: 'other' } }, api));
 });

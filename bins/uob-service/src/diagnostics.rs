@@ -9,7 +9,7 @@ use std::{
 };
 use subtle::ConstantTimeEq;
 use uob_application::capture::{CaptureGrant, CaptureManager, CapturePermission};
-use uob_contracts::{BridgeId, StationId, TargetInstanceId};
+use uob_contracts::{BridgeId, Environment, StationId, TargetInstanceId};
 use uob_management_adapter::{ManagementCaptureAuthenticator, ManagementCaptureConfiguration};
 
 #[derive(Default, Deserialize)]
@@ -36,10 +36,15 @@ enum Permission {
 
 pub(crate) struct Validated {
     enabled: bool,
+    environment: Environment,
     grants: Vec<(PathBuf, CaptureGrant)>,
 }
 impl Configuration {
-    pub(crate) fn validate(self, bridge: &BridgeId) -> Result<Validated, &'static str> {
+    pub(crate) fn validate(
+        self,
+        bridge: &BridgeId,
+        environment: Environment,
+    ) -> Result<Validated, &'static str> {
         if self.credentials.len() > 32 || (self.allow_capture && self.credentials.is_empty()) {
             return Err("invalid diagnostic credentials");
         }
@@ -71,6 +76,7 @@ impl Configuration {
         }
         Ok(Validated {
             enabled: self.allow_capture,
+            environment,
             grants,
         })
     }
@@ -128,8 +134,9 @@ impl Validated {
             if bytes.last() == Some(&b'\n') {
                 bytes.pop();
             }
-            if !(32..=128).contains(&bytes.len())
-                || !bytes.iter().all(u8::is_ascii_graphic)
+            if !std::str::from_utf8(&bytes).is_ok_and(|token| {
+                uob_management_adapter::token_matches_environment(token, self.environment)
+            }) || !bytes.iter().all(u8::is_ascii_graphic)
                 || entries
                     .iter()
                     .any(|(value, _)| bool::from(value.as_slice().ct_eq(&bytes)))
@@ -177,22 +184,27 @@ mod tests {
     #[test]
     fn configuration_is_opt_in_strict_and_offline() {
         let bridge = BridgeId::new("bridge").unwrap();
-        assert!(!Configuration::default().validate(&bridge).unwrap().enabled);
+        assert!(
+            !Configuration::default()
+                .validate(&bridge, Environment::Production)
+                .unwrap()
+                .enabled
+        );
         assert!(
             toml::from_str::<Configuration>("allow_capture=true")
                 .unwrap()
-                .validate(&bridge)
+                .validate(&bridge, Environment::Production)
                 .is_err()
         );
         assert!(toml::from_str::<Configuration>("allow_captur=true").is_err());
         assert!(
             config(std::path::Path::new("/missing/private/token"))
-                .validate(&bridge)
+                .validate(&bridge, Environment::Production)
                 .is_ok()
         );
         assert!(
             config(std::path::Path::new("relative/token"))
-                .validate(&bridge)
+                .validate(&bridge, Environment::Production)
                 .is_err()
         );
     }
@@ -202,14 +214,50 @@ mod tests {
         fs::create_dir(&root).unwrap();
         let path = root.join("token");
         let bridge = BridgeId::new("bridge").unwrap();
-        let token = "test-only-capture-secret-with-32-characters";
-        let validated = config(&path).validate(&bridge).unwrap();
+        let token = "uob1.production.test-only-capture-secret-with-32-characters";
+        let validated = config(&path)
+            .validate(&bridge, Environment::Production)
+            .unwrap();
         assert!(validated.resolve().is_err());
         fs::write(&path, format!("{token}\n")).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         let runtime = validated.resolve().unwrap();
         assert!(runtime.authenticator.authenticate(token).is_some());
         assert!(runtime.authenticator.authenticate("wrong-token").is_none());
+        // Copying a production credential into a staging/demo file must fail at startup.
+        for environment in [Environment::Staging, Environment::Demo] {
+            assert!(
+                config(&path)
+                    .validate(&bridge, environment)
+                    .unwrap()
+                    .resolve()
+                    .is_err()
+            );
+        }
+        let staging_token = "uob1.staging.independent-staging-fixture-secret-32-characters";
+        fs::write(&path, staging_token).unwrap();
+        let staging = config(&path)
+            .validate(&bridge, Environment::Staging)
+            .unwrap()
+            .resolve()
+            .unwrap();
+        assert!(staging.authenticator.authenticate(token).is_none());
+        assert!(runtime.authenticator.authenticate(staging_token).is_none());
+        assert!(
+            staging
+                .authenticator
+                .authenticate(&token.replace("production", "staging"))
+                .is_none()
+        );
+        assert!(staging.authenticator.authenticate(staging_token).is_some());
+        assert!(
+            config(&path)
+                .validate(&bridge, Environment::Production)
+                .unwrap()
+                .resolve()
+                .is_err()
+        );
+        fs::write(&path, token).unwrap();
         let grant = runtime.authenticator.authenticate(token).unwrap();
         let wrong_station = uob_application::capture::CaptureFilter {
             bridge: bridge.clone(),
@@ -233,7 +281,13 @@ mod tests {
         duplicate
             .credentials
             .push(config(&other).credentials.pop().unwrap());
-        assert!(duplicate.validate(&bridge).unwrap().resolve().is_err());
+        assert!(
+            duplicate
+                .validate(&bridge, Environment::Production)
+                .unwrap()
+                .resolve()
+                .is_err()
+        );
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         assert!(validated.resolve().is_err());
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();

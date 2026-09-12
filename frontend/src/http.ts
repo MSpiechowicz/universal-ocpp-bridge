@@ -3,7 +3,8 @@ import type { Identity } from './identity';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly kind = 'request') {
-    super(kind === 'identity' ? 'Service identity changed. Disconnect and authenticate again.'
+    super(kind === 'destination' ? 'Confirm the visible destination before this control operation.'
+      : kind === 'identity' ? 'Service identity changed. Disconnect and authenticate again.'
       : status === 401 || status === 403 ? 'Access denied. Check the credential and resource scope.'
       : status === 503 ? 'Management data is unavailable on this service configuration.'
       : status === 429 ? 'Service is busy. Retrying with a delay.'
@@ -77,7 +78,12 @@ export class ApiClient {
     return url.href;
   }
 
-  async request(path: string, options: RequestInit = {}, commandToken?: string): Promise<unknown> {
+  get destinationKey(): string { return JSON.stringify([this.origin, identityKey(this.identity)]); }
+
+  async request(path: string, options: RequestInit = {}, commandToken?: string, confirmedDestination?: string): Promise<unknown> {
+    if (!['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase()) && confirmedDestination !== this.destinationKey) {
+      throw new ApiError(0, 'destination');
+    }
     const url = this.path(path);
     if (this.activeReads >= 2) throw new ApiError(429);
     this.activeReads++;
@@ -111,7 +117,7 @@ export class ApiClient {
 
   // Explicit control credential; the read credential is never promoted to command authority.
   // Admission and result fields are passed through, never interpreted as physical success.
-  async submitCommand(request: unknown, controlCredential: string) {
+  async submitCommand(request: unknown, controlCredential: string, confirmedDestination: string) {
     const control = credential(controlCredential);
     const command = object(request);
     if (object(command.resource).bridge_id !== this.identity.bridge_id) throw new ApiError(0, 'identity');
@@ -119,7 +125,7 @@ export class ApiClient {
     boundedText(command.expires_at);
     const body = JSON.stringify(request);
     if (new TextEncoder().encode(body).length > 64 * 1024) throw new ApiError(0, 'limit');
-    return this.request('/api/v1/commands', { method: 'POST', body }, control);
+    return this.request('/api/v1/commands', { method: 'POST', body }, control, confirmedDestination);
   }
 
   async openEvents(station: string, cursor: string | undefined, signal: AbortSignal) {

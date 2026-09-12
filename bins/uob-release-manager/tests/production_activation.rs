@@ -4,7 +4,10 @@ mod support;
 // so a transient inherited installer lock is not mistaken for activation contention.
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 use std::{fs, net::TcpListener, os::unix::fs::MetadataExt, sync::Arc, time::Duration};
-use support::{BINARY, Behavior, Fixture, Process, Store, policy, run, seed, staging};
+use support::{
+    BINARY, Behavior, Fixture, Process, Store, cancel_at_phase, delayed_preflight_binary, policy,
+    run, seed, staging,
+};
 use uob_application::OperationalStore;
 use uob_release_manager::{
     activation::ActivationJournal,
@@ -246,7 +249,8 @@ fn changed_production_configuration_and_staging_failure_prevent_switch() {
 fn cancelled_start_recovers_selected_artifact_once_without_a_new_drain_or_switch() {
     let _serial = SERIAL.lock().unwrap();
     run(async {
-        let f = Fixture::with_candidate(Some(BINARY));
+        let candidate = delayed_preflight_binary();
+        let f = Fixture::with_candidate(Some(&candidate));
         let p = policy(&f);
         let store = Arc::new(Store::open(&p.operational_database, 16).unwrap());
         seed(&store).await;
@@ -254,23 +258,22 @@ fn cancelled_start_recovers_selected_artifact_once_without_a_new_drain_or_switch
         process.behavior = Behavior::HangStart;
         let mut manager = f.manager().with_preflight_policy(p.clone()).unwrap();
         assert_eq!(manager.handle(100, f.publish()).code, Code::Ok);
-        assert!(
-            tokio::time::timeout(
-                Duration::from_millis(300),
-                manager.promote_at_idle(
-                    100,
-                    f.artifact.digest().into(),
-                    Host {
-                        drain: store,
-                        staging: &staging(),
-                        production: &mut process,
-                        maintenance_window: Duration::from_secs(1)
-                    }
-                )
-            )
-            .await
-            .is_err()
-        );
+        let (signal, entered) = tokio::sync::oneshot::channel();
+        process.phase_entered = Some(signal);
+        cancel_at_phase(
+            manager.promote_at_idle(
+                100,
+                f.artifact.digest().into(),
+                Host {
+                    drain: store,
+                    staging: &staging(),
+                    production: &mut process,
+                    maintenance_window: Duration::from_secs(1),
+                },
+            ),
+            entered,
+        )
+        .await;
         assert_eq!(
             manager
                 .handle(100, Request::Status {})
@@ -326,7 +329,8 @@ fn cancellation_during_stop_recovers_only_previous_artifact_and_defers_promotion
     let _serial = SERIAL.lock().unwrap();
     run(async {
         let previous = [BINARY, b"\n# previous artifact\n"].concat();
-        let f = Fixture::with_binaries(Some(&previous), Some(BINARY));
+        let candidate = delayed_preflight_binary();
+        let f = Fixture::with_binaries(Some(&previous), Some(&candidate));
         let p = policy(&f);
         let store = Arc::new(Store::open(&p.operational_database, 16).unwrap());
         seed(&store).await;
@@ -335,23 +339,22 @@ fn cancellation_during_stop_recovers_only_previous_artifact_and_defers_promotion
         process.behavior = Behavior::HangStop;
         let mut manager = f.manager().with_preflight_policy(p.clone()).unwrap();
         assert_eq!(manager.handle(100, f.publish()).code, Code::Ok);
-        assert!(
-            tokio::time::timeout(
-                Duration::from_millis(300),
-                manager.promote_at_idle(
-                    100,
-                    f.artifact.digest().into(),
-                    Host {
-                        drain: store,
-                        staging: &staging(),
-                        production: &mut process,
-                        maintenance_window: Duration::from_secs(2)
-                    }
-                )
-            )
-            .await
-            .is_err()
-        );
+        let (signal, entered) = tokio::sync::oneshot::channel();
+        process.phase_entered = Some(signal);
+        cancel_at_phase(
+            manager.promote_at_idle(
+                100,
+                f.artifact.digest().into(),
+                Host {
+                    drain: store,
+                    staging: &staging(),
+                    production: &mut process,
+                    maintenance_window: Duration::from_secs(2),
+                },
+            ),
+            entered,
+        )
+        .await;
         drop(manager);
         let mut manager = f.manager().with_preflight_policy(p).unwrap();
         process.behavior = Behavior::Normal;

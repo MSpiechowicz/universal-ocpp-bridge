@@ -96,6 +96,7 @@ pub struct Process {
     pub starts: usize,
     pub root: PathBuf,
     pub start: Option<Start>,
+    pub phase_entered: Option<tokio::sync::oneshot::Sender<()>>,
 }
 impl Process {
     pub fn new(f: &Fixture, store: Arc<Store>) -> Self {
@@ -107,6 +108,7 @@ impl Process {
             starts: 0,
             root: f.artifact.root.clone(),
             start: None,
+            phase_entered: None,
         }
     }
     pub async fn boot_old(&mut self) {
@@ -138,6 +140,9 @@ impl ProductionProcess for Process {
         Box::pin(async move {
             self.stops += 1;
             if self.behavior == Behavior::HangStop {
+                if let Some(entered) = self.phase_entered.take() {
+                    entered.send(()).unwrap();
+                }
                 std::future::pending::<()>().await;
             }
             if self.behavior == Behavior::FailStop {
@@ -161,6 +166,9 @@ impl ProductionProcess for Process {
             );
             assert_eq!(start.configuration, self.root.join("production.toml"));
             if self.behavior == Behavior::HangStart {
+                if let Some(entered) = self.phase_entered.take() {
+                    entered.send(()).unwrap();
+                }
                 std::future::pending::<()>().await;
             }
             if self.behavior == Behavior::FailStart {
@@ -224,4 +232,39 @@ pub async fn seed(store: &Store) {
     });
     store.write_atomic(write).await.unwrap();
     assert_eq!(store.reserve_transaction_id().await.unwrap(), 1);
+}
+
+// Cancel only after the process fixture reaches the requested hanging phase. Preflight can take
+// longer on CI; elapsed wall time alone does not establish which durable transition was reached.
+pub async fn cancel_at_phase(
+    promotion: impl Future<Output = uob_release_manager::supervisor::Response>,
+    entered: tokio::sync::oneshot::Receiver<()>,
+) {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let mut promotion = std::pin::pin!(promotion);
+        let mut entered = std::pin::pin!(entered);
+        std::future::poll_fn(|context| {
+            if let std::task::Poll::Ready(response) = promotion.as_mut().poll(context) {
+                panic!(
+                    "promotion completed before cancellation: {:?}",
+                    response.code
+                );
+            }
+            entered
+                .as_mut()
+                .poll(context)
+                .map(|result| result.expect("process phase signal"))
+        })
+        .await;
+    })
+    .await
+    .expect("promotion must reach the requested process phase");
+}
+
+// Force preflight beyond the former 300 ms cancellation timer to reproduce the CI race.
+pub fn delayed_preflight_binary() -> Vec<u8> {
+    std::str::from_utf8(BINARY)
+        .unwrap()
+        .replace("then exit 0", "then sleep 0.5; exit 0")
+        .into_bytes()
 }

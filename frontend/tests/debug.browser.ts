@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const endpoint = '/api/v1/diagnostics/capture';
-const headers = { Authorization: 'Bearer browser-fixture-diagnostics' };
+const headers = { Authorization: 'Bearer uob1.production.browser-fixture-diagnostics-production-secret' };
 test.beforeEach(async ({ request }) => {
   const active = await request.get(endpoint, { headers });
   if (active.ok()) {
@@ -17,12 +17,13 @@ test('opening Debug is inert; explicit scoped capture streams, pauses, expires a
   await expect(page.getByRole('heading', { name: 'Debug timeline' })).toBeVisible();
   expect((await request.get(endpoint, { headers })).status()).toBe(410);
   expect(controls).toEqual([]);
-  await page.getByLabel('Diagnostic credential', { exact: true }).fill('browser-fixture-diagnostics');
+  await page.getByLabel('Diagnostic credential', { exact: true }).fill('uob1.production.browser-fixture-diagnostics-production-secret');
   await page.getByRole('button', { name: 'Inspect capture status' }).click();
-  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
   expect(controls).toEqual([]);
   await page.getByLabel('Capture station', { exact: true }).fill('station-browser-fixture');
   await page.getByLabel('Capture seconds', { exact: true }).fill('4');
+  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
   await page.getByRole('button', { name: 'Start capture on production' }).click();
   await expect(page.locator('.trace-row').first()).toBeVisible();
   await expect(page.locator('.debug-destination')).toContainText('PRODUCTION');
@@ -38,7 +39,7 @@ test('opening Debug is inert; explicit scoped capture streams, pauses, expires a
   await page.getByRole('button', { name: 'Clear display buffer' }).click();
   await expect(page.locator('.trace-row')).toHaveCount(0);
   await page.getByRole('button', { name: 'Refresh capture status' }).click();
-  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
   expect(controls).toHaveLength(1);
   await page.getByRole('button', { name: 'Disconnect diagnostics' }).click();
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
@@ -46,18 +47,22 @@ test('opening Debug is inert; explicit scoped capture streams, pauses, expires a
 
 test('diagnostic reader cannot start and stop is explicit through the real capture API', async ({ page, request }) => {
   await page.goto('/#debug');
-  await page.getByLabel('Diagnostic credential', { exact: true }).fill('browser-fixture-diagnostics-reader');
+  await page.getByLabel('Diagnostic credential', { exact: true }).fill('uob1.production.browser-fixture-diagnostics-reader-production-secret');
   await page.getByRole('button', { name: 'Inspect capture status' }).click();
+  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
   await page.getByRole('button', { name: 'Start capture on production' }).click();
   await expect(page.getByRole('alert')).toContainText('Access denied');
   expect((await request.get(endpoint, { headers })).status()).toBe(410);
   await page.getByRole('button', { name: 'Disconnect diagnostics' }).click();
-  await page.getByLabel('Diagnostic credential', { exact: true }).fill('browser-fixture-diagnostics');
+  await page.getByLabel('Diagnostic credential', { exact: true }).fill('uob1.production.browser-fixture-diagnostics-production-secret');
   await page.getByRole('button', { name: 'Inspect capture status' }).click();
+  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
   await page.getByRole('button', { name: 'Start capture on production' }).click();
   await expect(page.locator('.trace-row').first()).toBeVisible();
+  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
   await page.getByRole('button', { name: 'Stop capture on production' }).click();
-  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeEnabled();
+  await expect(page.getByText('Capture stopped. Displayed traces', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
   expect((await request.get(endpoint, { headers })).status()).toBe(410);
   await expect(page.getByRole('button', { name: /replay|fault|remote start/i })).toHaveCount(0);
   await page.screenshot({ path: 'test-results/debug-desktop.png', fullPage: true });
@@ -80,9 +85,10 @@ test('high-volume hidden display retains bounded inert rows and virtualizes on v
     await route.fulfill({ contentType: 'text/event-stream', body: rows });
   });
   await page.goto('/#debug');
-  await page.getByLabel('Diagnostic credential', { exact: true }).fill('browser-fixture-diagnostics');
+  await page.getByLabel('Diagnostic credential', { exact: true }).fill('uob1.production.browser-fixture-diagnostics-production-secret');
   await page.getByRole('button', { name: 'Inspect capture status' }).click();
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
   await page.getByRole('button', { name: 'Start capture on production' }).click();
   // Ensure the event-loop has consumed the intentionally large response while render ticks skip.
   await page.waitForTimeout(1200);
@@ -91,5 +97,7 @@ test('high-volume hidden display retains bounded inert rows and virtualizes on v
   expect(await page.locator('.trace-row').count()).toBeLessThanOrEqual(10);
   await expect(page.locator('.trace-row').first()).toContainText('<img src=x onerror=alert(1)>');
   expect(await page.locator('img').count()).toBe(0);
+  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
   await page.getByRole('button', { name: 'Stop capture on production' }).click();
+  await expect(page.getByText('Capture stopped. Displayed traces', { exact: false })).toBeVisible();
 });

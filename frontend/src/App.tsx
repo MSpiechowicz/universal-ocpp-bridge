@@ -88,6 +88,7 @@ export function App() {
           <h2 id="identity-heading">Destination</h2>
           <dl>
             <div><dt>Bridge</dt><dd>{identity?.bridge_id ?? 'Verifying…'}</dd></div>
+            <div><dt>Target</dt><dd>{identity?.selected_target_id ?? 'none selected'}</dd></div>
             <div><dt>Release</dt><dd>{identity?.runtime.release_id ?? '—'}</dd></div>
             <div><dt>Origin</dt><dd>{location.origin}</dd></div>
             <div><dt>Process</dt><dd>{identity?.runtime.process_instance_id ?? '—'}</dd></div>

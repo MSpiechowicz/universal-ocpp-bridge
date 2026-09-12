@@ -50,12 +50,12 @@ test('commands require distinct explicit authority and preserve admission eviden
     return Response.json(admitted, { status: 202 });
   });
   const request = { request_id: 'request-1', expires_at: '2026-09-12T16:00:00Z', resource: { bridge_id: identity.bridge_id }, operation: { kind: 'start' } };
-  await assert.rejects(api.submitCommand(request, undefined as unknown as string));
+  await assert.rejects(api.submitCommand(request, undefined as unknown as string, api.destinationKey));
   assert.equal(sent, undefined);
-  assert.deepEqual(await api.submitCommand(request, 'control-fixture'), admitted);
+  assert.deepEqual(await api.submitCommand(request, 'control-fixture', api.destinationKey), admitted);
   assert.equal(sent?.method, 'POST');
   assert.equal(new Headers(sent?.headers).get('authorization'), 'Bearer control-fixture');
-  await assert.rejects(api.submitCommand({ ...request, resource: { bridge_id: 'other' } }, 'control-fixture'));
+  await assert.rejects(api.submitCommand({ ...request, resource: { bridge_id: 'other' } }, 'control-fixture', api.destinationKey));
   api.close();
 });
 
@@ -67,4 +67,23 @@ test('malformed identity and oversized JSON are rejected; raw errors never escap
     ? Response.json(identity) : new Response('secret malicious server exception', { status: 403 }));
   await assert.rejects(api.stations(), error => error instanceof ApiError && !error.message.includes('secret'));
   api.close();
+});
+
+test('every mutation requires this destination and rechecks identity before sending authority', async () => {
+  let current = identity;
+  let controls = 0;
+  const api = new ApiClient(origin, identity, 'read-fixture', async (url, init) => {
+    if (String(url).endsWith('/identity')) return Response.json(current);
+    if (init?.method === 'POST') controls++;
+    return new Response(null, { status: 204 });
+  });
+  const path = '/api/v1/diagnostics/capture';
+  await assert.rejects(api.request(path, { method: 'POST' }), (e: ApiError) => e.kind === 'destination');
+  const other = new ApiClient('http://localhost:8081', identity, 'other-fixture');
+  await assert.rejects(api.request(path, { method: 'POST' }, undefined, other.destinationKey));
+  assert.equal(controls, 0);
+  current = { ...identity, runtime: { ...identity.runtime, environment: 'staging' } };
+  await assert.rejects(api.request(path, { method: 'POST' }, undefined, api.destinationKey), (e: ApiError) => e.kind === 'identity');
+  assert.equal(controls, 0);
+  other.close();
 });
