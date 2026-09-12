@@ -90,6 +90,7 @@ export class ApiClient {
           ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
       });
       if (!response.ok) { await response.body?.cancel(); throw new ApiError(response.status); }
+      if (response.status === 204) { await response.body?.cancel(); return undefined; }
       return await readJson(response);
     } finally { this.activeReads--; }
   }
@@ -122,9 +123,14 @@ export class ApiClient {
   }
 
   async openEvents(station: string, cursor: string | undefined, signal: AbortSignal) {
-    await this.verifyIdentity(signal);
     const query = station ? `?station_id=${encodeURIComponent(boundedText(station))}` : '';
-    return this.transport(`${this.origin}/api/v1/events${query}`, {
+    return this.openStream(`/api/v1/events${query}`, cursor, signal);
+  }
+
+  async openStream(path: string, cursor: string | undefined, signal: AbortSignal) {
+    const url = this.path(path);
+    await this.verifyIdentity(signal);
+    return this.transport(url, {
       cache: 'no-store', credentials: 'omit', redirect: 'error',
       signal: AbortSignal.any([signal, this.lifetime.signal]),
       headers: { Authorization: `Bearer ${this.token}`, Accept: 'text/event-stream',

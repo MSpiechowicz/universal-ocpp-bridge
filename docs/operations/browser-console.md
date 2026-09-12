@@ -3,16 +3,16 @@
 The management adapter embeds the compiled TypeScript/React console in the Rust binary. Open the
 management origin in a browser to see its bridge, environment, release and process identity before
 connecting. The shell implements connection/authentication and a bounded event-connection summary.
-Station/EVSE/transaction views, command widgets, configuration screens and the detailed Debug
-workspace are separate backlog items.
+The [bounded Debug timeline](debug-timeline.md) adds explicit diagnostic capture and trace inspection.
+Station/EVSE/transaction views, command widgets and configuration screens remain separate work.
 
 ## Raspberry Pi deployment
 
 No Node, npm, Vite, CDN, external font, browser WebSocket or broker connection is needed on the Pi.
 A normal Cargo service build includes the checked-in compiled assets. The service sends static
 bytes; React runs on the operator's browser. The shell has no background animation, service worker,
-IndexedDB or local/session-storage writes. It retains counters and only the latest event type,
-not a growing history of event payloads.
+IndexedDB or local/session-storage writes. The normal event summary retains counters and only the latest event type. Debug separately retains
+a bounded sanitized trace window when explicitly connected.
 
 The isolated frontend build enforces a 300 KiB total uncompressed asset budget and a 100 KiB gzip
 measurement budget. The current server sends uncompressed assets; the gzip measurement is not a

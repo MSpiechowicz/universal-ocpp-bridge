@@ -1,5 +1,7 @@
 //! Loopback-only real management-router fixture for console browser acceptance.
 //! No fixture controls or credentials are compiled into the production service.
+#[path = "browser_fixture/diagnostics.rs"]
+mod diagnostics;
 #[path = "browser_fixture/source.rs"]
 mod source;
 
@@ -60,6 +62,7 @@ async fn main() {
         runtime: runtime.clone(),
         selected_target_id: None,
     });
+    let identity = application.identity().clone();
     let router = router_with_authenticated_events(
         application,
         Arc::new(source::Source { runtime }),
@@ -75,6 +78,10 @@ async fn main() {
             static_assets: port != 39191,
         },
     );
+    let router = router.merge(uob_management_adapter::capture_router(
+        identity.clone(),
+        diagnostics::configuration(identity),
+    ));
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port)))
         .await
         .unwrap();
