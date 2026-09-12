@@ -14,7 +14,7 @@ while IFS= read -r -d '' file; do
   fi
 done < <(
   find "$repository_root" -type f \
-    \( -name '*.rs' -o -name '*.sh' -o -name '*.py' -o -name '*.js' -o -name '*.jsx' \
+    \( -name '*.rs' -o -name '*.sh' -o -name '*.py' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.jsx' \
        -o -name '*.ts' -o -name '*.tsx' \) \
     -not -path '*/.git/*' \
     -not -path '*/target/*' \

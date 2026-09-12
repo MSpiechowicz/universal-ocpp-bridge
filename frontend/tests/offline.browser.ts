@@ -61,10 +61,10 @@ test('hostile content stays inert; filters, bookmarks, inspector, clear and mobi
   await view.getByRole('button', { name: 'Trace 2', exact: true }).click();
   await expect(view.getByRole('region', { name: 'Redacted source', exact: true })).toContainText('<img src=x onerror=alert(1)>');
   expect(await view.locator('img,script,iframe').count()).toBe(0);
-  await page.screenshot({ path: 'test-results/offline-desktop.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/offline-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/offline-mobile.png', fullPage: true });
+  if (!process.env.UOB_BROWSER_REPORT_ONLY) await page.screenshot({ path: 'test-results/offline-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Clear offline capture', exact: true }).click();
   await expect(view).toHaveCount(0);
   expect(calls).toEqual([]);
@@ -84,4 +84,17 @@ test('large valid imports virtualize; malformed replacement and cancellation cle
   await page.getByRole('button', { name: /Clear offline capture/ }).click();
   await expect(page.getByRole('region', { name: 'Offline capture', exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('native capture picker fits narrow screens with wider font metrics', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/?offline=1');
+  const input = page.getByLabel('Capture file', { exact: true });
+  // Native file controls size themselves from platform font metrics. Make that
+  // intrinsic width exceed the panel on every runner, including local Noto Sans.
+  await input.evaluate(element => { element.style.fontSize = '20px'; });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await input.setInputFiles({ name: 'capture.jsonl', mimeType: 'application/x-ndjson', buffer: Buffer.from(encodeCapture()) });
+  await expect(page.getByRole('region', { name: 'Offline capture', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

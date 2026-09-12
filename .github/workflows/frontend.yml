@@ -1,0 +1,75 @@
+name: Frontend checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  console:
+    name: Frontend type, lint, build, and actual-service browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the frontend package and lockfile
+        run: test -s package.json && test -s package-lock.json && test -s tooling/package-lock.json
+      - name: Install the pinned frontend Node runtime
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            frontend/tooling/package-lock.json
+      - name: Bootstrap the locked package manager
+        run: |
+          npm ci --prefix tooling --ignore-scripts
+          echo "$GITHUB_WORKSPACE/frontend/tooling/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Install locked dependencies
+        run: |
+          test "$(node --version)" = "v26.8.1"
+          test "$(npm --version)" = "12.0.2"
+          npm ci --ignore-scripts
+      - name: Typecheck, lint, unit tests, and static asset build
+        run: npm run check
+      - name: Verify byte-identical repeated builds
+        run: npm run check:reproducible
+      - name: Require generated assets to match committed source
+        run: git diff --exit-code -- ../adapters/management/ui
+      - name: Build the daemon and real management fixture with current assets
+        run: |
+          cargo build --locked -p uob-service --bin uob
+          cargo build --locked -p uob-management-adapter --example browser_fixture
+      - name: Install the locked Playwright Chromium browser
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Run bounded actual-service browser checks
+        run: |
+          ulimit -f 32768
+          npm run test:browser:ci
+      - name: Retain only the bounded sanitized browser summary
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-browser-${{ github.sha }}
+          path: frontend/test-results/ci-summary.json
+          if-no-files-found: ignore
+          retention-days: 7

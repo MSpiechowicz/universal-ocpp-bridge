@@ -71,6 +71,9 @@ Run all current workspace, architecture, and documentation checks with:
 ./scripts/verify-workspace.sh
 ```
 
+Frontend changes also require the isolated [frontend checks](testing/frontend-checks.md),
+including the pinned build and browser suite against the actual daemon and management fixtures.
+
 Pull request checks do not calculate a product version, create tags, publish artifacts, or comment
 on pull requests. After the Rust workspace workflow succeeds for a push to `main`, its release job
 uses the same reviewed Cocogitto 7.0.0 binary to calculate the next semantic version from commits
