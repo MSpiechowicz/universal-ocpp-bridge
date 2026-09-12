@@ -14,6 +14,7 @@ service_binary="$(dirname "$(dirname "$executable")")/uob"
 for unit in packaging/systemd/*.service; do
   sed -e "s|/usr/local/libexec/uob-release-manager|$manager_binary|g" \
     -e "s|/usr/local/bin/uob|$service_binary|g" \
+    -e "s|/var/lib/uob-releases/artifacts/%i/bin/uob|$service_binary|g" \
     -e "s|/usr/local/libexec/staging_governor.py|$PWD/packaging/resources/staging_governor.py|g" \
     -e "s|/usr/local/libexec/uob-staging-network|$PWD/packaging/network/uob-staging-network|g" "$unit" >"$unit_directory/$(basename "$unit")"
 done
