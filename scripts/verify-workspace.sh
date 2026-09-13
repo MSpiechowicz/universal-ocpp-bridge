@@ -7,6 +7,7 @@ cd "$repository_root"
 ./scripts/check-file-sizes.sh
 python3 -B scripts/test_staging_governor.py
 python3 -B scripts/test_disk_preflight.py
+python3 -B scripts/test_platform_packages.py
 
 container_mode=false
 if [[ "${1:-}" == "--container" ]]; then

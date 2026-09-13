@@ -1,0 +1,63 @@
+name: Native platform packages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packages:
+    name: Native package smoke (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify native execution architecture
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: test "$(uname -m)" = "$EXPECTED_ARCH"
+      - name: Test fail-closed package content auditing
+        run: python3 -B scripts/test_platform_packages.py
+      - name: Build separate pinned production and simulator packages
+        run: ./scripts/build-platform-packages.sh
+      - name: Execute extracted packages on the native runner
+        run: >-
+          python3 -B scripts/smoke_platform_packages.py
+          --packages target/platform-packages
+          --output target/platform-packages/smoke.json
+      - name: Retain native execution evidence including failures
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-evidence-${{ matrix.arch }}-${{ github.sha }}
+          path: target/platform-packages/smoke.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Retain only smoke-tested packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packages-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            target/platform-packages/*.tar.gz
+            target/platform-packages/*.sha256
+          if-no-files-found: error
+          retention-days: 7
