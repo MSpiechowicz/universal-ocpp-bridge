@@ -47,6 +47,13 @@ the honest unavailable-query response. Existing router tests cover authenticated
 SSE, scope checks, diagnostics and inert rendering. This gate does not claim the
 full charging acceptance matrix or implement missing daemon query composition.
 
+The capture-expiry browser test runs both deadline orderings. It changes only the
+browser's remaining-time estimate in the real start response, so either the local
+timer or the server's SSE expiry arrives first. Each case asserts its specific
+terminal message, then polls the real capture API for HTTP 410 before resuming and
+clearing retained traces. This avoids depending on network timing or rounded seconds
+while retaining the server-expiry assertion.
+
 ## Report boundary and limits
 
 CI uses one worker, no retries, a 30-second test deadline, five-failure cutoff,

@@ -10,40 +10,52 @@ test.beforeEach(async ({ request }) => {
   }
 });
 
-test('opening Debug is inert; explicit scoped capture streams, pauses, expires and clears', async ({ page, request }) => {
-  const controls: string[] = [];
-  page.on('request', request => { if (request.method() === 'POST') controls.push(request.url()); });
-  await page.goto('/#debug');
-  await expect(page.getByRole('heading', { name: 'Debug timeline' })).toBeVisible();
-  expect((await request.get(endpoint, { headers })).status()).toBe(410);
-  expect(controls).toEqual([]);
-  await page.getByLabel('Diagnostic credential', { exact: true }).fill('uob1.production.browser-fixture-diagnostics-production-secret');
-  await page.getByRole('button', { name: 'Inspect capture status' }).click();
-  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
-  expect(controls).toEqual([]);
-  await page.getByLabel('Capture station', { exact: true }).fill('station-browser-fixture');
-  await page.getByLabel('Capture seconds', { exact: true }).fill('4');
-  await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
-  await page.getByRole('button', { name: 'Start capture on production' }).click();
-  await expect(page.locator('.trace-row').first()).toBeVisible();
-  await expect(page.locator('.debug-destination')).toContainText('PRODUCTION');
-  await expect(page.locator('.debug-destination')).toContainText('release-browser-fixture');
-  await page.getByRole('button', { name: 'Pause display', exact: true }).click();
-  await expect(page.getByText('Display paused at trace', { exact: false })).toBeVisible();
-  await expect(page.getByText('Capture deadline reached.', { exact: false })).toBeVisible({ timeout: 10000 });
-  expect((await request.get(endpoint, { headers })).status()).toBe(410);
-  await page.getByRole('button', { name: 'Resume display', exact: true }).click();
-  expect(await page.locator('.trace-row').count()).toBeLessThanOrEqual(10);
-  await page.locator('.trace-open').first().click();
-  await expect(page.getByRole('region', { name: 'Decision and trigger' })).toContainText('browser-synthetic-correlation');
-  await page.getByRole('button', { name: 'Clear display buffer' }).click();
-  await expect(page.locator('.trace-row')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Refresh capture status' }).click();
-  await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
-  expect(controls).toHaveLength(1);
-  await page.getByRole('button', { name: 'Disconnect diagnostics' }).click();
-  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
-});
+for (const expiryFirst of ['browser', 'server'] as const) {
+  test(`opening Debug is inert; capture pauses, expires and clears with ${expiryFirst} expiry first`, async ({ page, request }) => {
+    // Remaining seconds is only a browser estimate. Force both orderings while the
+    // real server still owns the capture, trace stream and six-second expiry.
+    await page.route(`**${endpoint}`, async route => {
+      if (route.request().method() !== 'POST') { await route.continue(); return; }
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      await route.fulfill({ response, json: { ...await response.json(), remaining_seconds: expiryFirst === 'browser' ? 3 : 30 } });
+    });
+    const controls: string[] = [];
+    page.on('request', request => { if (request.method() === 'POST') controls.push(request.url()); });
+    await page.goto('/#debug');
+    await expect(page.getByRole('heading', { name: 'Debug timeline' })).toBeVisible();
+    expect((await request.get(endpoint, { headers })).status()).toBe(410);
+    expect(controls).toEqual([]);
+    await page.getByLabel('Diagnostic credential', { exact: true }).fill('uob1.production.browser-fixture-diagnostics-production-secret');
+    await page.getByRole('button', { name: 'Inspect capture status' }).click();
+    await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
+    expect(controls).toEqual([]);
+    await page.getByLabel('Capture station', { exact: true }).fill('station-browser-fixture');
+    await page.getByLabel('Capture seconds', { exact: true }).fill('6');
+    await page.getByRole('checkbox', { name: /Confirm next control destination/ }).check();
+    await page.getByRole('button', { name: 'Start capture on production' }).click();
+    await expect(page.locator('.trace-row').first()).toBeVisible();
+    await expect(page.locator('.debug-destination')).toContainText('PRODUCTION');
+    await expect(page.locator('.debug-destination')).toContainText('release-browser-fixture');
+    await page.getByRole('button', { name: 'Pause display', exact: true }).click();
+    await expect(page.getByText('Display paused at trace', { exact: false })).toBeVisible();
+    const expiryMessage = expiryFirst === 'browser' ? 'Capture deadline reached.' : 'Capture stopped, expired or process restarted.';
+    await expect(page.getByText(expiryMessage, { exact: false })).toBeVisible({ timeout: 10000 });
+    // The browser estimate may expire before the server's authoritative deadline.
+    await expect.poll(async () => (await request.get(endpoint, { headers })).status(), { timeout: 10000 }).toBe(410);
+    await page.getByRole('button', { name: 'Resume display', exact: true }).click();
+    expect(await page.locator('.trace-row').count()).toBeLessThanOrEqual(10);
+    await page.locator('.trace-open').first().click();
+    await expect(page.getByRole('region', { name: 'Decision and trigger' })).toContainText('browser-synthetic-correlation');
+    await page.getByRole('button', { name: 'Clear display buffer' }).click();
+    await expect(page.locator('.trace-row')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Refresh capture status' }).click();
+    await expect(page.getByRole('button', { name: 'Start capture on production' })).toBeDisabled();
+    expect(controls).toHaveLength(1);
+    await page.getByRole('button', { name: 'Disconnect diagnostics' }).click();
+    expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+  });
+}
 
 test('diagnostic reader cannot start and stop is explicit through the real capture API', async ({ page, request }) => {
   await page.goto('/#debug');
