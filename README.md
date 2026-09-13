@@ -200,6 +200,10 @@ OCPP 2.0.1 charger authorization preserves typed identity and certificate eviden
 durable local policy after bounded provider resolution, and retains native status/expiry semantics.
 See [OCPP 2.0.1 authorization](docs/security/ocpp201-authorization.md) for provider boundaries and tests.
 
+The opt-in [external CSMS smoke](docs/simulator/external-csms-smoke.md) runs the packaged
+simulator against a pinned independent OCPP stack, with isolated dual-version charging and
+remote-command evidence and explicit mismatch failures.
+
 The simulator also offers an explicitly enabled [loopback control API](docs/simulator/control-api.md)
 for bounded demo/staging scenario runs, scoped cancellation and pending-step fault controls.
 

@@ -1,0 +1,856 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-09-13",
+  "package_run": "https://github.com/MSpiechowicz/universal-ocpp-bridge/actions/runs/34763607556",
+  "package_archive_sha256": "168ba1e814a44252c714fff6480cd39358df45b58e9e0ebe1c768d354bcd6ff3",
+  "package_manifest": {
+    "browser_assets": "absent",
+    "build_image": "rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922",
+    "build_mode": "native",
+    "dirty_source": false,
+    "files": {
+      "INSTALL.md": "3f117fc0c5e5d82bfbcea47b71aa70cb7bcd09e7a6945746c48ff83bfeb54c11",
+      "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "bin/uob-sim": "f1883c721b82a56b182323e27f79042b2095f0d16163025acc52f3c85fb1ebcf"
+    },
+    "kind": "simulator",
+    "pi_performance": "unqualified",
+    "product_version": "0.28.0",
+    "qualification": "package smoke only; not signed activation authorization",
+    "runtime_baseline": "Linux, glibc 2.36 or newer",
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "schema_version": 1,
+    "source_revision": "c47db330955cd43c73a84b50773f5d28a15c5984",
+    "source_tree": "70a65510dbdc05a17cc6868c0235832732378aad",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "runtime_image_id": "sha256:13a7f3130f9393e5acd537f5a4fe9f1a7d1604156dd6d1103bfb273a353a846c",
+  "wrapper_sha256": "0bc8822315ffe595a2804cc34207fa1dbc10f50b12ab5f085a85ef492b2db050",
+  "container_definition_sha256": "104526cb62d4d33398f6df6264f86c9ecfee092c479bae9424bb0a7065bc25f3",
+  "smoke": {
+    "schema_version": 1,
+    "external_implementation": "mobilityhouse/ocpp",
+    "dependencies": {
+      "ocpp": "2.1.0",
+      "websockets": "15.0.1",
+      "jsonschema": "4.26.0",
+      "jsonschema-specifications": "2025.9.1",
+      "referencing": "0.37.0",
+      "rpds-py": "2026.6.3",
+      "attrs": "26.1.0"
+    },
+    "python": "3.14.7",
+    "platform": "Linux-7.0.12-linuxkit-x86_64-with-glibc2.41",
+    "simulator_sha256": "f1883c721b82a56b182323e27f79042b2095f0d16163025acc52f3c85fb1ebcf",
+    "harness_sha256": {
+      "peer.py": "1b8f5e769e4f994c6ec19242ec097ae2f9b58c6c6dc270fb960d00a1d89b4d49",
+      "run.py": "53f0f2f9960e9b157ac15bcd2a2f077026f6ad305b5d2e47508aad965978f7d8",
+      "requirements.txt": "7307afb16f3c98162244450a12578b5b482048add8a2c1d6cb9429752cc73aa6"
+    },
+    "limitations": [
+      "bounded test CSMS policy, not a complete production CSMS",
+      "loopback plaintext, no authentication/TLS qualification",
+      "no certification, reconnect, persistence or full feature claim"
+    ],
+    "cases": [
+      {
+        "protocol": "1.6",
+        "case": "smoke",
+        "status": "passed",
+        "simulator_exit_code": 0,
+        "failure_code": null,
+        "timed_out": false,
+        "peer_errors": [],
+        "observed": [
+          "BootNotification",
+          "Heartbeat",
+          "Authorize",
+          "StatusNotification",
+          "RemoteStartTransaction:Accepted",
+          "StartTransaction",
+          "MeterValues",
+          "RemoteStopTransaction:Accepted",
+          "StopTransaction"
+        ],
+        "scenario_sha256": "1876566a83cb7d7f54a7fc4072b4cef26bb1e5000a38f159fa4a14ce5457ca2e",
+        "seed": 171,
+        "simulator_events": [
+          {
+            "schema_version": 1,
+            "sequence": 0,
+            "id": "00000000000000ab-00000000",
+            "event": "run_started",
+            "status": "running",
+            "seed": 171
+          },
+          {
+            "schema_version": 1,
+            "sequence": 1,
+            "id": "00000000000000ab-00000001",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 2,
+            "id": "00000000000000ab-00000002",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect",
+            "detail": "ocpp1.6"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 3,
+            "id": "00000000000000ab-00000003",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 4,
+            "id": "00000000000000ab-00000004",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot",
+            "detail": "{\"currentTime\":\"2026-09-01T00:00:00Z\",\"interval\":60,\"status\":\"Accepted\"}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 5,
+            "id": "00000000000000ab-00000005",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "heartbeat",
+            "station_id": "alpha",
+            "action": "heartbeat"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 6,
+            "id": "00000000000000ab-00000006",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "heartbeat",
+            "station_id": "alpha",
+            "action": "heartbeat",
+            "detail": "2026-09-01T00:00:00Z"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 7,
+            "id": "00000000000000ab-00000007",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "authorize",
+            "station_id": "alpha",
+            "action": "authorize"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 8,
+            "id": "00000000000000ab-00000008",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "authorize",
+            "station_id": "alpha",
+            "action": "authorize",
+            "detail": "{\"idTagInfo\":{\"status\":\"Accepted\"}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 9,
+            "id": "00000000000000ab-00000009",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "available",
+            "station_id": "alpha",
+            "action": "status"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 10,
+            "id": "00000000000000ab-0000000a",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "available",
+            "station_id": "alpha",
+            "action": "status",
+            "detail": "{}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 11,
+            "id": "00000000000000ab-0000000b",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "remote-start",
+            "station_id": "alpha",
+            "action": "await_remote_start"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 12,
+            "id": "00000000000000ab-0000000c",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "remote-start",
+            "station_id": "alpha",
+            "action": "await_remote_start",
+            "detail": "{\"accepted\":true,\"request\":{\"connectorId\":1,\"idTag\":\"LOCAL-USER-1\"}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 13,
+            "id": "00000000000000ab-0000000d",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "start",
+            "station_id": "alpha",
+            "action": "start_transaction"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 14,
+            "id": "00000000000000ab-0000000e",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "start",
+            "station_id": "alpha",
+            "action": "start_transaction",
+            "detail": "{\"idTagInfo\":{\"status\":\"Accepted\"},\"transactionId\":42}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 15,
+            "id": "00000000000000ab-0000000f",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "meter",
+            "station_id": "alpha",
+            "action": "meter_values"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 16,
+            "id": "00000000000000ab-00000010",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "meter",
+            "station_id": "alpha",
+            "action": "meter_values",
+            "detail": "{}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 17,
+            "id": "00000000000000ab-00000011",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "remote-stop",
+            "station_id": "alpha",
+            "action": "await_remote_stop"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 18,
+            "id": "00000000000000ab-00000012",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "remote-stop",
+            "station_id": "alpha",
+            "action": "await_remote_stop",
+            "detail": "{\"accepted\":true,\"request\":{\"transactionId\":42}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 19,
+            "id": "00000000000000ab-00000013",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "stop",
+            "station_id": "alpha",
+            "action": "stop_transaction"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 20,
+            "id": "00000000000000ab-00000014",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "stop",
+            "station_id": "alpha",
+            "action": "stop_transaction",
+            "detail": "{}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 21,
+            "id": "00000000000000ab-00000015",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "disconnect",
+            "station_id": "alpha",
+            "action": "disconnect"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 22,
+            "id": "00000000000000ab-00000016",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "disconnect",
+            "station_id": "alpha",
+            "action": "disconnect",
+            "detail": "stopped"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 23,
+            "id": "00000000000000ab-00000017",
+            "event": "run_passed",
+            "status": "passed",
+            "seed": 171,
+            "diagnostics": {
+              "rejected_steps": 0,
+              "rejected_commands": 0,
+              "dropped_traces": 0
+            }
+          }
+        ]
+      },
+      {
+        "protocol": "2.0.1",
+        "case": "smoke",
+        "status": "passed",
+        "simulator_exit_code": 0,
+        "failure_code": null,
+        "timed_out": false,
+        "peer_errors": [],
+        "observed": [
+          "BootNotification",
+          "Heartbeat",
+          "Authorize",
+          "RequestStartTransaction:Accepted",
+          "StatusNotification",
+          "TransactionEvent:Started",
+          "TransactionEvent:Updated",
+          "RequestStopTransaction:Accepted",
+          "TransactionEvent:Ended"
+        ],
+        "scenario_sha256": "d6f46f00db58458243b11db7799fa93e452f2a2daec089f07d5826c485584a3e",
+        "seed": 171,
+        "simulator_events": [
+          {
+            "schema_version": 1,
+            "sequence": 0,
+            "id": "00000000000000ab-00000000",
+            "event": "run_started",
+            "status": "running",
+            "seed": 171
+          },
+          {
+            "schema_version": 1,
+            "sequence": 1,
+            "id": "00000000000000ab-00000001",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 2,
+            "id": "00000000000000ab-00000002",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect",
+            "detail": "ocpp2.0.1"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 3,
+            "id": "00000000000000ab-00000003",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 4,
+            "id": "00000000000000ab-00000004",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot",
+            "detail": "{\"currentTime\":\"2026-09-01T00:00:00Z\",\"interval\":60,\"status\":\"Accepted\"}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 5,
+            "id": "00000000000000ab-00000005",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "heartbeat",
+            "station_id": "alpha",
+            "action": "heartbeat"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 6,
+            "id": "00000000000000ab-00000006",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "heartbeat",
+            "station_id": "alpha",
+            "action": "heartbeat",
+            "detail": "2026-09-01T00:00:00Z"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 7,
+            "id": "00000000000000ab-00000007",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "authorize",
+            "station_id": "alpha",
+            "action": "authorize"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 8,
+            "id": "00000000000000ab-00000008",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "authorize",
+            "station_id": "alpha",
+            "action": "authorize",
+            "detail": "{\"idTokenInfo\":{\"status\":\"Accepted\"}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 9,
+            "id": "00000000000000ab-00000009",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "evse-2-available",
+            "station_id": "alpha",
+            "action": "status"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 10,
+            "id": "00000000000000ab-0000000a",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "evse-2-available",
+            "station_id": "alpha",
+            "action": "status",
+            "detail": "{}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 11,
+            "id": "00000000000000ab-0000000b",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "remote-start",
+            "station_id": "alpha",
+            "action": "await_remote_start"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 12,
+            "id": "00000000000000ab-0000000c",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "remote-start",
+            "station_id": "alpha",
+            "action": "await_remote_start",
+            "detail": "{\"accepted\":true,\"request\":{\"evseId\":2,\"idToken\":{\"idToken\":\"LOCAL-USER-201\",\"type\":\"Central\"},\"remoteStartId\":171}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 13,
+            "id": "00000000000000ab-0000000d",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "start",
+            "station_id": "alpha",
+            "action": "start_transaction"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 14,
+            "id": "00000000000000ab-0000000e",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "start",
+            "station_id": "alpha",
+            "action": "start_transaction",
+            "detail": "{\"idTokenInfo\":{\"status\":\"Accepted\"}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 15,
+            "id": "00000000000000ab-0000000f",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "meter",
+            "station_id": "alpha",
+            "action": "meter_values"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 16,
+            "id": "00000000000000ab-00000010",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "meter",
+            "station_id": "alpha",
+            "action": "meter_values",
+            "detail": "{}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 17,
+            "id": "00000000000000ab-00000011",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "remote-stop",
+            "station_id": "alpha",
+            "action": "await_remote_stop"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 18,
+            "id": "00000000000000ab-00000012",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "remote-stop",
+            "station_id": "alpha",
+            "action": "await_remote_stop",
+            "detail": "{\"accepted\":true,\"request\":{\"transactionId\":\"tx-201-42\"}}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 19,
+            "id": "00000000000000ab-00000013",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "stop",
+            "station_id": "alpha",
+            "action": "stop_transaction"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 20,
+            "id": "00000000000000ab-00000014",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "stop",
+            "station_id": "alpha",
+            "action": "stop_transaction",
+            "detail": "{}"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 21,
+            "id": "00000000000000ab-00000015",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "disconnect",
+            "station_id": "alpha",
+            "action": "disconnect"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 22,
+            "id": "00000000000000ab-00000016",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "disconnect",
+            "station_id": "alpha",
+            "action": "disconnect",
+            "detail": "stopped"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 23,
+            "id": "00000000000000ab-00000017",
+            "event": "run_passed",
+            "status": "passed",
+            "seed": 171,
+            "diagnostics": {
+              "rejected_steps": 0,
+              "rejected_commands": 0,
+              "dropped_traces": 0
+            }
+          }
+        ]
+      }
+    ],
+    "status": "passed"
+  },
+  "negative_control": {
+    "schema_version": 1,
+    "external_implementation": "mobilityhouse/ocpp",
+    "dependencies": {
+      "ocpp": "2.1.0",
+      "websockets": "15.0.1",
+      "jsonschema": "4.26.0",
+      "jsonschema-specifications": "2025.9.1",
+      "referencing": "0.37.0",
+      "rpds-py": "2026.6.3",
+      "attrs": "26.1.0"
+    },
+    "python": "3.14.7",
+    "platform": "Linux-7.0.12-linuxkit-x86_64-with-glibc2.41",
+    "simulator_sha256": "f1883c721b82a56b182323e27f79042b2095f0d16163025acc52f3c85fb1ebcf",
+    "harness_sha256": {
+      "peer.py": "1b8f5e769e4f994c6ec19242ec097ae2f9b58c6c6dc270fb960d00a1d89b4d49",
+      "run.py": "53f0f2f9960e9b157ac15bcd2a2f077026f6ad305b5d2e47508aad965978f7d8",
+      "requirements.txt": "7307afb16f3c98162244450a12578b5b482048add8a2c1d6cb9429752cc73aa6"
+    },
+    "limitations": [
+      "bounded test CSMS policy, not a complete production CSMS",
+      "loopback plaintext, no authentication/TLS qualification",
+      "no certification, reconnect, persistence or full feature claim"
+    ],
+    "cases": [
+      {
+        "protocol": "1.6",
+        "case": "rejected_boot",
+        "status": "failed",
+        "simulator_exit_code": 3,
+        "failure_code": "unexpected_protocol_response",
+        "timed_out": false,
+        "peer_errors": [],
+        "observed": [
+          "BootNotification"
+        ],
+        "scenario_sha256": "1876566a83cb7d7f54a7fc4072b4cef26bb1e5000a38f159fa4a14ce5457ca2e",
+        "seed": 171,
+        "simulator_events": [
+          {
+            "schema_version": 1,
+            "sequence": 0,
+            "id": "00000000000000ab-00000000",
+            "event": "run_started",
+            "status": "running",
+            "seed": 171
+          },
+          {
+            "schema_version": 1,
+            "sequence": 1,
+            "id": "00000000000000ab-00000001",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 2,
+            "id": "00000000000000ab-00000002",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect",
+            "detail": "ocpp1.6"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 3,
+            "id": "00000000000000ab-00000003",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 4,
+            "id": "00000000000000ab-00000004",
+            "event": "step_failed",
+            "status": "failed",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot",
+            "detail": "protocol response did not match the expected value"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 5,
+            "id": "00000000000000ab-00000005",
+            "event": "run_failed",
+            "status": "failed",
+            "seed": 171,
+            "detail": "protocol response did not match the expected value",
+            "failure_category": "assertion",
+            "failure_code": "unexpected_protocol_response",
+            "diagnostics": {
+              "rejected_steps": 0,
+              "rejected_commands": 0,
+              "dropped_traces": 0
+            }
+          }
+        ]
+      },
+      {
+        "protocol": "2.0.1",
+        "case": "rejected_boot",
+        "status": "failed",
+        "simulator_exit_code": 3,
+        "failure_code": "unexpected_protocol_response",
+        "timed_out": false,
+        "peer_errors": [],
+        "observed": [
+          "BootNotification"
+        ],
+        "scenario_sha256": "d6f46f00db58458243b11db7799fa93e452f2a2daec089f07d5826c485584a3e",
+        "seed": 171,
+        "simulator_events": [
+          {
+            "schema_version": 1,
+            "sequence": 0,
+            "id": "00000000000000ab-00000000",
+            "event": "run_started",
+            "status": "running",
+            "seed": 171
+          },
+          {
+            "schema_version": 1,
+            "sequence": 1,
+            "id": "00000000000000ab-00000001",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 2,
+            "id": "00000000000000ab-00000002",
+            "event": "step_passed",
+            "status": "passed",
+            "seed": 171,
+            "step_id": "connect",
+            "station_id": "alpha",
+            "action": "connect",
+            "detail": "ocpp2.0.1"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 3,
+            "id": "00000000000000ab-00000003",
+            "event": "step_started",
+            "status": "running",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 4,
+            "id": "00000000000000ab-00000004",
+            "event": "step_failed",
+            "status": "failed",
+            "seed": 171,
+            "step_id": "boot",
+            "station_id": "alpha",
+            "action": "boot",
+            "detail": "protocol response did not match the expected value"
+          },
+          {
+            "schema_version": 1,
+            "sequence": 5,
+            "id": "00000000000000ab-00000005",
+            "event": "run_failed",
+            "status": "failed",
+            "seed": 171,
+            "detail": "protocol response did not match the expected value",
+            "failure_category": "assertion",
+            "failure_code": "unexpected_protocol_response",
+            "diagnostics": {
+              "rejected_steps": 0,
+              "rejected_commands": 0,
+              "dropped_traces": 0
+            }
+          }
+        ]
+      }
+    ],
+    "status": "failed"
+  }
+}
