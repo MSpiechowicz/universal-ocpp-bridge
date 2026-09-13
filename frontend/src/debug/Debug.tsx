@@ -27,6 +27,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
   const [duration, setDuration] = useState(600);
   const credential = useRef<HTMLInputElement>(null);
   const active = useRef<ApiClient | undefined>(undefined);
+  const streamCleanup = useRef<(() => void) | undefined>(undefined);
   const generation = useRef(0);
   useEffect(() => { diagnostics.commit('debug'); });
   useEffect(() => {
@@ -48,7 +49,9 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
   useEffect(() => {
     if (!api || !capture) return;
     state.terminal = false;
-    return traceStream(api, capture, buffer, state);
+    const stop = traceStream(api, capture, buffer, state);
+    streamCleanup.current = stop;
+    return () => { stop(); if (streamCleanup.current === stop) streamCleanup.current = undefined; };
   }, [api, capture, buffer, state]);
 
   async function status(client: ApiClient): Promise<Capture | undefined> {
@@ -86,6 +89,8 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
         await api.request(`${sessionPath(capture)}/stop`, { method: 'POST' }, undefined, destination);
       } else current = await status(api);
       if (operation !== generation.current) return;
+      // End the old stream before publishing control evidence; effect cleanup runs later.
+      streamCleanup.current?.(); streamCleanup.current = undefined;
       if (current && current.id !== capture?.id) buffer.clear();
       setCapture(current); setPaused(false);
       state.message = current ? 'Reading the authorized active capture.' : action === 'stop' ? 'Capture stopped. Displayed traces are a finite, incomplete history.' : 'No active capture.';
@@ -93,6 +98,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
     finally { if (operation === generation.current) setPending(false); }
   }
   function disconnect() {
+    streamCleanup.current?.(); streamCleanup.current = undefined;
     generation.current++; active.current?.close(); active.current = undefined;
     setConfirmed(false); setApi(undefined); setCapture(undefined); setPending(false); setFailure(''); buffer.clear();
     state.message = 'Disconnected. Credentials and display buffer cleared. A server capture keeps its own deadline.';
