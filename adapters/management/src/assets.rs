@@ -20,11 +20,22 @@ impl Default for ManagementRouterOptions {
 
 // Fixed allowlisted embedded files: no runtime filesystem, build tool, or path traversal.
 // Regenerate with the isolated frontend build before committing a console change.
-pub(crate) async fn browser_entry() -> Response {
-    asset(
+pub(crate) async fn browser_entry(
+    axum::extract::State(state): axum::extract::State<crate::ManagementState>,
+) -> Response {
+    let mut response = asset(
         "text/html; charset=utf-8",
         include_bytes!("../ui/index.html"),
-    )
+    );
+    if matches!(
+        state.application.identity().runtime.environment,
+        uob_contracts::Environment::Demo | uob_contracts::Environment::Staging
+    ) {
+        response.headers_mut().insert(header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' http://127.0.0.1:*; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+                .parse().expect("static policy"));
+    }
+    response
 }
 
 pub(crate) async fn browser_script() -> Response {
@@ -138,7 +149,7 @@ mod tests {
                     .unwrap()
                     .contains("connect-src 'self'")
             );
-            let body = axum::body::to_bytes(response.into_body(), 300 * 1024)
+            let body = axum::body::to_bytes(response.into_body(), 320 * 1024)
                 .await
                 .unwrap();
             assert!(!body.is_empty());

@@ -32,10 +32,14 @@ listener as a test peer. These startup declarations are trusted operator configu
 not remote attestation of the peer. Production configuration is not a supported input.
 
 The HTTP Host must exactly match the configured IP and port, including IPv6 brackets.
-A supplied Origin must be that listener's HTTP origin. Cross-origin requests and ambient
+On control routes, a supplied Origin must be that listener's HTTP origin. Cross-origin requests and ambient
 cookie authentication are rejected. An authorized future console integration can use a
 same-origin server proxy that explicitly supplies the separate simulator token; it must not
 forward bridge credentials or expose the token to arbitrary origins.
+
+The optional [Debug evidence endpoint](../operations/debug-simulator-evidence.md) uses a
+separate read token and explicit loopback console origin. It does not grant browser
+access to these control routes.
 
 ## Endpoints
 

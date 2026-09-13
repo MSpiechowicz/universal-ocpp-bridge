@@ -179,6 +179,9 @@ id = "heartbeat""#,
     assert_eq!(report["steps"][2]["action"], "disconnect");
     assert_eq!(report["steps"][3]["action"], "connect");
     assert_eq!(report["steps"][4]["fault"], "response_delay");
+    assert_eq!(report["steps"][4]["fault_selected"], true);
+    assert_eq!(report["steps"][4]["actual_event"], "heartbeat_result");
+    assert_eq!(report["steps"][4]["intervention"]["delay_ms"], 100);
     assert!(
         report["events"]
             .as_array()

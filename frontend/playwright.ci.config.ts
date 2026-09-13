@@ -15,7 +15,9 @@ export default defineConfig({
     ...server, stdout: 'ignore', stderr: 'ignore',
     // Build before entering the browser file budget; compiler outputs are larger
     // than browser reports and must never be generated under this runtime cap.
-    command: server.url?.includes(':39193/')
+    command: server.url?.includes(':39194/')
+      ? 'node scripts/simulator-fixture.mjs --prebuilt'
+      : server.url?.includes(':39193/')
       ? './target/debug/uob serve --config frontend/tests/daemon.toml'
       : './target/debug/examples/browser_fixture',
   })),
