@@ -165,6 +165,11 @@ git switch --quiet --create topic
 fixture_commit --quiet --allow-empty --message 'fix: branch fixture'
 assert_failure
 
+new_history candidate-branch
+git switch --quiet --create next
+fixture_commit --quiet --allow-empty --message 'fix: candidate branch fixture'
+assert_failure
+
 new_history wrong-tool
 cat > "$temporary/wrong-cog" <<'TOOL'
 #!/usr/bin/env bash

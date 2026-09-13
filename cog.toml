@@ -1,5 +1,5 @@
 ignore_merge_commits = false
-branch_whitelist = ["main"]
+branch_whitelist = ["main", "next"]
 tag_prefix = "v"
 skip_ci = "[skip ci]"
 pre_bump_hooks = ["./scripts/update-workspace-version.sh {{version}}"]
