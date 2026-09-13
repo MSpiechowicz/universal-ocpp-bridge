@@ -98,3 +98,13 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .offline-panel dd { margin-left: 0; }
 .offline-panel input[type="file"] { max-width: 100%; }
 .offline-panel pre { max-height: 240px; overflow: auto; }
+
+.operations { margin: 1.5rem 0; border-block: 1px solid var(--line, #c5cbd0); padding: 1rem 0; overflow-wrap: anywhere; }
+.operations h3 { margin-top: 1.5rem; }
+.operations dl { margin: 1rem 0; }
+.operations dt { font-weight: 600; margin-top: .75rem; }
+.operations dd { margin: .25rem 0 .75rem; }
+.operations-grid, .operations-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 1rem; }
+.operations table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.operations th, .operations td { padding: .5rem; text-align: left; border-bottom: 1px solid var(--line, #c5cbd0); overflow-wrap: anywhere; }
+.operations th:first-child { width: 48%; }

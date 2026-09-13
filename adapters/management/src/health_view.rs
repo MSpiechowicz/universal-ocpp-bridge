@@ -49,6 +49,26 @@ pub(super) fn health_json(snapshot: &HealthSnapshot) -> Value {
     let queues = resources.queues;
     let limits = snapshot.runtime_limits;
     json!({
+        "target_configuration": snapshot.target_configuration.as_ref().map(|(kind, capabilities)| json!({
+            "kind": kind.as_str(),
+            "capabilities": capabilities.iter().map(uob_application::SafeEndpointLabel::as_str).collect::<Vec<_>>(),
+        })),
+        "export_observation": snapshot.export_observation.as_ref().map(|value| json!({
+            "provider": value.provider.as_str(),
+            "destination_revision": value.destination_revision.as_str(),
+            "record_classes": value.record_classes,
+            "age_ms": snapshot.export_observation_age_ms,
+            "enqueued_records": value.enqueued_records,
+            "remote_committed_records": value.remote_committed_records,
+            "successful_batches": value.successful_batches,
+            "failed_batches": value.failed_batches,
+            "retries": value.retries,
+            "lag_milliseconds": value.lag_milliseconds,
+            "duplicates": value.duplicates,
+            "quarantined_records": value.quarantined_records,
+            "gap_count": value.gap_count,
+            "dropped_records": value.dropped_records,
+        })),
         "readiness": readiness(snapshot.readiness),
         "core_loop": core_loop(snapshot.core_loop),
         "storage": storage(snapshot.storage),

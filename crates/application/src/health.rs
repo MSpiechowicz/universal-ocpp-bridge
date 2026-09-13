@@ -1,3 +1,6 @@
+mod export_observation;
+pub use export_observation::ExportObservation;
+
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex, MutexGuard, PoisonError},
@@ -103,6 +106,9 @@ pub struct ProcessResourceMetrics {
 /// Complete operator snapshot. Reference thresholds remain documentation, not pass claims.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HealthSnapshot {
+    pub target_configuration: Option<(crate::SafeEndpointLabel, Vec<crate::SafeEndpointLabel>)>,
+    pub export_observation: Option<ExportObservation>,
+    pub export_observation_age_ms: Option<u64>,
     pub readiness: ReadinessState,
     pub core_loop: CoreLoopState,
     pub storage: StorageHealthState,
@@ -162,6 +168,8 @@ struct Inner {
 
 #[derive(Debug)]
 struct State {
+    target_configuration: Option<(crate::SafeEndpointLabel, Vec<crate::SafeEndpointLabel>)>,
+    export_observation: Option<(ExportObservation, std::time::Instant)>,
     core_loop: CoreLoopState,
     storage: StorageHealthState,
     storage_retention: Option<StorageRetentionStatusView>,
@@ -224,6 +232,8 @@ impl HealthMonitor {
             inner: Arc::new(Inner {
                 budget,
                 state: Mutex::new(State {
+                    target_configuration: None,
+                    export_observation: None,
                     core_loop: CoreLoopState::Starting,
                     storage: StorageHealthState::Starting,
                     storage_retention: None,
@@ -241,6 +251,23 @@ impl HealthMonitor {
     #[must_use]
     pub fn resources(&self) -> &RuntimeResourceBudget {
         &self.inner.budget
+    }
+
+    /// Replaces one passive observation; None clears prior destination evidence.
+    pub fn report_export_observation(&self, observation: Option<ExportObservation>) {
+        lock(&self.inner).export_observation =
+            observation.map(|value| (value.bounded(), std::time::Instant::now()));
+    }
+
+    /// Records offline registry metadata without constructing a target session.
+    /// Oversized capability lists are unavailable instead of silently truncated.
+    pub fn report_target_configuration(
+        &self,
+        kind: crate::SafeEndpointLabel,
+        capabilities: Vec<crate::SafeEndpointLabel>,
+    ) {
+        lock(&self.inner).target_configuration =
+            (capabilities.len() <= 32).then_some((kind, capabilities));
     }
 
     pub fn report_core_loop(&self, state: CoreLoopState) {
@@ -269,7 +296,12 @@ impl HealthMonitor {
     }
 
     pub fn report_component(&self, kind: ComponentKind, health: ComponentHealth) {
-        lock(&self.inner).components.insert(kind, health);
+        let mut state = lock(&self.inner);
+        if kind == ComponentKind::ExternalExporter && health.state == ComponentHealthState::Disabled
+        {
+            state.export_observation = None;
+        }
+        state.components.insert(kind, health);
     }
 
     /// Projects target-session health into the common component view.
@@ -378,6 +410,15 @@ impl HealthMonitor {
             ReadinessState::NotReady
         };
         HealthSnapshot {
+            target_configuration: state.target_configuration.clone(),
+            export_observation: state
+                .export_observation
+                .as_ref()
+                .map(|(value, _)| value.clone()),
+            export_observation_age_ms: state
+                .export_observation
+                .as_ref()
+                .map(|(_, at)| u64::try_from(at.elapsed().as_millis()).unwrap_or(u64::MAX)),
             readiness,
             core_loop: state.core_loop,
             storage: state.storage,

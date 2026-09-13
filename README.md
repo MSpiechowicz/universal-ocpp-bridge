@@ -50,6 +50,9 @@ with no Node runtime on the Raspberry Pi. It verifies destination identity, keep
 credentials in tab memory, binds diagnostic tokens to their environment, requires explicit destination
 confirmation for controls, and shows bounded authenticated SSE connection and stale-state evidence.
 
+The [Debug operational panels](docs/operations/debug-operational-panels.md) separate local persistence,
+resource pressure and remote export evidence with explicit unavailable observations.
+
 The [browser and API diagnostics panel](docs/operations/browser-diagnostics.md) exposes bounded,
 sanitized failure counters and correlation lookup alongside stream staleness and reconnect evidence.
 

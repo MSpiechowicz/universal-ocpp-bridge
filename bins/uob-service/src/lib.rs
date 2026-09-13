@@ -138,6 +138,19 @@ fn compose_all<E, P>(
         destination_transition,
     )?;
     let application = Application::new(identity);
+    if !data_export.is_enabled() {
+        application.health().report_component(
+            uob_application::ComponentKind::ExternalExporter,
+            uob_application::ComponentHealth {
+                state: uob_application::ComponentHealthState::Disabled,
+                reconnects: 0,
+                backlog_items: 0,
+                in_flight_items: 0,
+                active_connections: 0,
+                reason: None,
+            },
+        );
+    }
     if isolated_controls.simulator {
         application
             .security_policy()
@@ -151,6 +164,20 @@ fn compose_all<E, P>(
     let target_selection = target_selection
         .map(|selection| targets.validate(selection))
         .transpose()?;
+    if let Some(selection) = &target_selection {
+        let kind = uob_application::SafeEndpointLabel::new(selection.catalog.kind.as_str());
+        let capabilities: Result<Vec<_>, _> = selection
+            .catalog
+            .capabilities
+            .iter()
+            .map(|value| uob_application::SafeEndpointLabel::new(value.0.clone()))
+            .collect();
+        if let (Ok(kind), Ok(capabilities)) = (kind, capabilities) {
+            application
+                .health()
+                .report_target_configuration(kind, capabilities);
+        }
+    }
     Ok(ServiceComposition {
         targets,
         database_providers,

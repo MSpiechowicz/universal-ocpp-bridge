@@ -6,6 +6,7 @@ import type { Identity } from '../identity';
 import { TraceBuffer } from './buffer';
 import { capturePath, parseCapture, sessionPath, traceStream } from './capture';
 import type { Capture, TraceState } from './capture';
+import { Operations } from './Operations';
 import { Timeline } from './Timeline';
 
 export function Debug({ identity, hidden }: { identity: Identity; hidden: boolean }) {
@@ -128,6 +129,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
     <p>Stream gaps: {state.gaps} · server evictions: {state.evicted} · dropped: {state.dropped} · details shed: {state.shed}</p>
     <button className="secondary" onClick={() => { setCeiling(buffer.rows.at(-1)?.sequence ?? -1); setPaused(value => !value); }}>{paused ? 'Resume display' : 'Pause display'}</button>
     {paused && <p className="notice">Display paused at trace {ceiling}. Capture and expiry continue. Evicted rows disappear; resume shows the current retained window.</p>}
+    <Operations key={api ? "connected" : "disconnected"} identity={identity} hidden={hidden} buffer={buffer} ceiling={paused ? ceiling : Infinity}/>
     <Timeline buffer={buffer} tick={tick} paused={paused} ceiling={ceiling}/>
   </section>;
 }
