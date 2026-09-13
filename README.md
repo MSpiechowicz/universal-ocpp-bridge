@@ -295,3 +295,7 @@ start/stop replies, CSMS IDs, local authorization, meter evidence and bounded re
 Eligible release failures have a durable one-attempt fallback path that preserves current data.
 See [automatic rollback](docs/operations/automatic-rollback.md) for host integration, quarantine
 and operator-recovery behavior.
+
+Native x86-64 and ARM64 runtime archives are built and smoke-tested separately from
+the simulator. See [platform packages](docs/operations/platform-packages.md) for
+installation, content auditing and the explicit Pi qualification boundary.
