@@ -1,5 +1,6 @@
 #![doc = "External provider boundary for authorization, PKI, artifacts, and payments."]
 
+pub mod artifacts;
 mod charging_identity;
 pub use charging_identity::LocalChargingIdentityProvider;
 
