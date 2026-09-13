@@ -13,6 +13,7 @@ cd "$repository"
 tool_version="$("$cog_bin" --version)"
 test "$tool_version" = 'cog 7.0.0'
 test -f cog.toml
+test "$(git branch --show-current)" = main
 shallow="$(git rev-parse --is-shallow-repository)"
 test "$shallow" = false
 working_changes="$(git status --porcelain --untracked-files=normal)"

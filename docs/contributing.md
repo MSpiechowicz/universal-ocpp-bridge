@@ -48,8 +48,11 @@ bounded range to `cog check --ignore-merge-commits`, so genuine Git merge commit
 range while malformed ordinary commits still fail. `cog.toml` deliberately keeps merge-message
 ignoring disabled for standalone title verification.
 
-Pull requests are feature-squashed into `main`. The pull request title becomes the squash commit
-subject, so it must be a valid Conventional Commit before review and after every title edit. Use a
+Feature pull requests are feature-squashed into `main` (or optional `next`).
+Channel promotion from `next` to `main` is rejected by this feature PR path; it requires the
+separate trusted ancestry-preserving gate described in the
+[candidate channel policy](operations/candidate-channel-versioning.md).
+The feature pull request title becomes the squash commit subject, so it must be a valid Conventional Commit before review and after every title edit. Use a
 `!` before the colon or a `BREAKING CHANGE:` footer only for an intentional breaking change. Merge
 commits used to synchronize branches are not squash-title substitutes.
 
