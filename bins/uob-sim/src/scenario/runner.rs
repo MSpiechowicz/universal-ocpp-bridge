@@ -238,6 +238,7 @@ async fn run_station(
             .as_ref()
             .filter(|fault| fault_selected(seed, &station.id, &work.step.id, fault))
             .map(|fault| fault.kind);
+        live.observe(&work.step.id, None, Some(selected_fault.is_some()));
         let result = {
             let execution = execute_step(
                 &connector,
@@ -249,6 +250,7 @@ async fn run_station(
                 &mut state,
                 &mut diagnostics,
                 seed,
+                &live,
             );
             tokio::pin!(execution);
             tokio::select! {
@@ -266,7 +268,7 @@ async fn run_station(
                 }
             }
         };
-        live.finish(&work.step.id, result.is_ok());
+        live.finish(&work.step.id, &result);
         if let Err(step_failure) = &result {
             failure = Some(step_failure.clone());
         }
@@ -306,6 +308,7 @@ async fn execute_step(
     state: &mut StationState,
     diagnostics: &mut DiagnosticCounts,
     seed: u64,
+    live: &LiveRun,
 ) -> Result<String, RunFailure> {
     let jitter = deterministic_jitter(seed, &station.id, &step.id, step.jitter_ms);
     let start_delay = step.start_delay_ms.saturating_add(jitter);
@@ -332,6 +335,7 @@ async fn execute_step(
             .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?;
         let delay = Duration::from_millis(step.fault.as_ref().map_or(0, |fault| fault.delay_ms));
         let result = complete_heartbeat_pair_out_of_order(connected, clock, delay).await?;
+        live.observe(&step.id, Some(step.action.event()), None);
         step.assert_detail(&result)?;
         return Ok(result);
     }
@@ -346,6 +350,9 @@ async fn execute_step(
         selected_fault,
     )
     .await;
+    if result.is_ok() {
+        live.observe(&step.id, Some(step.action.event()), None);
+    }
     let result = expected_failure(step, result)?;
     if matches!(selected_fault, Some(FaultKind::ResponseDelay)) {
         let delay = step.fault.as_ref().map_or(0, |fault| fault.delay_ms);

@@ -53,6 +53,9 @@ confirmation for controls, and shows bounded authenticated SSE connection and st
 The [Debug operational panels](docs/operations/debug-operational-panels.md) separate local persistence,
 resource pressure and remote export evidence with explicit unavailable observations.
 
+The [simulator evidence panel](docs/operations/debug-simulator-evidence.md) reads isolated
+demo/staging run outcomes and links supplied correlations into the existing Debug timeline.
+
 The [browser and API diagnostics panel](docs/operations/browser-diagnostics.md) exposes bounded,
 sanitized failure counters and correlation lookup alongside stream staleness and reconnect evidence.
 

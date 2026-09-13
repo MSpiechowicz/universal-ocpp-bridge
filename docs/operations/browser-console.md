@@ -14,7 +14,7 @@ bytes; React runs on the operator's browser. The shell has no background animati
 IndexedDB or local/session-storage writes. The normal event summary retains counters and only the latest event type. Debug separately retains
 a bounded sanitized trace window when explicitly connected.
 
-The isolated frontend build enforces a 300 KiB total uncompressed asset budget and a 100 KiB gzip
+The isolated frontend build enforces a 320 KiB total uncompressed asset budget and a 100 KiB gzip
 measurement budget. The current server sends uncompressed assets; the gzip measurement is not a
 claim about HTTP compression. There are only three allowlisted routes: `/`,
 `/ui/assets/console.js` and `/ui/assets/console.css`. Responses are `no-store` with explicit MIME,

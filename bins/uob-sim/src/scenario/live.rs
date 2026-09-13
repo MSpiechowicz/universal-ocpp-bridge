@@ -21,6 +21,11 @@ pub struct StepProgress {
     pub status: &'static str,
     pub expectation: Option<String>,
     pub assertion_passed: Option<bool>,
+    pub actual_event: Option<&'static str>,
+    pub failure_category: Option<super::FailureCategory>,
+    pub failure_code: Option<&'static str>,
+    pub detail_assertion: bool,
+    pub fault_selected: Option<bool>,
     pub fault: Option<&'static str>,
     pub intervention: Option<Intervention>,
 }
@@ -50,6 +55,11 @@ impl LiveRun {
                         status: "pending",
                         expectation: step.expect_event.clone(),
                         assertion_passed: None,
+                        actual_event: None,
+                        failure_category: None,
+                        failure_code: None,
+                        detail_assertion: step.expect_detail.is_some(),
+                        fault_selected: None,
                         fault: step.fault.as_ref().map(|fault| fault.kind.name()),
                         intervention: None,
                     },
@@ -140,7 +150,22 @@ impl LiveRun {
         state.step.clone()
     }
 
-    pub(super) fn finish(&self, step_id: &str, passed: bool) {
+    pub(super) fn observe(&self, step_id: &str, event: Option<&'static str>, fault: Option<bool>) {
+        let mut states = self.0.lock().expect("live run lock");
+        let state = states
+            .iter_mut()
+            .find(|state| state.step.id == step_id)
+            .expect("validated step");
+        if let Some(event) = event {
+            state.progress.actual_event = Some(event);
+        }
+        if let Some(fault) = fault {
+            state.progress.fault_selected = Some(fault);
+        }
+    }
+
+    pub(super) fn finish(&self, step_id: &str, result: &Result<String, super::RunFailure>) {
+        let passed = result.is_ok();
         let mut states = self.0.lock().expect("live run lock");
         let state = states
             .iter_mut()
@@ -148,5 +173,9 @@ impl LiveRun {
             .expect("validated step");
         state.progress.status = if passed { "passed" } else { "failed" };
         state.progress.assertion_passed = Some(passed);
+        if let Err(failure) = result {
+            state.progress.failure_category = Some(failure.category);
+            state.progress.failure_code = Some(failure.code);
+        }
     }
 }

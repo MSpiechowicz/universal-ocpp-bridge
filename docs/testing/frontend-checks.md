@@ -25,6 +25,7 @@ npm run check
 npm run check:reproducible
 git diff --exit-code -- ../adapters/management/ui
 cargo build --locked -p uob-service --bin uob
+cargo build --locked -p uob-sim --bin uob-sim
 cargo build --locked -p uob-management-adapter --example browser_fixture
 ./node_modules/.bin/playwright install --with-deps chromium
 npm run test:browser:ci
@@ -37,7 +38,8 @@ validators because rejecting those characters is intentional. React Compiler
 rules are not enabled: this project does not use that compiler.
 
 The suite starts four real management-router fixtures plus the actual `uob`
-executable, built after the asset build, on loopback ports 39189–39193. Occupied
+executable, built after the asset build, on loopback ports 39189–39193, and a
+separate real simulator on port 39194 for read-only evidence tests. Occupied
 ports fail rather than reusing another process. The daemon uses an isolated
 API-only demo configuration without station, broker or external database peers.
 Its smoke test verifies compiled assets, runtime identity, credential clearing and

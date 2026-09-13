@@ -8,6 +8,7 @@ import { capturePath, parseCapture, sessionPath, traceStream } from './capture';
 import type { Capture, TraceState } from './capture';
 import { Operations } from './Operations';
 import { Timeline } from './Timeline';
+import { Simulator } from './Simulator';
 
 export function Debug({ identity, hidden }: { identity: Identity; hidden: boolean }) {
   const [buffer] = useState(() => new TraceBuffer());
@@ -130,6 +131,7 @@ export function Debug({ identity, hidden }: { identity: Identity; hidden: boolea
     <button className="secondary" onClick={() => { setCeiling(buffer.rows.at(-1)?.sequence ?? -1); setPaused(value => !value); }}>{paused ? 'Resume display' : 'Pause display'}</button>
     {paused && <p className="notice">Display paused at trace {ceiling}. Capture and expiry continue. Evicted rows disappear; resume shows the current retained window.</p>}
     <Operations key={api ? "connected" : "disconnected"} identity={identity} hidden={hidden} buffer={buffer} ceiling={paused ? ceiling : Infinity}/>
+    <Simulator identity={identity} hidden={hidden}/>
     <Timeline buffer={buffer} tick={tick} paused={paused} ceiling={ceiling}/>
   </section>;
 }

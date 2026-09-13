@@ -25,5 +25,11 @@ export default defineConfig({
     timeout: 120000,
     reuseExistingServer: false,
     gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
+  }, {
+    command: 'node scripts/simulator-fixture.mjs',
+    url: 'http://127.0.0.1:39194/api/v1/scenarios',
+    timeout: 120000,
+    reuseExistingServer: false,
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
   }],
 });

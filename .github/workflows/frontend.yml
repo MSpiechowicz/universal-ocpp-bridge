@@ -57,6 +57,7 @@ jobs:
         run: git diff --exit-code -- ../adapters/management/ui
       - name: Build the daemon and real management fixture with current assets
         run: |
+          cargo build --locked -p uob-sim --bin uob-sim
           cargo build --locked -p uob-service --bin uob
           cargo build --locked -p uob-management-adapter --example browser_fixture
       - name: Install the locked Playwright Chromium browser

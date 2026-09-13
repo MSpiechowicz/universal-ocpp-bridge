@@ -21,6 +21,19 @@ struct Document {
     token_file: String,
     simulator_file: String,
     scenarios: Vec<ScenarioFile>,
+    debug: Option<DebugDocument>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DebugDocument {
+    console_origin: String,
+    token_file: String,
+}
+
+pub(super) struct DebugAccess {
+    pub origin: String,
+    pub token: String,
 }
 
 #[derive(Deserialize)]
@@ -40,6 +53,7 @@ pub struct ControlConfiguration {
     pub(super) simulator: SimulatorConfiguration,
     pub(super) scenarios: BTreeMap<String, ScenarioDefinition>,
     pub(super) imports: BTreeSet<String>,
+    pub(super) debug: Option<DebugAccess>,
 }
 
 impl ControlConfiguration {
@@ -65,6 +79,10 @@ impl ControlConfiguration {
         if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err("control_token_requires_32_random_bytes_hex");
         }
+        let debug = document
+            .debug
+            .map(|debug| load_debug(debug, parent, &token))
+            .transpose()?;
         let simulator = parse_configuration(&read_bounded(
             &parent.join(document.simulator_file),
             DOCUMENT_LIMIT,
@@ -134,6 +152,7 @@ impl ControlConfiguration {
             simulator,
             scenarios,
             imports,
+            debug,
         })
     }
 }
@@ -201,4 +220,31 @@ pub(super) fn validate_simulator(
         }
     }
     Ok(())
+}
+
+fn load_debug(
+    debug: DebugDocument,
+    parent: &Path,
+    token: &str,
+) -> Result<DebugAccess, &'static str> {
+    let origin = url::Url::parse(&debug.console_origin).map_err(|_| "invalid_debug_origin")?;
+    if origin.scheme() != "http"
+        || !matches!(origin.host_str(), Some("127.0.0.1" | "[::1]"))
+        || origin.origin().ascii_serialization() != debug.console_origin
+    {
+        return Err("literal_loopback_debug_origin_required");
+    }
+    let debug_token = read_bounded(&parent.join(debug.token_file), 128)?
+        .trim()
+        .to_owned();
+    if debug_token.len() != 64
+        || !debug_token.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || debug_token == token
+    {
+        return Err("separate_debug_token_required");
+    }
+    Ok(DebugAccess {
+        origin: debug.console_origin,
+        token: debug_token,
+    })
 }

@@ -16,6 +16,7 @@ type ApiResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
 
 pub(super) fn router(server: ControlServer) -> Router {
     Router::new()
+        .route("/api/v1/debug/runs/{id}", get(super::debug::status))
         .route("/api/v1/scenarios", get(catalog))
         .route("/api/v1/runs", get(list).post(start))
         .route("/api/v1/runs/{id}", get(status).delete(remove))
@@ -35,6 +36,9 @@ async fn guard(State(server): State<ControlServer>, request: Request, next: Next
         != Some(expected_host.as_str())
     {
         return StatusCode::FORBIDDEN.into_response();
+    }
+    if request.uri().path().starts_with("/api/v1/debug/") {
+        return super::debug::guard(server, request, next).await;
     }
     // No cookies or ambient browser authentication. A future console proxy must explicitly
     // inject this separate simulator token; arbitrary cross-origin browser access stays denied.

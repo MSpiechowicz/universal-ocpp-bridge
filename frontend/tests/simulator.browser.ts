@@ -1,0 +1,64 @@
+import { test, expect } from '@playwright/test';
+import { parseSimulator } from '../src/debug/simulator';
+
+test('real simulator failure is read with separate credentials, exact seed and inert evidence', async ({ page, request }) => {
+  const simulator = 'http://127.0.0.1:39194';
+  const control = { Authorization: `Bearer ${'b'.repeat(64)}` };
+  const started = await request.post(`${simulator}/api/v1/runs`, { headers: control, data: { scenario: 'failed-assertion' } });
+  expect(started.ok()).toBe(true);
+  const run = String((await started.json()).run_id);
+  await expect.poll(async () => (await (await request.get(`${simulator}/api/v1/runs/${run}`, { headers: control })).json()).status).toBe('failed');
+  const debugResponse = await request.get(`${simulator}/api/v1/debug/runs/${run}`, { headers: { Origin: 'http://127.0.0.1:39193', Authorization: `Bearer ${'a'.repeat(64)}` } });
+  expect(debugResponse.status()).toBe(200);
+  parseSimulator(await debugResponse.json(), 'demo', run);
+  const writes: string[] = [];
+  page.on('request', req => { if (!['GET', 'OPTIONS'].includes(req.method())) writes.push(req.url()); });
+  await page.goto('http://127.0.0.1:39193');
+  const panel = page.getByRole('region', { name: 'Simulator scenario evidence', exact: true });
+  await panel.getByLabel('Simulator origin', { exact: true }).fill(simulator);
+  await panel.getByLabel('Simulator run ID').fill(run);
+  await panel.getByLabel('Simulator Debug read credential').fill('a'.repeat(64));
+  await panel.getByRole('button', { name: 'Read simulator evidence', exact: true }).click();
+  await expect(panel).toContainText('seed 18446744073709551615');
+  await expect(panel).toContainText('unexpected_event_detail');
+  await expect(panel).toContainText('Actual event');
+  await expect(panel).toContainText('delay_elapsed');
+  await expect(panel).toContainText('Server correlation unavailable');
+  await expect(panel).not.toContainText('deliberately-mismatched-private-wire-text');
+  expect(writes).toEqual([]);
+  // Optional server correlation metadata uses the existing timeline navigation contract.
+  const correlation = '12345678-1234-1234-1234-123456789abc';
+  await page.route(`${simulator}/api/v1/debug/runs/${run}`, async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    data.steps[0].correlation_id = correlation;
+    data.steps[0].failure_code = '<img src=x onerror=alert(1)>';
+    await route.fulfill({ response, json: data });
+  });
+  await panel.getByRole('button', { name: 'Refresh simulator evidence' }).click();
+  await expect(panel).toContainText('<img src=x onerror=alert(1)>');
+  await expect(panel.locator('img')).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Find simulator correlation in retained traces' }).click();
+  await expect(page.getByLabel('Filter correlation', { exact: true })).toHaveValue(correlation);
+  await expect(page.getByRole('button', { name: 'Start capture on demo', exact: true })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Clear simulator credential and evidence' }).click();
+  await expect(panel.getByLabel('Simulator Debug read credential')).toHaveValue('');
+  await expect(panel).not.toContainText('seed 18446744073709551615');
+  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+  await request.delete(`${simulator}/api/v1/runs/${run}`, { headers: control });
+});
+
+test('production has no simulator access and staging rejects demo evidence', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Debug timeline', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Simulator Debug read credential')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Simulator scenario evidence', exact: true })).toHaveCount(0);
+  const response = await page.request.get('/');
+  expect(response.headers()['content-security-policy']).toContain("connect-src 'self';");
+  await page.goto('http://127.0.0.1:39190');
+  const panel = page.getByRole('region', { name: 'Simulator scenario evidence', exact: true });
+  await panel.getByLabel('Simulator origin', { exact: true }).fill('http://127.0.0.1:39194');
+  await panel.getByLabel('Simulator Debug read credential').fill('a'.repeat(64));
+  await panel.getByRole('button', { name: 'Read simulator evidence', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('Simulator evidence unavailable');
+});
