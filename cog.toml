@@ -4,6 +4,19 @@ tag_prefix = "v"
 skip_ci = "[skip ci]"
 pre_bump_hooks = ["./scripts/update-workspace-version.sh {{version}}"]
 
+[commit_types]
+fix = { changelog_title = "Bug fixes", bump_patch = true, bump_minor = false }
+perf = { changelog_title = "Performance", bump_patch = true, bump_minor = false }
+feat = { changelog_title = "Features", bump_patch = false, bump_minor = true }
+docs = { changelog_title = "Documentation", bump_patch = false, bump_minor = false }
+test = { changelog_title = "Tests", bump_patch = false, bump_minor = false }
+ci = { changelog_title = "Continuous integration", bump_patch = false, bump_minor = false }
+build = { changelog_title = "Build", bump_patch = false, bump_minor = false }
+chore = { changelog_title = "Maintenance", bump_patch = false, bump_minor = false }
+refactor = { changelog_title = "Refactoring", bump_patch = false, bump_minor = false }
+style = { changelog_title = "Style", bump_patch = false, bump_minor = false }
+revert = { changelog_title = "Reverts", bump_patch = false, bump_minor = false }
+
 [changelog]
 path = "CHANGELOG.md"
 template = "remote"

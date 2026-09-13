@@ -74,28 +74,32 @@ Run all current workspace, architecture, and documentation checks with:
 Frontend changes also require the isolated [frontend checks](testing/frontend-checks.md),
 including the pinned build and browser suite against the actual daemon and management fixtures.
 
-Pull request checks do not calculate a product version, create tags, publish artifacts, or comment
-on pull requests. After the Rust workspace workflow succeeds for a push to `main`, its release job
+Pull request checks exercise version proposals in disposable fixture histories. They do not
+create product tags, publish artifacts, or comment on pull requests. After the Rust workspace
+workflow succeeds for a push to `main`, its release job
 uses the same reviewed Cocogitto 7.0.0 binary to calculate the next semantic version from commits
-since the latest `v*` tag. A breaking change increments the major version, `feat` increments the
-minor version, and `fix` increments the patch version.
+since the latest `v*` tag. After stable 1.0.0, a breaking change increments the major version,
+`feat` increments the minor version, and `fix` or `perf` increments the patch version.
+Maintenance-only changes do not require a release. See the
+[product version policy](operations/product-version-policy.md) for the tested rules, 0.x behavior,
+first-stable readiness boundary, and Cargo/schema/supervisor version ownership.
 
-When the verified main revision still uses an already released version, the job prepares the
-workspace version, lockfile, and changelog on a separate `codex/release-*` branch. Open the PR using
-the comparison link in the job summary and merge it after all required checks pass. The generated
-commit has no skip-CI marker. Actions does not create or approve the PR, so no additional token or
-repository permission is needed.
+The existing protected source-publication job is separate from proposal generation. When the
+verified main revision still uses an already released version and eligible changes exist, it runs
+the explicit bump hook, verifies the generated workspace version, lockfile and changelog, and
+atomically publishes the release commit and tag through the approved release identity.
 
 When main contains an unreleased workspace version, the protected job verifies its build and
 pushes only a version tag pointing to that exact main revision, then creates the GitHub Release.
-It never pushes a generated commit to main. Retries recover a missing GitHub Release after a
-successful tag push; superseded main runs skip publication. Changes that do not require a version
-increment finish successfully without preparing a branch.
+Retries recover a missing GitHub Release after a successful tag push; superseded main runs skip
+publication. Changes that do not require a version increment finish successfully without a bump.
+Source publication is not qualification or production activation, and a version proposal grants
+no publication permission.
 
-Preview the next version without modifying the repository:
+Preview the next version as JSON from a clean, full-history `main` checkout:
 
 ```text
-cog bump --auto --dry-run
+./scripts/propose-product-version.sh
 ```
 
 Inspect the source version, latest tag, and identity reported by a running service:
