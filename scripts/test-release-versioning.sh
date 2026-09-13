@@ -13,7 +13,8 @@ git config --local user.name 'Release regression test'
 git config --local user.email 'release-test@example.invalid'
 # Include the working copy of the hook when developers run this before committing.
 cp "$repository_root/scripts/update-workspace-version.sh" scripts/update-workspace-version.sh
-git add scripts/update-workspace-version.sh
+cp "$repository_root/cog.toml" cog.toml
+git add scripts/update-workspace-version.sh cog.toml
 # A version PR already contains the next manifest version before its tag exists.
 # Establish that version as the test baseline so the injected fix bumps it again.
 manifest_version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"

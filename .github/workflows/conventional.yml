@@ -68,6 +68,8 @@ jobs:
         run: ./scripts/check-conventional.sh range "$BASE_SHA" "$HEAD_SHA"
       - name: Test Conventional Commit safeguards
         run: ./scripts/test-conventional-checks.sh
+      - name: Test read-only product version proposals
+        run: ./scripts/test-product-version-policy.sh
       - name: Test release versioning with an empty Cargo home
         run: ./scripts/test-release-versioning.sh
       - name: Test single-approval release publication

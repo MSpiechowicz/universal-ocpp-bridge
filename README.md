@@ -40,6 +40,9 @@ Contributions use pinned, Rust-native Conventional Commit and pull request title
 baseline, feature-squash policy, automatic semantic-version releases, and local verification
 commands.
 
+The [product version proposal policy](docs/operations/product-version-policy.md) defines explicit
+commit bump rules, read-only JSON proposals, and the separate first-stable readiness decision.
+
 The service has a noninteractive `uob` CLI for offline configuration validation, headless startup,
 optional static-asset disabling, and authenticated JSONL event consumption. See the
 [headless CLI guide](docs/operations/headless-cli.md) for configuration, stream security, and exit
