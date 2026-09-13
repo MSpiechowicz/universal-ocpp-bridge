@@ -51,6 +51,20 @@ export class ApiClient {
     this.token = credential(token);
   }
 
+  static async healthSnapshot(origin: string, identity: Identity, signal: AbortSignal, transport: typeof fetch = fetch) {
+    const current = await ApiClient.identify(origin, signal, transport);
+    if (identityKey(current) !== identityKey(identity)) throw new ApiError(0, 'identity');
+    const response = await observedFetch(transport, `${origin}/api/v1/health`, {
+      cache: 'no-store', credentials: 'omit', redirect: 'error',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
+    });
+    if (!response.ok && response.status !== 503) { await response.body?.cancel(); throw new ApiError(response.status); }
+    const data = await readJson(response);
+    const after = await ApiClient.identify(origin, signal, transport);
+    if (identityKey(after) !== identityKey(identity)) throw new ApiError(0, 'identity');
+    return data;
+  }
+
   close() { this.token = ''; this.lifetime.abort(); }
 
   static async identify(origin: string, signal?: AbortSignal, transport: typeof fetch = fetch): Promise<Identity> {

@@ -2,6 +2,8 @@
 //! No fixture controls or credentials are compiled into the production service.
 #[path = "browser_fixture/diagnostics.rs"]
 mod diagnostics;
+#[path = "browser_fixture/operations.rs"]
+mod operations;
 #[path = "browser_fixture/source.rs"]
 mod source;
 
@@ -72,6 +74,7 @@ async fn main() {
         runtime: runtime.clone(),
         selected_target_id: None,
     });
+    operations::configure(&application);
     let identity = application.identity().clone();
     let router = router_with_authenticated_events(
         application,

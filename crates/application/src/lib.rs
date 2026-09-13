@@ -60,8 +60,8 @@ pub use diagnostic::{
 };
 pub use health::{
     AuxiliaryProcess, ComponentHealth, ComponentHealthState, ComponentKind, CoreLoopState,
-    HealthMonitor, HealthSnapshot, LatencyClass, LatencySnapshot, ProcessResourceMetrics,
-    ReadinessState, StorageHealthState, StorageRetentionStatusView,
+    ExportObservation, HealthMonitor, HealthSnapshot, LatencyClass, LatencySnapshot,
+    ProcessResourceMetrics, ReadinessState, StorageHealthState, StorageRetentionStatusView,
 };
 pub use payment::{
     CheckoutIntent, CheckoutIntentId, CheckoutPresentation, CheckoutRequest, PaymentAuditPort,
