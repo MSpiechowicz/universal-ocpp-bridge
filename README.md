@@ -138,6 +138,9 @@ independent connector state and conservative recovery.
 Native report workflows can use [bounded multipart collection](docs/architecture/multipart-reports.md)
 for correlated ordered fragments, shared memory admission, cancellation, and absolute deadlines.
 
+Firmware and diagnostic providers can use [bounded artifact streaming](docs/architecture/artifact-streaming.md)
+for byte transport and private temporary spooling with shared admission and cancellation.
+
 Future industrial drivers remain behind the target registry and canonical data/command ports. See
 the [industrial adapter extension boundary](docs/architecture/industrial-adapter-extension.md) for
 the mapping checklist, unavailable first-release OPC UA kind, and compatibility limits.

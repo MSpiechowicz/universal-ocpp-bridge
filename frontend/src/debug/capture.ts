@@ -36,6 +36,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
     if (identityPending || lifetime.signal.aborted) return;
     identityPending = true;
     void api.verifyIdentity(lifetime.signal).catch(() => {
+      if (lifetime.signal.aborted) return;
       state.message = 'Identity verification failed. Reconnect explicitly.'; state.terminal = true;
       lifetime.abort(); current?.abort();
     }).finally(() => { identityPending = false; });
@@ -61,6 +62,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
         signal.addEventListener('abort', cancel, { once: true });
         try {
           const response = await api.openStream(`${sessionPath(capture)}/traces`, cursor, signal);
+          if (signal.aborted) { await response.body?.cancel(); throw new ApiError(0); }
           if (!response.ok) { await response.body?.cancel(); throw new ApiError(response.status); }
           if (!response.headers.get('content-type')?.startsWith('text/event-stream') || !response.body) { await response.body?.cancel(); throw new ApiError(0, 'format'); }
           reader = response.body.getReader();
@@ -87,6 +89,7 @@ export function traceStream(api: ApiClient, capture: Capture, buffer: TraceBuffe
           while (!signal.aborted) {
             clearTimeout(watchdog); watchdog = setTimeout(() => current?.abort(), 45000);
             const part = await reader.read();
+            if (signal.aborted) break;
             if (part.done) break;
             state.lastActivity = Date.now();
             parser.push(part.value);
