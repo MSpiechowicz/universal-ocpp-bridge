@@ -3007,9 +3007,11 @@ version = "0.28.0"
 dependencies = [
  "futures-util",
  "reqwest",
+ "rustix",
  "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "subtle",
  "time",
  "tokio",

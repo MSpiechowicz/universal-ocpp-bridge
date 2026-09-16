@@ -33,10 +33,14 @@ pub struct Grant {
 }
 
 /// Local protocol v1: only digests can select application artifacts.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Request {
     Status {},
+    Events {
+        #[serde(default)]
+        after: u64,
+    },
     Stage {
         digest: String,
     },
@@ -53,7 +57,7 @@ pub enum Request {
 impl Request {
     const fn permission(&self) -> Permission {
         match self {
-            Self::Status {} => Permission::Read,
+            Self::Status {} | Self::Events { .. } => Permission::Read,
             Self::Stage { .. } | Self::Qualify { .. } => Permission::Stage,
             Self::Promote { .. } | Self::Rollback {} => Permission::Activate,
         }
@@ -78,13 +82,23 @@ pub enum Code {
 }
 
 /// Bounded private request evidence, separate from the later activation state machine.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
     pub sequence: u64,
     pub uid: u32,
     pub request: Request,
     pub result: Code,
+}
+
+/// Snapshot of retained mutation records after an exclusive sequence cursor.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Events {
+    pub records: Vec<Record>,
+    pub oldest_sequence: u64,
+    pub latest_sequence: u64,
+    pub truncated: bool,
 }
 
 /// Persistent supervisor state does not assert staging execution or charging health.
@@ -107,7 +121,7 @@ pub struct Status {
     pub qualification: Option<crate::qualification::Qualified>,
 }
 
-/// One bounded response. Status is returned only after the read permission check.
+/// One bounded response. Read results are returned only after the permission check.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
     pub protocol: u32,
@@ -115,6 +129,8 @@ pub struct Response {
     pub code: Code,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<Status>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<Events>,
 }
 
 impl Response {
@@ -125,6 +141,7 @@ impl Response {
             manager_version: env!("CARGO_PKG_VERSION").to_owned(),
             code,
             status: None,
+            events: None,
         }
     }
 }
@@ -191,6 +208,12 @@ impl Supervisor {
         {
             return Response::code(Code::Forbidden);
         }
+        if let Request::Events { after } = request {
+            return Response {
+                events: Some(self.ledger.events(after)),
+                ..Response::code(Code::Ok)
+            };
+        }
         if let Request::Status {} = request {
             let mut status = self.ledger.status().clone();
             status.qualification = self.current_qualification();
@@ -249,7 +272,7 @@ impl Supervisor {
                 }
             }
             Request::Rollback {} => Code::QualificationRequired,
-            Request::Status {} => unreachable!(),
+            Request::Status {} | Request::Events { .. } => unreachable!(),
         };
         match self.ledger.record(uid, request, code) {
             Ok(()) => Response::code(code),

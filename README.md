@@ -47,9 +47,9 @@ The [candidate channel policy](docs/operations/candidate-channel-versioning.md) 
 rc numbering and same-artifact stable proposals with ancestry and tree checks.
 
 The service has a noninteractive `uob` CLI for offline configuration validation, headless startup,
-optional static-asset disabling, and authenticated JSONL event consumption. See the
-[headless CLI guide](docs/operations/headless-cli.md) for configuration, stream security, and exit
-codes.
+optional static-asset disabling, authenticated JSONL event consumption, and independent
+supervisor-backed release commands. See the [headless CLI guide](docs/operations/headless-cli.md)
+for configuration, release permissions and policy errors, stream security, and exit codes.
 
 The optional [browser console](docs/operations/browser-console.md) embeds compiled static assets
 with no Node runtime on the Raspberry Pi. It verifies destination identity, keeps scoped

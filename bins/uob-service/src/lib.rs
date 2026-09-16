@@ -7,6 +7,7 @@ mod diagnostics;
 mod event_stream;
 mod identity;
 mod lifecycle;
+mod release_cli;
 mod staging_network;
 mod watchdog;
 

@@ -4,6 +4,8 @@
 listener, and its browser. Its first independent package version is **0.1.0**;
 `--version` reports that version. Application workspace version bumps no longer
 change it. The existing offline `install` and `verify` commands remain available.
+The [`uob release` commands](headless-cli.md#independent-release-control) provide the operator
+client without loading bridge configuration or depending on the HTTP API.
 
 This issue establishes the supervisor ownership and authorization boundary. Staging
 currently revalidates the installed candidate and persists `staged_verified_digest`.
@@ -72,6 +74,7 @@ response line. Example requests:
 
 ```json
 {"operation":"status"}
+{"operation":"events","after":0}
 {"operation":"stage","digest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
 {"operation":"promote","digest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
 {"operation":"rollback"}
@@ -80,6 +83,7 @@ response line. Example requests:
 | Operation | Required permission | Current effect |
 | --- | --- | --- |
 | `status` | `read` | Read private supervisor evidence without querying the bridge |
+| `events` | `read` | Snapshot up to 64 retained mutation requests after an exclusive sequence cursor, with oldest/latest sequence and truncation metadata |
 | `stage` | `stage` | Under the artifact-store lock, require the current candidate and reverify its signature, host/security/schema eligibility, ownership, sealed layout and bytes; persist verification evidence |
 | `qualify` | `stage` | Verify signed evidence from the private inbox and persist an exact candidate/evidence reference |
 | `promote` / `rollback` | `activate` | Record `qualification_required` (or `preflight_rejected` / `activation_blocked` after qualified production preflight); leave application pointers and services unchanged |
@@ -92,13 +96,17 @@ fields fail validation, including extra fields on status and rollback. Digests
 must be exactly 64 lowercase hexadecimal characters.
 
 Responses contain `protocol: 1`, `manager_version`, a safe `code`, and, only for
-authorized status requests, `status`. Codes are `ok`, `forbidden`,
+authorized read requests, `status` or `events`. Codes are `ok`, `forbidden`,
 `invalid_request`, `busy`, `artifact_rejected`, `qualification_required`,
 `evidence_rejected`, `preflight_rejected`, `activation_blocked`, `recovery_required`, and `storage_failure`. No raw request or OS error text is
 echoed. Status reports a monotonic request sequence, failed authorized operation
 count, last operation and authenticated UID, and the last successfully verified
 staging digest. That digest is a historical observation, not a current
 qualification or activation permission. It is cleared by a failed staging check.
+An events response contains `records`, `oldest_sequence`, `latest_sequence`, and `truncated`.
+Omitting `after` selects zero; records have sequence strictly greater than the cursor.
+An empty history reports both bounds as zero. Reads remain available during recovery and do
+not append records or change state. Unauthorized reads disclose neither status nor events.
 
 The transport accepts at most four concurrent clients, 1024 request bytes per
 client, and a one-second absolute read deadline. Trickle traffic cannot reset the
@@ -114,10 +122,13 @@ state. A separate runtime lock prevents competing socket owners. An owner-checke
 stale socket left by process death can be removed after acquiring that lock;
 regular files and links at the socket path are rejected without deletion.
 
-The private ledger retains one bounded last-operation record and aggregate
-counters; this is not a full audit history or the separate activation journal.
-An authorized operation is acknowledged only after writing `state.next`, syncing
-it, renaming it to `state.json`, and syncing the directory. Unauthorized operations
+The private ledger retains the latest 64 mutation request records, a last-operation record and
+aggregate counters. This bounded request history is not a complete activation audit or the
+separate activation journal. Loading a legacy ledger preserves its last operation as the initial
+history and reports truncation when earlier sequence numbers are unavailable.
+An authorized mutation is acknowledged only after writing `state.next`, syncing
+it, renaming it to `state.json`, and syncing the directory. History and status are committed
+together under the existing 64 KiB bound. Unauthorized operations
 cannot allocate ledger records or touch the artifact store. Sequence exhaustion
 and persistence errors fail closed.
 

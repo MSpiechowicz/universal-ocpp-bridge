@@ -1,6 +1,6 @@
 use std::{io::Write, path::PathBuf};
 
-use crate::{configuration, event_stream};
+use crate::{configuration, event_stream, release_cli};
 
 const DEFAULT_CONFIGURATION_PATH: &str = "bridge.toml";
 
@@ -17,6 +17,7 @@ enum Command {
         configuration: PathBuf,
         after: Option<String>,
     },
+    Release(release_cli::Command),
 }
 
 pub struct CliResult {
@@ -28,7 +29,18 @@ pub async fn execute(
     arguments: impl IntoIterator<Item = String>,
     output: &mut impl Write,
 ) -> CliResult {
+    let mut arguments = arguments.into_iter().peekable();
+    let release = arguments
+        .peek()
+        .is_some_and(|argument| argument == "release");
     let Ok(command) = parse_arguments(arguments) else {
+        if release {
+            let _ = serde_json::to_writer(
+                &mut *output,
+                &serde_json::json!({ "error": "invalid_release_arguments" }),
+            )
+            .and_then(|()| output.write_all(b"\n").map_err(serde_json::Error::io));
+        }
         return failure(2, usage());
     };
     match command {
@@ -44,6 +56,14 @@ pub async fn execute(
             configuration,
             after,
         } => events(&configuration, after.as_deref(), output).await,
+        Command::Release(command) => match release_cli::execute(command, output).await {
+            Ok(()) => success(),
+            Err(error) => {
+                let diagnostic = error.diagnostic().to_owned();
+                error.write_safe(output);
+                failure(1, diagnostic)
+            }
+        },
     }
 }
 
@@ -159,6 +179,7 @@ fn parse_arguments(arguments: impl IntoIterator<Item = String>) -> Result<Comman
         Some("serve") => parse_serve(arguments),
         Some("config") if arguments.next().as_deref() == Some("check") => parse_check(arguments),
         Some("events") => parse_events(arguments),
+        Some("release") => parse_release(arguments),
         _ => Err(()),
     }
 }
@@ -226,6 +247,167 @@ fn parse_events(mut arguments: impl Iterator<Item = String>) -> Result<Command, 
     })
 }
 
+fn parse_release(mut arguments: impl Iterator<Item = String>) -> Result<Command, ()> {
+    let operation = arguments.next().ok_or(())?;
+    let command = match operation.as_str() {
+        "stage" => parse_release_stage(arguments)?,
+        "qualify" => parse_release_qualify(arguments)?,
+        "promote" => parse_release_promote(arguments)?,
+        "rollback" => parse_release_rollback(arguments)?,
+        "status" => parse_release_status(arguments)?,
+        "events" => parse_release_events(arguments)?,
+        _ => return Err(()),
+    };
+    Ok(Command::Release(command))
+}
+
+fn parse_release_stage(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<release_cli::Command, ()> {
+    let mut bundle = None;
+    let mut socket = PathBuf::from(release_cli::DEFAULT_SOCKET);
+    let mut socket_seen = false;
+    while let Some(option) = arguments.next() {
+        let value = arguments.next().ok_or(())?;
+        match option.as_str() {
+            "--bundle" if bundle.is_none() => bundle = Some(value.into()),
+            "--socket" if !socket_seen => {
+                socket = value.into();
+                socket_seen = true;
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(release_cli::Command::Stage {
+        bundle: bundle.ok_or(())?,
+        socket,
+    })
+}
+
+fn parse_release_qualify(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<release_cli::Command, ()> {
+    let mut release = None;
+    let mut evidence = None;
+    let mut socket = PathBuf::from(release_cli::DEFAULT_SOCKET);
+    let mut socket_seen = false;
+    while let Some(option) = arguments.next() {
+        let value = arguments.next().ok_or(())?;
+        match option.as_str() {
+            "--release" if release.is_none() && release_cli::digest_name(&value) => {
+                release = Some(value);
+            }
+            "--evidence" if evidence.is_none() => evidence = Some(value.into()),
+            "--socket" if !socket_seen => {
+                socket = value.into();
+                socket_seen = true;
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(release_cli::Command::Qualify {
+        release: release.ok_or(())?,
+        evidence: evidence.ok_or(())?,
+        socket,
+    })
+}
+
+fn parse_release_promote(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<release_cli::Command, ()> {
+    let mut release = None;
+    let mut socket = PathBuf::from(release_cli::DEFAULT_SOCKET);
+    let mut socket_seen = false;
+    while let Some(option) = arguments.next() {
+        let value = arguments.next().ok_or(())?;
+        match option.as_str() {
+            "--release" if release.is_none() && release_cli::digest_name(&value) => {
+                release = Some(value);
+            }
+            "--socket" if !socket_seen => {
+                socket = value.into();
+                socket_seen = true;
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(release_cli::Command::Promote {
+        release: release.ok_or(())?,
+        socket,
+    })
+}
+
+fn parse_release_rollback(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<release_cli::Command, ()> {
+    let mut previous_good = false;
+    let mut socket = PathBuf::from(release_cli::DEFAULT_SOCKET);
+    let mut socket_seen = false;
+    while let Some(option) = arguments.next() {
+        let value = arguments.next().ok_or(())?;
+        match option.as_str() {
+            "--to" if !previous_good && value == "previous-good" => previous_good = true,
+            "--socket" if !socket_seen => {
+                socket = value.into();
+                socket_seen = true;
+            }
+            _ => return Err(()),
+        }
+    }
+    previous_good
+        .then_some(release_cli::Command::Rollback { socket })
+        .ok_or(())
+}
+
+fn parse_release_status(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<release_cli::Command, ()> {
+    let mut json = false;
+    let mut socket = PathBuf::from(release_cli::DEFAULT_SOCKET);
+    let mut socket_seen = false;
+    while let Some(option) = arguments.next() {
+        let value = arguments.next().ok_or(())?;
+        match option.as_str() {
+            "--format" if !json && value == "json" => json = true,
+            "--socket" if !socket_seen => {
+                socket = value.into();
+                socket_seen = true;
+            }
+            _ => return Err(()),
+        }
+    }
+    json.then_some(release_cli::Command::Status { socket })
+        .ok_or(())
+}
+
+fn parse_release_events(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<release_cli::Command, ()> {
+    let mut jsonl = false;
+    let mut after = 0;
+    let mut after_seen = false;
+    let mut socket = PathBuf::from(release_cli::DEFAULT_SOCKET);
+    let mut socket_seen = false;
+    while let Some(option) = arguments.next() {
+        let value = arguments.next().ok_or(())?;
+        match option.as_str() {
+            "--format" if !jsonl && value == "jsonl" => jsonl = true,
+            "--after" if !after_seen => {
+                after = value.parse().map_err(|_| ())?;
+                after_seen = true;
+            }
+            "--socket" if !socket_seen => {
+                socket = value.into();
+                socket_seen = true;
+            }
+            _ => return Err(()),
+        }
+    }
+    jsonl
+        .then_some(release_cli::Command::Events { after, socket })
+        .ok_or(())
+}
+
 fn success() -> CliResult {
     CliResult {
         exit_code: 0,
@@ -241,7 +423,7 @@ fn failure(exit_code: u8, diagnostic: String) -> CliResult {
 }
 
 fn usage() -> String {
-    "usage: uob serve --config PATH [--no-ui] | uob config check --config PATH [--secrets] | uob events [--config PATH] [--after CURSOR] --format jsonl".to_owned()
+    "usage: uob serve --config PATH [--no-ui] | uob config check --config PATH [--secrets] | uob events [--config PATH] [--after CURSOR] --format jsonl | uob release {stage --bundle DIRECTORY | qualify --release DIGEST --evidence FILE | promote --release DIGEST | rollback --to previous-good | status --format json | events --format jsonl [--after SEQUENCE]} [--socket PATH]".to_owned()
 }
 
 #[cfg(test)]
@@ -264,5 +446,43 @@ mod tests {
         ));
         assert!(parse_arguments(["serve"].map(str::to_owned)).is_err());
         assert!(parse_arguments(["events", "--format", "text"].map(str::to_owned)).is_err());
+        let digest = "a".repeat(64);
+        assert!(matches!(
+            parse_arguments(
+                [
+                    "release",
+                    "status",
+                    "--format",
+                    "json",
+                    "--socket",
+                    "/tmp/control.sock"
+                ]
+                .map(str::to_owned)
+            ),
+            Ok(Command::Release(_))
+        ));
+        assert!(
+            parse_arguments(
+                [
+                    "release", "events", "--format", "jsonl", "--after", "1", "--after", "2"
+                ]
+                .map(str::to_owned)
+            )
+            .is_err()
+        );
+        assert!(
+            parse_arguments(
+                [
+                    "release",
+                    "promote",
+                    "--release",
+                    &digest,
+                    "--release",
+                    &digest
+                ]
+                .map(str::to_owned)
+            )
+            .is_err()
+        );
     }
 }
