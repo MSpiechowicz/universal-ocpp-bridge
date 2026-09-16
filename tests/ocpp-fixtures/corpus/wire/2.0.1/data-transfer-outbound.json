@@ -1,0 +1,14 @@
+[
+  2,
+  "fixture-201-outbound",
+  "DataTransfer",
+  {
+    "vendorId": "org.example.uob-test",
+    "messageId": "Probe",
+    "data": ["request", 1, false, null],
+    "customData": {
+      "vendorId": "org.example.fixture",
+      "opaque": {"scope": "outbound"}
+    }
+  }
+]

@@ -7,6 +7,7 @@ pub mod capture;
 pub mod charging_identity;
 mod command;
 pub mod data_transfer;
+pub mod data_transfer201;
 mod database;
 mod diagnostic;
 mod health;

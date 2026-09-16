@@ -1,0 +1,11 @@
+[
+  3,
+  "fixture-201-transfer",
+  {
+    "status": "UnknownVendorId",
+    "statusInfo": {
+      "reasonCode": "UnknownVendor",
+      "additionalInfo": "secret://fixture/201-unknown-vendor"
+    }
+  }
+]

@@ -1,0 +1,16 @@
+[
+  3,
+  "fixture-201-transfer",
+  {
+    "status": "UnknownMessageId",
+    "data": 42,
+    "customData": {
+      "vendorId": "org.example.fixture",
+      "opaque": {"message": "unknown"}
+    },
+    "statusInfo": {
+      "reasonCode": "UnknownMessage",
+      "additionalInfo": "secret://fixture/201-unknown-message"
+    }
+  }
+]
