@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## Unreleased
+
+### Features
+
+- Add explicit PostgreSQL export schema installation and upgrades, append-only canonical JSONB
+  storage, exact-value measurement/transaction/result views, and least-privilege runtime grants.
+  Disposable PostgreSQL acceptance checks cover data preservation, identity conflicts, and
+  privilege/upgrade safety.
+
 - - -
 ## [v0.28.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ed717999f4be4f380c9d93ee346040fe54e1a34d..v0.28.0) - 2026-09-11
 #### Features

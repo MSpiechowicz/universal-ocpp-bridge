@@ -49,6 +49,8 @@ jobs:
         run: python3 -B scripts/test-service-watchdog.py --disposable
       - name: Verify staging PostgreSQL isolation in a disposable cluster
         run: ./scripts/test-staging-postgresql.sh
+      - name: Verify PostgreSQL export provisioning in a disposable cluster
+        run: ./scripts/test-postgresql-provisioning.sh
       - name: Verify Linux deployment isolation on the disposable runner
         run: ./scripts/test-environment-isolation.sh
 
