@@ -2,7 +2,7 @@
 mod evaluate;
 mod model;
 mod storage;
-use super::Supervisor;
+use super::{Decision as AuditDecision, Supervisor};
 use crate::artifacts::InstallError;
 pub use model::{Decision, Observation, Policy, Signal, State};
 
@@ -59,13 +59,30 @@ impl Supervisor {
                 last.decision = decision;
             }
         }
-        self.ledger.record_failures(next.clone())?;
+        self.ledger
+            .record_failures(next.clone(), self.failure_decision(&next))?;
         if decision == Decision::StopStaging {
             // Persist intent first. On a crash the next observation retries this idempotent
             // operation, never treating the interrupted call as successful shutdown.
             next.staging_stopped(staging.stop_and_confirm());
-            self.ledger.record_failures(next.clone())?;
+            self.ledger
+                .record_failures(next.clone(), self.failure_decision(&next))?;
         }
         Ok(next.decision)
+    }
+
+    fn failure_decision(&self, state: &State) -> AuditDecision {
+        AuditDecision::Failure {
+            candidate_digest: self
+                .activation
+                .state()
+                .production
+                .as_ref()
+                .map(|p| p.digest.clone()),
+            previous_good_digest: self.activation.state().previous_good.clone(),
+            observation: state.last,
+            decision: state.decision,
+            trigger_id: state.trigger.as_ref().map(|trigger| trigger.observation.id),
+        }
     }
 }

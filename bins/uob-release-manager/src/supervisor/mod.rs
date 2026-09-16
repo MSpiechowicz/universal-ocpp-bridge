@@ -1,4 +1,5 @@
 //! Independent local release-control boundary. No application process is required.
+pub mod audit;
 pub mod failures;
 pub mod ipc;
 pub mod preflight;
@@ -11,6 +12,7 @@ mod storage;
 
 use crate::activation::ActivationJournal;
 use crate::artifacts::{ArtifactStore, InstallError, InstallPolicy, filesystem, manifest};
+pub use audit::{Actor, Decision};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::Path};
 use storage::Ledger;
@@ -81,7 +83,7 @@ pub enum Code {
     StorageFailure,
 }
 
-/// Bounded private request evidence, separate from the later activation state machine.
+/// Bounded private request and supervisor-decision evidence.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
@@ -89,6 +91,10 @@ pub struct Record {
     pub uid: u32,
     pub request: Request,
     pub result: Code,
+    #[serde(default)]
+    pub actor: Actor,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decision: Option<Decision>,
 }
 
 /// Snapshot of retained mutation records after an exclusive sequence cursor.

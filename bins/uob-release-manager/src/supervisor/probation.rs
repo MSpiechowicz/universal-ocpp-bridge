@@ -1,5 +1,9 @@
 //! Production evidence supplied by a trusted host collector, never by release IPC.
-use super::{Supervisor, promotion::Step};
+use super::{
+    Decision as AuditDecision, Supervisor,
+    audit::{Compatibility, Drain, Health, PromotionOutcome},
+    promotion::Step,
+};
 use crate::{
     activation::{Phase, Transition},
     artifacts::{InstallError, manifest},
@@ -196,19 +200,45 @@ impl Supervisor {
             },
         };
         evidence.validate()?;
+        let complete = evidence.complete();
         // Once healthy, this API no longer accumulates probation; the failure policy owns
         // subsequent degradation. Retrying after a committed healthy transition is harmless.
         if production.phase == Phase::Healthy {
             return Ok(true);
         }
-        let complete = evidence.complete();
-        self.ledger.record_probation(evidence)?;
+        let decision = self.probation_decision(complete);
+        self.ledger.record_probation(evidence, decision)?;
         self.probation_continuous = true;
         if complete {
             self.activation
                 .transition(Transition::MarkHealthy, &self.policy)?;
         }
         Ok(complete)
+    }
+
+    fn probation_decision(&self, complete: bool) -> AuditDecision {
+        let promotion = self
+            .ledger
+            .status()
+            .promotion
+            .as_ref()
+            .expect("validated promotion");
+        AuditDecision::promotion(
+            promotion,
+            self.ledger
+                .status()
+                .qualification
+                .as_ref()
+                .map(|qualification| qualification.evidence_digest.clone()),
+            Compatibility::Accepted,
+            Drain::NotRequested,
+            if complete {
+                Health::Healthy
+            } else {
+                Health::Probation
+            },
+            PromotionOutcome::Continuing,
+        )
     }
 }
 fn rejected() -> InstallError {

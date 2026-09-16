@@ -8,6 +8,7 @@ mod event_stream;
 mod identity;
 mod lifecycle;
 mod release_cli;
+mod release_read;
 mod staging_network;
 mod watchdog;
 

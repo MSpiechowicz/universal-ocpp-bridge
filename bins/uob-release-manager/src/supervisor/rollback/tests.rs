@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     supervisor::{
         Request,
+        audit::{Compatibility, Decision, Drain, Health, PromotionOutcome},
         promotion::{self, ProcessFuture, Start},
     },
     test_support::Fixture,
@@ -110,18 +111,32 @@ async fn setup() -> (Fixture, Supervisor, preflight::Policy) {
             .unwrap();
     }
     let meta = fs::metadata(&p.operational_database).unwrap();
+    let record = promotion::Record {
+        candidate: f.artifact.digest().into(),
+        previous: f.previous.compatibility.artifact_digest.as_str().into(),
+        configuration_digest: qualification::digest(&fs::read(&p.configuration).unwrap()),
+        production_inputs_digest: qualification::digest(&serde_json::to_vec(&p).unwrap()),
+        database_device: meta.dev(),
+        database_inode: meta.ino(),
+        step: promotion::Step::Probation,
+        recovery_attempted: false,
+    };
     manager
         .ledger
-        .record_promotion(promotion::Record {
-            candidate: f.artifact.digest().into(),
-            previous: f.previous.compatibility.artifact_digest.as_str().into(),
-            configuration_digest: qualification::digest(&fs::read(&p.configuration).unwrap()),
-            production_inputs_digest: qualification::digest(&serde_json::to_vec(&p).unwrap()),
-            database_device: meta.dev(),
-            database_inode: meta.ino(),
-            step: promotion::Step::Probation,
-            recovery_attempted: false,
-        })
+        .record_promotion(
+            record.clone(),
+            Code::Ok,
+            Decision::Promote {
+                candidate_digest: record.candidate,
+                previous_good_digest: Some(record.previous),
+                evidence_digest: None,
+                configuration_digest: Some(record.configuration_digest),
+                compatibility: Compatibility::Accepted,
+                drain: Drain::Granted,
+                health: Health::Probation,
+                outcome: PromotionOutcome::Continuing,
+            },
+        )
         .unwrap();
     (f, manager, p)
 }
@@ -370,7 +385,20 @@ fn trusted_observation_rolls_back_automatically_but_outages_never_stop_productio
         let (_f, mut manager, _p) = setup().await;
         let mut interrupted = manager.ledger.status().promotion.clone().unwrap();
         interrupted.step = promotion::Step::Starting;
-        manager.ledger.record_promotion(interrupted).unwrap();
+        let decision = Decision::Promote {
+            candidate_digest: interrupted.candidate.clone(),
+            previous_good_digest: Some(interrupted.previous.clone()),
+            evidence_digest: None,
+            configuration_digest: Some(interrupted.configuration_digest.clone()),
+            compatibility: Compatibility::Accepted,
+            drain: Drain::Granted,
+            health: Health::NotObserved,
+            outcome: PromotionOutcome::Continuing,
+        };
+        manager
+            .ledger
+            .record_promotion(interrupted, Code::Ok, decision)
+            .unwrap();
         let mut process = Process::default();
         for (id, signal) in [
             (1, failures::Signal::Started { invocation: 1 }),

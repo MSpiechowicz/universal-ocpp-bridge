@@ -1,5 +1,7 @@
 //! One automatic fallback per durable incident, independent of management availability.
-use super::{Code, Supervisor, failures, preflight, promotion::ProductionProcess};
+use super::{
+    Code, Decision as AuditDecision, Supervisor, failures, preflight, promotion::ProductionProcess,
+};
 use crate::{
     activation::{Phase, Transition},
     artifacts::{ArtifactStore, InstallError, filesystem as disk, manifest},
@@ -123,7 +125,12 @@ impl Supervisor {
                 record.reason = Reason::EligibleFailure;
             }
         }
-        if self.ledger.record_rollback(record.clone()).is_err() {
+        let initial_code = if record.step == Step::RecoveryRequired {
+            Code::RecoveryRequired
+        } else {
+            Code::Ok
+        };
+        if self.persist_rollback(record.clone(), initial_code).is_err() {
             return Code::StorageFailure;
         }
         if record.step == Step::RecoveryRequired {
@@ -166,12 +173,15 @@ impl Supervisor {
         if result.is_err() {
             record.reason = Reason::ProcessFailed;
         }
-        if self.ledger.record_rollback(record).is_err() {
-            Code::StorageFailure
-        } else if result.is_ok() {
+        let code = if result.is_ok() {
             Code::Ok
         } else {
             Code::RecoveryRequired
+        };
+        if self.persist_rollback(record, code).is_err() {
+            Code::StorageFailure
+        } else {
+            code
         }
     }
 
@@ -245,6 +255,16 @@ impl Supervisor {
             .rollback
             .as_ref()
             .is_some_and(|r| r.step != Step::Restored)
+    }
+
+    fn persist_rollback(&mut self, record: Record, code: Code) -> Result<(), InstallError> {
+        let decision = AuditDecision::Rollback {
+            quarantined_digest: record.quarantined_digest.clone(),
+            previous_good_digest: record.previous_good.clone(),
+            step: record.step,
+            reason: record.reason,
+        };
+        self.ledger.record_rollback(record, code, decision)
     }
 }
 fn rejected() -> InstallError {

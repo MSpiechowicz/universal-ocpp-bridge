@@ -2,7 +2,11 @@
 //!
 //! The host supplies its existing drain transport and process controller. Opening another
 //! SQLite worker is not a substitute for the production process's `ReleaseDrainPort`.
-use super::{Code, Permission, Request, Response, Supervisor, preflight};
+use super::{
+    Code, Decision as AuditDecision, Permission, Request, Response, Supervisor,
+    audit::{Compatibility, Drain, Health, PromotionOutcome},
+    preflight,
+};
 use crate::{
     activation::{Phase, Transition},
     artifacts::{ArtifactStore, InstallError, filesystem as disk, manifest},
@@ -132,16 +136,16 @@ impl Supervisor {
             return Response::code(Code::InvalidRequest);
         }
         if self.activation_blocked() {
-            return Response::code(Code::RecoveryRequired);
+            return self.record_activation(uid, digest, Code::RecoveryRequired);
         }
         if host.maintenance_window.is_zero() || host.maintenance_window > Duration::from_hours(24) {
-            return Response::code(Code::InvalidRequest);
+            return self.record_activation(uid, digest, Code::InvalidRequest);
         }
         if self
             .current_qualification()
             .is_none_or(|q| q.candidate_digest != digest)
         {
-            return Response::code(Code::QualificationRequired);
+            return self.record_activation(uid, digest, Code::QualificationRequired);
         }
         let code = self.activate(&digest, host).await;
         self.record_activation(uid, digest, code)
@@ -182,7 +186,12 @@ impl Supervisor {
             step: Step::Stopping,
             recovery_attempted: false,
         };
-        if self.ledger.record_promotion(record).is_err() {
+        let decision = self.promotion_decision(&record, Code::Ok);
+        if self
+            .ledger
+            .record_promotion(record, Code::Ok, decision)
+            .is_err()
+        {
             return Code::StorageFailure;
         }
         let result = async {
@@ -241,9 +250,14 @@ impl Supervisor {
         if record.recovery_attempted || !matches!(record.step, Step::Stopping | Step::Starting) {
             return Response::code(Code::RecoveryRequired);
         }
-        record.recovery_attempted = true;
         let digest = record.candidate.clone();
-        if self.ledger.record_promotion(record).is_err() {
+        record.recovery_attempted = true;
+        let decision = self.promotion_decision(&record, Code::Ok);
+        if self
+            .ledger
+            .record_promotion(record, Code::Ok, decision)
+            .is_err()
+        {
             return Response::code(Code::StorageFailure);
         }
         let result = async {
@@ -353,7 +367,13 @@ impl Supervisor {
             .clone()
             .ok_or_else(rejected)?;
         record.step = step;
-        self.ledger.record_promotion(record)
+        let result = if step == Step::RecoveryRequired {
+            Code::RecoveryRequired
+        } else {
+            Code::Ok
+        };
+        let decision = self.promotion_decision(&record, result);
+        self.ledger.record_promotion(record, result, decision)
     }
     fn activation_result(&mut self, result: &Result<(), InstallError>) -> Code {
         if result.is_ok() {
@@ -366,10 +386,85 @@ impl Supervisor {
         }
     }
     fn record_activation(&mut self, uid: u32, digest: String, code: Code) -> Response {
+        if self.record_activation_decision(&digest, code).is_err() {
+            return Response::code(Code::StorageFailure);
+        }
         match self.ledger.record(uid, Request::Promote { digest }, code) {
             Ok(()) => Response::code(code),
             Err(_) => Response::code(Code::StorageFailure),
         }
+    }
+
+    fn record_activation_decision(&mut self, digest: &str, code: Code) -> Result<(), InstallError> {
+        let decision = self
+            .ledger
+            .status()
+            .promotion
+            .as_ref()
+            .filter(|record| record.candidate == digest)
+            .map_or_else(
+                || AuditDecision::Promote {
+                    candidate_digest: digest.into(),
+                    previous_good_digest: self.activation.state().previous_good.clone(),
+                    evidence_digest: self
+                        .ledger
+                        .status()
+                        .qualification
+                        .as_ref()
+                        .filter(|qualification| qualification.candidate_digest == digest)
+                        .map(|qualification| qualification.evidence_digest.clone()),
+                    configuration_digest: None,
+                    compatibility: match code {
+                        Code::PreflightRejected => Compatibility::Rejected,
+                        Code::ActivationBlocked | Code::EvidenceRejected => Compatibility::Accepted,
+                        _ => Compatibility::NotChecked,
+                    },
+                    drain: match code {
+                        Code::ActivationBlocked => Drain::Rejected,
+                        Code::EvidenceRejected => Drain::Granted,
+                        _ => Drain::NotRequested,
+                    },
+                    health: Health::NotObserved,
+                    outcome: promotion_outcome(code),
+                },
+                |record| self.promotion_decision(record, code),
+            );
+        self.ledger.record_supervisor(
+            self.ledger.status().clone(),
+            Request::Promote {
+                digest: digest.into(),
+            },
+            code,
+            decision,
+        )
+    }
+
+    fn promotion_decision(&self, record: &Record, code: Code) -> AuditDecision {
+        AuditDecision::promotion(
+            record,
+            self.ledger
+                .status()
+                .qualification
+                .as_ref()
+                .filter(|qualification| qualification.candidate_digest == record.candidate)
+                .map(|qualification| qualification.evidence_digest.clone()),
+            Compatibility::Accepted,
+            Drain::Granted,
+            match record.step {
+                Step::Probation => Health::Probation,
+                Step::RecoveryRequired | Step::RecoveredPrevious => Health::Rejected,
+                Step::Stopping | Step::Starting => Health::NotObserved,
+            },
+            promotion_outcome(code),
+        )
+    }
+}
+
+fn promotion_outcome(code: Code) -> PromotionOutcome {
+    match code {
+        Code::Ok => PromotionOutcome::Continuing,
+        Code::RecoveryRequired | Code::StorageFailure => PromotionOutcome::RecoveryRequired,
+        _ => PromotionOutcome::Rejected,
     }
 }
 fn rejected() -> InstallError {

@@ -18,6 +18,12 @@ pub(super) fn check(path: &Path) -> Result<(), ConfigurationLoadError> {
         .map_err(|_| fail())?
         .resolve()
         .map_err(|_| fail())?;
+    config
+        .release_read
+        .validate(config.bridge.environment)
+        .map_err(|_| fail())?
+        .resolve()
+        .map_err(|_| fail())?;
     let mut references = Vec::new();
     if let Some(path) = config.events.credentials_file {
         references.push(path);

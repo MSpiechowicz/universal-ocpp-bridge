@@ -1,7 +1,9 @@
 use super::support::Fixture;
 use std::fs;
 use uob_release_manager::supervisor::{
-    Code, Events, Grant, Permission, Request, Response, Supervisor,
+    Actor, Code, Events, Grant, Permission, Request, Response, Supervisor,
+    audit::Decision,
+    failures::{Observation, Policy, Signal, StagingStop},
 };
 
 fn grant(uid: u32, permissions: &[Permission]) -> Grant {
@@ -31,6 +33,13 @@ fn stage(manager: &mut Supervisor, digest: &str) {
     );
 }
 
+struct NoStagingStop;
+impl StagingStop for NoStagingStop {
+    fn stop_and_confirm(&mut self) -> bool {
+        false
+    }
+}
+
 #[test]
 fn events_page_the_bounded_history_with_an_exclusive_cursor() {
     let fixture = Fixture::new();
@@ -46,6 +55,12 @@ fn events_page_the_bounded_history_with_an_exclusive_cursor() {
     assert_eq!(retained.latest_sequence, 65);
     assert!(retained.truncated);
     assert_eq!(retained.records.len(), 64);
+    assert!(
+        retained
+            .records
+            .iter()
+            .all(|record| { record.actor == Actor::Operator && record.decision.is_none() })
+    );
     assert_eq!(
         retained.records.first().map(|record| record.sequence),
         Some(2)
@@ -88,6 +103,10 @@ fn events_survive_restart_and_migrate_a_legacy_last_operation() {
     let mut legacy: serde_json::Value =
         serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
     legacy.as_object_mut().unwrap().remove("history");
+    legacy["last_operation"]
+        .as_object_mut()
+        .unwrap()
+        .remove("actor");
     fs::write(&state_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
 
     let mut manager = fixture.manager(grants);
@@ -95,6 +114,65 @@ fn events_survive_restart_and_migrate_a_legacy_last_operation() {
     assert_eq!(migrated.records.len(), 1);
     assert_eq!(migrated.records[0].sequence, 2);
     assert!(migrated.truncated);
+}
+
+#[test]
+fn detailed_supervisor_decisions_are_byte_bounded_and_survive_reopen() {
+    let fixture = Fixture::new();
+    let grants = vec![grant(100, &[Permission::Read])];
+    let mut manager = fixture.manager(grants.clone());
+    let mut staging = NoStagingStop;
+    for id in 1..=65 {
+        let signal = if id == 1 {
+            Signal::Started { invocation: 1 }
+        } else {
+            Signal::MqttOutage
+        };
+        manager
+            .observe_failure(
+                Policy::default(),
+                Observation {
+                    id,
+                    at_seconds: id,
+                    signal,
+                    resource_pressure: false,
+                },
+                &mut staging,
+            )
+            .unwrap();
+    }
+    let retained = events(manager.handle(100, Request::Events { after: 0 }));
+    assert_eq!(
+        (retained.oldest_sequence, retained.latest_sequence),
+        (2, 65)
+    );
+    assert!(retained.truncated);
+    assert_eq!(retained.records.len(), 64);
+    assert!(
+        retained
+            .records
+            .iter()
+            .all(|record| { record.actor == Actor::Supervisor && record.decision.is_some() })
+    );
+    match retained.records.last().unwrap().decision.as_ref() {
+        Some(Decision::Failure {
+            observation: Some(observation),
+            ..
+        }) => assert_eq!(
+            (observation.id, observation.signal),
+            (65, Signal::MqttOutage)
+        ),
+        _ => panic!("latest trusted health observation must be retained"),
+    }
+    let status = manager.handle(100, Request::Status {}).status.unwrap();
+    assert_eq!(status.failures.unwrap().last.unwrap().id, 65);
+    assert!(fs::read(fixture.state.join("state.json")).unwrap().len() <= 65536);
+    drop(manager);
+
+    let mut manager = fixture.manager(grants);
+    let reopened = events(manager.handle(100, Request::Events { after: 0 }));
+    assert_eq!(reopened.records, retained.records);
+    assert_eq!(reopened.latest_sequence, 65);
 }
 
 #[test]
