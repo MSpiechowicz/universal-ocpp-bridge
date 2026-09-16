@@ -1,4 +1,7 @@
 //! Unprivileged release-manager client; it never loads bridge configuration.
+mod response;
+
+use response::{Events, Response};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -210,14 +213,23 @@ fn response_output(
     output: &mut impl Write,
 ) -> Result<(), Error> {
     match output_kind {
-        Output::Mutation if response.status.is_some() || response.events.is_some() => {
+        Output::Mutation
+            if response.status.is_some()
+                || response.events.is_some()
+                || response.activation.is_some() =>
+        {
             Err(Error::Protocol)
         }
         Output::Status if response.events.is_some() => Err(Error::Protocol),
+        Output::Status if !response.code.is_status_result() && response.activation.is_some() => {
+            Err(Error::Protocol)
+        }
         Output::Status if response.code.is_status_result() && response.status.is_none() => {
             Err(Error::Protocol)
         }
-        Output::Events if response.status.is_some() => Err(Error::Protocol),
+        Output::Events if response.status.is_some() || response.activation.is_some() => {
+            Err(Error::Protocol)
+        }
         Output::Events if response.code == Code::Ok && response.events.is_none() => {
             Err(Error::Protocol)
         }
@@ -256,25 +268,7 @@ fn write_json(output: &mut impl Write, value: &impl Serialize) -> Result<(), Err
 }
 
 fn validate_response(response: &Response) -> Result<(), Error> {
-    if response.protocol != 1
-        || response.manager_version.is_empty()
-        || response.manager_version.len() > 64
-        || !response
-            .manager_version
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b".-+".contains(&byte))
-        || response
-            .status
-            .as_ref()
-            .is_some_and(|status| !status.valid())
-        || response
-            .events
-            .as_ref()
-            .is_some_and(|events| !events.valid())
-    {
-        return Err(Error::Protocol);
-    }
-    Ok(())
+    response.valid().then_some(()).ok_or(Error::Protocol)
 }
 
 pub(crate) fn digest_name(value: &str) -> bool {
@@ -334,117 +328,6 @@ enum Code {
 impl Code {
     const fn is_status_result(self) -> bool {
         matches!(self, Self::Ok | Self::RecoveryRequired)
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Response {
-    protocol: u32,
-    manager_version: String,
-    code: Code,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    status: Option<Status>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    events: Option<Events>,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Status {
-    rollback: Option<serde_json::Value>,
-    probation: Option<serde_json::Value>,
-    promotion: Option<serde_json::Value>,
-    failures: Option<serde_json::Value>,
-    sequence: u64,
-    failed_operations: u64,
-    staged_verified_digest: Option<String>,
-    last_operation: Option<Record>,
-    qualification: Option<serde_json::Value>,
-}
-
-impl Status {
-    fn valid(&self) -> bool {
-        [
-            &self.rollback,
-            &self.probation,
-            &self.promotion,
-            &self.failures,
-            &self.qualification,
-        ]
-        .into_iter()
-        .all(|value| value.as_ref().is_none_or(serde_json::Value::is_object))
-            && self
-                .staged_verified_digest
-                .as_ref()
-                .is_none_or(|digest| digest_name(digest))
-            && self.last_operation.as_ref().is_none_or(Record::valid)
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Events {
-    records: Vec<Record>,
-    oldest_sequence: u64,
-    latest_sequence: u64,
-    truncated: bool,
-}
-
-impl Events {
-    fn valid(&self) -> bool {
-        self.oldest_sequence <= self.latest_sequence.saturating_add(1)
-            && self.records.len() <= 64
-            && self.records.iter().all(Record::valid)
-            && self.records.iter().all(|record| {
-                record.sequence >= self.oldest_sequence && record.sequence <= self.latest_sequence
-            })
-            && self
-                .records
-                .windows(2)
-                .all(|records| records[0].sequence < records[1].sequence)
-    }
-}
-
-#[derive(Default, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum Actor {
-    #[default]
-    Operator,
-    Supervisor,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Record {
-    sequence: u64,
-    uid: u32,
-    request: Request,
-    result: Code,
-    #[serde(default)]
-    actor: Actor,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    decision: Option<serde_json::Value>,
-}
-
-impl Record {
-    fn valid(&self) -> bool {
-        if self.sequence == 0
-            || self
-                .decision
-                .as_ref()
-                .is_some_and(|decision| !decision.is_object())
-        {
-            return false;
-        }
-        match &self.request {
-            Request::Stage { digest } | Request::Promote { digest } => digest_name(digest),
-            Request::Qualify {
-                digest,
-                evidence_digest,
-            } => digest_name(digest) && digest_name(evidence_digest),
-            Request::Status {} | Request::Rollback {} | Request::Events { .. } => true,
-        }
     }
 }
 

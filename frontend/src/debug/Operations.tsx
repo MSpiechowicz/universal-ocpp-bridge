@@ -6,6 +6,7 @@ import type { TraceBuffer } from './buffer';
 import { displayMetric, latestCommit, parseOperations, stationObservations } from './operations';
 import type { Component, Operations as Snapshot } from './operations';
 
+import { Fields } from '../Fields';
 export function Operations({ identity, hidden, buffer, ceiling }: {
   identity: Identity; hidden: boolean; buffer: TraceBuffer; ceiling: number;
 }) {
@@ -46,10 +47,10 @@ export function Operations({ identity, hidden, buffer, ceiling }: {
       <p role="status">{failure ? 'Refresh failed; retained snapshot is stale.' : hidden ? 'Hidden tab: polling paused; retained snapshot is stale.' : snapshot ? 'Last health snapshot received' : 'Snapshot unavailable.'}
         {snapshot && ` · ${new Date(snapshot.received).toLocaleTimeString()}`}</p>
       <p className="field-note">Receipt time is not metric observation time. Ages are unavailable unless reported. Missing is not zero.</p>
-      <dl><dt>Selected target identity</dt><dd>{identity.selected_target_id ?? 'None selected'}</dd>
-        <dt>Target kind / declared capabilities</dt><dd>{data?.targetKind ?? 'Unavailable'} · {data?.targetCapabilities ?? 'Unavailable'}</dd>
-
-      </dl>
+      <Fields rows={[
+        ['Selected target identity', identity.selected_target_id ?? 'None selected'],
+        ['Target kind / declared capabilities', `${data?.targetKind ?? 'Unavailable'} · ${data?.targetCapabilities ?? 'Unavailable'}`],
+      ]}/>
       <h4>Captured OCPP connections (up to 10)</h4>
       <p>Historical authorized capture evidence. Reconnect counts and in-flight calls per station are unavailable.</p>
       {stations.length ? <dl>{stations.map(row => <div key={row.station}><dt>{row.station}</dt><dd>{row.protocol || 'Protocol unavailable'} · last captured heartbeat: {row.heartbeat || 'Unavailable'}</dd></div>)}</dl> : <p>No retained OCPP connection evidence.</p>}
@@ -59,13 +60,13 @@ export function Operations({ identity, hidden, buffer, ceiling }: {
         <ComponentView label="External client health" value={data?.externalClient}/>
       </div>
       <h3>Local persistence</h3>
-      <dl><dt>Core readiness</dt><dd>{data?.readiness ?? 'Unavailable'}</dd>
-        <dt>Local storage safety</dt><dd>{data?.storage ?? 'Unavailable'}</dd>
-        <dt>New session admission</dt><dd>{data?.admission ?? 'Unavailable'}</dd>
-        <dt>Latest retained local commit evidence</dt><dd>{commit ? `${commit.outcome} · ${commit.time} · trace ${commit.sequence}` : 'Unavailable — no storage.commit trace in the retained capture window'}
+      <Fields rows={[
+        ['Core readiness', data?.readiness], ['Local storage safety', data?.storage], ['New session admission', data?.admission],
+        ['Latest retained local commit evidence', <>
+          {commit ? `${commit.outcome} · ${commit.time} · trace ${commit.sequence}` : 'Unavailable — no storage.commit trace in the retained capture window'}
           {correlation && <button className="secondary" onClick={() => window.dispatchEvent(new CustomEvent('uob-correlation', { detail: correlation }))}>Open local commit correlation</button>}
-        </dd>
-      </dl>
+        </>],
+      ]}/>
       <p>Local commits survive export outages. Capture may be incomplete.</p>
       <h3>Resource use and capacity</h3>
       {data ? <><table><thead><tr><th scope="col">Resource / queue</th><th scope="col">Used</th><th scope="col">Capacity</th></tr></thead><tbody>
@@ -82,11 +83,9 @@ export function Operations({ identity, hidden, buffer, ceiling }: {
   </section>;
 }
 function ComponentView({ label, value }: { label: string; value?: Component }) {
-  return <section aria-label={label}><h4>{label}</h4><dl>
-    <dt>State</dt><dd>{value?.state ?? 'Unavailable'}</dd>
-    <dt>Reconnects</dt><dd>{displayMetric(value?.reconnects)}</dd>
-    <dt>Backlog items</dt><dd>{displayMetric(value?.backlog)}</dd>
-    <dt>In-flight items</dt><dd>{displayMetric(value?.inFlight)}</dd>
-    <dt>Active connections</dt><dd>{displayMetric(value?.connections)}</dd>
-  </dl></section>;
+  return <section aria-label={label}><h4>{label}</h4><Fields rows={[
+    ['State', value?.state], ['Reconnects', displayMetric(value?.reconnects)],
+    ['Backlog items', displayMetric(value?.backlog)], ['In-flight items', displayMetric(value?.inFlight)],
+    ['Active connections', displayMetric(value?.connections)],
+  ]}/></section>;
 }

@@ -108,3 +108,9 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .operations table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .operations th, .operations td { padding: .5rem; text-align: left; border-bottom: 1px solid var(--line, #c5cbd0); overflow-wrap: anywhere; }
 .operations th:first-child { width: 48%; }
+.release-panel dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.release-panel dl > div { min-width: 0; }
+.release-panel dd, .release-panel code { font-family: ui-monospace, monospace; font-size: 12px; }
+.release-panel details { border-top: 1px solid var(--line); padding: 12px 0; }
+.release-panel summary { cursor: pointer; font-size: 13px; }
+@media (max-width: 600px) { .release-panel dl { grid-template-columns: 1fr; } }

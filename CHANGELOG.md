@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- Add a production-only Debug release view with separately authenticated read access,
+  authoritative activation-journal pointers, historical qualification/drain/probation
+  evidence and exact rollback reasons. Preserve headless CLI recovery, environment
+  isolation, bounded audit rendering and the existing console asset budget.
+
 - Add ordered supervisor decision audit records with exact artifact/evidence digests,
   operator/supervisor attribution, safe health observations, and byte-bounded retention
   that preserves current incident context. Expose production-only authenticated release
