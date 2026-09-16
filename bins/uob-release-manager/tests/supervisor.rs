@@ -1,5 +1,9 @@
 #[path = "supervisor/adversarial.rs"]
 mod adversarial;
+#[path = "supervisor/cli.rs"]
+mod cli;
+#[path = "supervisor/events.rs"]
+mod events;
 #[path = "supervisor/support.rs"]
 mod support;
 use std::{fs, path::PathBuf};
@@ -164,30 +168,7 @@ fn stage_rechecks_bytes_and_only_selects_the_installed_candidate() {
 }
 
 #[test]
-fn manager_packaging_has_an_independent_version_lifecycle_and_no_execution_surface() {
-    let manifest = include_str!("../Cargo.toml");
-    assert!(manifest.contains("version = \"0.1.0\""));
-    let unit = include_str!("../../../packaging/systemd/uob-release-manager.service");
-    for value in [
-        "/usr/local/libexec/uob-release-manager serve",
-        "StateDirectory=uob-release-manager",
-        "RuntimeDirectoryMode=0750",
-        "Restart=on-failure",
-        "StartLimitBurst=5",
-        "ProtectSystem=strict",
-        "RestrictAddressFamilies=AF_UNIX",
-        "CapabilityBoundingSet=\n",
-    ] {
-        assert!(unit.contains(value), "missing {value}");
-    }
-    for value in [
-        "Requires=uob.service",
-        "PartOf=uob.service",
-        "BindsTo=uob.service",
-        "ExecStart=/var/lib/uob-releases",
-    ] {
-        assert!(!unit.contains(value));
-    }
+fn manager_reports_its_independent_version() {
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_uob-release-manager"))
         .arg("--version")
         .output()

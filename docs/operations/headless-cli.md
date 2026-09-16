@@ -1,4 +1,4 @@
-# Headless service CLI
+# Headless service and release CLI
 
 The production binary is `uob`. Every command is noninteractive: it never reads a prompt from
 standard input and never launches a browser. Service diagnostics go to standard error; commands
@@ -77,3 +77,82 @@ Exit code `0` means the requested operation completed successfully. Exit code `2
 invalid arguments or configuration. Exit code `1` identifies runtime, network, stream, or output
 failure. Diagnostics use stable sanitized categories and do not reproduce rejected configuration
 values, credential contents, response bodies, or filesystem paths.
+
+## Independent release control
+
+Release commands connect directly to the independent supervisor's protected Unix socket.
+They do not load `bridge.toml`, contact the management API, or start a bridge process:
+
+```text
+uob release stage --bundle /srv/delivery/candidate
+uob release qualify --release DIGEST --evidence evidence.json
+uob release promote --release DIGEST
+uob release rollback --to previous-good
+uob release status --format json
+uob release events --format jsonl
+uob release events --format jsonl --after 41
+```
+
+Every form accepts `--socket PATH`; the default is
+`/run/uob-release-manager/control.sock`. Use only an administrator-controlled socket.
+The supervisor authenticates the process's kernel UID, not a CLI-supplied credential.
+Group membership permits connecting but does not confer an operation grant:
+
+| Commands | Required supervisor permission |
+|---|---|
+| `status`, `events` | `read` |
+| `stage`, `qualify` | `stage` |
+| `promote`, `rollback` | `activate` |
+
+`DIGEST` is the exact 64-character lowercase SHA-256 artifact identity, not a release label.
+`--bundle` takes a directory in the existing
+[signed-artifact format](signed-artifact-store.md), not a platform-package tarball.
+The CLI reads its bounded `manifest.json` to select the digest. The administrator must first
+install the signed manifest, signature and payload with the existing
+`uob-release-manager install` command. `stage` asks the supervisor to reverify that installed
+candidate's signature, bytes and eligibility; it does not install local files or claim that a
+staging workload ran.
+
+`--evidence` identifies exact document bytes, bounded to 64 KiB. Before calling `qualify`, the
+administrator or trusted delivery pipeline must provision those bytes and their detached
+signature in the supervisor's [protected evidence inbox](release-qualification.md).
+The CLI hashes the local file; only its digest crosses IPC. It cannot supply a trusted key,
+upload unsigned claims, write the inbox, or override the configured qualification matrix.
+Manifest/evidence inputs must be regular files; final-component symlinks and FIFOs are rejected.
+
+The supervisor remains authoritative. Missing or invalid installation/evidence returns policy
+errors such as `artifact_rejected`, `evidence_rejected`, or `qualification_required`.
+Qualified promotion uses the existing preflight gate and returns `preflight_rejected` or
+`activation_blocked` where production admission/process control is unavailable through IPC.
+Rollback likewise returns the existing `qualification_required` policy response.
+Neither command bypasses compatibility, drain, or activation ownership. These CLI forms do not
+turn the separate internal activation/automatic-rollback APIs into unconditional operator actions.
+
+Status and mutation commands emit one JSON response containing `protocol`, `manager_version`,
+and `code`, with status evidence where available. Supervisor policy failures retain their
+machine-readable response and exit `1`; they are not reported as success.
+Local failures emit `{"error":"..."}` with a stable sanitized category. Invalid arguments exit
+`2`; input, transport, protocol and output failures exit `1`. Diagnostics remain on stderr.
+Connect/write waits are bounded to one second each; the absolute response deadline is six
+minutes, allowing the supervisor's configured preflight to take up to five minutes.
+A timeout does not cancel supervisor work. Inspect status/events before deciding whether to retry.
+
+Release events are a finite snapshot, not the management SSE stream or a follow mode. Each
+retained record is one JSON line with `sequence`, authenticated `uid`, digest-only `request`,
+and `result`. The final line is:
+
+```json
+{"type":"metadata","cursor":42,"truncated":false,"oldest_sequence":1,"latest_sequence":42}
+```
+
+`--after` is an exclusive unsigned sequence cursor. Retention is the latest 64 recorded mutation
+requests. `truncated:true` means the requested cursor predates available history; archive output
+externally if a longer request history is required. A legacy ledger exposes only its previously
+retained last operation until new records accumulate. Reads do not change the ledger.
+This request history does not claim to contain all internal activation decisions, health events,
+or denied/invalid requests rejected before recording; broader audit coverage is separate work.
+
+Run `./scripts/test-release-cli.sh` for real CLI-to-supervisor checks with no bridge/API running,
+including read-only permissions, untrusted evidence, candidate selection, restart and cursor
+retrieval. It builds `uob` separately and runs the cross-binary regression cases; the workspace
+verifier invokes it automatically.

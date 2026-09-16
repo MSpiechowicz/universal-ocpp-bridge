@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- Add headless release stage, qualify, promote, rollback, status and JSONL event commands over
+  protected supervisor IPC, without requiring the bridge/API. Preserve signed installation,
+  trusted qualification and activation policy gates; retain the latest 64 mutation requests
+  with restart-safe exclusive cursors and explicit history truncation.
+
 - Add OCPP 2.0.1 DataTransfer with exact vendor/message routing, bounded opaque JSON,
   validated customData/statusInfo, durable sanitized outcomes, and one-shot outbound delivery.
   Pinned independent fixtures and WebSocket/SQLite scenarios cover native statuses, invalid

@@ -1,4 +1,4 @@
-use super::{Code, Record, Request, Status};
+use super::{Code, Events, Record, Request, Status};
 use crate::artifacts::{InstallError, filesystem as disk, manifest};
 use std::{
     fs,
@@ -7,9 +7,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const HISTORY_CAPACITY: usize = 64;
+
 pub struct Ledger {
     root: PathBuf,
     state: Status,
+    history: Vec<Record>,
     recovery: bool,
     _lock: File,
 }
@@ -33,12 +36,12 @@ impl Ledger {
         lock.try_lock()
             .map_err(|_| InstallError::Rejected("supervisor already running"))?;
         let path = root.join("state.json");
-        let state = match fs::symlink_metadata(&path) {
-            Ok(_) => serde_json::from_slice(&disk::bounded_read(&path, 65536)?)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Status::default(),
+        let (state, history) = match fs::symlink_metadata(&path) {
+            Ok(_) => decode(&disk::bounded_read(&path, 65536)?)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (Status::default(), Vec::new()),
             Err(e) => return Err(e.into()),
         };
-        validate(&state)?;
+        validate(&state, &history)?;
         // A partial publication never becomes authoritative on restart. Keep status
         // readable, block mutation, and retain evidence for explicit recovery.
         let recovery = match fs::symlink_metadata(root.join("state.next")) {
@@ -49,6 +52,7 @@ impl Ledger {
         Ok(Self {
             root: root.to_owned(),
             state,
+            history,
             recovery,
             _lock: lock,
         })
@@ -59,6 +63,20 @@ impl Ledger {
     }
     pub const fn needs_recovery(&self) -> bool {
         self.recovery
+    }
+
+    pub fn events(&self, after: u64) -> Events {
+        let oldest_sequence = self.history.first().map_or(0, |record| record.sequence);
+        let latest_sequence = self.history.last().map_or(0, |record| record.sequence);
+        let start = self
+            .history
+            .partition_point(|record| record.sequence <= after);
+        Events {
+            records: self.history[start..].to_vec(),
+            oldest_sequence,
+            latest_sequence,
+            truncated: oldest_sequence != 0 && after < oldest_sequence.saturating_sub(1),
+        }
     }
 
     pub fn record(&mut self, uid: u32, request: Request, result: Code) -> Result<(), InstallError> {
@@ -87,13 +105,19 @@ impl Ledger {
                 pi_measurements_digest: None,
             });
         }
-        next.last_operation = Some(Record {
+        let record = Record {
             sequence: next.sequence,
             uid,
             request,
             result,
-        });
-        self.persist(next)
+        };
+        next.last_operation = Some(record.clone());
+        let mut history = self.history.clone();
+        history.push(record);
+        if history.len() > HISTORY_CAPACITY {
+            history.remove(0);
+        }
+        self.persist(next, Some(history))
     }
 
     pub fn record_failures(
@@ -102,7 +126,7 @@ impl Ledger {
     ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
         next.failures = Some(failures);
-        self.persist(next)
+        self.persist(next, None)
     }
 
     pub fn record_promotion(
@@ -114,7 +138,7 @@ impl Ledger {
             next.probation = None;
         }
         next.promotion = Some(promotion);
-        self.persist(next)
+        self.persist(next, None)
     }
 
     pub fn record_probation(
@@ -123,18 +147,23 @@ impl Ledger {
     ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
         next.probation = Some(evidence);
-        self.persist(next)
+        self.persist(next, None)
     }
 
     pub fn record_rollback(&mut self, record: super::rollback::Record) -> Result<(), InstallError> {
         let mut next = self.state.clone();
         next.rollback = Some(record);
-        self.persist(next)
+        self.persist(next, None)
     }
 
-    fn persist(&mut self, next: Status) -> Result<(), InstallError> {
-        validate(&next)?;
-        let bytes = serde_json::to_vec(&next)?;
+    fn persist(
+        &mut self,
+        next: Status,
+        updated_history: Option<Vec<Record>>,
+    ) -> Result<(), InstallError> {
+        let history = updated_history.as_deref().unwrap_or(&self.history);
+        validate(&next, history)?;
+        let bytes = encode(&next, history)?;
         if bytes.len() > 65536 {
             return Err(InstallError::Rejected("supervisor ledger exceeds bound"));
         }
@@ -144,12 +173,54 @@ impl Ledger {
         fs::rename(&temporary, self.root.join("state.json"))?;
         disk::sync_dir(&self.root)?;
         self.state = next;
+        if let Some(history) = updated_history {
+            self.history = history;
+        }
         self.recovery = false;
         Ok(())
     }
 }
 
-fn validate(state: &Status) -> Result<(), InstallError> {
+fn decode(bytes: &[u8]) -> Result<(Status, Vec<Record>), InstallError> {
+    let mut state: serde_json::Value = serde_json::from_slice(bytes)?;
+    let object = state
+        .as_object_mut()
+        .ok_or(InstallError::Rejected("invalid supervisor ledger"))?;
+    let history: Option<Vec<Record>> = object
+        .remove("history")
+        .map(serde_json::from_value)
+        .transpose()?;
+    let state: Status = serde_json::from_value(state)?;
+    let history = history.unwrap_or_else(|| state.last_operation.clone().into_iter().collect());
+    Ok((state, history))
+}
+
+fn encode(state: &Status, history: &[Record]) -> Result<Vec<u8>, InstallError> {
+    #[derive(serde::Serialize)]
+    struct Persisted<'a> {
+        #[serde(flatten)]
+        state: &'a Status,
+        history: &'a [Record],
+    }
+    Ok(serde_json::to_vec(&Persisted { state, history })?)
+}
+
+fn validate_record(record: &Record) -> bool {
+    record.sequence != 0
+        && match &record.request {
+            Request::Stage { digest } | Request::Promote { digest } => {
+                manifest::digest_name(digest)
+            }
+            Request::Qualify {
+                digest,
+                evidence_digest,
+            } => manifest::digest_name(digest) && manifest::digest_name(evidence_digest),
+            Request::Rollback {} => true,
+            Request::Status {} | Request::Events { .. } => false,
+        }
+}
+
+fn validate(state: &Status, history: &[Record]) -> Result<(), InstallError> {
     if let Some(record) = &state.rollback {
         record.validate()?;
     }
@@ -171,16 +242,28 @@ fn validate(state: &Status) -> Result<(), InstallError> {
     let bad_digest = state
         .staged_verified_digest
         .as_ref()
-        .is_some_and(|d| !manifest::digest_name(d));
-    let bad_record = state.last_operation.as_ref().is_some_and(|r| {
-        r.sequence != state.sequence || matches!(&r.request,
-            Request::Stage { digest } | Request::Promote { digest } | Request::Qualify { digest, .. } if !manifest::digest_name(digest))
-            || matches!(&r.request, Request::Qualify { evidence_digest, .. } if !manifest::digest_name(evidence_digest))
-    });
+        .is_some_and(|digest| !manifest::digest_name(digest));
+    let bad_last_operation = state
+        .last_operation
+        .as_ref()
+        .is_some_and(|record| record.sequence != state.sequence || !validate_record(record));
+    let bad_history = history.len() > HISTORY_CAPACITY
+        || history.iter().any(|record| !validate_record(record))
+        || history
+            .windows(2)
+            .any(|records| records[0].sequence.checked_add(1) != Some(records[1].sequence))
+        || match (history.last(), state.last_operation.as_ref()) {
+            (None, None) => state.sequence != 0,
+            (Some(latest), Some(last_operation)) => {
+                latest != last_operation || latest.sequence != state.sequence
+            }
+            _ => true,
+        };
     if state.qualification.as_ref().is_some_and(|q| {
         !manifest::digest_name(&q.candidate_digest) || !manifest::digest_name(&q.evidence_digest)
     }) || bad_digest
-        || bad_record
+        || bad_last_operation
+        || bad_history
         || state.failed_operations > state.sequence
         || (state.sequence == 0) != state.last_operation.is_none()
     {
