@@ -31,6 +31,7 @@ pub(crate) async fn serve(
     address: SocketAddr,
     application: Application,
     diagnostics: uob_management_adapter::ManagementCaptureConfiguration,
+    release_read: Option<uob_management_adapter::ManagementReleaseReadConfiguration>,
     options: ManagementRouterOptions,
     deadline: Duration,
     deployment: Option<crate::deployment::DeploymentState>,
@@ -53,11 +54,12 @@ pub(crate) async fn serve(
             })??;
     }
     let (stop, stopped) = oneshot::channel();
-    let server = uob_management_adapter::serve_with_capture_readiness(
+    let server = uob_management_adapter::serve_with_capture_and_release_readiness(
         address,
         application,
         options,
         Some(diagnostics),
+        release_read,
         async move {
             let _ = stopped.await;
         },

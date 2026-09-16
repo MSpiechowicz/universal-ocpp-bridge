@@ -138,21 +138,26 @@ minutes, allowing the supervisor's configured preflight to take up to five minut
 A timeout does not cancel supervisor work. Inspect status/events before deciding whether to retry.
 
 Release events are a finite snapshot, not the management SSE stream or a follow mode. Each
-retained record is one JSON line with `sequence`, authenticated `uid`, digest-only `request`,
-and `result`. The final line is:
+retained record is one JSON line with `sequence`, `uid`, digest-only `request`,
+`result`, and `actor` (`operator` or `supervisor`). Internal decisions also carry
+safe typed `decision` evidence for compatibility/drain, health and rollback.
+Operator UIDs come from socket peer credentials; internal decisions use the
+supervisor's effective UID. The final line is:
 
 ```json
 {"type":"metadata","cursor":42,"truncated":false,"oldest_sequence":1,"latest_sequence":42}
 ```
 
-`--after` is an exclusive unsigned sequence cursor. Retention is the latest 64 recorded mutation
-requests. `truncated:true` means the requested cursor predates available history; archive output
-externally if a longer request history is required. A legacy ledger exposes only its previously
-retained last operation until new records accumulate. Reads do not change the ledger.
-This request history does not claim to contain all internal activation decisions, health events,
-or denied/invalid requests rejected before recording; broader audit coverage is separate work.
+`--after` is an exclusive unsigned sequence cursor covering both actors. Retention
+is at most 64 records and may be lower to keep the combined state below 64 KiB.
+`truncated:true` means the requested cursor predates available history; archive output
+externally if a longer history is required. Current incident context remains pinned
+in status independently of event eviction. Older records without an actor are
+operator records. Reads do not change the ledger. Unauthorized/malformed requests
+rejected before recording are not audit entries.
 
 Run `./scripts/test-release-cli.sh` for real CLI-to-supervisor checks with no bridge/API running,
-including read-only permissions, untrusted evidence, candidate selection, restart and cursor
-retrieval. It builds `uob` separately and runs the cross-binary regression cases; the workspace
+including read-only permissions, untrusted evidence, candidate selection, restart,
+cursor retrieval, and internal audit export after automatic rollback and bridge death.
+It builds `uob` separately and runs the cross-binary regression cases; the workspace
 verifier invokes it automatically.

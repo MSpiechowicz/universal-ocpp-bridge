@@ -105,6 +105,10 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
         Ok(value) => value,
         Err(error) => return failure(1, error.to_string()),
     };
+    let release_read = match configuration.release_read.resolve() {
+        Ok(value) => value,
+        Err(error) => return failure(1, error.to_string()),
+    };
     eprintln!(
         "service listening on {} (static assets: {})",
         configuration.management_address,
@@ -117,6 +121,7 @@ async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
             diagnostics.manager.clone(),
         ),
         diagnostics,
+        release_read,
         options,
         configuration.shutdown_timeout,
         deployment,

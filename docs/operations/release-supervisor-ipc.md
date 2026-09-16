@@ -53,11 +53,13 @@ the application unit. Stopping the bridge does not stop release control.
 
 Only deliberately authorized local operator accounts should join the IPC group.
 Group membership allows connecting; it does **not** grant an operation. Configure
-each operator's numeric UID and exact permissions in `grants`. Do not add the
-bridge or staging service accounts. Root is explicitly listed in the example and
-has no special protocol bypass. Restart the supervisor after changing grants or
-trust/revocation policy; those administrator files are loaded at startup. Restart
-does not discard persisted supervisor state.
+each operator's numeric UID and exact permissions in `grants`. The optional
+[management read bridge](management-read-api.md#release-supervisor-read-bridge) may
+add the production bridge account to this group with **only** `read` permission.
+Never grant it `stage` or `activate`, and never add the staging account. Root is
+explicitly listed in the example and has no special protocol bypass. Restart the
+supervisor after changing grants or trust/revocation policy; those administrator
+files are loaded at startup. Restart does not discard persisted supervisor state.
 
 The current service has no executable activation backend and no service-control
 privileges. Its writable paths are its own state/runtime directories and the
@@ -83,7 +85,7 @@ response line. Example requests:
 | Operation | Required permission | Current effect |
 | --- | --- | --- |
 | `status` | `read` | Read private supervisor evidence without querying the bridge |
-| `events` | `read` | Snapshot up to 64 retained mutation requests after an exclusive sequence cursor, with oldest/latest sequence and truncation metadata |
+| `events` | `read` | Snapshot up to 64 retained operator outcomes and supervisor decisions after an exclusive sequence cursor, with oldest/latest sequence and truncation metadata |
 | `stage` | `stage` | Under the artifact-store lock, require the current candidate and reverify its signature, host/security/schema eligibility, ownership, sealed layout and bytes; persist verification evidence |
 | `qualify` | `stage` | Verify signed evidence from the private inbox and persist an exact candidate/evidence reference |
 | `promote` / `rollback` | `activate` | Record `qualification_required` (or `preflight_rejected` / `activation_blocked` after qualified production preflight); leave application pointers and services unchanged |
@@ -99,14 +101,31 @@ Responses contain `protocol: 1`, `manager_version`, a safe `code`, and, only for
 authorized read requests, `status` or `events`. Codes are `ok`, `forbidden`,
 `invalid_request`, `busy`, `artifact_rejected`, `qualification_required`,
 `evidence_rejected`, `preflight_rejected`, `activation_blocked`, `recovery_required`, and `storage_failure`. No raw request or OS error text is
-echoed. Status reports a monotonic request sequence, failed authorized operation
-count, last operation and authenticated UID, and the last successfully verified
-staging digest. That digest is a historical observation, not a current
+echoed. Status reports a monotonic audit sequence, failed authorized operator request
+count, last operator outcome and authenticated UID, and the last successfully verified
+staging digest. Internal decisions advance the sequence without replacing `last_operation`.
+That digest is a historical observation, not a current
 qualification or activation permission. It is cleared by a failed staging check.
 An events response contains `records`, `oldest_sequence`, `latest_sequence`, and `truncated`.
 Omitting `after` selects zero; records have sequence strictly greater than the cursor.
 An empty history reports both bounds as zero. Reads remain available during recovery and do
 not append records or change state. Unauthorized reads disclose neither status nor events.
+
+Each event has `sequence`, `uid`, `request`, `result`, and `actor`. Operator records
+use the kernel-authenticated peer UID and `actor: operator`. Internal decisions use
+the supervisor's effective UID and `actor: supervisor`, with a typed `decision`:
+
+- Promotion: exact candidate, previous-good, qualification evidence and configuration
+  digests when available; compatibility, drain, health and outcome categories.
+- Failure: trusted observation ID/time, closed signal category and resource-pressure
+  flag, artifact identities, policy decision and the pinned incident trigger ID.
+- Rollback: quarantined and previous-good digests, attempt/restored/recovery-required
+  step and a closed reason category.
+
+No credential, secret reference, configuration contents, path or raw error is an
+audit field. Promotion/rollback requests remain subject to the existing gates;
+the event API cannot initiate them. Unauthorized and malformed requests rejected
+before recording do not consume retention capacity.
 
 The transport accepts at most four concurrent clients, 1024 request bytes per
 client, and a one-second absolute read deadline. Trickle traffic cannot reset the
@@ -122,15 +141,20 @@ state. A separate runtime lock prevents competing socket owners. An owner-checke
 stale socket left by process death can be removed after acquiring that lock;
 regular files and links at the socket path are rejected without deletion.
 
-The private ledger retains the latest 64 mutation request records, a last-operation record and
-aggregate counters. This bounded request history is not a complete activation audit or the
-separate activation journal. Loading a legacy ledger preserves its last operation as the initial
-history and reports truncation when earlier sequence numbers are unavailable.
-An authorized mutation is acknowledged only after writing `state.next`, syncing
-it, renaming it to `state.json`, and syncing the directory. History and status are committed
-together under the existing 64 KiB bound. Unauthorized operations
-cannot allocate ledger records or touch the artifact store. Sequence exhaustion
-and persistence errors fail closed.
+The private ledger retains at most 64 audit records, the last operator outcome,
+aggregate counters, and current promotion, probation, failure and rollback state.
+Oldest events are also evicted when needed to keep the **combined** encoded state
+within 64 KiB; current incident context is never evicted to make room for history.
+`truncated` signals an expired cursor. Archive exports externally when a complete
+long-term audit trail is required. The ledger is outside application bundles and
+the operational database; application rollback does not roll audit evidence back.
+
+Loading older ledgers treats records without `actor` as operator records. If an
+older ledger retained only its last operation, earlier cursors report truncation.
+Each recorded transition and its audit event commit together by writing `state.next`,
+syncing it, renaming it to `state.json`, and syncing the directory. Unauthorized
+operations cannot allocate records or touch the artifact store. Sequence exhaustion,
+an oversized pinned status and persistence errors fail closed.
 
 An interrupted `state.next` leaves the previous `state.json` readable, reports
 `recovery_required`, and blocks further mutations. Stop the supervisor and inspect

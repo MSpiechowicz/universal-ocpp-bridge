@@ -28,6 +28,8 @@ struct FileConfiguration {
     #[serde(default)]
     diagnostics: crate::diagnostics::Configuration,
     #[serde(default)]
+    release_read: crate::release_read::Configuration,
+    #[serde(default)]
     management: ManagementConfiguration,
     #[serde(default)]
     events: EventClientConfiguration,
@@ -110,6 +112,7 @@ struct DataExportSection {
 
 pub(crate) struct ValidatedServiceConfiguration {
     pub diagnostics: crate::diagnostics::Validated,
+    pub release_read: crate::release_read::Validated,
     pub service: ServiceComposition<(), ()>,
     pub management_address: SocketAddr,
     pub events: ValidatedEventClientConfiguration,
@@ -203,10 +206,15 @@ fn validate(
             service.application.runtime_identity().environment,
         )
         .map_err(|_| ConfigurationLoadError::InvalidDocument)?;
+    let release_read = configuration
+        .release_read
+        .validate(configuration.bridge.environment)
+        .map_err(|_| ConfigurationLoadError::InvalidDocument)?;
     let events = validate_event_client(configuration.events, configuration.management.listen_addr)?;
 
     Ok(ValidatedServiceConfiguration {
         diagnostics,
+        release_read,
         service,
         management_address: configuration.management.listen_addr,
         shutdown_timeout,

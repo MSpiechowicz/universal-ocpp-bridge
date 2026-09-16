@@ -406,6 +406,14 @@ impl Events {
     }
 }
 
+#[derive(Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Actor {
+    #[default]
+    Operator,
+    Supervisor,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Record {
@@ -413,10 +421,22 @@ struct Record {
     uid: u32,
     request: Request,
     result: Code,
+    #[serde(default)]
+    actor: Actor,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    decision: Option<serde_json::Value>,
 }
 
 impl Record {
     fn valid(&self) -> bool {
+        if self.sequence == 0
+            || self
+                .decision
+                .as_ref()
+                .is_some_and(|decision| !decision.is_object())
+        {
+            return false;
+        }
         match &self.request {
             Request::Stage { digest } | Request::Promote { digest } => digest_name(digest),
             Request::Qualify {

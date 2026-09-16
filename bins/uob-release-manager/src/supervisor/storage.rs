@@ -1,4 +1,4 @@
-use super::{Code, Events, Record, Request, Status};
+use super::{Actor, Code, Decision, Events, Record, Request, Status};
 use crate::artifacts::{InstallError, filesystem as disk, manifest};
 use std::{
     fs,
@@ -81,10 +81,6 @@ impl Ledger {
 
     pub fn record(&mut self, uid: u32, request: Request, result: Code) -> Result<(), InstallError> {
         let mut next = self.state.clone();
-        next.sequence = next
-            .sequence
-            .checked_add(1)
-            .ok_or(InstallError::Rejected("supervisor sequence exhausted"))?;
         if result != Code::Ok {
             next.failed_operations = next.failed_operations.saturating_add(1);
         }
@@ -105,77 +101,140 @@ impl Ledger {
                 pi_measurements_digest: None,
             });
         }
-        let record = Record {
-            sequence: next.sequence,
-            uid,
-            request,
-            result,
-        };
-        next.last_operation = Some(record.clone());
-        let mut history = self.history.clone();
-        history.push(record);
-        if history.len() > HISTORY_CAPACITY {
-            history.remove(0);
-        }
-        self.persist(next, Some(history))
+        self.append(
+            next,
+            Record {
+                sequence: 0,
+                uid,
+                request,
+                result,
+                actor: Actor::Operator,
+                decision: None,
+            },
+            true,
+        )
     }
 
     pub fn record_failures(
         &mut self,
         failures: super::failures::State,
+        decision: Decision,
     ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
         next.failures = Some(failures);
-        self.persist(next, None)
+        self.record_supervisor(next, Request::Rollback {}, Code::Ok, decision)
     }
 
     pub fn record_promotion(
         &mut self,
         promotion: super::promotion::Record,
+        result: Code,
+        decision: Decision,
     ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
         if promotion.step == super::promotion::Step::Stopping {
             next.probation = None;
         }
+        let request = Request::Promote {
+            digest: promotion.candidate.clone(),
+        };
         next.promotion = Some(promotion);
-        self.persist(next, None)
+        self.record_supervisor(next, request, result, decision)
     }
 
     pub fn record_probation(
         &mut self,
         evidence: super::probation::State,
+        decision: Decision,
     ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
+        let request = Request::Promote {
+            digest: evidence.last.candidate.clone(),
+        };
         next.probation = Some(evidence);
-        self.persist(next, None)
+        self.record_supervisor(next, request, Code::Ok, decision)
     }
 
-    pub fn record_rollback(&mut self, record: super::rollback::Record) -> Result<(), InstallError> {
+    pub fn record_rollback(
+        &mut self,
+        record: super::rollback::Record,
+        result: Code,
+        decision: Decision,
+    ) -> Result<(), InstallError> {
         let mut next = self.state.clone();
         next.rollback = Some(record);
-        self.persist(next, None)
+        self.record_supervisor(next, Request::Rollback {}, result, decision)
+    }
+
+    pub fn record_supervisor(
+        &mut self,
+        next: Status,
+        request: Request,
+        result: Code,
+        decision: Decision,
+    ) -> Result<(), InstallError> {
+        self.append(
+            next,
+            Record {
+                sequence: 0,
+                uid: rustix::process::geteuid().as_raw(),
+                request,
+                result,
+                actor: Actor::Supervisor,
+                decision: Some(decision),
+            },
+            false,
+        )
+    }
+
+    fn append(
+        &mut self,
+        mut next: Status,
+        mut record: Record,
+        last_operator: bool,
+    ) -> Result<(), InstallError> {
+        next.sequence = next
+            .sequence
+            .checked_add(1)
+            .ok_or(InstallError::Rejected("supervisor sequence exhausted"))?;
+        record.sequence = next.sequence;
+        if last_operator {
+            next.last_operation = Some(record.clone());
+        }
+        let mut history = self.history.clone();
+        history.push(record);
+        // The status snapshot contains the current incident and is never evicted. Older
+        // event records yield first when detailed decisions exceed the byte envelope.
+        if history.len() > HISTORY_CAPACITY {
+            history.remove(0);
+        }
+        let bytes = loop {
+            let bytes = encode(&next, &history)?;
+            if bytes.len() <= 65536 {
+                break bytes;
+            }
+            if history.len() <= 1 {
+                return Err(InstallError::Rejected("supervisor ledger exceeds bound"));
+            }
+            history.remove(0);
+        };
+        self.persist(next, history, &bytes)
     }
 
     fn persist(
         &mut self,
         next: Status,
-        updated_history: Option<Vec<Record>>,
+        history: Vec<Record>,
+        bytes: &[u8],
     ) -> Result<(), InstallError> {
-        let history = updated_history.as_deref().unwrap_or(&self.history);
-        validate(&next, history)?;
-        let bytes = encode(&next, history)?;
-        if bytes.len() > 65536 {
-            return Err(InstallError::Rejected("supervisor ledger exceeds bound"));
-        }
+        validate(&next, &history)?;
         let temporary = self.root.join("state.next");
         self.recovery = true;
-        disk::write_new(&temporary, &bytes)?;
+        disk::write_new(&temporary, bytes)?;
         fs::rename(&temporary, self.root.join("state.json"))?;
         disk::sync_dir(&self.root)?;
         self.state = next;
-        if let Some(history) = updated_history {
-            self.history = history;
-        }
+        self.history = history;
         self.recovery = false;
         Ok(())
     }
@@ -218,6 +277,10 @@ fn validate_record(record: &Record) -> bool {
             Request::Rollback {} => true,
             Request::Status {} | Request::Events { .. } => false,
         }
+        && match record.actor {
+            Actor::Operator => record.decision.is_none(),
+            Actor::Supervisor => record.decision.as_ref().is_some_and(Decision::valid),
+        }
 }
 
 fn validate(state: &Status, history: &[Record]) -> Result<(), InstallError> {
@@ -243,29 +306,28 @@ fn validate(state: &Status, history: &[Record]) -> Result<(), InstallError> {
         .staged_verified_digest
         .as_ref()
         .is_some_and(|digest| !manifest::digest_name(digest));
-    let bad_last_operation = state
-        .last_operation
-        .as_ref()
-        .is_some_and(|record| record.sequence != state.sequence || !validate_record(record));
+    let bad_last_operation = state.last_operation.as_ref().is_some_and(|record| {
+        record.actor != Actor::Operator
+            || record.decision.is_some()
+            || record.sequence > state.sequence
+            || !validate_record(record)
+    });
     let bad_history = history.len() > HISTORY_CAPACITY
         || history.iter().any(|record| !validate_record(record))
         || history
             .windows(2)
             .any(|records| records[0].sequence.checked_add(1) != Some(records[1].sequence))
-        || match (history.last(), state.last_operation.as_ref()) {
-            (None, None) => state.sequence != 0,
-            (Some(latest), Some(last_operation)) => {
-                latest != last_operation || latest.sequence != state.sequence
-            }
-            _ => true,
-        };
+        || history
+            .last()
+            .is_some_and(|latest| latest.sequence != state.sequence)
+        || (history.is_empty() && state.sequence != 0);
     if state.qualification.as_ref().is_some_and(|q| {
         !manifest::digest_name(&q.candidate_digest) || !manifest::digest_name(&q.evidence_digest)
     }) || bad_digest
         || bad_last_operation
         || bad_history
         || state.failed_operations > state.sequence
-        || (state.sequence == 0) != state.last_operation.is_none()
+        || (state.sequence == 0) != state.last_operation.is_none() && history.is_empty()
     {
         return Err(InstallError::Rejected("invalid supervisor ledger"));
     }

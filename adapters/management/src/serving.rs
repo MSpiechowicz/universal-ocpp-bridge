@@ -1,5 +1,5 @@
 use crate::{ManagementRouterOptions, router_with_options};
-use std::{io, net::SocketAddr};
+use std::{future::Future, io, net::SocketAddr};
 use uob_application::Application;
 
 /// Binds and serves the management adapter.
@@ -33,7 +33,7 @@ pub async fn serve_with_shutdown(
     address: SocketAddr,
     application: Application,
     options: ManagementRouterOptions,
-    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+    shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> io::Result<()> {
     serve_with_readiness(address, application, options, shutdown, || Ok(())).await
 }
@@ -46,22 +46,35 @@ pub async fn serve_with_readiness(
     address: SocketAddr,
     application: Application,
     options: ManagementRouterOptions,
-    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+    shutdown: impl Future<Output = ()> + Send + 'static,
     ready: impl FnOnce() -> io::Result<()>,
 ) -> io::Result<()> {
-    serve_with_capture_readiness(address, application, options, None, shutdown, ready).await
+    serve_with_capture_and_release_readiness(
+        address,
+        application,
+        options,
+        None,
+        None,
+        shutdown,
+        ready,
+    )
+    .await
 }
 
-/// Serves with optional explicit capture credentials and the same host readiness/shutdown hooks.
+/// Serves with optional explicit capture and release-read credentials.
+///
+/// The release bridge is separately authenticated and mounted only when the host deliberately
+/// supplies its fixed supervisor-socket configuration.
 ///
 /// # Errors
 /// Returns an I/O error for unsafe binding, readiness failure, or listener failure.
-pub async fn serve_with_capture_readiness(
+pub async fn serve_with_capture_and_release_readiness(
     address: SocketAddr,
     application: Application,
     options: ManagementRouterOptions,
     capture: Option<crate::ManagementCaptureConfiguration>,
-    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+    release_read: Option<crate::ManagementReleaseReadConfiguration>,
+    shutdown: impl Future<Output = ()> + Send + 'static,
     ready: impl FnOnce() -> io::Result<()>,
 ) -> io::Result<()> {
     if !address.ip().is_loopback() {
@@ -75,6 +88,9 @@ pub async fn serve_with_capture_readiness(
     let mut router = router_with_options(application, options);
     if let Some(capture) = capture {
         router = router.merge(crate::capture_router(identity, capture));
+    }
+    if let Some(release_read) = release_read {
+        router = router.merge(crate::release_read_router(release_read));
     }
     ready()?;
     axum::serve(listener, router)

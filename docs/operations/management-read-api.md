@@ -93,3 +93,53 @@ admission capacity.
 
 The combined router constructor does not reuse an event bearer for command submissions. Command
 authentication and trusted origin remain the independent host-configured command boundary.
+
+## Release supervisor read bridge
+
+Release evidence is independent of charger events and of the selected target.
+The production daemon can explicitly enable a read-only bridge to its independently
+running supervisor:
+
+```toml
+[release_read]
+supervisor_socket = "/run/uob-release-manager/control.sock"
+token_file = "/etc/uob/release-read-token"
+```
+
+Both paths are required and administrator-selected. Omit the section to disable
+the routes. Staging/demo configurations reject this capability; they must not
+connect to the production supervisor. The credential is separately provisioned,
+not a diagnostic or command token. Use a unique `uob1.production.` token with
+32–128 printable non-whitespace secret characters. Its file must be canonical,
+regular, non-hardlinked, at most 256 bytes, and inaccessible to other users
+(for example root-owned mode 0640 with the production bridge group).
+Only one optional trailing newline is stripped. Tokens are resolved at startup,
+compared in constant time and never forwarded over IPC or included in evidence.
+
+For this opt-in deployment, give the production unit the supplementary
+`uob-release-control` group and configure its numeric UID with **only** `read`
+in the supervisor's administrator-owned `grants`. Restart both services after
+changing credentials/grants. Group access alone is insufficient; never grant
+the bridge `stage` or `activate`, and never give staging this group or socket.
+No application access to the supervisor's private state directory is needed.
+
+- `GET /api/v1/release/status` returns the supervisor protocol envelope and
+  current safe status, including incident context during recovery.
+- `GET /api/v1/release/events?after=0` returns the supervisor envelope and finite
+  audit snapshot. `after` defaults to zero and is an exclusive unsigned cursor.
+  Records, oldest/latest sequence and explicit truncation have the same semantics
+  as [`uob release events`](headless-cli.md#independent-release-control).
+
+Both routes require `Authorization: Bearer TOKEN`, even on loopback. Missing or
+wrong credentials return `401`; invalid cursor queries return `400`. There are
+no mutation methods, client-selected socket paths or arbitrary IPC forwarding.
+The bridge makes only `status`/`events` requests, under its kernel-authenticated
+read-only UID. It permits four concurrent connections, a shared one-second
+connect/write/read deadline, and an 80 KiB maximum response. Saturation returns
+`429`, supervisor unavailability/busy/denied bridge UID returns `503`, timeout
+returns `504`, and malformed supervisor output returns a sanitized `502`.
+Supervisor recovery-required status remains a readable `200` response.
+
+This API depends on the bridge process, but audit persistence does not. If the
+bridge crashes, use the independent CLI/socket. A supervisor outage does not
+change charging readiness or selected-target health.

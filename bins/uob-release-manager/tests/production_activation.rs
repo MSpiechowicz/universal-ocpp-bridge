@@ -1,3 +1,5 @@
+#[path = "production_activation/audit.rs"]
+mod audit;
 #[path = "production_activation/support.rs"]
 mod support;
 // Subprocess fork/exec briefly inherits other threads' file locks. Serialize fixtures
@@ -12,7 +14,8 @@ use uob_application::OperationalStore;
 use uob_release_manager::{
     activation::ActivationJournal,
     supervisor::{
-        Code, Request,
+        Actor, Code, Request,
+        failures::{Observation, Policy as FailurePolicy, Signal, StagingStop},
         promotion::{Host, Step},
     },
 };
@@ -42,6 +45,13 @@ fn production_child() {
     fs::write(root.join("ready"), b"ready").unwrap();
     loop {
         std::thread::park();
+    }
+}
+
+struct StopStaging;
+impl StagingStop for StopStaging {
+    fn stop_and_confirm(&mut self) -> bool {
+        true
     }
 }
 

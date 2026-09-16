@@ -2,7 +2,11 @@ use super::*;
 use crate::test_support as support;
 use crate::{
     artifacts::ArtifactStore,
-    supervisor::{Request, promotion::Record},
+    supervisor::{
+        Code, Request,
+        audit::{Compatibility, Decision, Drain, Health, PromotionOutcome},
+        promotion::Record,
+    },
 };
 use std::fs;
 use support::Fixture;
@@ -39,18 +43,32 @@ fn setup() -> (Fixture, Supervisor) {
             .transition(transition, &f.artifact.policy)
             .unwrap();
     }
+    let record = Record {
+        candidate: f.artifact.digest().into(),
+        previous: f.previous.compatibility.artifact_digest.as_str().into(),
+        configuration_digest: "c".repeat(64),
+        production_inputs_digest: "d".repeat(64),
+        database_device: 1,
+        database_inode: 2,
+        step: Step::Probation,
+        recovery_attempted: false,
+    };
     manager
         .ledger
-        .record_promotion(Record {
-            candidate: f.artifact.digest().into(),
-            previous: f.previous.compatibility.artifact_digest.as_str().into(),
-            configuration_digest: "c".repeat(64),
-            production_inputs_digest: "d".repeat(64),
-            database_device: 1,
-            database_inode: 2,
-            step: Step::Probation,
-            recovery_attempted: false,
-        })
+        .record_promotion(
+            record.clone(),
+            Code::Ok,
+            Decision::Promote {
+                candidate_digest: record.candidate,
+                previous_good_digest: Some(record.previous),
+                evidence_digest: None,
+                configuration_digest: Some(record.configuration_digest),
+                compatibility: Compatibility::Accepted,
+                drain: Drain::Granted,
+                health: Health::Probation,
+                outcome: PromotionOutcome::Continuing,
+            },
+        )
         .unwrap();
     (f, manager)
 }
@@ -230,15 +248,30 @@ fn completed_evidence_before_activation_commit_recovers_conservatively() {
     let _serial = crate::TEST_SERIAL.lock().unwrap();
     let (f, mut manager) = setup();
     // Fault boundary: evidence fsynced, healthy activation intent not yet published.
+    let state = State {
+        policy: policy(),
+        started_unix_seconds: 1_000_300,
+        verified_seconds: MINIMUM_SECONDS,
+        interrupted_intervals: 0,
+        last: sample(&f, 289),
+    };
     manager
         .ledger
-        .record_probation(State {
-            policy: policy(),
-            started_unix_seconds: 1_000_300,
-            verified_seconds: MINIMUM_SECONDS,
-            interrupted_intervals: 0,
-            last: sample(&f, 289),
-        })
+        .record_probation(
+            state.clone(),
+            Decision::Promote {
+                candidate_digest: state.last.candidate,
+                previous_good_digest: Some(
+                    f.previous.compatibility.artifact_digest.as_str().into(),
+                ),
+                evidence_digest: None,
+                configuration_digest: Some(state.last.configuration_digest),
+                compatibility: Compatibility::Accepted,
+                drain: Drain::Granted,
+                health: Health::Healthy,
+                outcome: PromotionOutcome::Continuing,
+            },
+        )
         .unwrap();
     drop(manager);
     let mut manager = f.manager();

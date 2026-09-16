@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- Add ordered supervisor decision audit records with exact artifact/evidence digests,
+  operator/supervisor attribution, safe health observations, and byte-bounded retention
+  that preserves current incident context. Expose production-only authenticated release
+  status/events through read-only management IPC; retain CLI access after rollback and
+  bridge failure.
+
 - Add headless release stage, qualify, promote, rollback, status and JSONL event commands over
   protected supervisor IPC, without requiring the bridge/API. Preserve signed installation,
   trusted qualification and activation policy gates; retain the latest 64 mutation requests

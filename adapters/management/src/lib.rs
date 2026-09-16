@@ -13,6 +13,8 @@ mod command_api;
 mod event_api;
 mod health_view;
 mod read_api;
+mod release_read;
+mod release_read_protocol;
 mod routing;
 mod security;
 
@@ -20,7 +22,7 @@ use std::fmt::Write;
 
 mod serving;
 pub use serving::{
-    serve, serve_with_capture_readiness, serve_with_options, serve_with_readiness,
+    serve, serve_with_capture_and_release_readiness, serve_with_options, serve_with_readiness,
     serve_with_shutdown,
 };
 
@@ -38,6 +40,9 @@ pub use event_api::{
     ManagementEventLimits,
 };
 pub use read_api::ManagementReadLimits;
+pub use release_read::{
+    ManagementReleaseReadAuthenticator, ManagementReleaseReadConfiguration, release_read_router,
+};
 pub use routing::{
     router, router_with_authenticated_events, router_with_commands_and_authenticated_events,
     router_with_options, router_with_queries,

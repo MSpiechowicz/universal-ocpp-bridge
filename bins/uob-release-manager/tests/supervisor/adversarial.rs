@@ -24,7 +24,7 @@ fn ipc_rejects_forged_identity_paths_units_shell_and_supervisor_replacement() {
         r#"{"operation":"rollback","unit":"uob-release-manager.service"}"#,
         r#"{"operation":"replace_supervisor"}"#,
         r#"{"operation":"execute","command":"/bin/sh"}"#,
-        r#"{"operation":"stage","path":"/usr/local/libexec/uob-release-manager"}"#,
+        r#"{"operation":"stage","path":"/usr/local/libexec/uob-release-manager","token":"do-not-retain-this-secret"}"#,
     ] {
         assert_eq!(daemon.raw(input).code, Code::InvalidRequest, "{input}");
     }
@@ -36,6 +36,16 @@ fn ipc_rejects_forged_identity_paths_units_shell_and_supervisor_replacement() {
             .unwrap()
             .sequence,
         0
+    );
+    let accepted = daemon.raw(&format!(
+        r#"{{"operation":"stage","digest":"{}"}}"#,
+        f.artifacts.digest()
+    ));
+    assert_eq!(accepted.code, Code::Ok);
+    assert!(
+        !String::from_utf8(fs::read(f.state.join("state.json")).unwrap())
+            .unwrap()
+            .contains("do-not-retain-this-secret")
     );
 }
 
