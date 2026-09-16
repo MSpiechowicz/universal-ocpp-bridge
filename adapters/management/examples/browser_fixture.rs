@@ -4,6 +4,8 @@
 mod diagnostics;
 #[path = "browser_fixture/operations.rs"]
 mod operations;
+#[path = "browser_fixture/release.rs"]
+mod release;
 #[path = "browser_fixture/source.rs"]
 mod source;
 
@@ -91,6 +93,12 @@ async fn main() {
             static_assets: port != 39191,
         },
     );
+    let (router, _release_fixture) = if port == 39189 {
+        let (release_router, fixture) = release::router();
+        (router.merge(release_router), Some(fixture))
+    } else {
+        (router, None)
+    };
     let router = router.merge(uob_management_adapter::capture_router(
         identity.clone(),
         diagnostics::configuration(identity),

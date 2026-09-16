@@ -127,7 +127,7 @@ pub struct Status {
     pub qualification: Option<crate::qualification::Qualified>,
 }
 
-/// One bounded response. Read results are returned only after the permission check.
+/// One bounded response. Activation pointers are a live journal snapshot, never ledger state.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
     pub protocol: u32,
@@ -137,6 +137,8 @@ pub struct Response {
     pub status: Option<Status>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub events: Option<Events>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub activation: Option<crate::activation::State>,
 }
 
 impl Response {
@@ -148,6 +150,7 @@ impl Response {
             code,
             status: None,
             events: None,
+            activation: None,
         }
     }
 }
@@ -237,6 +240,7 @@ impl Supervisor {
             };
             return Response {
                 status: Some(status),
+                activation: Some(self.activation.state().clone()),
                 ..Response::code(code)
             };
         }

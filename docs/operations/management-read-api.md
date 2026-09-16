@@ -125,6 +125,13 @@ No application access to the supervisor's private state directory is needed.
 
 - `GET /api/v1/release/status` returns the supervisor protocol envelope and
   current safe status, including incident context during recovery.
+  Its optional top-level `activation` is a live activation-journal snapshot:
+  `sequence`, `production` (`digest`/`phase` or null), `candidate` (`digest`/`phase`
+  or null), and `previous_good` (digest or null). These pointers are permission-gated
+  and are not reconstructed from historical promotion/probation records. After
+  rollback the production pointer can refer to the previous-good artifact while
+  the candidate is quarantined. Older supervisors can omit this field; readers
+  must treat that as unavailable, not as an empty journal.
 - `GET /api/v1/release/events?after=0` returns the supervisor envelope and finite
   audit snapshot. `after` defaults to zero and is an exclusive unsigned cursor.
   Records, oldest/latest sequence and explicit truncation have the same semantics

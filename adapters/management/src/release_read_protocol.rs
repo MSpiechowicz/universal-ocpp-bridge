@@ -40,6 +40,8 @@ pub(crate) struct Response {
     status: Option<Status>,
     #[serde(skip_serializing_if = "Option::is_none")]
     events: Option<Events>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    activation: Option<Activation>,
 }
 
 impl Response {
@@ -48,19 +50,26 @@ impl Response {
             && valid_version(&self.manager_version)
             && self.status.as_ref().is_none_or(Status::valid)
             && self.events.as_ref().is_none_or(Events::valid)
+            && self.activation.as_ref().is_none_or(Activation::valid)
+            && self.activation.as_ref().is_none_or(|_| {
+                self.events.is_none()
+                    && self.status.is_some()
+                    && matches!(self.code, Code::Ok | Code::RecoveryRequired)
+            })
     }
 
     pub(crate) fn status_result(&self) -> bool {
         self.events.is_none()
             && match self.code {
                 Code::Ok | Code::RecoveryRequired => self.status.is_some(),
-                Code::Busy | Code::Forbidden => self.status.is_none(),
+                Code::Busy | Code::Forbidden => self.status.is_none() && self.activation.is_none(),
                 _ => false,
             }
     }
 
     pub(crate) fn events_result(&self, after: u64) -> bool {
         self.status.is_none()
+            && self.activation.is_none()
             && match self.code {
                 Code::Ok => self
                     .events
@@ -111,6 +120,54 @@ impl Status {
                 .is_none_or(|digest| digest_name(digest))
             && self.last_operation.as_ref().is_none_or(Record::valid)
     }
+}
+
+/// Safe journal pointers, distinct from persisted status evidence.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Activation {
+    sequence: u64,
+    production: Option<Release>,
+    previous_good: Option<String>,
+    candidate: Option<Release>,
+}
+
+impl Activation {
+    fn valid(&self) -> bool {
+        self.production.as_ref().is_none_or(Release::valid)
+            && self.candidate.as_ref().is_none_or(Release::valid)
+            && self
+                .previous_good
+                .as_ref()
+                .is_none_or(|digest| digest_name(digest))
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Release {
+    digest: String,
+    phase: Phase,
+}
+
+impl Release {
+    fn valid(&self) -> bool {
+        digest_name(&self.digest)
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum Phase {
+    Installed,
+    Staging,
+    Qualified,
+    Promoting,
+    Probation,
+    Healthy,
+    Quarantined,
+    RollingBack,
+    PreviousGood,
 }
 
 #[derive(Deserialize, Serialize)]

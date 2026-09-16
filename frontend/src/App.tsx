@@ -7,6 +7,7 @@ import { Debug } from './debug/Debug';
 import type { Identity } from './identity';
 import { subscribe } from './events';
 import type { ConnectionState } from './events';
+import { Fields } from './Fields';
 
 export function App() {
   const [identity, setIdentity] = useState<Identity>();
@@ -91,13 +92,11 @@ export function App() {
         <p className="intro">Verify the destination, then connect with a scoped management credential.</p>
         <section className="identity-panel" aria-labelledby="identity-heading">
           <h2 id="identity-heading">Destination</h2>
-          <dl>
-            <div><dt>Bridge</dt><dd>{identity?.bridge_id ?? 'Verifying…'}</dd></div>
-            <div><dt>Target</dt><dd>{identity?.selected_target_id ?? 'none selected'}</dd></div>
-            <div><dt>Release</dt><dd>{identity?.runtime.release_id ?? '—'}</dd></div>
-            <div><dt>Origin</dt><dd>{location.origin}</dd></div>
-            <div><dt>Process</dt><dd>{identity?.runtime.process_instance_id ?? '—'}</dd></div>
-          </dl>
+          <Fields rows={[
+            ['Bridge', identity?.bridge_id ?? 'Verifying…'], ['Target', identity?.selected_target_id ?? 'none selected'],
+            ['Release', identity?.runtime.release_id ?? '—'], ['Origin', location.origin],
+            ['Process', identity?.runtime.process_instance_id ?? '—'],
+          ]}/>
         </section>
         <section className="connection-panel" aria-labelledby="access-heading">
           <div><p className="section-label">Access</p><h2 id="access-heading">Connect to this bridge</h2><p>Credentials stay in this tab’s memory. Reloading or disconnecting clears the connection.</p></div>

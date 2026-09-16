@@ -148,3 +148,128 @@ async fn release_read_routes_have_no_mutation_methods() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
 }
+
+fn activation() -> serde_json::Value {
+    serde_json::json!({
+        "sequence": 42,
+        "production": {
+            "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "phase": "previous-good"
+        },
+        "previous_good": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "candidate": {
+            "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "phase": "quarantined"
+        }
+    })
+}
+
+fn status_with_activation(activation: &serde_json::Value) -> Vec<u8> {
+    let mut response = serde_json::to_vec(&serde_json::json!({
+        "protocol": 1,
+        "manager_version": "0.28.0",
+        "code": "ok",
+        "status": {
+            "rollback": null,
+            "probation": null,
+            "promotion": null,
+            "failures": null,
+            "sequence": 0,
+            "failed_operations": 0,
+            "staged_verified_digest": null,
+            "last_operation": null,
+            "qualification": null
+        },
+        "activation": activation
+    }))
+    .unwrap();
+    response.push(b'\n');
+    response
+}
+
+#[tokio::test]
+async fn status_exposes_valid_live_activation_pointers() {
+    let (router, peer, _directory) = fixture(status_with_activation(&activation()));
+    let response = router
+        .oneshot(authorized("/api/v1/release/status"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
+    assert_eq!(
+        response["activation"]["production"]["phase"],
+        serde_json::Value::String("previous-good".into())
+    );
+    assert_eq!(
+        response["activation"]["candidate"]["phase"],
+        serde_json::Value::String("quarantined".into())
+    );
+    assert_eq!(peer.join().unwrap(), "{\"operation\":\"status\"}\n");
+}
+
+#[tokio::test]
+async fn status_without_activation_remains_compatible() {
+    let mut legacy: serde_json::Value =
+        serde_json::from_slice(&status_with_activation(&activation())).unwrap();
+    legacy.as_object_mut().unwrap().remove("activation");
+    let mut legacy = serde_json::to_vec(&legacy).unwrap();
+    legacy.push(b'\n');
+    let (router, peer, _directory) = fixture(legacy);
+    let response = router
+        .oneshot(authorized("/api/v1/release/status"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
+    assert!(response.get("activation").is_none());
+    let _ = peer.join();
+}
+
+#[tokio::test]
+async fn activation_is_rejected_for_invalid_pointers_events_and_errors() {
+    let mut invalid_digest = activation();
+    invalid_digest["candidate"]["digest"] = serde_json::json!("A");
+    let mut invalid_phase = activation();
+    invalid_phase["production"]["phase"] = serde_json::json!("current");
+    let mut events = serde_json::to_vec(&serde_json::json!({
+        "protocol": 1,
+        "manager_version": "0.28.0",
+        "code": "ok",
+        "events": {
+            "records": [],
+            "oldest_sequence": 0,
+            "latest_sequence": 0,
+            "truncated": false
+        },
+        "activation": activation()
+    }))
+    .unwrap();
+    events.push(b'\n');
+    let mut forbidden = serde_json::to_vec(&serde_json::json!({
+        "protocol": 1,
+        "manager_version": "0.28.0",
+        "code": "forbidden",
+        "activation": activation()
+    }))
+    .unwrap();
+    forbidden.push(b'\n');
+    for (uri, response) in [
+        (
+            "/api/v1/release/status",
+            status_with_activation(&invalid_digest),
+        ),
+        (
+            "/api/v1/release/status",
+            status_with_activation(&invalid_phase),
+        ),
+        ("/api/v1/release/events", events),
+        ("/api/v1/release/status", forbidden),
+    ] {
+        let (router, peer, _directory) = fixture(response);
+        let response = router.oneshot(authorized(uri)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+        let _ = peer.join();
+    }
+}

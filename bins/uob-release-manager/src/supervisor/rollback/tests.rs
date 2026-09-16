@@ -230,6 +230,41 @@ fn fallback_preserves_post_promotion_records_export_cursor_and_audits_across_reb
         );
     });
 }
+
+#[test]
+fn status_reports_live_journal_pointers_after_rollback() {
+    let _serial = crate::TEST_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    run(async {
+        let (f, mut manager, _) = setup().await;
+        trigger(&mut manager);
+        let mut process = Process::default();
+        assert_eq!(manager.rollback_automatically(&mut process).await, Code::Ok);
+
+        let response = manager.handle(100, Request::Status {});
+        let status = response.status.unwrap();
+        let activation = response.activation.unwrap();
+        let production = activation.production.unwrap();
+        let candidate = activation.candidate.unwrap();
+        assert_eq!(status.promotion.unwrap().step, promotion::Step::Probation);
+        assert_eq!(
+            production.digest,
+            f.previous.compatibility.artifact_digest.as_str()
+        );
+        assert_eq!(production.phase, Phase::PreviousGood);
+        assert_eq!(
+            activation.previous_good.unwrap(),
+            f.previous.compatibility.artifact_digest.as_str()
+        );
+        assert_eq!(candidate.digest, f.artifact.digest());
+        assert_eq!(candidate.phase, Phase::Quarantined);
+
+        let forbidden = manager.handle(102, Request::Status {});
+        assert_eq!(forbidden.code, Code::Forbidden);
+        assert!(forbidden.activation.is_none());
+    });
+}
 #[test]
 fn failed_or_interrupted_fallback_is_never_retried_after_reboot() {
     let _serial = crate::TEST_SERIAL.lock().unwrap();
