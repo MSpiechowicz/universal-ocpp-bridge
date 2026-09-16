@@ -2,6 +2,7 @@
 
 mod authorization;
 pub mod availability;
+pub mod data_transfer;
 pub mod remote_control;
 mod transaction_input;
 mod transactions;
@@ -56,6 +57,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
             ChargerObservation::ConnectorStatus(registration::status_observation(payload)?)
         }
         "MeterValues" => measurements(payload_as(payload)?)?,
+        "DataTransfer" => ChargerObservation::DataTransfer16(data_transfer::observation(payload)?),
         "StartTransaction" => {
             ChargerObservation::TransactionStarted(transaction_input::start(payload)?)
         }

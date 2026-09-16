@@ -407,7 +407,7 @@ fn ocpp201_metering_rejects_invalid_resources_and_empty_samples() {
 
 #[test]
 fn unsupported_and_invalid_input_map_to_explicit_call_errors() {
-    let unsupported = br#"[2,"id","DataTransfer",{}]"#;
+    let unsupported = br#"[2,"id","GetConfiguration",{}]"#;
     let error = v16::decode_call(unsupported).expect_err("mapping is intentionally absent");
     assert_eq!(error.kind(), DecodeErrorKind::UnsupportedAction);
     assert_eq!(error.call_error().code, OcppErrorCode::NotImplemented);

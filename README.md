@@ -127,6 +127,10 @@ timeouts and conservative uncertain-transmission outcomes. See
 [OCPP call lifecycle](docs/architecture/ocpp-call-lifecycle.md) for validation, duplicate and late
 response behavior, application response control, and hostile-peer evidence.
 
+OCPP 1.6J DataTransfer uses exact vendor/message registration, bounded opaque data, and
+persisted outcomes in both directions. See the [DataTransfer boundary](docs/architecture/ocpp-model-adapters.md#ocpp-16j-datatransfer)
+for provider deadlines, default redaction, embedding responsibilities, and no-replay recovery.
+
 OCPP 1.6 remote start, stop, reset and unlock use the authorized durable command path with
 separate protocol responses and observed effects. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
 for native validation, local identity resolution, deadlines and recovery.
