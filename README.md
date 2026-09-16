@@ -78,6 +78,8 @@ for production defaults and isolated staging/demo examples.
 Optional external database export is selected independently of the bridge target and remains bound
 to one stable destination revision. See [external export configuration](docs/configuration/external-export.md)
 for disabled behavior, PostgreSQL settings, TLS requirements, and safe destination changes.
+An [explicit PostgreSQL provisioning command](docs/configuration/external-export.md#explicit-postgresql-schema-provisioning)
+installs the canonical destination schema and least-privilege grants independently of the runtime driver.
 
 Diagnostic observations are centrally redacted and serialized before any downstream sink can see
 them. See [the diagnostic redaction boundary](docs/security/diagnostic-redaction.md) for the typed

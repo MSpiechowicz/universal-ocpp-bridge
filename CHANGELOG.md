@@ -1,6 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## Unreleased
+
+### Features
+
+- Add explicit PostgreSQL export schema installation and upgrades, append-only canonical JSONB
+  storage, exact-value measurement/transaction/result views, and least-privilege runtime grants.
+  Disposable PostgreSQL acceptance checks cover data preservation, identity conflicts, and
+  privilege/upgrade safety.
+
+### Security
+
+- Update the workspace rustls pin from 0.23.43 to 0.23.45 to reject TLS 1.3 handshake
+  messages crossing encryption-level boundaries
+  ([RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285.html)).
+
 - - -
 ## [v0.28.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ed717999f4be4f380c9d93ee346040fe54e1a34d..v0.28.0) - 2026-09-11
 #### Features
