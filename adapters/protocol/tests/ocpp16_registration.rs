@@ -307,7 +307,7 @@ async fn invalid_unsupported_and_storage_failure_never_report_success() {
             OcppErrorCode::PropertyConstraintViolation,
         ),
         (
-            json!([2, "bad", "DataTransfer", {}]),
+            json!([2, "bad", "GetConfiguration", {}]),
             OcppErrorCode::NotImplemented,
         ),
         (json!([2, "bad"]), OcppErrorCode::FormationViolation),

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- Add OCPP 1.6J DataTransfer routing with exact vendor/message capabilities, bounded opaque
+  payloads, committed native outcomes, provider deadlines, and one-shot outbound recovery.
+  Independent schema fixtures and WebSocket/SQLite scenarios cover invalid input, delayed
+  replies, persistence failures, redaction, timeout, disconnect, and restart without replay.
+
 - Add explicit PostgreSQL export schema installation and upgrades, append-only canonical JSONB
   storage, exact-value measurement/transaction/result views, and least-privilege runtime grants.
   Disposable PostgreSQL acceptance checks cover data preservation, identity conflicts, and

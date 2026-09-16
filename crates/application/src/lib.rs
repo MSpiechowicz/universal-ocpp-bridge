@@ -6,6 +6,7 @@ mod authorization;
 pub mod capture;
 pub mod charging_identity;
 mod command;
+pub mod data_transfer;
 mod database;
 mod diagnostic;
 mod health;
