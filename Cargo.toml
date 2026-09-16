@@ -39,7 +39,7 @@ reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-
 rumqttc = { package = "rumqttc-v4-next", version = "=0.34.0", default-features = false, features = ["use-rustls"] }
 rcgen = "=0.14.5"
 rust-ocpp = { version = "=3.0.4", default-features = false, features = ["v1_6", "v2_0_1"] }
-rustls = "=0.23.43"
+rustls = "=0.23.45"
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 schemars = "=1.2.2"
 serde = { version = "=1.0.229", features = ["derive"] }
