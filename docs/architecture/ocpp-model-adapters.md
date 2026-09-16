@@ -57,10 +57,9 @@ response data is rejected, as required by OCPP §4.3; `UnknownMessageId` may con
 Neither reconnect nor process restart automatically replays a transfer.
 
 `OpaqueData` omits its contents from `Debug`; default flow diagnostics and persisted receipt
-state contain no opaque payload. Vendor-specific effects, external retries, OCPP 2.0.1
-DataTransfer, and certification are outside this boundary. A vendor integration needing
-side effects must supply its own reviewed orchestration rather than perform them in the
-cancellable provider evaluator.
+state contain no opaque payload. Vendor-specific effects, external retries, and certification
+are outside this boundary. A vendor integration needing side effects must supply its own
+reviewed orchestration rather than perform them in the cancellable provider evaluator.
 
 Verification:
 
@@ -72,3 +71,65 @@ cargo run --locked --quiet -p uob-ocpp-fixtures
 The independent schema-checked wire corpus and real-WebSocket/SQLite scenarios cover native
 status mapping, exact capabilities, invalid input, delayed and unavailable providers, failed
 commits, redacted diagnostics, outbound malformed replies, timeout, disconnect and recovery.
+
+## OCPP 2.0.1 DataTransfer
+
+`uob_application::data_transfer201::Registry` and `v201::data_transfer` provide the corresponding
+edition-specific application and wire boundary. The existing OCPP 1.6J API remains separate:
+accepted 1.6 registration cannot authorize a 2.0.1 transfer. Both directions require a current,
+accepted 2.0.1 registration; outbound delivery also checks the authenticated socket's station
+identity and negotiated edition.
+
+OCPP 2.0.1 `data` is arbitrary JSON, not a string-only 1.6 payload. Objects, arrays, scalars and
+explicit JSON `null` retain their meaning; omitted data stays absent. Each opaque `data` or
+`customData` value is limited to 16 KiB of compact serialized UTF-8 JSON, including quotes and
+escapes. Its size is counted without allocating another payload buffer and cached for receipt
+accounting. The shared WebSocket message budget still applies to the complete envelope.
+`customData` requires a string `vendorId` of at most 255 characters and permits arbitrary
+extension members. Optional `statusInfo` requires `reasonCode` (at most 20 characters), permits
+`additionalInfo` (at most 512 characters), and may contain bounded `customData`. Other
+request/response/statusInfo members are rejected. Opaque values, request identifiers and
+status-detail text are redacted from these application types' `Debug` output.
+
+Capabilities remain exact vendor/message pairs, including distinct omitted and empty message
+identifiers. Unknown vendors/messages receive native unknown statuses; only an explicitly
+installed provider can accept or reject a request. There is no default production vendor
+implementation. Providers receive validated data and extensions without any claim that the bridge
+understands their semantics. Unlike the 1.6 boundary, 2.0.1 native unknown-status responses may
+carry bounded JSON data; its pinned specification/schema has no status-dependent prohibition.
+
+`complete_data_transfer` exposes a correlated reply only after an atomic receipt commit. The
+five-second timeout applies to provider evaluation, not the authoritative write. Snapshots retain
+only `ocpp201/data-transfer/` status, saturating receipt count, content-byte counts, and outbound
+status. Counts include identifier/status bytes and opaque JSON bytes, but exclude the enclosing
+request/response field-name overhead.
+No vendor identifier, data, extension, or status-detail text is persisted. Failed writes leave
+the caller's snapshot unchanged.
+
+`send_data_transfer` is an embedding API, not a management command ingress. Its ordered station
+owner must authorize the operation, allocate a fresh message ID, and serialize snapshot updates.
+It commits `TransmissionUncertain` before enqueueing, then a native reply or terminal lifecycle
+outcome before returning. Malformed replies remain uncertain rather than becoming successful.
+Timeout, disconnect, reopen, and reconnect never trigger an automatic vendor-operation replay.
+
+### OCPP 2.0.1 requirement evidence
+
+The independently authored corpus uses the provenance-pinned Edition 4 Part 3 schemas. Part 2
+section P requirements map to the executable `ocpp201_data_transfer` suite:
+
+| Requirements | Boundary and behavioral evidence |
+|---|---|
+| P01.FR.01 / P02.FR.02 | Vendor extension boundary only; no built-in interpretation or command-policy bypass. Exact capability admission rejects unsupported outbound requests without sending. |
+| P01.FR.02–03 / P02.FR.03–04 | Vendor identifiers retain schema-valid values; reversed DNS is a recommendation, not an extra rejection rule. Omitted/empty message IDs route independently; Unicode limits are verified. |
+| P01.FR.04 / P02.FR.05 | Explicit 16 KiB vendor-agreement limit; invalid/oversized values and escaped JSON byte boundaries cannot mutate persisted state. |
+| P01.FR.05–06 / P02.FR.06–07 | Unknown-vendor precedence and exact message matching retain native statuses in fixtures, persisted receipts, and observed replies. |
+| P01.FR.07 / P02.FR.08 | Test-only vendor agreement controls Accepted/Rejected and JSON data. Real-wire replies retain customData/statusInfo; debug, flow records, and durable receipts exclude sensitive content. |
+
+SQLite reopen, wrong-edition registration, failed writes, provider timeout, delayed wire replies,
+outbound CALLERROR/malformed replies, disconnect, and no-replay recovery provide the lifecycle
+evidence beyond schema validation. This is not certification or closure of other planned features.
+
+```text
+cargo test --locked -p uob-protocol-adapter --test ocpp201_data_transfer
+cargo run --locked --quiet -p uob-ocpp-fixtures
+```

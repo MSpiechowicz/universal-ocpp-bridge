@@ -1,0 +1,16 @@
+[
+  3,
+  "fixture-201-transfer",
+  {
+    "status": "Rejected",
+    "data": false,
+    "statusInfo": {
+      "reasonCode": "PolicyDenied",
+      "additionalInfo": "secret://fixture/201-rejected",
+      "customData": {
+        "vendorId": "org.example.fixture",
+        "opaque": {"reason": "policy"}
+      }
+    }
+  }
+]

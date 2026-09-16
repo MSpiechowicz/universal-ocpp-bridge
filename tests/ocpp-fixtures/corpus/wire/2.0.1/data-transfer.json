@@ -1,0 +1,17 @@
+[
+  2,
+  "fixture-201-transfer",
+  "DataTransfer",
+  {
+    "vendorId": "org.example.uob-test",
+    "messageId": "Probe",
+    "data": {
+      "token": "secret://fixture/201-request",
+      "values": [0, true, null]
+    },
+    "customData": {
+      "vendorId": "org.example.fixture",
+      "opaque": {"scope": "inbound"}
+    }
+  }
+]

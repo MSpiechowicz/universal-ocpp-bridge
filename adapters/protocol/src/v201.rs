@@ -1,6 +1,7 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
 pub mod availability;
+pub mod data_transfer;
 pub mod remote_control;
 
 mod authorization;
@@ -54,6 +55,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         "StatusNotification" => {
             ChargerObservation::EvseConnectorStatus(registration::status_observation(payload)?)
         }
+        "DataTransfer" => ChargerObservation::DataTransfer201(data_transfer::observation(payload)?),
         "MeterValues" => {
             let request: MeterValuesRequest = payload_as(payload)?;
             let evse_id = u32::try_from(request.evse_id)

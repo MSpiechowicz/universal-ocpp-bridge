@@ -1,0 +1,20 @@
+[
+  3,
+  "fixture-201-transfer",
+  {
+    "status": "Accepted",
+    "data": null,
+    "customData": {
+      "vendorId": "org.example.fixture",
+      "opaque": {"reply": "accepted"}
+    },
+    "statusInfo": {
+      "reasonCode": "Accepted",
+      "additionalInfo": "secret://fixture/201-accepted",
+      "customData": {
+        "vendorId": "org.example.fixture",
+        "opaque": [true, null]
+      }
+    }
+  }
+]

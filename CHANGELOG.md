@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- Add OCPP 2.0.1 DataTransfer with exact vendor/message routing, bounded opaque JSON,
+  validated customData/statusInfo, durable sanitized outcomes, and one-shot outbound delivery.
+  Pinned independent fixtures and WebSocket/SQLite scenarios cover native statuses, invalid
+  requests, provider deadlines, redaction, persistence failures, and reconnect/restart recovery.
+
 - Add OCPP 1.6J DataTransfer routing with exact vendor/message capabilities, bounded opaque
   payloads, committed native outcomes, provider deadlines, and one-shot outbound recovery.
   Independent schema fixtures and WebSocket/SQLite scenarios cover invalid input, delayed
