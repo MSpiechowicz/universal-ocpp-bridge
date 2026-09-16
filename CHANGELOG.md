@@ -43,6 +43,43 @@ All notable changes to this project will be documented in this file. See [conven
   ([RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285.html)).
 
 - - -
+## [v0.29.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/1583b0d610a136fb3898d92b122936cf0da11e98..v0.29.0) - 2026-09-16
+#### Features
+- (**console**) inspect bounded captures offline (#295) - ([605de80](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/605de800341d2f76f858c4fa299ce464f0c87605)) - Maciej Spiechowicz
+- (**console**) surface sanitized browser and API diagnostics (#294) - ([7134d0f](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/7134d0fd5b3a501aee7b19386caa5b8ce910f437)) - Maciej Spiechowicz
+- ![BREAKING](https://img.shields.io/badge/BREAKING-red) (**console**) isolate browser credentials and control destinations (#290) - ([b428924](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b42892496769ebfe5c7e5d3a5d209d113855fca7)) - Maciej Spiechowicz
+- (**console**) add bounded Debug timeline and capture controls (#289) - ([102561e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/102561e657035314537d9627dfbc849d2d9c8e19)) - Maciej Spiechowicz
+- (**console**) add optional authenticated browser shell (#288) - ([51fd3c5](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/51fd3c5ab0eba52892f5c4551d08ee1efd758efe)) - Maciej Spiechowicz
+- (**debug**) show release qualification and rollback evidence (#309) - ([ac62ee2](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/ac62ee2d5b915556d915a3330d67664371572b75)) - Maciej Spiechowicz
+- (**debug**) link isolated simulator evidence to retained traces (#298) - ([364150e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/364150e4709e3dedf8aa40f7f0c6c9b229542b98)) - Maciej Spiechowicz
+- (**debug**) show connection, resource and export observations (#297) - ([3ea68da](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3ea68dab5c4e10f2ae1380a1d15de3816168d08b)) - Maciej Spiechowicz
+- (**debug**) separate command response and observed-effect evidence (#292) - ([3c834bb](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3c834bbc29f56c2d5e9a396f9cf09af13b8231e2)) - Maciej Spiechowicz
+- (**debug**) inspect redacted messages and bounded state changes (#291) - ([eab9c47](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/eab9c47f1d9144799110b8dc5230ea884baf1ab3)) - Maciej Spiechowicz
+- (**export**) provision least-privilege PostgreSQL schemas (#304) - ([22368ae](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/22368ae2fccf7c8f8ffe938bb855cecc750bab18)) - Maciej Spiechowicz
+- (**ocpp**) implement OCPP 2.0.1 DataTransfer routing (#306) - ([cbaa68b](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/cbaa68bc31a17cba8d39760b8f086e47abae6e01)) - Maciej Spiechowicz
+- (**ocpp**) implement OCPP 1.6J DataTransfer routing (#305) - ([a52266d](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/a52266dc484423b2fe48c76615e864e109232766)) - Maciej Spiechowicz
+- (**ocpp**) implement durable OCPP 2.0.1 availability (#286) - ([72c024c](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/72c024c464a2fa281dae60017eddb52452bd23f0)) - Maciej Spiechowicz
+- (**ocpp**) implement durable OCPP 1.6 availability (#285) - ([53c093a](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/53c093a12775511401ed9f7cf0520492928c7dcb)) - Maciej Spiechowicz
+- (**ocpp**) implement durable OCPP 2.0.1 remote control (#284) - ([cab3f11](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/cab3f11d04ee809cda9a42d615e7e60ae31ab6ab)) - Maciej Spiechowicz
+- (**ocpp**) implement durable OCPP 1.6 remote control (#283) - ([40b95b3](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/40b95b396565b665ff6dd9d0662794760ac7e3e7)) - Maciej Spiechowicz
+- (**packaging**) build and smoke-test native runtime archives (#301) - ([c47db33](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/c47db330955cd43c73a84b50773f5d28a15c5984)) - Maciej Spiechowicz
+- (**providers**) stream operational artifacts with bounded resources (#299) - ([6f4a733](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/6f4a7338136b1e99f2c5f84c7d45d8e6422b8578)) - Maciej Spiechowicz
+- (**release**) expose durable supervisor audit events (#308) - ([28d67b6](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/28d67b665647f41f86e85135a2ce5cd7b0bc35a4)) - Maciej Spiechowicz
+- (**release**) add headless supervisor control commands (#307) - ([a2e65a7](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/a2e65a763f686d4ec43d9ca99846607a8bdefe6e)) - Maciej Spiechowicz
+- (**release**) verify candidate channels and same-artifact promotion (#303) - ([fa69979](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/fa69979604679da93950fae5e56a56e103cbdf97)) - Maciej Spiechowicz
+- (**release**) add read-only product version proposals (#300) - ([3fd6a8f](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3fd6a8f6edd8006757af04e39ef4b02abe570350)) - Maciej Spiechowicz
+- (**release**) restore eligible previous-good artifacts automatically (#282) - ([d00c806](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/d00c806852bf8b3d7dc0d8c725d7da7cfe9a86a1)) - Maciej Spiechowicz
+- (**release**) require durable production probation evidence (#281) - ([6a043d9](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/6a043d9dda85923da02d05a5b9e05c14ecaa5dcb)) - Maciej Spiechowicz
+- (**release**) activate qualified artifacts against production state (#280) - ([1583b0d](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/1583b0d610a136fb3898d92b122936cf0da11e98)) - Maciej Spiechowicz
+- (**sim**) add bounded loopback scenario controls (#287) - ([3e8c075](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/3e8c07571359aca67e941f6c84539eacbf061582)) - Maciej Spiechowicz
+- (**staging**) isolate database access and sanitized imports (#293) - ([abf17bc](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/abf17bc0e2ee78fe8b5cd14cc14c3c0a6cd3d30c)) - Maciej Spiechowicz
+#### Tests
+- (**sim**) qualify standalone external CSMS interoperability (#302) - ([87575c4](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/87575c4dbdb129373b2ee504d97aa7283414ebe0)) - Maciej Spiechowicz
+#### Continuous integration
+- (**frontend**) gate console builds and real-service browser tests (#296) - ([f3f65f1](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/f3f65f1f78dcf154e7b6b991e3ae0daebc59849e)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.28.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/ed717999f4be4f380c9d93ee346040fe54e1a34d..v0.28.0) - 2026-09-11
 #### Features
 - (**diagnostics**) stream bounded redacted capture exports (#276) - ([d49492c](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/d49492c0a1feb7af849e6359ffc1d545cde8bc2b)) - Maciej Spiechowicz
