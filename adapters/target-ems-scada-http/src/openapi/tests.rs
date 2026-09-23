@@ -2,6 +2,8 @@ use super::{openapi_document, schemas::CANONICAL};
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
 use serde_json::{Value, json};
 
+// This contract-only lib test includes the standalone client, including exercise-only paths.
+#[allow(dead_code)]
 #[path = "../../../../tests/ems-http-contract-client/probe.rs"]
 mod probe;
 

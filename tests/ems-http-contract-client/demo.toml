@@ -1,6 +1,8 @@
 # Broker-free contract scenarios; identifiers match the independent HTTP fixture host.
 [[scenario]]
 protocol = "ocpp16"
+command_station = "station-a"
+authorization_reference = "sha256:8fc01b045dc9878eb0e5c8fc111e8d1c94e3a879ad19ef46baad20c207ccb71a"
 calls = [
   { operation = "capabilities", path = "/bridge/v1/capabilities" },
   { operation = "stations", path = "/bridge/v1/stations?limit=1" },
@@ -10,6 +12,9 @@ calls = [
 ]
 [[scenario]]
 protocol = "ocpp201"
+command_station = "station-b"
+reader_out_of_scope = true
+authorization_reference = "sha256:4a6de24e52a39ab2fed9fceaee138e19ca829f97dba66d6dba25d50b3984a817"
 calls = [
   { operation = "station", path = "/bridge/v1/stations/station-b" },
   { operation = "points", path = "/bridge/v1/points?station_id=station-b&evse_id=1&limit=2" },

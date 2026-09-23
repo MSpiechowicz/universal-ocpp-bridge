@@ -27,11 +27,17 @@ jsonschema = { version = "=0.52.1", default-features = false }
 reqwest.workspace = true
 rustls.workspace = true
 uob-storage-adapter = { path = "../storage" }
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 tower = { version = "=0.5.3", features = ["util"] }
 uob-management-adapter = { path = "../management" }
 uob-target-adapter = { path = "../target" }
 uob-target-conformance = { path = "../../tests/target-conformance" }
+uob-protocol-adapter = { path = "../protocol" }
+uob-sim = { path = "../../bins/uob-sim" }
+uob-provider-adapter = { path = "../providers" }
+uuid.workspace = true
+tokio-tungstenite.workspace = true
+base64.workspace = true
 
 [lints]
 workspace = true

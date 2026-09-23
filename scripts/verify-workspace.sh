@@ -57,7 +57,10 @@ fi
 
 cargo fmt --all --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo test --locked --workspace
+# The integration acceptance executes this example as a separate process.
+target_directory="$(cargo metadata --locked --no-deps --format-version=1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+cargo build --locked --package uob-ems-scada-http-target-adapter --example probe_http_contract
+UOB_EXAMPLE_PATH="$target_directory/debug/examples/probe_http_contract" cargo test --locked --workspace
 ./scripts/test-release-cli.sh
 cargo run --locked --quiet --package uob-ocpp-fixtures
 ./scripts/test-release-protections.sh
