@@ -91,7 +91,21 @@ struct Resolve {
 #[derive(Deserialize)]
 struct Node {
     id: String,
-    dependencies: Vec<String>,
+    #[serde(rename = "deps")]
+    dependencies: Vec<ResolvedDependency>,
+}
+
+#[derive(Deserialize)]
+struct ResolvedDependency {
+    #[serde(rename = "pkg")]
+    package_id: String,
+    #[serde(default)]
+    dep_kinds: Vec<DependencyKind>,
+}
+
+#[derive(Deserialize)]
+struct DependencyKind {
+    kind: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -346,11 +360,7 @@ fn check_runtime_graphs(
         .iter()
         .map(|package| (package.id.as_str(), package.name.as_str()))
         .collect();
-    let edges: BTreeMap<&str, &[String]> = resolve
-        .nodes
-        .iter()
-        .map(|node| (node.id.as_str(), node.dependencies.as_slice()))
-        .collect();
+    let edges = runtime_edges(&resolve.nodes);
 
     check_graph_excludes(
         "uob-service",
@@ -392,13 +402,27 @@ fn check_runtime_graphs(
         errors,
     );
 }
+fn runtime_edges(nodes: &[Node]) -> BTreeMap<&str, Vec<&str>> {
+    nodes
+        .iter()
+        .map(|node| {
+            let dependencies = node
+                .dependencies
+                .iter()
+                .filter(|dependency| dependency.dep_kinds.iter().any(|kind| kind.kind.is_none()))
+                .map(|dependency| dependency.package_id.as_str())
+                .collect();
+            (node.id.as_str(), dependencies)
+        })
+        .collect()
+}
 
 fn check_graph_excludes(
     root_name: &str,
     forbidden: &[&str],
     packages: &BTreeMap<&str, &Package>,
     names_by_id: &BTreeMap<&str, &str>,
-    edges: &BTreeMap<&str, &[String]>,
+    edges: &BTreeMap<&str, Vec<&str>>,
     errors: &mut Vec<String>,
 ) {
     let Some(root) = packages.get(root_name) else {
@@ -419,14 +443,43 @@ fn check_graph_excludes(
             ));
         }
         if let Some(dependencies) = edges.get(id) {
-            pending.extend(dependencies.iter().map(String::as_str));
+            pending.extend(dependencies.iter().copied());
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Dependency, is_opcua_sdk, is_rumqtt_dependency};
+    use super::{
+        Dependency, DependencyKind, Node, ResolvedDependency, is_opcua_sdk, is_rumqtt_dependency,
+        runtime_edges,
+    };
+
+    #[test]
+    fn runtime_graph_edges_ignore_dev_and_build_dependencies() {
+        let nodes = [Node {
+            id: "root".to_owned(),
+            dependencies: vec![
+                ResolvedDependency {
+                    package_id: "normal".to_owned(),
+                    dep_kinds: vec![DependencyKind { kind: None }],
+                },
+                ResolvedDependency {
+                    package_id: "dev-only".to_owned(),
+                    dep_kinds: vec![DependencyKind {
+                        kind: Some("dev".to_owned()),
+                    }],
+                },
+                ResolvedDependency {
+                    package_id: "build-only".to_owned(),
+                    dep_kinds: vec![DependencyKind {
+                        kind: Some("build".to_owned()),
+                    }],
+                },
+            ],
+        }];
+        assert_eq!(runtime_edges(&nodes)["root"], vec!["normal"]);
+    }
 
     #[test]
     fn deferred_opcua_sdk_names_are_recognized() {

@@ -76,8 +76,68 @@ cargo run --locked -p uob-ems-scada-http-target-adapter --example probe_http_con
   https://ems.example:9080 tests/ems-http-contract-client/demo.toml
 ```
 
-The probe has a five-second request deadline, a 1 MiB response bound and disabled redirects.
-The self-contained demo verifies the HTTP contract using canonical fixture state; it does not
-claim to drive chargers. The broader independent HTTP/SSE EMS client and charger-driven end-to-end
-acceptance matrix remain their own planned items. Existing adapter tests separately exercise
-real command admission, restart/status replay, SSE reconnect, expiry and bounded slow readers.
+The external client requires HTTPS for non-loopback API bases; plaintext HTTP is accepted only
+for IPv4/IPv6 loopback or exact `localhost` fixtures. The probe has a five-second per-request
+deadline and a 45-second overall deadline, a 1 MiB per-response bound, at most 32 advertised
+schemas and 1 MiB total schema response bytes. Redirects are disabled. It validates the
+published OpenAPI document and same-origin canonical schema references. The fixture-only
+contract demo does not claim to drive chargers.
+
+An empty read-only scenario set fails locally before any API request; nonempty sets may cover
+one protocol. Active-exercise protocol requirements are separate.
+
+## Independent HTTP/SSE EMS acceptance
+
+Build the external executable, then run the test-only loopback host and public `uob-sim` scenario
+runner against it:
+
+```text
+cargo build --locked -p uob-ems-scada-http-target-adapter --example probe_http_contract
+UOB_EXAMPLE_PATH="$PWD/target/debug/examples/probe_http_contract" \
+  cargo test --locked -p uob-ems-scada-http-target-adapter \
+  --test issue87_integration -- --nocapture
+```
+
+The executable's `--exercise` mode accepts an API base URL and
+`tests/ems-http-contract-client/demo.toml`; reader and operator bearer tokens come from
+`UOB_EMS_TOKEN` and `UOB_EMS_OPERATOR_TOKEN`. It emits one JSON result with separate HTTP
+admission, protocol response, and observed transaction-transition evidence for OCPP 1.6J
+and 2.0.1. The test-only host joins the actual EMS target, application command coordinator,
+authenticated OCPP endpoint, operational SQLite journal/outbox and simulator WebSocket flows;
+production service startup and the public API remain unchanged. No MQTT adapter or broker runs.
+
+Loopback active exercises use `--exercise` without further options. A non-loopback HTTPS
+active exercise requires the deliberate `--allow-remote-exercise` option as well; the client
+rejects remote exercises without it before any API request. This option is invalid without
+`--exercise`, and remote plaintext remains unsupported. The read-only contract probe above
+continues to support remote HTTPS without an active-exercise opt-in.
+
+```text
+cargo run --locked -p uob-ems-scada-http-target-adapter --example probe_http_contract -- \
+  https://ems.example:9080 tests/ems-http-contract-client/demo.toml \
+  --exercise --allow-remote-exercise
+```
+
+Only run an active exercise against an intended test EMS: it submits real start/stop
+commands. An exercise result reports `status: passed` only after completing command
+scenarios for both `ocpp16` and `ocpp201`; a scenario missing either commandable
+protocol fails before any HTTP request rather than claiming partial acceptance.
+
+The scenario path must be a regular file of at most 64 KiB; reads stop at 64 KiB + 1 bytes to
+detect a file that grows after its metadata check.
+
+The client walks paginated station/point inventories (requiring more than one `limit=2` point
+page per scenario), reads a point value, verifies reader denial and station scope, exercises
+expired/conflicting/duplicate request IDs, resumes durable
+SSE IDs after reconnect, and recovers an expired cursor by fetching the fresh station snapshot
+before subscribing without the stale cursor. A terminal gap also requires this recovery; a
+control record's `id` is never a checkpoint. One charging flow has no subscriber until
+completion; the other holds an unread station-level SSE connection during command and
+transaction processing. The replay/correlation subscription uses the observed transaction resource.
+All requests and stream frames are bounded, redirects are disabled, and status/recovery links
+must remain same-origin and free of URL credentials. Diagnostics omit bearer tokens.
+
+The test asserts both simulator-side remote-command acceptance and later native transaction
+start/stop observations. `202` is only durable admission; a pending transaction reports station
+observation, not proof of electrical power flow. Independently, committed outbox deliveries
+are reported as local `/bridge/v1` exposure, never as EMS peer consumption.

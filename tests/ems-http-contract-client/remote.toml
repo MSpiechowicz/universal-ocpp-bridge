@@ -1,0 +1,130 @@
+schema_version = 1
+seed = 87
+
+[[steps]]
+id = "connect-16"
+station = "station-a"
+action = "connect"
+timeout_ms = 5000
+expect_event = "connected"
+expect_detail = "ocpp1.6"
+
+[[steps]]
+id = "boot-16"
+station = "station-a"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "issue87.16.boot"
+expect_message = "BootNotification"
+expect_event = "boot_result"
+payload = { chargePointVendor = "UOB", chargePointModel = "Simulator" }
+
+[[steps]]
+id = "auth-16"
+station = "station-a"
+action = "authorize"
+timeout_ms = 5000
+fixture_id = "issue87.16.auth"
+expect_message = "Authorize"
+expect_event = "authorization_result"
+payload = { idTag = "LOCAL-USER-1" }
+expect_response = { idTagInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "remote-start-16"
+station = "station-a"
+action = "await_remote_start"
+timeout_ms = 30000
+expect_event = "remote_start_received"
+
+[[steps]]
+id = "transaction-start-16"
+station = "station-a"
+action = "start_transaction"
+timeout_ms = 5000
+fixture_id = "issue87.16.start"
+expect_message = "StartTransaction"
+expect_event = "transaction_started"
+payload = { connectorId = 1, idTag = "LOCAL-USER-1", meterStart = 1000, timestamp = "2026-09-01T00:00:02Z" }
+
+[[steps]]
+id = "remote-stop-16"
+station = "station-a"
+action = "await_remote_stop"
+timeout_ms = 30000
+expect_event = "remote_stop_received"
+
+[[steps]]
+id = "transaction-stop-16"
+station = "station-a"
+action = "stop_transaction"
+timeout_ms = 5000
+fixture_id = "issue87.16.stop"
+expect_message = "StopTransaction"
+expect_event = "transaction_stopped"
+payload = { transactionId = 1, idTag = "LOCAL-USER-1", meterStop = 1500, timestamp = "2026-09-01T00:10:02Z", reason = "Remote" }
+
+[[steps]]
+id = "connect-201"
+station = "station-b"
+action = "connect"
+timeout_ms = 5000
+expect_event = "connected"
+expect_detail = "ocpp2.0.1"
+
+[[steps]]
+id = "boot-201"
+station = "station-b"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "issue87.201.boot"
+expect_message = "BootNotification"
+expect_event = "boot_result"
+payload = { reason = "PowerUp", chargingStation = { model = "Simulator", vendorName = "UOB" } }
+
+[[steps]]
+id = "auth-201"
+station = "station-b"
+action = "authorize"
+timeout_ms = 5000
+fixture_id = "issue87.201.auth"
+expect_message = "Authorize"
+expect_event = "authorization_result"
+payload = { idToken = { idToken = "LOCAL-USER-1", type = "Central" } }
+expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "remote-start-201"
+station = "station-b"
+action = "await_remote_start"
+timeout_ms = 30000
+expect_event = "remote_start_received"
+
+[[steps]]
+id = "transaction-start-201"
+station = "station-b"
+action = "start_transaction"
+timeout_ms = 5000
+fixture_id = "issue87.201.start"
+expect_message = "TransactionEvent"
+expect_event = "transaction_started"
+payload = { eventType = "Started", timestamp = "2026-09-01T00:00:02Z", triggerReason = "Authorized", seqNo = 0, transactionInfo = { transactionId = "tx-201-87", chargingState = "EVConnected" }, evse = { id = 1, connectorId = 1 }, idToken = { idToken = "LOCAL-USER-1", type = "Central" } }
+expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "remote-stop-201"
+station = "station-b"
+action = "await_remote_stop"
+timeout_ms = 30000
+expect_event = "remote_stop_received"
+
+[[steps]]
+id = "transaction-stop-201"
+station = "station-b"
+action = "stop_transaction"
+timeout_ms = 5000
+fixture_id = "issue87.201.stop"
+expect_message = "TransactionEvent"
+expect_event = "transaction_stopped"
+payload = { eventType = "Ended", timestamp = "2026-09-01T00:10:02Z", triggerReason = "RemoteStop", seqNo = 1, transactionInfo = { transactionId = "tx-201-87", chargingState = "Idle", stoppedReason = "Remote" }, evse = { id = 1, connectorId = 1 } }
+expect_response = {}

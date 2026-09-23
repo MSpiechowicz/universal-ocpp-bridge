@@ -2857,6 +2857,7 @@ name = "uob-ems-scada-http-target-adapter"
 version = "0.29.0"
 dependencies = [
  "axum",
+ "base64",
  "futures-util",
  "jsonschema 0.52.1",
  "libc",
@@ -2867,14 +2868,19 @@ dependencies = [
  "serde_json",
  "time",
  "tokio",
+ "tokio-tungstenite 0.30.0",
  "toml",
  "tower",
  "uob-application",
  "uob-contracts",
  "uob-management-adapter",
+ "uob-protocol-adapter",
+ "uob-provider-adapter",
+ "uob-sim",
  "uob-storage-adapter",
  "uob-target-adapter",
  "uob-target-conformance",
+ "uuid",
 ]
 
 [[package]]
