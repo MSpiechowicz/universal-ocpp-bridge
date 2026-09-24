@@ -56,6 +56,16 @@ All notable changes to this project will be documented in this file. See [conven
   ([RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285.html)).
 
 - - -
+## [v0.30.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/515dab0d381b3e139938bfb3a342f147ccc0d515..v0.30.0) - 2026-09-24
+#### Features
+- (**console**) implement live station views (#312) - ([01d4f98](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/01d4f9868d7cc8bda0fd2770c8659e1d0966282d)) - Maciej Spiechowicz
+- (**ems**) add independent MQTT acceptance client (#311) - ([523319d](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/523319d9131c39dcbaf946672857d400d61664e3)) - Maciej Spiechowicz
+#### Tests
+- (**ems**) synchronize charger readiness in acceptance runs (#313) - ([22a3b64](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/22a3b648b05ca895d4ee39292116c9a77868a04a)) - Maciej Spiechowicz
+- (**ems**) add independent HTTP/SSE client (#310) - ([515dab0](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/515dab0d381b3e139938bfb3a342f147ccc0d515)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.29.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/1583b0d610a136fb3898d92b122936cf0da11e98..v0.29.0) - 2026-09-16
 #### Features
 - (**console**) inspect bounded captures offline (#295) - ([605de80](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/605de800341d2f76f858c4fa299ce464f0c87605)) - Maciej Spiechowicz
