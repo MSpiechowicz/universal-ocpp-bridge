@@ -15,8 +15,8 @@ use uob_application::{CommandClock, LocalAuthorizationService};
 use uob_contracts::{ResourceRef, TransactionSnapshot};
 
 pub type Auth = LocalAuthorizationService<Value, TransactionSnapshot, TransactionSnapshot, String>;
-const MAX_PENDING_HANDSHAKES: usize = 16;
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
+pub(super) const MAX_PENDING_HANDSHAKES: usize = 16;
+pub(super) const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 
 // tungstenite fixes this callback's rejection type to a large HTTP ErrorResponse.
 #[allow(clippy::result_large_err)]
@@ -141,68 +141,4 @@ pub async fn start(
         }
     });
     (endpoint, task)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio::io::AsyncReadExt;
-
-    #[tokio::test]
-    async fn idle_peer_is_closed_after_handshake_deadline() {
-        let host = super::super::Host::start().await;
-        let endpoint = reqwest::Url::parse(&host.protocol.proxy_address).unwrap();
-        let address = (endpoint.host_str().unwrap(), endpoint.port().unwrap());
-        let mut peer = TcpStream::connect(address).await.unwrap();
-        let mut byte = [0];
-        let closed = tokio::time::timeout(
-            HANDSHAKE_TIMEOUT + Duration::from_secs(1),
-            peer.read(&mut byte),
-        )
-        .await
-        .expect("idle handshake must not retain a socket indefinitely")
-        .expect("idle socket read");
-        assert_eq!(
-            closed, 0,
-            "idle handshake must close without sending a response"
-        );
-    }
-
-    #[tokio::test]
-    async fn excess_pending_handshake_is_dropped_before_deadline() {
-        let host = super::super::Host::start().await;
-        let endpoint = reqwest::Url::parse(&host.protocol.proxy_address).unwrap();
-        let address = (endpoint.host_str().unwrap(), endpoint.port().unwrap());
-
-        tokio::time::timeout(Duration::from_secs(1), async {
-            let mut pending = Vec::with_capacity(MAX_PENDING_HANDSHAKES);
-            for _ in 0..MAX_PENDING_HANDSHAKES {
-                pending.push(
-                    TcpStream::connect(address)
-                        .await
-                        .expect("connect pending peer"),
-                );
-            }
-            // Give the listener time to accept every idle peer before opening the excess peer.
-            tokio::time::sleep(Duration::from_millis(50)).await;
-
-            let mut excess = TcpStream::connect(address)
-                .await
-                .expect("connect excess peer");
-            let mut byte = [0];
-            assert_eq!(
-                excess.read(&mut byte).await.expect("read excess peer"),
-                0,
-                "excess handshake must be dropped without a response"
-            );
-            for peer in pending {
-                match peer.try_read(&mut byte) {
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
-                    other => panic!("capacity peer must still be pending: {other:?}"),
-                }
-            }
-        })
-        .await
-        .expect("excess handshake must be dropped before the two-second deadline");
-    }
 }

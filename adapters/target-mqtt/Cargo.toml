@@ -22,8 +22,17 @@ uob-contracts = { path = "../../crates/contracts" }
 libc.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+tokio-tungstenite.workspace = true
+uob-protocol-adapter = { path = "../protocol" }
+uob-provider-adapter = { path = "../providers" }
+uob-sim = { path = "../../bins/uob-sim" }
+uob-storage-adapter = { path = "../storage" }
+uuid.workspace = true
 jsonschema = { version = "=0.52.1", default-features = false }
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 uob-target-conformance = { path = "../../tests/target-conformance" }
 
 [lints]

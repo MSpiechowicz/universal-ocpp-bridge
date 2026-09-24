@@ -1,0 +1,25 @@
+bridge_id = "site-01"
+
+[[scenario]]
+protocol = "ocpp16"
+station = "station-a"
+point_id = "station-16.connector-1.power.active"
+unit = "watt"
+value = "7.2"
+measurement_original_value = "7200"
+measurement_original_unit = "W"
+observed_at = "2026-09-01T13:59:57Z"
+freshness = { status = "fresh", valid_until = "2026-09-01T14:00:07Z" }
+quality = { level = "good" }
+authorization_reference = "sha256:8fc01b045dc9878eb0e5c8fc111e8d1c94e3a879ad19ef46baad20c207ccb71a"
+
+[[scenario]]
+protocol = "ocpp201"
+station = "station-b"
+point_id = "station-201.evse-1.power.active"
+unit = "watt"
+value = "7.2"
+observed_at = "2026-09-01T02:00:00Z"
+freshness = { status = "fresh", valid_until = "2026-09-02T00:00:00Z" }
+quality = { level = "good" }
+authorization_reference = "sha256:4a6de24e52a39ab2fed9fceaee138e19ca829f97dba66d6dba25d50b3984a817"

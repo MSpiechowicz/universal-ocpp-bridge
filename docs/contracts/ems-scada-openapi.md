@@ -27,6 +27,17 @@ EventEnvelope and cursor; `gap` and `error` are terminal control records without
 Telemetry is best effort and outside this durable stream. Full transport semantics are embedded
 in the document from `adapters/target-ems-scada-http/openapi/semantics.md`.
 
+## Separate MQTT transport
+
+The optional `ems-scada` preset on the MQTT target exposes the same canonical point descriptors
+and values as retained MQTT topics, alongside station state, durable events and explicit command
+results. It is not an OpenAPI endpoint and does not convert a vendor HTTP API to MQTT. For the
+independent MQTT 3.1.1/TLS consumer, scoped ACL fixture and opt-in two-protocol broker acceptance
+command, see [MQTT target: Independent EMS/SCADA MQTT acceptance](../configuration/mqtt-target.md#independent-emsscada-mqtt-acceptance).
+The direct HTTP/SSE listener and its broker-free acceptance below remain unchanged; selecting
+one target does not implicitly start the other. Neither target's transport acknowledgement proves
+EMS consumption or electrical energy delivery.
+
 ## Regeneration and CI drift gate
 
 ```text

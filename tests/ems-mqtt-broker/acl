@@ -1,0 +1,31 @@
+# Only the shared issue-88 fixture bridge may publish canonical outputs.
+user uob-bridge
+topic read uob/v1/demo/site-01/commands/+/+
+topic write uob/v1/demo/site-01/availability
+topic write uob/v1/demo/site-01/state/+
+topic write uob/v1/demo/site-01/points/+/+
+topic write uob/v1/demo/site-01/values/+/+
+topic write uob/v1/demo/site-01/events/+/+
+topic write uob/v1/demo/site-01/results/+/+
+topic write uob/v1/demo/site-01/traces/+/+
+
+# Read-only EMS observer; no command access or publication rights.
+user ems-reader
+topic read uob/v1/demo/site-01/availability
+topic read uob/v1/demo/site-01/state/+
+topic read uob/v1/demo/site-01/points/+/+
+topic read uob/v1/demo/site-01/values/+/+
+topic read uob/v1/demo/site-01/events/+/+
+topic read uob/v1/demo/site-01/results/+/+
+topic read uob/v1/demo/site-01/traces/+/+
+
+# EMS operator can issue requests and see outputs, but cannot forge bridge output.
+user ems-operator
+topic write uob/v1/demo/site-01/commands/+/+
+topic read uob/v1/demo/site-01/availability
+topic read uob/v1/demo/site-01/state/+
+topic read uob/v1/demo/site-01/points/+/+
+topic read uob/v1/demo/site-01/values/+/+
+topic read uob/v1/demo/site-01/events/+/+
+topic read uob/v1/demo/site-01/results/+/+
+topic read uob/v1/demo/site-01/traces/+/+

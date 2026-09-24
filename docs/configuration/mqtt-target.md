@@ -218,6 +218,63 @@ request. Confirm the physical effect from a subsequent transaction/status event 
 must never publish commands with `retain: true`, reuse a fixed request ID, or infer charging from a
 result alone.
 
+## Independent EMS/SCADA MQTT acceptance
+
+From the repository root, with Docker daemon access, `openssl`, `cargo`, `timeout`, and the
+`eclipse-mosquitto:2.0.22` image available locally (pull it explicitly if absent), run:
+
+```text
+./scripts/test-ems-mqtt.sh
+```
+
+This opt-in runner provisions an ephemeral TLS Mosquitto broker on a random loopback port,
+per-run credentials and CA, and an ACL limited to `uob/v1/demo/site-01`. The bridge reads
+commands and writes canonical outputs; `ems-reader` reads outputs but cannot publish commands;
+`ems-operator` reads outputs and publishes commands but cannot forge bridge outputs. The runner
+builds the **independent MQTT 3.1.1 consumer** executable and runs the exact ignored
+`issue88_integration` test. Its host is test-only: it joins the actual MQTT target, application
+command coordinator, operational journal/outbox, OCPP endpoint, and simulator. It does not start
+the production service.
+
+The consumer CLI lives at `adapters/target-mqtt/examples/probe_mqtt_contract.rs`. For an
+independently running compatible broker/target, supply a credential-free `mqtts://` URL, CA,
+consumer credentials, and a scenario matching its actual canonical point values and timestamps:
+
+```text
+UOB_MQTT_CA_FILE=/path/to/ca.pem \
+UOB_MQTT_CLIENT_USER=ems-reader \
+UOB_MQTT_CLIENT_PASSWORD_FILE=/path/to/reader.password \
+  cargo run --locked -p uob-mqtt-target-adapter --example probe_mqtt_contract -- \
+  mqtts://localhost:8883 tests/ems-mqtt-contract-client/demo.toml
+```
+
+The checked-in `demo.toml` has fixed historical fixture timestamps; it is not a live-data
+template. Without `--exercise` the CLI only subscribes and validates retained availability,
+state, point descriptors and exact value/quality/freshness metadata against the canonical
+schemas for OCPP 1.6J and OCPP 2.0.1. To send real start/stop commands to an intended test
+broker, use an authorized operator credential and append `--exercise`. Active exercise on a
+non-loopback broker additionally requires `--allow-remote-exercise`; read-only remote access
+does not. Do not use active exercise on a production charger.
+
+The fixture asserts per-protocol correlated, non-retained results for start/stop, duplicate
+request IDs, expired requests, and retained-command **replay** after the target resubscribes.
+Identical duplicates reuse the protocol decision without a second transaction. It separately
+observes OCPP 1.6J connector and OCPP 2.0.1 EVSE/connector transaction start/stop in station
+state, non-retained durable events, and the host journal. A command's broker QoS 1 `PUBACK`
+means only that the broker received it; the correlated consumer result reports the protocol
+decision, and later station/event observations report transaction effects. Neither protocol
+acceptance nor a transaction alone proves electrical energy delivery.
+
+The runner also commits new timed observations, waits until the OCPP 1.6J value is stale while
+the OCPP 2.0.1 value is still current, then interrupts and restores the broker. The independent
+read-only consumer must reconnect, acknowledge renewed subscriptions, and receive retained
+catalog/state with the same values and their correct age-based freshness. MQTT 3.1.1 delivers
+a live retained publication with `RETAIN=false`, so the fixture establishes retained storage
+from a new subscription's replay rather than the live delivery flag. This exercise does not
+install a broker in Compose (issue #94) or provide a vendor HTTP connector. The unchanged,
+broker-free direct HTTP mode is described in
+[EMS/SCADA OpenAPI contract](../contracts/ems-scada-openapi.md).
+
 ## Broker integration test
 
 Normal tests use a hermetic MQTT wire peer. The ignored test below additionally exercises a real
