@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Features
 
+- Add an independent MQTT 3.1.1/TLS EMS/SCADA consumer and opt-in isolated broker
+  acceptance for OCPP 1.6J and 2.0.1 commands, retained points, freshness,
+  duplicate idempotency, expired/retained-replay rejection, and outage/reconnect evidence (#88).
+
 - Add a production-only Debug release view with separately authenticated read access,
   authoritative activation-journal pointers, historical qualification/drain/probation
   evidence and exact rollback reasons. Preserve headless CLI recovery, environment

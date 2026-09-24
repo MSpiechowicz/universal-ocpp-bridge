@@ -55,15 +55,11 @@ fn identity() -> ServiceIdentity {
 }
 fn fixture(version: ProtocolEdition, station: &str) -> StationSnapshot {
     let bytes = if version == ProtocolEdition::Ocpp16j {
-        include_bytes!(
-            "../../../../crates/contracts/tests/fixtures/station-snapshot-ocpp16-v1.json"
-        )
-        .as_slice()
+        include_bytes!("../../crates/contracts/tests/fixtures/station-snapshot-ocpp16-v1.json")
+            .as_slice()
     } else {
-        include_bytes!(
-            "../../../../crates/contracts/tests/fixtures/station-snapshot-ocpp201-v1.json"
-        )
-        .as_slice()
+        include_bytes!("../../crates/contracts/tests/fixtures/station-snapshot-ocpp201-v1.json")
+            .as_slice()
     };
     let mut snapshot: StationSnapshot = serde_json::from_slice(bytes).unwrap();
     snapshot.station.bridge_id = BridgeId::new("site-01").unwrap();

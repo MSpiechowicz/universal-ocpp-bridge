@@ -1,5 +1,8 @@
+#[path = "../../../../tests/ems-contract-host/protocol.rs"]
 mod protocol;
+#[path = "../../../../tests/ems-contract-host/proxy.rs"]
 mod proxy;
+#[path = "../../../../tests/ems-contract-host/query.rs"]
 mod query;
 use query::{Source, Store};
 use std::{net::TcpListener as StdListener, path::PathBuf, sync::Arc};
@@ -169,5 +172,70 @@ impl Drop for Host {
         self.target.abort();
         self.command_task.abort();
         let _ = std::fs::remove_dir_all(&self.folder);
+    }
+}
+
+#[cfg(test)]
+mod proxy_tests {
+    use super::{
+        Host,
+        proxy::{HANDSHAKE_TIMEOUT, MAX_PENDING_HANDSHAKES},
+    };
+    use std::time::Duration;
+    use tokio::{io::AsyncReadExt, net::TcpStream};
+
+    #[tokio::test]
+    async fn idle_peer_is_closed_after_handshake_deadline() {
+        let host = Host::start().await;
+        let endpoint = reqwest::Url::parse(&host.protocol.proxy_address).unwrap();
+        let address = (endpoint.host_str().unwrap(), endpoint.port().unwrap());
+        let mut peer = TcpStream::connect(address).await.unwrap();
+        let mut byte = [0];
+        let closed = tokio::time::timeout(
+            HANDSHAKE_TIMEOUT + Duration::from_secs(1),
+            peer.read(&mut byte),
+        )
+        .await
+        .expect("idle handshake must not retain a socket indefinitely")
+        .expect("idle socket read");
+        assert_eq!(
+            closed, 0,
+            "idle handshake must close without sending a response"
+        );
+    }
+
+    #[tokio::test]
+    async fn excess_pending_handshake_is_dropped_before_deadline() {
+        let host = Host::start().await;
+        let endpoint = reqwest::Url::parse(&host.protocol.proxy_address).unwrap();
+        let address = (endpoint.host_str().unwrap(), endpoint.port().unwrap());
+        tokio::time::timeout(Duration::from_secs(1), async {
+            let mut pending = Vec::with_capacity(MAX_PENDING_HANDSHAKES);
+            for _ in 0..MAX_PENDING_HANDSHAKES {
+                pending.push(
+                    TcpStream::connect(address)
+                        .await
+                        .expect("connect pending peer"),
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let mut excess = TcpStream::connect(address)
+                .await
+                .expect("connect excess peer");
+            let mut byte = [0];
+            assert_eq!(
+                excess.read(&mut byte).await.expect("read excess peer"),
+                0,
+                "excess handshake must be dropped without a response"
+            );
+            for peer in pending {
+                match peer.try_read(&mut byte) {
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                    other => panic!("capacity peer must still be pending: {other:?}"),
+                }
+            }
+        })
+        .await
+        .expect("excess handshake must be dropped before the two-second deadline");
     }
 }

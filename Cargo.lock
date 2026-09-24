@@ -2924,18 +2924,27 @@ dependencies = [
 name = "uob-mqtt-target-adapter"
 version = "0.29.0"
 dependencies = [
+ "base64",
+ "futures-util",
  "jsonschema 0.52.1",
  "libc",
+ "reqwest",
  "rumqttc-v4-next",
  "serde",
  "serde_json",
  "time",
  "tokio",
+ "tokio-tungstenite 0.30.0",
  "toml",
  "uob-application",
  "uob-contracts",
+ "uob-protocol-adapter",
+ "uob-provider-adapter",
+ "uob-sim",
+ "uob-storage-adapter",
  "uob-target-conformance",
  "url",
+ "uuid",
 ]
 
 [[package]]
