@@ -79,7 +79,7 @@ test('static build budget rejects oversized asset output', () => {
     copyFileSync('scripts/check-budget.mjs', join(directory, 'frontend/scripts/check-budget.mjs'));
     writeFileSync(join(directory, 'adapters/management/ui/index.html'), '<html></html>');
     writeFileSync(join(directory, 'adapters/management/ui/assets/console.css'), '');
-    writeFileSync(join(directory, 'adapters/management/ui/assets/console.js'), 'x'.repeat(321 * 1024));
+    writeFileSync(join(directory, 'adapters/management/ui/assets/console.js'), 'x'.repeat(353 * 1024));
     const build = spawnSync(process.execPath, [join(directory, 'frontend/scripts/check-budget.mjs')], { timeout: 30000 });
     assert.equal(build.status, 1);
     assert.match(build.stderr.toString(), /Pi console asset budget exceeded/);

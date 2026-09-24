@@ -9,7 +9,9 @@ mod authorization_input;
 pub use authorization::{authorize_call, complete_authorization};
 
 mod registration;
-pub use registration::{complete_registration, registration_call};
+pub use registration::{
+    complete_registration, complete_registration_with_invalidation, registration_call,
+};
 
 use std::fmt::Write as _;
 

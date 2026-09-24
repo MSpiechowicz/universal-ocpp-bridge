@@ -2,8 +2,8 @@
 use super::{RegistrationError, accepted_for, activity, commit, set};
 use crate::OperationalStore;
 use uob_contracts::{
-    AvailabilityState, NativeProtocolReference, ProtocolEdition, StationSnapshot, TypedValue,
-    UtcTimestamp,
+    AvailabilityState, EventEnvelope, NativeProtocolReference, ProtocolEdition, StationSnapshot,
+    TypedValue, UtcTimestamp,
 };
 
 /// `StatusNotification` addresses exactly one existing EVSE connector, never station zero.
@@ -28,10 +28,41 @@ pub async fn heartbeat<
     snapshot: &mut StationSnapshot,
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
+    heartbeat_inner(store, snapshot, now, None).await
+}
+
+/// Atomically persists accepted OCPP 2.0.1 heartbeat activity and a scoped invalidation.
+/// # Errors
+/// Rejects unregistered stations or persistence failures without changing the snapshot.
+pub async fn heartbeat_with_invalidation<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    now: UtcTimestamp,
+    invalidation: EventEnvelope<E>,
+) -> Result<(), RegistrationError> {
+    heartbeat_inner(store, snapshot, now, Some(invalidation)).await
+}
+
+async fn heartbeat_inner<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    now: UtcTimestamp,
+    invalidation: Option<EventEnvelope<E>>,
+) -> Result<(), RegistrationError> {
     accepted_for(snapshot, ProtocolEdition::Ocpp201)?;
     let mut next = snapshot.clone();
     activity(&mut next, now);
-    commit(store, snapshot, next).await
+    commit(store, snapshot, next, invalidation).await
 }
 
 /// Persists native status without interpreting Occupied as physical charging or command success.
@@ -44,7 +75,7 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
     let next = status_snapshot(snapshot, observation, now)?;
-    commit(store, snapshot, next).await
+    commit(store, snapshot, next, None).await
 }
 
 pub(super) fn status_snapshot(

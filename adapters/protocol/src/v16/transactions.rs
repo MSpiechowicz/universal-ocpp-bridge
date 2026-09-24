@@ -5,6 +5,7 @@ use std::time::Duration;
 use uob_application::{
     AuthorizationDecision, AuthorizationDenialReason, AuthorizationProvider, ChargerObservation,
     CommandClock, LocalAuthorizationService, OperationalStore, SensitiveAuthorizationToken,
+    StationEvent,
     transaction16::{self, TransactionContext, TransactionError},
 };
 use uob_contracts::{StationSnapshot, TransactionSnapshot};
@@ -12,9 +13,8 @@ use uob_contracts::{StationSnapshot, TransactionSnapshot};
 /// All calls share the authoritative store, current policy, and trusted clock.
 /// The station owner must serialize calls and restore its snapshot before reconnect handling.
 pub struct TransactionServices<'a, C, R> {
-    pub store: &'a dyn OperationalStore<C, TransactionSnapshot, TransactionSnapshot, R>,
-    pub authorization:
-        &'a LocalAuthorizationService<C, TransactionSnapshot, TransactionSnapshot, R>,
+    pub store: &'a dyn OperationalStore<C, StationEvent, TransactionSnapshot, R>,
+    pub authorization: &'a LocalAuthorizationService<C, StationEvent, TransactionSnapshot, R>,
     pub provider: &'a dyn AuthorizationProvider,
     pub clock: &'a dyn CommandClock,
     pub authorization_timeout: Duration,

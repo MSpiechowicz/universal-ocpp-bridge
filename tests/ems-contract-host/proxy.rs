@@ -11,10 +11,10 @@ use tokio_tungstenite::{
     WebSocketStream, accept_hdr_async, connect_async,
     tungstenite::{Message, client::IntoClientRequest, http::header::AUTHORIZATION},
 };
-use uob_application::{CommandClock, LocalAuthorizationService};
+use uob_application::{CommandClock, LocalAuthorizationService, StationEvent};
 use uob_contracts::{ResourceRef, TransactionSnapshot};
 
-pub type Auth = LocalAuthorizationService<Value, TransactionSnapshot, TransactionSnapshot, String>;
+pub type Auth = LocalAuthorizationService<Value, StationEvent, TransactionSnapshot, String>;
 pub(super) const MAX_PENDING_HANDSHAKES: usize = 16;
 pub(super) const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
 

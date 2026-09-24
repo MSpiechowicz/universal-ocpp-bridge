@@ -138,6 +138,8 @@ async fn transaction_notifications_commit_and_reconcile_separately_from_acceptan
         .unwrap()
         .events
         .remove(0);
+    let event: EventEnvelope<TransactionSnapshot> =
+        serde_json::from_value(serde_json::to_value(event).unwrap()).unwrap();
     let durable = store
         .command_by_request_id(start.request.request_id.clone())
         .await
@@ -239,6 +241,8 @@ async fn transaction_notifications_commit_and_reconcile_separately_from_acceptan
         .unwrap()
         .events
         .remove(1);
+    let event: EventEnvelope<TransactionSnapshot> =
+        serde_json::from_value(serde_json::to_value(event).unwrap()).unwrap();
     let durable = store
         .command_by_request_id(stop.request.request_id)
         .await

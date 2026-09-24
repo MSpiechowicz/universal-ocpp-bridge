@@ -36,6 +36,7 @@ struct MemoryState {
     command_results: Vec<uob_contracts::CommandResult>,
     deliveries: Vec<PendingDelivery<TestDeliveryPayload>>,
     records: Vec<CommittedRecord<TestCommittedPayload>>,
+    next_event_sequence: u64,
 }
 
 #[derive(Clone, Default)]
@@ -58,6 +59,14 @@ impl
         TestCommittedPayload,
     > for MemoryStore
 {
+    fn reserve_event_sequence(&self) -> StorageFuture<'_, u64> {
+        Box::pin(async move {
+            let mut state = self.state.lock().expect("memory state");
+            state.next_event_sequence += 1;
+            Ok(state.next_event_sequence)
+        })
+    }
+
     fn write_atomic(
         &self,
         write: AtomicStoreWrite<
@@ -138,6 +147,58 @@ impl
             Ok(Page {
                 items,
                 next_cursor: None,
+            })
+        })
+    }
+
+    fn station_snapshot(&self, station: ResourceRef) -> StorageFuture<'_, Option<StationSnapshot>> {
+        Box::pin(async move {
+            Ok(self
+                .state
+                .lock()
+                .expect("memory state")
+                .snapshots
+                .iter()
+                .rev()
+                .find(|snapshot| snapshot.station == station)
+                .cloned())
+        })
+    }
+
+    fn read_scoped_snapshots(
+        &self,
+        query: SnapshotQuery,
+        stations: Vec<ResourceRef>,
+    ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
+        Box::pin(async move {
+            let mut values = self
+                .state
+                .lock()
+                .expect("memory state")
+                .snapshots
+                .iter()
+                .filter(|snapshot| stations.contains(&snapshot.station))
+                .cloned()
+                .collect::<Vec<_>>();
+            values.sort_by_key(|snapshot| serde_json::to_string(&snapshot.station).unwrap());
+            values.dedup_by(|left, right| left.station == right.station);
+            if let Some(after) = query.after {
+                values.retain(|snapshot| {
+                    serde_json::to_string(&snapshot.station).unwrap().as_str() > after.as_str()
+                });
+            }
+            let has_more = values.len() > usize::from(query.limit.get());
+            values.truncate(usize::from(query.limit.get()));
+            let next_cursor = if has_more {
+                values.last().map(|snapshot| {
+                    SnapshotCursor::new(serde_json::to_string(&snapshot.station).unwrap()).unwrap()
+                })
+            } else {
+                None
+            };
+            Ok(Page {
+                items: values,
+                next_cursor,
             })
         })
     }

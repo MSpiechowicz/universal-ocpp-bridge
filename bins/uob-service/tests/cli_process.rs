@@ -122,6 +122,16 @@ fn serve_with_closed_stdin_keeps_api_but_disables_assets() {
     let identity = http_get(address, "/api/v1/identity");
     assert!(root.starts_with("HTTP/1.1 404"));
     assert!(identity.starts_with("HTTP/1.1 200"));
+    for path in [
+        "/api/v1/stations",
+        "/api/v1/stations/station-a",
+        "/api/v1/events",
+    ] {
+        assert!(
+            http_get(address, path).starts_with("HTTP/1.1 503"),
+            "{path}"
+        );
+    }
     assert!(!browser_marker.exists(), "service launched a browser");
 
     child.kill().expect("stop test service");

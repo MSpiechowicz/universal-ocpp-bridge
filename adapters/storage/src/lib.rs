@@ -11,6 +11,7 @@ mod recovery;
 mod remote_control;
 mod retention;
 mod schema;
+mod snapshots;
 mod store;
 mod worker;
 

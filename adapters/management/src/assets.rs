@@ -149,7 +149,7 @@ mod tests {
                     .unwrap()
                     .contains("connect-src 'self'")
             );
-            let body = axum::body::to_bytes(response.into_body(), 320 * 1024)
+            let body = axum::body::to_bytes(response.into_body(), 352 * 1024)
                 .await
                 .unwrap();
             assert!(!body.is_empty());

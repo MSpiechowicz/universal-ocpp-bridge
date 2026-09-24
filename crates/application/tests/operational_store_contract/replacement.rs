@@ -11,6 +11,10 @@ impl
         TestCommittedPayload,
     > for ReplacementMemoryStore
 {
+    fn reserve_event_sequence(&self) -> StorageFuture<'_, u64> {
+        self.0.reserve_event_sequence()
+    }
+
     fn write_atomic(
         &self,
         write: AtomicStoreWrite<
@@ -28,6 +32,18 @@ impl
         query: SnapshotQuery,
     ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
         self.0.read_snapshots(query)
+    }
+
+    fn station_snapshot(&self, station: ResourceRef) -> StorageFuture<'_, Option<StationSnapshot>> {
+        self.0.station_snapshot(station)
+    }
+
+    fn read_scoped_snapshots(
+        &self,
+        query: SnapshotQuery,
+        stations: Vec<ResourceRef>,
+    ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
+        self.0.read_scoped_snapshots(query, stations)
     }
 
     fn read_retained_events(

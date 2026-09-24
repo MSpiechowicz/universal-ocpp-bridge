@@ -8,6 +8,9 @@ import type { Identity } from './identity';
 import { subscribe } from './events';
 import type { ConnectionState } from './events';
 import { Fields } from './Fields';
+import { Stations } from './stations/Stations';
+import { StationStore } from './stations/store';
+import type { InventoryState } from './stations/store';
 
 export function App() {
   const [identity, setIdentity] = useState<Identity>();
@@ -15,7 +18,8 @@ export function App() {
   const [client, setClient] = useState<ApiClient>();
   const [pending, setPending] = useState(false);
   const [station, setStation] = useState('');
-  const [page, setPage] = useState<{ count: number; more: boolean }>();
+  const [inventory, setInventory] = useState<InventoryState>();
+  const [store, setStore] = useState<StationStore>();
   const [connection, setConnection] = useState<ConnectionState>();
   const [hidden, setHidden] = useState(document.hidden);
   const credential = useRef<HTMLInputElement>(null);
@@ -38,10 +42,27 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!client) return;
-    const stop = subscribe(client, station, setConnection);
-    return () => { stop(); client.close(); };
-  }, [client, station]);
+    if (!client || !store) return;
+    return () => { store.close(); client.close(); };
+  }, [client, store]);
+
+  useEffect(() => {
+    if (!client || !store) return;
+    // A selection starts a new single-station subscription with its own cursor.
+    // The previous subscription is stopped by effect cleanup without closing the read credential.
+    store.stream(false);
+    setConnection(undefined);
+    const selected = store.state.selected;
+    if (!selected) return;
+    let disposed = false;
+    const unsubscribe = subscribe(client, selected, value => { if (!disposed) setConnection(value); }, {
+      stale: () => store.stream(false),
+      live: () => store.stream(true),
+      event: () => store.refresh(),
+      recovered: snapshot => store.recovered(snapshot),
+    });
+    return () => { disposed = true; unsubscribe(); };
+  }, [client, store, inventory?.selected]);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,9 +75,12 @@ export function App() {
     try {
       next = new ApiClient(location.origin, identity, token);
       active.current = next;
-      const inventory = await next.stations();
+      const page = await next.stations();
       if (generation !== operation.current) { next.close(); return; }
-      setPage(inventory); setClient(next);
+      const controller = new StationStore(next, setInventory);
+      controller.initialize(page);
+      if (station || page.items[0]) controller.select(station || page.items[0].station.station_id);
+      setStore(controller); setClient(next);
     } catch (error) {
       next?.close();
       if (generation === operation.current) setFailure(error instanceof ApiError ? error.message : 'Connection failed. No credentials were saved.');
@@ -65,15 +89,15 @@ export function App() {
 
   function disconnect() {
     diagnostics.clear();
-    operation.current++; active.current?.close(); active.current = undefined;
-    setClient(undefined); setConnection(undefined); setPage(undefined); setPending(false);
+    operation.current++; store?.close(); active.current?.close(); active.current = undefined;
+    setClient(undefined); setStore(undefined); setConnection(undefined); setInventory(undefined); setPending(false);
     setFailure('');
     // A new connection requires a fresh service identity and an explicitly entered credential.
     setIdentity(undefined);
     void ApiClient.identify(location.origin).then(setIdentity).catch(() => setFailure('Cannot verify service identity. Reload to retry.'));
   }
 
-  const state = hidden && client ? 'stale' : connection?.status ?? (pending ? 'connecting' : 'disconnected');
+  const state = !client ? (pending ? 'connecting' : 'disconnected') : hidden ? 'stale' : connection?.status ?? 'connecting';
   return <div className="console">
     <header className="topbar">
       <a href="/" className="brand"><span className="brand-mark" aria-hidden="true">U</span><span>Universal OCPP Bridge<small>Management console</small></span></a>
@@ -83,6 +107,7 @@ export function App() {
       <aside aria-label="Console navigation">
         <p className="section-label">Workspace</p>
         <a className="nav-active" href="#connection" aria-current="page">Connection</a>
+        <a href="#stations" className="debug-nav">Stations</a>
         <a href="#debug" className="debug-nav">Debug timeline</a>
         <a href="/?offline=1">Offline capture inspector</a>
         <div className="sidebar-note">Local management<br/><span>HTTP / JSON + SSE</span></div>
@@ -114,15 +139,16 @@ export function App() {
           <h2 id="stream-heading">Event connection</h2>
           <p className="notice" role="status">{hidden ? 'Tab is hidden. The display may be stale; server processing continues.' : connection?.message ?? 'Opening authenticated event stream…'}</p>
           <dl>
-            <div><dt>Inventory query</dt><dd>{page?.count ?? 0} visible in first page{page?.more ? ' · more available' : ''}</dd></div>
+            <div><dt>Inventory query</dt><dd>{inventory?.page?.items.length ?? 0} visible{inventory?.page?.next_cursor ? ' · more available' : ''}</dd></div>
             <div><dt>Events received</dt><dd>{connection?.received ?? 0}</dd></div>
             <div><dt>Reconnect attempts</dt><dd>{connection?.attempts ?? 0}</dd></div>
             <div><dt>History gaps</dt><dd>{connection?.gaps ?? 0}</dd></div>
             <div><dt>Latest event type</dt><dd>{connection?.lastEvent ?? 'No event received'}</dd></div>
             <div><dt>Last stream activity</dt><dd>{connection?.lastActivity ? new Date(connection.lastActivity).toLocaleTimeString() : 'Waiting'}</dd></div>
           </dl>
-          <p className="field-note">Stream activity confirms connectivity. It does not confirm a charger action or refresh the inventory query.</p>
+          <p className="field-note">Stream activity confirms connectivity, not a charger action. Station observations refresh separately.</p>
         </section>}
+        {client && store && inventory && <Stations state={inventory} store={store} scope={station} hidden={hidden}/>}
         <DiagnosticsPanel connection={connection} hidden={hidden}/>
         {identity && <Debug key={JSON.stringify(identity)} identity={identity} hidden={hidden}/>}
         <footer>Independent management interface <span>Bound to the destination shown above</span></footer>

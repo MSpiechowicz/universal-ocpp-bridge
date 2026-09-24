@@ -18,7 +18,7 @@ use uob_application::{
     SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
     StorageRetentionStatus, TargetDeliveryStore,
 };
-use uob_contracts::{Command, RequestId, StationSnapshot, UtcTimestamp};
+use uob_contracts::{Command, RequestId, ResourceRef, StationSnapshot, UtcTimestamp};
 
 use crate::{
     SqliteRetentionPolicy, SqliteRuntimeConfiguration, codec,
@@ -184,6 +184,10 @@ where
         self.request(Request::TransactionId)
     }
 
+    fn reserve_event_sequence(&self) -> StorageFuture<'_, u64> {
+        self.request(Request::EventSequence)
+    }
+
     fn write_atomic(
         &self,
         write: AtomicStoreWrite<C, E, D, R>,
@@ -203,11 +207,46 @@ where
         self.request(|reply| Request::Snapshots(after, usize::from(query.limit.get()), reply))
     }
 
+    fn station_snapshot(&self, station: ResourceRef) -> StorageFuture<'_, Option<StationSnapshot>> {
+        let key = match crate::snapshots::station_key(&station) {
+            Ok(key) => key,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        self.request(|reply| Request::StationSnapshot(key, reply))
+    }
+
+    fn read_scoped_snapshots(
+        &self,
+        query: SnapshotQuery,
+        stations: Vec<ResourceRef>,
+    ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
+        let keys = stations
+            .iter()
+            .map(crate::snapshots::station_key)
+            .collect::<Result<Vec<_>, _>>()
+            .and_then(|keys| {
+                serde_json::to_string(&keys).map_err(|_| {
+                    StorageError::new(
+                        StorageErrorCode::InvalidRequest,
+                        "station scope could not be encoded",
+                    )
+                })
+            });
+        let keys = match keys {
+            Ok(keys) => keys,
+            Err(error) => return Box::pin(async move { Err(error) }),
+        };
+        let after = query.after.map(|cursor| cursor.as_str().to_owned());
+        self.request(|reply| {
+            Request::ScopedSnapshots(keys, after, usize::from(query.limit.get()), reply)
+        })
+    }
+
     fn read_retained_events(
         &self,
         query: RetainedEventQuery,
     ) -> StorageFuture<'_, RetainedEventPage<E>> {
-        let resource = match codec::resource_key(&query.resource) {
+        let resource = match crate::snapshots::event_stream_key(&query.resource) {
             Ok(resource) => resource,
             Err(error) => return Box::pin(async move { Err(error) }),
         };

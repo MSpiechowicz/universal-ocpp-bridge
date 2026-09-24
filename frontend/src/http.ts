@@ -1,6 +1,7 @@
 import { diagnostics, requestArea } from './diagnostics/store';
 import { boundedText, identityKey, object, parseIdentity } from './identity';
 import type { Identity } from './identity';
+import { parsePage, parseStation } from './stations/schema';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly kind = 'request') {
@@ -13,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function readJson(response: Response): Promise<unknown> {
+export async function readJson(response: Response, exactIntegers = false): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new ApiError(0);
   const bytes = new Uint8Array(1024 * 1024);
@@ -26,11 +27,35 @@ export async function readJson(response: Response): Promise<unknown> {
       if (length > 1024 * 1024) throw new ApiError(0, 'limit');
       bytes.set(part.value, length - part.value.length);
     }
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, length)));
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, length));
+    return JSON.parse(exactIntegers ? preserveLargeIntegers(text) : text);
   } finally {
     await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
+}
+// JSON.parse rounds i64/u64 beyond Number.MAX_SAFE_INTEGER. Only station snapshots
+// need lossless integer tokens; quote those lexemes before parsing, outside JSON strings.
+const numberToken = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+function preserveLargeIntegers(json: string): string {
+  let result = '';
+  let quoted = false;
+  for (let index = 0; index < json.length;) {
+    const char = json[index];
+    if (char === '"') { quoted = !quoted; result += char; index++; continue; }
+    if (quoted && char === '\\') { result += json.slice(index, index + 2); index += 2; continue; }
+    if (!quoted && (char === '-' || (char >= '0' && char <= '9'))) {
+      numberToken.lastIndex = index;
+      const token = numberToken.exec(json)?.[0];
+      if (token) {
+        result += !/[.eE]/.test(token) && !Number.isSafeInteger(Number(token)) ? `"${token}"` : token;
+        index += token.length;
+        continue;
+      }
+    }
+    result += char; index++;
+  }
+  return result;
 }
 
 export class ApiClient {
@@ -95,7 +120,7 @@ export class ApiClient {
 
   get destinationKey(): string { return JSON.stringify([this.origin, identityKey(this.identity)]); }
 
-  async request(path: string, options: RequestInit = {}, commandToken?: string, confirmedDestination?: string): Promise<unknown> {
+  async request(path: string, options: RequestInit = {}, commandToken?: string, confirmedDestination?: string, exactIntegers = false): Promise<unknown> {
     if (!['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase()) && confirmedDestination !== this.destinationKey) {
       throw new ApiError(0, 'destination');
     }
@@ -112,18 +137,21 @@ export class ApiClient {
       });
       if (!response.ok) { await response.body?.cancel(); throw new ApiError(response.status); }
       if (response.status === 204) { await response.body?.cancel(); return undefined; }
-      return await readJson(response);
+      return await readJson(response, exactIntegers);
     } finally { this.activeReads--; }
   }
 
-  async stations() {
-    const page = object(await this.request('/api/v1/stations?limit=10'));
-    if (!Array.isArray(page.items) || page.items.length > 10) throw new ApiError(0);
-    return { count: page.items.length, more: typeof page.next_cursor === 'string' };
+  async stations(after?: string) {
+    const query = new URLSearchParams({ limit: '10' });
+    if (after !== undefined) query.set('after', boundedText(after, 512));
+    return parsePage(await this.request(`/api/v1/stations?${query}`, {}, undefined, undefined, true), this.identity.bridge_id);
   }
 
-  station(id: string) {
-    return this.request(`/api/v1/stations/${encodeURIComponent(boundedText(id))}`);
+  async station(id: string) {
+    const stationId = boundedText(id);
+    const snapshot = parseStation(await this.request(`/api/v1/stations/${encodeURIComponent(stationId)}`, {}, undefined, undefined, true), this.identity.bridge_id);
+    if (snapshot.station.station_id !== stationId) throw new ApiError(0, 'identity');
+    return snapshot;
   }
 
   commandStatus(requestId: string) {

@@ -31,6 +31,88 @@ test are documented in [`MQTT target`](../configuration/mqtt-target.md). The dir
 listener is documented in
 [`EMS/SCADA HTTP target`](../configuration/ems-scada-http-target.md).
 
+## Demo charging station views
+
+To display real station observations, explicitly extend an isolated **demo** configuration.
+Both listeners must bind loopback; plaintext charging ingress is rejected outside `demo`.
+The read grant is independent of charger credentials and authorizes only the configured
+station roster, not diagnostics capture, commands or an outbound target:
+
+```toml
+[bridge]
+id = "local-demo"
+environment = "demo"
+
+[management]
+listen_addr = "127.0.0.1:8080"
+
+[charging]
+enabled = true
+listen_addr = "127.0.0.1:9000"
+state_directory = "/var/lib/uob/demo-private"
+read_grant_file = "/var/lib/uob/demo-secrets/management-read"
+
+[[charging.stations]]
+id = "station-a"
+protocol = "ocpp16j"
+credential_file = "/var/lib/uob/demo-secrets/station-a"
+
+[[charging.stations.resources]]
+connector_id = "connector-1"
+native_connector_id = 1
+
+[[charging.stations]]
+id = "station-b"
+protocol = "ocpp201"
+credential_file = "/var/lib/uob/demo-secrets/station-b"
+
+[[charging.stations.resources]]
+evse_id = "evse-1"
+native_evse_id = 1
+
+[[charging.stations.resources]]
+evse_id = "evse-1"
+connector_id = "connector-1"
+native_evse_id = 1
+native_connector_id = 1
+
+[[charging.stations.resources]]
+evse_id = "evse-2"
+native_evse_id = 2
+
+[[charging.stations.resources]]
+evse_id = "evse-2"
+connector_id = "connector-2"
+native_evse_id = 2
+native_connector_id = 1
+```
+
+Create the state directory owned by the service account with mode `0700`; create
+distinct credential files owned by the same account with mode `0600`, no symlinks
+or hard links. Generate independent random station secrets of at least 16 bytes.
+The read file must contain one complete `uob1.demo.`-prefixed bearer token with
+32–128 printable secret characters and no newline. Protect the directory containing
+those files; never put real credentials in TOML, version control, process arguments,
+browser URLs or logs. Supply each station's credential through its OCPP WebSocket
+Basic-auth handshake and select `ocpp1.6` or `ocpp2.0.1` accordingly.
+
+`uob serve` verifies privacy, credentials, topology, bridge identity and exclusive
+SQLite ownership before admitting stations. A matching identity marker left by an
+interrupted first start can be resumed; an unmarked existing database or a foreign
+bridge marker cannot be adopted. Restart retains recent transactions, points and event
+cursors; transport disconnect emits a durable change and marks availability unknown
+until a fresh accepted status observation. OCPP 2.0.1 retains at most 128 transaction
+rows, preserving active rows and a monotonic seven-day replay floor for aged ended rows.
+If the protected recent/active history fills that bound, further starts fail closed rather
+than evicting a transaction or accepting an old replay. Storage retention runs at startup
+and every minute while charging is active.
+The management console on `http://127.0.0.1:8080` requires manual entry of the read
+token and shows only committed observations. A report of a transaction is not proof
+of authorization or physical charging: with no provisioned local authorization grant
+the demo replies `Invalid`. Disabling `[charging]` leaves station/event reads
+unavailable (503) rather than serving a synthetic inventory. Do not forward plaintext
+charging ingress off the loopback host.
+
 ## Commands and exit codes
 
 Validate without binding a socket, resolving DNS, reading credentials, or starting adapters:

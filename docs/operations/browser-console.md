@@ -1,10 +1,12 @@
 # Optional browser console
 
 The management adapter embeds the compiled TypeScript/React console in the Rust binary. Open the
-management origin in a browser to see its bridge, environment, release and process and selected-target identity before
-connecting. The shell implements connection/authentication and a bounded event-connection summary.
-The [bounded Debug timeline](debug-timeline.md) adds explicit diagnostic capture and trace inspection.
-Station/EVSE/transaction views, command widgets and configuration screens remain separate work.
+management origin in a browser to see bridge, environment, release, process and selected-target
+identity before connecting. A demo-only charging listener can supply durable station inventory,
+connector/EVSE topology, current and recently ended transactions, typed observations and explicit
+capabilities. The [bounded Debug timeline](debug-timeline.md) retains its separate diagnostic
+capture and trace inspection boundary. Command widgets and configuration screens remain separate
+work.
 
 ## Raspberry Pi deployment
 
@@ -14,9 +16,11 @@ bytes; React runs on the operator's browser. The shell has no background animati
 IndexedDB or local/session-storage writes. The normal event summary retains counters and only the latest event type. Debug separately retains
 a bounded sanitized trace window when explicitly connected.
 
-The isolated frontend build enforces a 320 KiB total uncompressed asset budget and a 100 KiB gzip
-measurement budget. The current server sends uncompressed assets; the gzip measurement is not a
-claim about HTTP compression. There are only three allowlisted routes: `/`,
+The isolated frontend build enforces a 352 KiB total uncompressed asset budget and a 108 KiB
+gzip measurement budget. Station and EVSE views increased the measured checked-in footprint
+from the former 320/100 KiB ceiling; the limits remain enforced in both the frontend build and
+Rust asset test. The server sends uncompressed assets; gzip is not an HTTP compression claim.
+There are only three allowlisted routes: `/`,
 `/ui/assets/console.js` and `/ui/assets/console.css`. Responses are `no-store` with explicit MIME,
 `nosniff`, no-referrer and a restrictive same-origin content security policy. Unknown asset paths
 are 404. Assets are not read from disk at runtime.
@@ -94,12 +98,24 @@ event history. Authentication failure, changed identity or malformed/oversized t
 connection and requires an explicit reconnect. A keep-alive only proves stream activity, not a
 charger action or the freshness of an earlier inventory response.
 
-The current `uob serve` CLI composition serves identity/health and optionally diagnostics but does
-not yet attach a canonical query/event source. The shell reports unavailable on that composition,
-without displaying a successful login. Hosts using the existing
-`router_with_authenticated_events` or combined command/event router supply their real canonical
-source and scoped authenticator. The browser acceptance fixture uses that actual router and
-application with deterministic source data; it does not claim hardware charging validation.
+An API-only `uob serve` configuration still returns 503 for station reads and events: the service
+does not invent charger state. An explicitly configured demo charging listener instead composes
+the private SQLite operational store with bearer-authenticated, roster-scoped station inventory,
+detail and durable SSE. Reads are limited to configured station identities, including SQL
+pagination before LIMIT; connector-only grants cannot enumerate whole stations. Each selected
+station uses a separate stream cursor. Selection, EOF, a cursor gap or reconnect marks existing
+observations stale until the relevant page and detail have been queried again. Connectivity
+changes also emit a scoped invalidation event; the browser re-queries the full snapshot rather
+than treating the event as one. A retained Debug link preselects only the station filter: transaction,
+EVSE, connector and point identifiers are not indexed in retained traces, and a matching trace is
+not guaranteed. Opening Debug never starts a capture. Unsupported operations stay unadvertised.
+
+The demo transport uses a separate loopback WebSocket listener and must be enabled explicitly.
+Neither this read grant nor a charger credential grants command permission. Boot, status,
+transaction and meter observations are committed before the station response. A reported
+transaction without an authorization grant remains a pending observation; the demo returns
+`Invalid`, not an invented charging approval. This mode is **not** a production plaintext
+charging listener. See the [headless configuration guide](headless-cli.md#demo-charging-station-views).
 
 ## Build and verification
 
@@ -109,21 +125,26 @@ Build only on a developer or CI host, using Node 26.8.1 and npm 12.0.2:
 cd frontend
 npm ci --ignore-scripts
 npm run check
+cargo build --locked -p uob-service --bin uob --example charging_browser_peer
+cargo build --locked -p uob-management-adapter --example browser_fixture
+cargo build --locked -p uob-sim --bin uob-sim
 npm exec playwright install chromium
 npm run test:browser
+UOB_LIVE_BROWSER=1 npm run test:browser
 ```
 
 Direct dependency versions and transitive integrity hashes are pinned in the isolated lockfile.
 `npm run check` executes transport/parser tests, TypeScript checks, the production Vite build and
-asset budgets. Commit the generated `adapters/management/ui` files together with their source.
-A second build should produce no asset diff. Rust release jobs consume those files and do not
-install frontend tooling. Automated frontend workflow gates remain issue #97.
+asset budgets. Commit generated `adapters/management/ui` files together with their source; a
+second build must produce no asset diff. Rust release jobs consume those files without installing
+frontend tooling. The [frontend checks](../testing/frontend-checks.md) build the daemon and
+authenticated OCPP peer and run both router-fixture and real-daemon browser suites.
 
-Browser acceptance launches four loopback-only Rust fixture servers on ports 39189–39192,
-exercises the actual authenticated management router and compiled assets, forces an initial SSE
-EOF then verifies durable cursor resume, and checks denied credentials, inert hostile text,
-production/staging/demo token rejection, navigation and history credential isolation, desktop/mobile layout and `--no-ui` route equivalence. Fixture
-credentials are public deterministic test values; the fixture is not part of the production
-binary. Set `UOB_BROWSER_EXECUTABLE` to use an already installed compatible Chrome executable.
+The router fixtures on ports 39189–39192 cover scoped authentication, cursor resume, inert
+rendering, navigation and layout. The API-only daemon on 39193 proves the honest 503 path.
+The separate real daemon uses private files, two authenticated OCPP editions and multi-EVSE
+traffic on 39195–39196; it verifies live read/SSE isolation, topology, value quality,
+transaction observations and disconnect/reconnect behavior without intercepting management
+responses. Set `UOB_BROWSER_EXECUTABLE` to use an installed compatible Chrome executable.
 
 Run `./scripts/verify-workspace.sh` for the required Rust, architecture and repository checks.

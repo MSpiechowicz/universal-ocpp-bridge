@@ -213,14 +213,19 @@ pub fn stop(
 /// The caller holds the single station owner across preparation, commit and snapshot replacement.
 /// # Errors
 /// Leaves the caller's snapshot untouched on any failed commit or invalid trusted context.
-pub async fn commit<C: Send + 'static, R: Send + 'static>(
-    store: &dyn OperationalStore<C, TransactionSnapshot, TransactionSnapshot, R>,
+pub async fn commit<
+    C: Send + 'static,
+    E: From<StationSnapshot> + From<TransactionSnapshot> + Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, TransactionSnapshot, R>,
     snapshot: &mut StationSnapshot,
     transaction: TransactionSnapshot,
     context: TransactionContext,
     now: UtcTimestamp,
 ) -> Result<(), TransactionError> {
-    if context.identity.bridge_id != snapshot.station.bridge_id
+    if context.sequence == 0
+        || context.identity.bridge_id != snapshot.station.bridge_id
         || context.identity.selected_target_id != context.target.as_ref().map(|t| t.0.clone())
     {
         return Err(TransactionError::InvalidState);
@@ -241,7 +246,7 @@ pub async fn commit<C: Send + 'static, R: Send + 'static>(
     let event = EventEnvelope {
         event_id: context.event_id.clone(),
         schema_version: snapshot.schema_version,
-        runtime: context.identity.runtime,
+        runtime: context.identity.runtime.clone(),
         resource: transaction.resource.clone(),
         source_time: transaction.ended_at.or(Some(transaction.started_at)),
         observed_at: now,
@@ -253,10 +258,10 @@ pub async fn commit<C: Send + 'static, R: Send + 'static>(
         .map_err(|_| TransactionError::InvalidState)?,
         origin: EventOrigin::Station,
         sequence: context.sequence,
-        correlation_id: context.correlation_id,
+        correlation_id: context.correlation_id.clone(),
         causation_id: None,
         provenance: None,
-        payload: transaction.clone(),
+        payload: E::from(transaction.clone()),
     };
     let mut write = AtomicStoreWrite::empty();
     write.purpose = if ended {
@@ -266,6 +271,23 @@ pub async fn commit<C: Send + 'static, R: Send + 'static>(
     };
     write.station_snapshot = Some(next.clone());
     write.journal_events.push(event);
+    write.journal_events.push(EventEnvelope {
+        event_id: EventId::new(format!("{}/station", context.event_id.as_str()))
+            .map_err(|_| TransactionError::InvalidState)?,
+        schema_version: next.schema_version,
+        runtime: context.identity.runtime,
+        resource: next.station.clone(),
+        source_time: transaction.ended_at.or(Some(transaction.started_at)),
+        observed_at: now,
+        event_type: EventType::new("station.snapshot.changed")
+            .map_err(|_| TransactionError::InvalidState)?,
+        origin: EventOrigin::Station,
+        sequence: context.sequence,
+        correlation_id: context.correlation_id,
+        causation_id: Some(context.event_id.clone()),
+        provenance: None,
+        payload: E::from(next.clone()),
+    });
     if let Some((target, revision)) = context.target {
         write.required_deliveries.push(PendingDelivery {
             delivery_id: DeliveryId::new(format!("transaction/{}", context.event_id.as_str()))

@@ -8,8 +8,9 @@ Rust service and simulator architecture, selectable MQTT and EMS/SCADA targets
 protocols, external database export, browser debugging, staging, automatic
 rollback, and CI/release strategy.
 
-Implementation has started with the buildable workspace foundation. Charging
-behavior, simulator scenarios, and production release supervision remain planned.
+The workspace includes opt-in demo-only loopback charging ingress and scoped station
+views; production charging deployment, broader simulator scenarios and release
+supervision remain separate work.
 
 ## Workspace foundation
 
@@ -55,6 +56,10 @@ The optional [browser console](docs/operations/browser-console.md) embeds compil
 with no Node runtime on the Raspberry Pi. It verifies destination identity, keeps scoped
 credentials in tab memory, binds diagnostic tokens to their environment, requires explicit destination
 confirmation for controls, and shows bounded authenticated SSE connection and stale-state evidence.
+The [demo charging station configuration](docs/operations/headless-cli.md#demo-charging-station-views)
+connects authenticated OCPP 1.6J and 2.0.1 peers to durable, read-only station,
+EVSE, connector, transaction and measurement views. It is not a production
+plaintext listener or a command-authority grant.
 
 The [Debug operational panels](docs/operations/debug-operational-panels.md) separate local persistence,
 resource pressure and remote export evidence with explicit unavailable observations.

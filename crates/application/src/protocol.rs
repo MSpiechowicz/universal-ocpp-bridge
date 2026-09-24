@@ -1,6 +1,9 @@
+mod persistence;
+pub use persistence::{ObservationCommitError, record_measurements, record_transaction_event};
+
 use uob_contracts::{
     DataPointValue, NativeProtocolReference, ProtocolEdition, StationSnapshot, TransactionId,
-    TransactionProtocolState, TransactionSnapshot, TransactionState, UtcTimestamp,
+    TransactionProtocolState, TransactionSnapshot, TransactionState, TypedValue, UtcTimestamp,
 };
 
 /// Target-neutral charger observation accepted from a protocol adapter.
@@ -69,13 +72,92 @@ pub enum TransactionApplyOutcome {
     Duplicate,
 }
 
+const OCPP201_REPLAY_FLOOR: &str = "ocpp201/transactions/replay_floor_seconds";
+const OCPP201_RETENTION_SECONDS: i64 = 7 * 24 * 60 * 60;
+const MAX_SNAPSHOT_TRANSACTIONS: usize = 128;
+
+fn replay_floor(snapshot: &StationSnapshot, now: UtcTimestamp) -> i64 {
+    let current = now
+        .into_inner()
+        .unix_timestamp()
+        .saturating_sub(OCPP201_RETENTION_SECONDS);
+    snapshot
+        .current_values
+        .iter()
+        .find_map(|value| {
+            if value.point_id.as_str() == OCPP201_REPLAY_FLOOR
+                && let Some(TypedValue::SignedInteger(floor)) = value.value
+            {
+                return Some(floor);
+            }
+            None
+        })
+        .map_or(current, |persisted| persisted.max(current))
+}
+
+fn expired_ended(transaction: &TransactionSnapshot, floor: i64) -> bool {
+    transaction.protocol_state.as_ref().is_some_and(|state| {
+        state.protocol == ProtocolEdition::Ocpp201
+            && transaction.state == TransactionState::Ended
+            && transaction.started_at.into_inner().unix_timestamp() <= floor
+            && transaction
+                .ended_at
+                .is_some_and(|ended| ended.into_inner().unix_timestamp() < floor)
+    })
+}
+
+fn check_transaction_lifecycle(
+    snapshot: &StationSnapshot,
+    observation: &TransactionEventObservation,
+    current: Option<usize>,
+) -> Result<Option<TransactionApplyOutcome>, TransactionApplyError> {
+    if let Some(index) = current {
+        let transaction = &snapshot.transactions[index];
+        let state = transaction
+            .protocol_state
+            .as_ref()
+            .ok_or(TransactionApplyError::InvalidTransition)?;
+        if state.native_resource != observation.native_resource
+            || observation
+                .remote_start_id
+                .is_some_and(|id| state.remote_start_id.is_some_and(|old| id != old))
+        {
+            return Err(TransactionApplyError::ConflictingReplay);
+        }
+        if observation.sequence_number == state.last_sequence_number {
+            let same = state.native_resource == observation.native_resource
+                && state.last_event == event_name(observation.event)
+                && state.last_trigger_reason == observation.trigger_reason
+                && state.last_event_at == observation.occurred_at
+                && state.last_event_fingerprint == observation.payload_fingerprint;
+            return if same {
+                Ok(Some(TransactionApplyOutcome::Duplicate))
+            } else {
+                Err(TransactionApplyError::ConflictingReplay)
+            };
+        }
+        if observation.sequence_number != state.last_sequence_number.saturating_add(1) {
+            return Err(TransactionApplyError::OutOfOrder);
+        }
+        if transaction.state == TransactionState::Ended {
+            return Err(TransactionApplyError::AlreadyEnded);
+        }
+        if observation.event == TransactionEventKind::Started {
+            return Err(TransactionApplyError::InvalidTransition);
+        }
+    } else if observation.event != TransactionEventKind::Started {
+        return Err(TransactionApplyError::MissingStart);
+    }
+    Ok(None)
+}
+
 /// Reconciles one transaction event into the snapshot that callers persist atomically with events.
 ///
 /// # Errors
 ///
 /// Returns [`TransactionApplyError`] for an unsupported protocol, unknown resource, invalid
-/// identity, stale or conflicting sequence, or an invalid lifecycle transition. The snapshot is
-/// unchanged when reconciliation fails.
+/// identity, stale or conflicting sequence, an expired unseen start, full history, or an invalid
+/// lifecycle transition. The snapshot is unchanged when reconciliation fails.
 pub fn apply_transaction_event(
     snapshot: &mut StationSnapshot,
     observation: &TransactionEventObservation,
@@ -98,41 +180,23 @@ pub fn apply_transaction_event(
                 && state.native_transaction_id == observation.native_transaction_id
         })
     });
-    if let Some(index) = current {
-        let transaction = &snapshot.transactions[index];
-        let state = transaction
-            .protocol_state
-            .as_ref()
-            .ok_or(TransactionApplyError::InvalidTransition)?;
-        if observation
-            .remote_start_id
-            .is_some_and(|id| state.remote_start_id.is_some_and(|old| id != old))
-        {
-            return Err(TransactionApplyError::ConflictingReplay);
-        }
-        if observation.sequence_number == state.last_sequence_number {
-            let same = state.native_resource == observation.native_resource
-                && state.last_event == event_name(observation.event)
-                && state.last_trigger_reason == observation.trigger_reason
-                && state.last_event_at == observation.occurred_at
-                && state.last_event_fingerprint == observation.payload_fingerprint;
-            return if same {
-                Ok(TransactionApplyOutcome::Duplicate)
-            } else {
-                Err(TransactionApplyError::ConflictingReplay)
-            };
-        }
-        if observation.sequence_number != state.last_sequence_number.saturating_add(1) {
-            return Err(TransactionApplyError::OutOfOrder);
-        }
-        if transaction.state == TransactionState::Ended {
-            return Err(TransactionApplyError::AlreadyEnded);
-        }
-        if observation.event == TransactionEventKind::Started {
-            return Err(TransactionApplyError::InvalidTransition);
-        }
-    } else if observation.event != TransactionEventKind::Started {
-        return Err(TransactionApplyError::MissingStart);
+    if let Some(outcome) = check_transaction_lifecycle(snapshot, observation, current)? {
+        return Ok(outcome);
+    }
+
+    // Source timestamps determine whether an unseen start can be replayed. The trusted
+    // observation clock advances the durable floor; a corrected clock cannot lower it.
+    let floor = replay_floor(snapshot, observed_at);
+    if current.is_none() && observation.occurred_at.into_inner().unix_timestamp() <= floor {
+        return Err(TransactionApplyError::ExpiredStart);
+    }
+    let retained = snapshot
+        .transactions
+        .iter()
+        .filter(|transaction| !expired_ended(transaction, floor))
+        .count();
+    if retained + usize::from(current.is_none()) > MAX_SNAPSHOT_TRANSACTIONS {
+        return Err(TransactionApplyError::Capacity);
     }
 
     if let Some(measurements) = &observation.measurements {
@@ -177,6 +241,21 @@ pub fn apply_transaction_event(
             protocol_state: Some(protocol_state),
         });
     }
+    // Keep the event being committed even if an old active session has only just ended:
+    // persistence still needs its transaction evidence for the matching journal event.
+    snapshot.transactions.retain(|transaction| {
+        transaction.protocol_state.as_ref().is_some_and(|state| {
+            state.protocol == ProtocolEdition::Ocpp201
+                && state.native_transaction_id == observation.native_transaction_id
+        }) || !expired_ended(transaction, floor)
+    });
+    crate::registration::set(
+        &mut snapshot.current_values,
+        OCPP201_REPLAY_FLOOR,
+        Some(TypedValue::SignedInteger(floor)),
+        None,
+        observed_at,
+    );
     snapshot.observed_at = observed_at;
     Ok(TransactionApplyOutcome::Applied)
 }
@@ -211,6 +290,10 @@ pub enum TransactionApplyError {
     ConflictingReplay,
     AlreadyEnded,
     InvalidTransition,
+    /// The charger-reported start predates the durable monotonic replay window.
+    ExpiredStart,
+    /// The bounded snapshot has no safely removable ended transaction.
+    Capacity,
 }
 
 /// Application-owned meter samples from one OCPP operation.
@@ -263,7 +346,11 @@ pub fn apply_measurements(
             .iter_mut()
             .find(|current| current.point_id == value.point_id)
         {
-            *current = value;
+            if value.source_time.unwrap_or(value.observed_at)
+                >= current.source_time.unwrap_or(current.observed_at)
+            {
+                *current = value;
+            }
         } else {
             target.push(value);
         }

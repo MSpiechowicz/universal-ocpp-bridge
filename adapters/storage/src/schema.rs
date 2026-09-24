@@ -1,14 +1,144 @@
 use rusqlite::{Connection, OptionalExtension};
-use uob_application::StorageError;
+use uob_application::{StorageError, StorageErrorCode};
 
 use crate::configuration::unavailable;
 
 pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
-    create_schema(connection)?;
-    upgrade_columns(connection)?;
-    connection
-        .execute_batch("PRAGMA user_version = 7;")
-        .map_err(unavailable)
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(unavailable)?;
+    let transaction = connection.unchecked_transaction().map_err(unavailable)?;
+    create_schema(&transaction)?;
+    upgrade_columns(&transaction)?;
+    // Validate station snapshots on every open; only the legacy journal needs v8 rewriting.
+    normalize_station_keys(&transaction, version < 8)?;
+    if version < 8 {
+        normalize_event_stream_keys(&transaction)?;
+    }
+    transaction.execute(
+        "UPDATE event_sequence_counter SET value = MAX(value,
+         COALESCE((SELECT MAX(sequence) FROM journal_events), 0),
+         COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'journal_events'), 0)) WHERE id = 1",
+        [],
+    ).map_err(unavailable)?;
+    transaction
+        .execute_batch("PRAGMA user_version = 8;")
+        .map_err(unavailable)?;
+    transaction.commit().map_err(unavailable)
+}
+
+fn normalize_station_keys(connection: &Connection, upgrade: bool) -> Result<(), StorageError> {
+    let mut last_row = 0;
+    loop {
+        let rows = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT rowid, station_key, payload FROM station_snapshots
+                     WHERE rowid > ?1 ORDER BY rowid LIMIT 128",
+                )
+                .map_err(unavailable)?;
+            statement
+                .query_map([last_row], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .map_err(unavailable)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(unavailable)?
+        };
+        if rows.is_empty() {
+            break;
+        }
+        for (row_id, old_key, payload) in rows {
+            let snapshot = crate::codec::decode_snapshot(&payload)?;
+            let stored_key = crate::codec::resource_key(&snapshot.station)?;
+            let canonical = crate::snapshots::station_key(&snapshot.station).map_err(|_| {
+                StorageError::new(
+                    StorageErrorCode::IntegrityFailure,
+                    "persisted snapshot station key is invalid",
+                )
+            })?;
+            if old_key != stored_key && old_key != canonical {
+                return Err(StorageError::new(
+                    StorageErrorCode::IntegrityFailure,
+                    "persisted snapshot station key disagrees with payload",
+                ));
+            }
+            if old_key != canonical {
+                if !upgrade {
+                    return Err(StorageError::new(
+                        StorageErrorCode::IntegrityFailure,
+                        "persisted snapshot station key is not canonical",
+                    ));
+                }
+                connection
+                    .execute(
+                        "UPDATE station_snapshots SET station_key = ?1 WHERE rowid = ?2",
+                        rusqlite::params![canonical, row_id],
+                    )
+                    .map_err(unavailable)?;
+            }
+            last_row = row_id;
+        }
+    }
+    Ok(())
+}
+
+fn normalize_event_stream_keys(connection: &Connection) -> Result<(), StorageError> {
+    let mut last_row = 0;
+    loop {
+        let rows = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT row_id, resource, payload FROM journal_events
+                     WHERE row_id > ?1 ORDER BY row_id LIMIT 128",
+                )
+                .map_err(unavailable)?;
+            statement
+                .query_map([last_row], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })
+                .map_err(unavailable)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(unavailable)?
+        };
+        if rows.is_empty() {
+            break;
+        }
+        for (row_id, old_key, payload) in rows {
+            let event = crate::codec::decode_event::<serde_json::Value>(&payload)?;
+            let stored_key = crate::codec::resource_key(&event.resource)?;
+            let canonical = crate::snapshots::event_stream_key(&event.resource).map_err(|_| {
+                StorageError::new(
+                    StorageErrorCode::IntegrityFailure,
+                    "persisted event resource is invalid",
+                )
+            })?;
+            if old_key != stored_key && old_key != canonical {
+                return Err(StorageError::new(
+                    StorageErrorCode::IntegrityFailure,
+                    "persisted event resource disagrees with payload",
+                ));
+            }
+            if old_key != canonical {
+                connection
+                    .execute(
+                        "UPDATE journal_events SET resource = ?1 WHERE row_id = ?2",
+                        rusqlite::params![canonical, row_id],
+                    )
+                    .map_err(unavailable)?;
+            }
+            last_row = row_id;
+        }
+    }
+    Ok(())
 }
 
 fn create_schema(connection: &Connection) -> Result<(), StorageError> {
@@ -17,6 +147,8 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
             "CREATE TABLE IF NOT EXISTS release_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL);\n\
              CREATE TABLE IF NOT EXISTS transaction_id_counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL);\n\
              INSERT OR IGNORE INTO transaction_id_counter VALUES (1, 0);\n\
+             CREATE TABLE IF NOT EXISTS event_sequence_counter (id INTEGER PRIMARY KEY CHECK (id = 1), value INTEGER NOT NULL CHECK (value >= 0));\n\
+             INSERT OR IGNORE INTO event_sequence_counter VALUES (1, 0);\n\
              CREATE TABLE IF NOT EXISTS station_snapshots (\n\
                  station_key TEXT PRIMARY KEY, payload TEXT NOT NULL\n\
              );\n\
@@ -69,8 +201,7 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
              CREATE TABLE IF NOT EXISTS storage_retention_stats (\n\
                  category TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0\n\
                      CHECK (count >= 0)\n\
-             );\n\
-             PRAGMA user_version = 7;",
+             );",
         )
         .map_err(unavailable)
 }

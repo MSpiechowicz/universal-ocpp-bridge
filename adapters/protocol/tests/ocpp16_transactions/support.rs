@@ -3,14 +3,15 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use uob_application::{
     AuthorizationChange, AuthorizationProvider, AuthorizationState, CommandClock,
     LocalAuthorizationService, OperationalStore, PageLimit, SensitiveAuthorizationToken,
-    SnapshotQuery, registration::RegistrationDecision, transaction16::TransactionContext,
+    SnapshotQuery, StationEvent, registration::RegistrationDecision,
+    transaction16::TransactionContext,
 };
 use uob_contracts::{EventId, ServiceIdentity, StationSnapshot, TransactionSnapshot, UtcTimestamp};
 use uob_protocol_adapter::v16::{self, TransactionServices};
 use uob_provider_adapter::LocalAuthorizationProvider;
 use uob_storage_adapter::SqliteOperationalStore;
-pub type Store = SqliteOperationalStore<String, TransactionSnapshot, TransactionSnapshot, String>;
-pub type Auth = LocalAuthorizationService<String, TransactionSnapshot, TransactionSnapshot, String>;
+pub type Store = SqliteOperationalStore<String, StationEvent, TransactionSnapshot, String>;
+pub type Auth = LocalAuthorizationService<String, StationEvent, TransactionSnapshot, String>;
 pub const START: &[u8] =
     include_bytes!("../../../../tests/ocpp-fixtures/corpus/wire/1.6/start-transaction.json");
 pub const STOP: &[u8] =

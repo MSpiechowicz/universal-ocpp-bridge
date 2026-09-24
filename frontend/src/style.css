@@ -114,3 +114,28 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .release-panel details { border-top: 1px solid var(--line); padding: 12px 0; }
 .release-panel summary { cursor: pointer; font-size: 13px; }
 @media (max-width: 600px) { .release-panel dl { grid-template-columns: 1fr; } }
+
+.stations-panel { border-top: 1px solid var(--line); padding: 28px 0; overflow-wrap: anywhere; }
+.stations-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.station-columns { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 24px; margin-top: 20px; }
+.station-columns nav, .station-detail { padding: 20px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.station-columns h3 { font-size: 15px; margin: 0 0 16px; }
+.station-columns h4 { font-size: 13px; margin: 24px 0 10px; }
+.station-columns h5 { font-size: 13px; margin: 0; }
+.station-columns code { font-size: 12px; overflow-wrap: anywhere; }
+.station-list, .point-list, .transaction-list { list-style: none; padding: 0; margin: 0; }
+.station-list li, .point-list li, .transaction-list li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.station-list li span { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
+.station-select { width: 100%; text-align: left; background: transparent; border-color: var(--line); color: inherit; overflow-wrap: anywhere; }
+.station-select[aria-current="true"] { border-color: var(--accent); background: var(--accent); color: white; }
+.station-detail-container { min-width: 0; }
+.station-detail-container > a { display: inline-block; margin-bottom: 12px; font-size: 13px; }
+.station-detail p, .station-detail li { font-size: 12px; }
+.station-detail ul { padding-left: 20px; }
+.station-detail .point-list, .station-detail .transaction-list { padding: 0; }
+.station-capabilities { border-top: 1px solid var(--line); margin-top: 18px; }
+.point-reading { font-size: 16px !important; font-weight: 650; margin-bottom: 4px; }
+.point-reading span { font-weight: 400; color: var(--muted); font-size: 12px; }
+.point-list p { margin: 4px 0; }
+.resource-card { padding: 16px; border: 1px solid var(--line); border-radius: 5px; margin: 12px 0; }
+@media (max-width: 900px) { .station-columns { grid-template-columns: 1fr; } }

@@ -98,9 +98,9 @@ pub async fn receive_json(peer: &mut Peer) -> Value {
     serde_json::from_str(&text).expect("JSON frame")
 }
 
-pub type Store = SqliteOperationalStore<Value, TransactionSnapshot, TransactionSnapshot, String>;
-pub type Coordinator = CommandCoordinator<Value, TransactionSnapshot, TransactionSnapshot, String>;
-pub type Auth = LocalAuthorizationService<Value, TransactionSnapshot, TransactionSnapshot, String>;
+pub type Store = SqliteOperationalStore<Value, StationEvent, TransactionSnapshot, String>;
+pub type Coordinator = CommandCoordinator<Value, StationEvent, TransactionSnapshot, String>;
+pub type Auth = LocalAuthorizationService<Value, StationEvent, TransactionSnapshot, String>;
 pub struct Database(pub PathBuf);
 impl Database {
     pub fn new() -> Self {

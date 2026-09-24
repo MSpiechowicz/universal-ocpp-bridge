@@ -22,6 +22,36 @@ export function Timeline({ buffer, tick, paused, ceiling, offline = false }: { o
     window.addEventListener('uob-correlation', selectCorrelation);
     return () => window.removeEventListener('uob-correlation', selectCorrelation);
   }, [offline]);
+  useEffect(() => {
+    if (offline) return;
+    const selectStation = (event: Event) => {
+      const station = (event as CustomEvent<unknown>).detail;
+      if (validFilter(station, 256)) {
+        setFilters({ station }); setScroll(0); setSelected(undefined);
+      }
+    };
+    window.addEventListener('uob-station', selectStation);
+    return () => window.removeEventListener('uob-station', selectStation);
+  }, [offline]);
+  useEffect(() => {
+    if (offline) return;
+    const selectDebugFilter = (event: Event) => {
+      const detail: unknown = (event as CustomEvent<unknown>).detail;
+      if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return;
+      const input = detail as Record<string, unknown>;
+      if (!validFilter(input.station, 256) || Object.keys(input).some(key => !['station', 'transaction', 'evse', 'connector'].includes(key))) return;
+      if (['transaction', 'evse', 'connector'].some(key => input[key] !== undefined && !validFilter(input[key], 128))) return;
+      const next: Filters = { station: input.station };
+      for (const key of ['transaction', 'evse', 'connector'] as const) {
+        const field = input[key];
+        if (typeof field === 'string') next[key] = field;
+      }
+      setFilters(next); setScroll(0); setSelected(undefined);
+      if (viewport.current) viewport.current.scrollTop = 0;
+    };
+    window.addEventListener('uob-debug-filter', selectDebugFilter);
+    return () => window.removeEventListener('uob-debug-filter', selectDebugFilter);
+  }, [offline]);
   const viewport = useRef<HTMLDivElement>(null);
   // Index matching does not parse or sort payloads; only the viewport is mounted in React.
   const rows = buffer.rows.filter(row => (!paused || row.sequence <= ceiling) && matches(row, filters));
@@ -36,9 +66,9 @@ export function Timeline({ buffer, tick, paused, ceiling, offline = false }: { o
     setScroll(0); if (viewport.current) viewport.current.scrollTop = 0;
   }
   return <>
-    <details className="debug-filters" open={!!filters.correlation}><summary>Filter retained traces</summary>
+    <details className="debug-filters" open={!!(filters.correlation || filters.station || filters.transaction || filters.evse || filters.connector)}><summary>Filter retained traces</summary>
       <div className="filter-grid">
-        {filterNames.map(name => <label key={name}>{name}<input aria-label={`Filter ${name}`} value={filters[name] ?? ''} onChange={event => filter(name, event.target.value)} maxLength={128}/></label>)}
+        {filterNames.map(name => <label key={name}>{name}<input aria-label={`Filter ${name}`} value={filters[name] ?? ''} onChange={event => filter(name, event.target.value)} maxLength={name === 'station' ? 256 : 128}/></label>)}
         {(['from', 'until'] as const).map(name => <label key={name}>{name} (local time)<input aria-label={`Filter ${name}`} type="datetime-local" onChange={event => filter(name, event.target.value)}/></label>)}
       </div>
       <p className="field-note">Missing metadata is unavailable, not inferred. Search “unavailable” in a field to select missing values. Severity is separate from outcome.</p>
@@ -68,4 +98,13 @@ export function Timeline({ buffer, tick, paused, ceiling, offline = false }: { o
       <Inspector key={selected} inspection={buffer.inspection(selected)} raw={detail}/>
     </section>}
   </>;
+}
+
+function validFilter(value: unknown, maximum: number): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maximum) return false;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code < 32 || code === 127) return false;
+  }
+  return true;
 }

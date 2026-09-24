@@ -55,10 +55,10 @@ jobs:
         run: npm run check:reproducible
       - name: Require generated assets to match committed source
         run: git diff --exit-code -- ../adapters/management/ui
-      - name: Build the daemon and real management fixture with current assets
+      - name: Build daemon, authenticated OCPP peers and real management fixture
         run: |
           cargo build --locked -p uob-sim --bin uob-sim
-          cargo build --locked -p uob-service --bin uob
+          cargo build --locked -p uob-service --bin uob --example charging_browser_peer
           cargo build --locked -p uob-management-adapter --example browser_fixture
       - name: Install the locked Playwright Chromium browser
         run: ./node_modules/.bin/playwright install --with-deps chromium
@@ -66,11 +66,26 @@ jobs:
         run: |
           ulimit -f 32768
           npm run test:browser:ci
-      - name: Retain only the bounded sanitized browser summary
+      - name: Retain the sanitized router-fixture browser summary
         if: ${{ always() && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: frontend-browser-${{ github.sha }}
+          name: frontend-browser-fixtures-${{ github.sha }}
+          path: frontend/test-results/ci-summary.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Run bounded real charging daemon browser checks
+        id: live
+        env:
+          UOB_LIVE_BROWSER: "1"
+        run: |
+          ulimit -f 32768
+          npm run test:browser:ci
+      - name: Retain the sanitized live-daemon browser summary
+        if: ${{ always() && !cancelled() && steps.live.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-browser-live-${{ github.sha }}
           path: frontend/test-results/ci-summary.json
           if-no-files-found: ignore
           retention-days: 7

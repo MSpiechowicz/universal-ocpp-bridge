@@ -71,7 +71,7 @@ pub async fn commit_timed_observations(host: &Host, pump: &mut Pump) -> probe::D
         demo.scenario[index].expected_current = Some(index == 1);
         let mut write: AtomicStoreWrite<
             serde_json::Value,
-            uob_contracts::TransactionSnapshot,
+            uob_contracts::StationEvent,
             uob_contracts::TransactionSnapshot,
             String,
         > = AtomicStoreWrite::empty();

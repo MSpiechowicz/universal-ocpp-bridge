@@ -12,6 +12,7 @@ use std::{sync::Arc, time::Duration};
 use support::*;
 use uob_application::{
     AuthorizationState, OperationalStore, PageLimit, RecoveryQuery, RetainedEventQuery,
+    StationEvent,
 };
 use uob_contracts::{NativeProtocolReference, TransactionState};
 use uob_protocol_adapter::OcppErrorCode;
@@ -83,6 +84,17 @@ async fn lifecycle_commits_events_and_outbox_before_reply_and_replays_after_rest
     assert!(call(&store, &auth, &mut state, STOP, 3).await.is_ok());
     assert!(call(&store, &auth, &mut state, START, 3).await.is_ok());
     assert_eq!(state, before);
+    assert_retained_outbox(&store, &state).await;
+    store.shutdown(Duration::from_secs(2)).await.unwrap();
+    drop(store);
+    let store = db.open();
+    let mut recovered = persisted(&store).await;
+    assert!(call(&store, &auth, &mut recovered, STOP, 3).await.is_ok());
+    assert_eq!(recovered, before);
+    assert_eq!(store.reserve_transaction_id().await.unwrap(), 2);
+}
+
+async fn assert_retained_outbox(store: &Store, state: &uob_contracts::StationSnapshot) {
     let events = store
         .read_retained_events(RetainedEventQuery {
             resource: state.resources[0].resource.clone(),
@@ -92,7 +104,23 @@ async fn lifecycle_commits_events_and_outbox_before_reply_and_replays_after_rest
         .await
         .unwrap();
     assert_eq!(events.events.len(), 2);
-    assert_eq!(events.events[1].payload, state.transactions[0]);
+    assert_eq!(
+        events.events[1].payload,
+        StationEvent::Transaction(state.transactions[0].clone())
+    );
+    let invalidations = store
+        .read_retained_events(RetainedEventQuery {
+            resource: state.station.clone(),
+            after: None,
+            limit: PageLimit::new(100).unwrap(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(invalidations.events.len(), 2);
+    assert_eq!(
+        invalidations.events[1].payload,
+        StationEvent::StationSnapshot(state.clone())
+    );
     assert_eq!(
         store
             .recover(RecoveryQuery {
@@ -104,13 +132,6 @@ async fn lifecycle_commits_events_and_outbox_before_reply_and_replays_after_rest
             .len(),
         2
     );
-    store.shutdown(Duration::from_secs(2)).await.unwrap();
-    drop(store);
-    let store = db.open();
-    let mut recovered = persisted(&store).await;
-    assert!(call(&store, &auth, &mut recovered, STOP, 3).await.is_ok());
-    assert_eq!(recovered, before);
-    assert_eq!(store.reserve_transaction_id().await.unwrap(), 2);
 }
 
 #[tokio::test]

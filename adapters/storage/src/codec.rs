@@ -4,12 +4,18 @@ use uob_application::{
     AcknowledgementScope, AtomicStoreWrite, AuthorizationChange, AuthorizationReference,
     AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommittedRecord,
     CommittedRecordId, DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, DeliveryOutcome,
-    Durability, OPERATIONAL_HISTORY_RETENTION_SECONDS, PendingDelivery, RecordedDeliveryAttempt,
-    StorageError, StorageErrorCode, StorageWritePurpose,
+    PendingDelivery, RecordedDeliveryAttempt, StorageError, StorageErrorCode, StorageWritePurpose,
 };
 use uob_contracts::{
     Command, CommandLifecycle, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot,
     TargetInstanceId,
+};
+
+#[path = "codec_helpers.rs"]
+mod helpers;
+use helpers::{
+    corrupt, decode_durability, durability, durability_or_state, from_json, integrity, json,
+    retention_boundary, signed, unsigned,
 };
 
 #[derive(Debug)]
@@ -118,7 +124,8 @@ where
     });
     let snapshot = write
         .station_snapshot
-        .map(|value| Ok((json(&value.station)?, json(&value)?)))
+        .as_ref()
+        .map(helpers::encode_snapshot)
         .transpose()?;
     let authorization = write
         .authorization_changes
@@ -157,7 +164,7 @@ where
             let retain_until = retention_boundary(value.observed_at)?;
             Ok(EncodedEvent {
                 event_id: value.event_id.as_str().to_owned(),
-                resource: json(&value.resource)?,
+                resource: crate::snapshots::event_stream_key(&value.resource)?,
                 sequence: unsigned(value.sequence, "event sequence")?,
                 payload: json(&value)?,
                 retain_until,
@@ -425,73 +432,4 @@ pub(crate) fn resource_key(value: &ResourceRef) -> Result<String, StorageError> 
 
 pub(crate) fn timestamp_key(value: &uob_contracts::UtcTimestamp) -> Result<String, StorageError> {
     json(value)
-}
-
-fn json<T: Serialize>(value: &T) -> Result<String, StorageError> {
-    serde_json::to_string(value).map_err(|_| {
-        StorageError::new(
-            StorageErrorCode::InvalidRequest,
-            "record serialization failed",
-        )
-    })
-}
-
-fn from_json<T: DeserializeOwned>(value: &str) -> Result<T, StorageError> {
-    serde_json::from_str(value).map_err(|_| corrupt("committed record failed typed decoding"))
-}
-
-fn unsigned(value: u64, label: &str) -> Result<i64, StorageError> {
-    i64::try_from(value).map_err(|_| {
-        StorageError::new(
-            StorageErrorCode::InvalidRequest,
-            format!("{label} exceeds SQLite integer range"),
-        )
-    })
-}
-
-fn signed(value: i64, label: &str) -> Result<u64, StorageError> {
-    u64::try_from(value).map_err(|_| corrupt(&format!("negative {label}")))
-}
-
-fn retention_boundary(value: uob_contracts::UtcTimestamp) -> Result<i64, StorageError> {
-    value
-        .into_inner()
-        .unix_timestamp()
-        .checked_add(OPERATIONAL_HISTORY_RETENTION_SECONDS)
-        .ok_or_else(|| {
-            StorageError::new(
-                StorageErrorCode::InvalidRequest,
-                "operational retention timestamp exceeds supported range",
-            )
-        })
-}
-
-const fn durability(value: Durability) -> i64 {
-    match value {
-        Durability::Critical => 0,
-        Durability::BestEffortTelemetry => 1,
-    }
-}
-
-const fn durability_or_state(value: AuthorizationState) -> i64 {
-    match value {
-        AuthorizationState::Active => 0,
-        AuthorizationState::Revoked => 1,
-    }
-}
-
-fn decode_durability(value: i64) -> Result<Durability, StorageError> {
-    match value {
-        0 => Ok(Durability::Critical),
-        1 => Ok(Durability::BestEffortTelemetry),
-        _ => Err(corrupt("unknown durability value")),
-    }
-}
-
-fn corrupt(detail: &str) -> StorageError {
-    StorageError::new(StorageErrorCode::IntegrityFailure, detail)
-}
-
-fn integrity(error: impl std::fmt::Display) -> StorageError {
-    corrupt(&error.to_string())
 }

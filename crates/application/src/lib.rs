@@ -72,10 +72,10 @@ pub use payment::{
     PaymentProviderId, PaymentVerificationReference, SensitivePaymentData, VerifiedPaymentEvent,
 };
 pub use protocol::{
-    ChargerObservation, MeasurementApplyError, MeasurementObservation, RegistrationObservation,
-    TransactionApplyError, TransactionApplyOutcome, TransactionEventKind,
+    ChargerObservation, MeasurementApplyError, MeasurementObservation, ObservationCommitError,
+    RegistrationObservation, TransactionApplyError, TransactionApplyOutcome, TransactionEventKind,
     TransactionEventObservation, TransactionStartObservation, apply_measurements,
-    apply_transaction_event,
+    apply_transaction_event, record_measurements, record_transaction_event,
 };
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,
@@ -117,6 +117,7 @@ pub use target::{
     TargetRuntimeLimits, TargetShutdown, TargetSubscription, TargetTask,
     ValidatedTargetConfiguration,
 };
+pub use uob_contracts::StationEvent;
 
 use uob_contracts::{ContractVersion, RuntimeIdentity, ServiceIdentity};
 

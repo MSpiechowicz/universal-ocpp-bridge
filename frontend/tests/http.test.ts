@@ -87,3 +87,33 @@ test('every mutation requires this destination and rechecks identity before send
   assert.equal(controls, 0);
   other.close();
 });
+
+test('pagination uses opaque cursor without changing authority and rejects inconsistent station detail', async () => {
+  const seen: string[] = [];
+  const snapshot = { schema_version: { major: 1, revision: 0 }, station: { bridge_id: 'bridge-a', station_id: 's / 1' },
+    observed_at: '2026-09-24T10:00:00Z', connectivity: { status: 'disconnected' },
+    capabilities: { operations: [], optional: [], protocol_details: [] }, resources: [], transactions: [], current_values: [] };
+  const api = new ApiClient(origin, identity, 'read-fixture', async url => {
+    seen.push(String(url));
+    if (String(url).endsWith('/identity')) return Response.json(identity);
+    if (String(url).includes('/stations?')) return Response.json({ items: [snapshot], next_cursor: 'opaque+/==' });
+    return Response.json({ ...snapshot, station: { ...snapshot.station, station_id: 'different' } });
+  });
+  assert.equal((await api.stations()).next_cursor, 'opaque+/==');
+  await api.stations('opaque+/==');
+  assert.equal(new URL(seen.find(url => url.includes('after='))!).searchParams.get('after'), 'opaque+/==');
+  await assert.rejects(api.station('s / 1'), (error: ApiError) => error.kind === 'identity');
+  api.close();
+});
+
+test('station JSON preserves full i64/u64 integer lexemes without rounding other fields', async () => {
+  const raw = JSON.stringify({ schema_version: { major: 1, revision: 0 }, station: { bridge_id: 'bridge-a', station_id: 's1' },
+    observed_at: '2026-09-24T10:00:00Z', connectivity: { status: 'disconnected' },
+    capabilities: { operations: [], optional: [], protocol_details: [] }, resources: [], transactions: [],
+    current_values: [{ point_id: 'energy', value: { type: 'unsigned_integer', value: 'VALUE' }, observed_at: '2026-09-24T10:00:00Z',
+      quality: { level: 'good' }, freshness: { status: 'fresh' } }] }).replace('"VALUE"', '18446744073709551615');
+  const api = new ApiClient(origin, identity, 'read-fixture', async url =>
+    String(url).endsWith('/identity') ? Response.json(identity) : new Response(raw, { headers: { 'content-type': 'application/json' } }));
+  assert.equal((await api.station('s1')).current_values[0].value?.value, '18446744073709551615');
+  api.close();
+});

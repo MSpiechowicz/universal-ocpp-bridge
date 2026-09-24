@@ -19,7 +19,7 @@ use crate::{
     },
     command,
     configuration::unavailable,
-    delivery, recovery, retention,
+    delivery, recovery, retention, snapshots,
 };
 
 pub(crate) enum Request<C, E, D, R> {
@@ -30,8 +30,16 @@ pub(crate) enum Request<C, E, D, R> {
     ),
     Probe(Reply<()>),
     TransactionId(Reply<i32>),
+    EventSequence(Reply<u64>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
     Snapshots(
+        Option<String>,
+        usize,
+        Reply<Page<StationSnapshot, SnapshotCursor>>,
+    ),
+    StationSnapshot(String, Reply<Option<StationSnapshot>>),
+    ScopedSnapshots(
+        String,
         Option<String>,
         usize,
         Reply<Page<StationSnapshot, SnapshotCursor>>,
@@ -73,6 +81,9 @@ pub(crate) fn run<C, E, D, R>(
             Request::TransactionId(reply) => respond(reply, connection.query_row(
                 "UPDATE transaction_id_counter SET value = value + 1 WHERE id = 1 AND value < 2147483647 RETURNING value",
                 [], |row| row.get(0)).map_err(unavailable)),
+            Request::EventSequence(reply) => respond(reply, connection.query_row(
+                "UPDATE event_sequence_counter SET value = value + 1 WHERE id = 1 AND value < 9223372036854775807 RETURNING value",
+                [], |row| row.get::<_, i64>(0)).map_err(unavailable).map(i64::cast_unsigned)),
             Request::RemoteControl(operation, reply) => {
                 let guard = match &operation {
                     crate::remote_control::Operation::Read(_) => Ok(()),
@@ -93,7 +104,13 @@ pub(crate) fn run<C, E, D, R>(
                 drain.check_write(&write).and_then(|()| drain.changed()).and_then(|()| write_atomic(&mut connection, retention_policy, write)),
             ),
             Request::Snapshots(after, limit, reply) => {
-                respond(reply, read_snapshots(&connection, after, limit));
+                respond(reply, snapshots::read(&connection, after, limit));
+            }
+            Request::StationSnapshot(key, reply) => {
+                respond(reply, snapshots::exact(&connection, &key));
+            }
+            Request::ScopedSnapshots(keys, after, limit, reply) => {
+                respond(reply, snapshots::scoped(&connection, &keys, after, limit));
             }
             Request::Events(resource, after, limit, reply) => {
                 respond(reply, read_events(&connection, &resource, after, limit));
@@ -179,6 +196,14 @@ fn write_atomic(
             .execute(
                 "UPDATE commands SET unresolved = ?2 WHERE request_id = ?1",
                 params![result.request_id, i64::from(result.unresolved)],
+            )
+            .map_err(unavailable)?;
+    }
+    if let Some(sequence) = write.events.iter().map(|event| event.sequence).max() {
+        transaction
+            .execute(
+                "UPDATE event_sequence_counter SET value = MAX(value, ?1) WHERE id = 1",
+                [sequence],
             )
             .map_err(unavailable)?;
     }
@@ -289,41 +314,6 @@ fn write_record(transaction: &Transaction<'_>, value: &EncodedRecord) -> Result<
         )
         .map(|_| ())
         .map_err(unavailable)
-}
-
-fn read_snapshots(
-    connection: &Connection,
-    after: Option<String>,
-    limit: usize,
-) -> Result<Page<StationSnapshot, SnapshotCursor>, StorageError> {
-    let after = after.unwrap_or_default();
-    let mut statement = connection
-        .prepare(
-            "SELECT station_key, payload FROM station_snapshots\n\
-             WHERE station_key > ?1 ORDER BY station_key LIMIT ?2",
-        )
-        .map_err(unavailable)?;
-    let rows = statement
-        .query_map(params![after, limit_plus_one(limit)?], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(unavailable)?;
-    let mut values = collect_rows(rows)?;
-    let has_more = values.len() > limit;
-    values.truncate(limit);
-    let next_cursor = has_more
-        .then(|| {
-            values
-                .last()
-                .map(|value| SnapshotCursor::new(value.0.clone()))
-        })
-        .flatten()
-        .transpose()?;
-    let items = values
-        .into_iter()
-        .map(|(_, payload)| codec::decode_snapshot(&payload))
-        .collect::<Result<_, _>>()?;
-    Ok(Page { items, next_cursor })
 }
 
 fn read_events<E: DeserializeOwned>(

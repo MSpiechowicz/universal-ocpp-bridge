@@ -3,7 +3,10 @@ use std::fmt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
-use crate::{ContractVersion, Environment, ResourceRef, RuntimeIdentity, UtcTimestamp};
+use crate::{
+    ContractVersion, Environment, ResourceRef, RuntimeIdentity, StationId, StationSnapshot,
+    TransactionSnapshot, UtcTimestamp,
+};
 
 macro_rules! event_id {
     ($name:ident, $description:literal) => {
@@ -120,6 +123,32 @@ pub struct EventEnvelope<T> {
     pub provenance: Option<EventProvenance>,
     /// Statically typed event data; raw target payloads are not part of the envelope.
     pub payload: T,
+}
+
+/// Station journal payload. Untagged encoding keeps previously persisted snapshot and
+/// transaction event JSON readable without changing event envelope wire schemas.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum StationEvent {
+    StationSnapshot(StationSnapshot),
+    Transaction(TransactionSnapshot),
+    /// Small, explicitly incomplete station change marker. Fetch the authoritative snapshot.
+    Invalidation {
+        /// Station whose authoritative snapshot changed.
+        station_snapshot_invalidated: StationId,
+    },
+}
+
+impl From<StationSnapshot> for StationEvent {
+    fn from(snapshot: StationSnapshot) -> Self {
+        Self::StationSnapshot(snapshot)
+    }
+}
+
+impl From<TransactionSnapshot> for StationEvent {
+    fn from(transaction: TransactionSnapshot) -> Self {
+        Self::Transaction(transaction)
+    }
 }
 
 impl<T> EventEnvelope<T> {
