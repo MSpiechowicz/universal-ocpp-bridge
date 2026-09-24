@@ -48,6 +48,13 @@ expect_event = "transaction_started"
 payload = { connectorId = 1, idTag = "LOCAL-USER-1", meterStart = 1000, timestamp = "2026-09-01T00:00:02Z" }
 
 [[steps]]
+id = "ready-for-stop-16"
+station = "station-a"
+action = "heartbeat"
+timeout_ms = 5000
+expect_event = "heartbeat_result"
+
+[[steps]]
 id = "remote-stop-16"
 station = "station-a"
 action = "await_remote_stop"
@@ -110,6 +117,13 @@ expect_message = "TransactionEvent"
 expect_event = "transaction_started"
 payload = { eventType = "Started", timestamp = "2026-09-01T00:00:02Z", triggerReason = "Authorized", seqNo = 0, transactionInfo = { transactionId = "tx-201-87", chargingState = "EVConnected" }, evse = { id = 1, connectorId = 1 }, idToken = { idToken = "LOCAL-USER-1", type = "Central" } }
 expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "ready-for-stop-201"
+station = "station-b"
+action = "heartbeat"
+timeout_ms = 5000
+expect_event = "heartbeat_result"
 
 [[steps]]
 id = "remote-stop-201"

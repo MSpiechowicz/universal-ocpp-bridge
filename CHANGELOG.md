@@ -44,6 +44,11 @@ All notable changes to this project will be documented in this file. See [conven
   Disposable PostgreSQL acceptance checks cover data preservation, identity conflicts, and
   privilege/upgrade safety.
 
+### Tests
+- Stabilize the test-only EMS HTTP/SSE acceptance fixture for both OCPP protocols:
+  establish post-start charger readiness before remote stop and preserve second-session
+  event sequencing.
+
 ### Security
 
 - Update the workspace rustls pin from 0.23.43 to 0.23.45 to reject TLS 1.3 handshake

@@ -148,6 +148,11 @@ transaction processing. The replay/correlation subscription uses the observed tr
 All requests and stream frames are bounded, redirects are disabled, and status/recovery links
 must remain same-origin and free of URL credentials. Diagnostics omit bearer tokens.
 
+The test-only acceptance fixture sequences a charger Heartbeat after each start
+transaction and before testing remote stop, establishing charger-side readiness
+for both protocols. The external client still independently checks HTTP admission,
+protocol acceptance, and observed transaction effects.
+
 The test asserts both simulator-side remote-command acceptance and later native transaction
 start/stop observations. `202` is only durable admission; a pending transaction reports station
 observation, not proof of electrical power flow. Independently, committed outbox deliveries

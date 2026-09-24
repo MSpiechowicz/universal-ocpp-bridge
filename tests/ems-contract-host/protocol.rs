@@ -1,23 +1,24 @@
 use super::{STATION_SECRET, proxy, query::Store};
 use serde_json::{Value, json};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, RwLock},
-    time::Duration,
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use tokio::{
+    net::TcpListener,
+    sync::{RwLock, watch},
+    task::JoinHandle,
 };
-use tokio::{net::TcpListener, task::JoinHandle};
 use uob_application::charging_identity::{
     ChargingIdentityProvider, ChargingIdentityResolution, ChargingTokenKind,
     PresentedChargingIdentity,
 };
 use uob_application::{
-    Application, AuthorizationChange, AuthorizationProvider, AuthorizationState, CommandClock,
-    CommandCoordinator, CommandDispatchOutcome, LocalAuthorizationService, PageLimit,
-    SensitiveAuthorizationToken, StationCommandContext, StationCommandError, StationCommandFuture,
-    StationCommandPort, StationEvent, registration::RegistrationDecision,
+    Application, AuthorizationChange, AuthorizationProvider, AuthorizationState,
+    ChargerObservation, CommandClock, CommandCoordinator, CommandDispatchOutcome,
+    LocalAuthorizationService, PageLimit, SensitiveAuthorizationToken, StationCommandContext,
+    StationCommandError, StationCommandFuture, StationCommandPort, StationEvent,
+    TransactionEventKind, registration::RegistrationDecision,
 };
 use uob_contracts::{
-    ArtifactDigest, AvailabilityState, BridgeId, CanonicalResource, Environment,
+    ArtifactDigest, AvailabilityState, BridgeId, CanonicalResource, CommandOperation, Environment,
     NativeProtocolReference, Operation, ProcessInstanceId, ProtocolEdition, ReleaseId, ResourceRef,
     RuntimeIdentity, ServiceIdentity, StationId, StationSnapshot, SupportedOperation,
     TargetInstanceId, TransactionSnapshot, UtcTimestamp,
@@ -161,7 +162,12 @@ struct StationContext {
     auth: Arc<Auth>,
     sessions: Arc<Sessions>,
 }
-struct Sessions(RwLock<BTreeMap<String, Arc<Port>>>);
+#[derive(Clone)]
+struct StationSession {
+    port: Arc<Port>,
+    stop_ready: watch::Receiver<bool>,
+}
+struct Sessions(RwLock<BTreeMap<String, StationSession>>);
 impl StationCommandPort<Value> for Sessions {
     fn context(
         &self,
@@ -171,11 +177,11 @@ impl StationCommandPort<Value> for Sessions {
             let session = self
                 .0
                 .read()
-                .map_err(|_| StationCommandError::new("station lock"))?
+                .await
                 .get(resource.station_id.as_str())
                 .cloned();
             if let Some(session) = session {
-                session.context(resource).await
+                session.port.context(resource).await
             } else {
                 Ok(None)
             }
@@ -189,12 +195,23 @@ impl StationCommandPort<Value> for Sessions {
             let session = self
                 .0
                 .read()
-                .map_err(|_| StationCommandError::new("station lock"))?
+                .await
                 .get(command.resource.station_id.as_str())
                 .cloned();
-            let session =
+            let mut session =
                 session.ok_or_else(|| StationCommandError::new("station disconnected"))?;
-            session.dispatch(command).await
+            if matches!(&command.operation, CommandOperation::Stop { .. }) {
+                // The store commits the start before the charger receives its response.
+                // Its next Heartbeat is sent only after the simulator records that response.
+                while !*session.stop_ready.borrow_and_update() {
+                    session
+                        .stop_ready
+                        .changed()
+                        .await
+                        .map_err(|_| StationCommandError::new("station disconnected"))?;
+                }
+            }
+            session.port.dispatch(command).await
         })
     }
 }
@@ -301,16 +318,27 @@ async fn run_station(
         Control::V16(port) => port.clone(),
         Control::V201(port) => port.clone(),
     };
-    context
-        .sessions
-        .0
-        .write()
-        .unwrap()
-        .insert(station.clone(), command_port);
+    let (stop_ready, receiver) = watch::channel(false);
+    context.sessions.0.write().await.insert(
+        station.clone(),
+        StationSession {
+            port: command_port,
+            stop_ready: receiver,
+        },
+    );
     let mut sequence = 0;
     while let Some(incoming) = outputs.incoming.receive().await {
         sequence += 1;
         let action = incoming.call.action.as_str().to_owned();
+        let started = action == "StartTransaction"
+            || matches!(
+                &incoming.call.observation,
+                ChargerObservation::TransactionEvent(observation)
+                    if observation.event == TransactionEventKind::Started
+            );
+        if started {
+            stop_ready.send_replace(false);
+        }
         if matches!(
             action.as_str(),
             "BootNotification" | "StatusNotification" | "Heartbeat"
@@ -349,8 +377,11 @@ async fn run_station(
             Control::V16(port) => port.update_committed(snapshot.clone()).unwrap(),
             Control::V201(port) => port.update_committed(snapshot.clone()).unwrap(),
         }
+        if action == "Heartbeat" {
+            stop_ready.send_replace(true);
+        }
     }
-    context.sessions.0.write().unwrap().remove(&station);
+    context.sessions.0.write().await.remove(&station);
     let _ = task.shutdown(Duration::from_secs(2)).await;
 }
 
