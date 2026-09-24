@@ -188,7 +188,7 @@ async fn access_checks(
 
 async fn charging_commands(
     http: &Http,
-    station: &str,
+    (station, station_index): (&str, usize),
     station_path: &str,
     operator: &str,
     resource: &Value,
@@ -200,8 +200,14 @@ async fn charging_commands(
     let mut deduplicated = true;
     let mut admission_http_status = 0;
     let mut observed_transaction: Option<Value> = None;
+    // Log only known fixture labels; configured station IDs can contain arbitrary text.
+    let station_label = match station {
+        "station-a" => "station-a",
+        "station-b" => "station-b",
+        _ => "other",
+    };
     for kind in ["start", "stop"] {
-        let request_id = format!("http-{invocation_id}-{kind}-{station}");
+        let request_id = format!("http-{invocation_id}-{kind}-{station_index}");
         let parameters = if kind == "start" {
             json!({"authorization_reference":authorization_reference})
         } else {
@@ -218,9 +224,15 @@ async fn charging_commands(
         }
         let status_url = text(&admitted, "status_url")?;
         let (retry_status, retry) = command(http, operator, &payload).await?;
-        deduplicated &= retry_status == 202
-            && retry["request_id"] == request_id
-            && retry["status_url"] == admitted["status_url"];
+        let retry_request_id_matches = retry["request_id"] == request_id;
+        let retry_status_url_matches = retry["status_url"] == admitted["status_url"];
+        deduplicated = retry_status == 202 && retry_request_id_matches && retry_status_url_matches;
+        if !deduplicated {
+            eprintln!(
+                "command mismatch: station={station_label} station_index={station_index} operation={kind} request_id={request_id} retry_http_status={retry_status} retry_request_id_matches={retry_request_id_matches} retry_status_url_matches={retry_status_url_matches} deduplicated={deduplicated}"
+            );
+            return Err(Error("command and station outcome mismatch"));
+        }
         let mut conflicting = payload.clone();
         if kind == "start" {
             conflicting["operation"]["parameters"]["authorization_reference"] = json!("different");
@@ -233,7 +245,13 @@ async fn charging_commands(
             return Err(Error("conflicting duplicate admitted"));
         }
         let status_url = status_url.to_owned();
-        protocol_accepted &= accepted_status(http, &status_url, operator, &request_id).await?;
+        protocol_accepted = accepted_status(http, &status_url, operator, &request_id).await?;
+        if !protocol_accepted {
+            eprintln!(
+                "command mismatch: station={station_label} station_index={station_index} operation={kind} request_id={request_id} protocol_stage=protocol_response protocol_accepted={protocol_accepted}"
+            );
+            return Err(Error("command and station outcome mismatch"));
+        }
         let transaction_id = observed_transaction
             .as_ref()
             .and_then(|tx| tx["transaction_id"].as_str());
@@ -331,7 +349,7 @@ async fn run_operation(
         .find(|scenario| scenario.reader_out_of_scope)
         .and_then(|scenario| scenario.command_station.as_deref())
         .ok_or(Error("out-of-scope station missing"))?;
-    for scenario in &demo.scenario {
+    for (station_index, scenario) in demo.scenario.iter().enumerate() {
         let Some(station) = scenario.command_station.as_deref() else {
             continue;
         };
@@ -371,7 +389,7 @@ async fn run_operation(
         }
         let (commands, transaction) = charging_commands(
             &http,
-            station,
+            (station, station_index),
             &station_path,
             operator,
             &resource,

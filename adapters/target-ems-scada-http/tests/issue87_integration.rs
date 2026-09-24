@@ -56,14 +56,40 @@ connectors = [1]
 }
 
 fn repeat_scenario(mut scenario: ScenarioDefinition, first: &RunReport) -> ScenarioDefinition {
-    // The host's event fixture IDs are per station-session sequence numbers. Two
-    // heartbeats advance the second session beyond the first run's journal IDs.
+    // Station event IDs use call sequence numbers. Advance the next start past
+    // every call from the first start through the first stop, including heartbeats.
     for station in ["16", "201"] {
         let boot = scenario
             .steps
             .iter()
             .position(|step| step.id == format!("boot-{station}"))
             .unwrap();
+        let start = scenario
+            .steps
+            .iter()
+            .position(|step| step.id == format!("transaction-start-{station}"))
+            .unwrap();
+        let stop_index = scenario
+            .steps
+            .iter()
+            .position(|step| step.id == format!("transaction-stop-{station}"))
+            .unwrap();
+        let calls_after_start = scenario.steps[start + 1..=stop_index]
+            .iter()
+            .filter(|step| {
+                step.station == scenario.steps[boot].station
+                    && matches!(
+                        step.action,
+                        ActionKind::Boot
+                            | ActionKind::Authorize
+                            | ActionKind::Status
+                            | ActionKind::StartTransaction
+                            | ActionKind::MeterValues
+                            | ActionKind::StopTransaction
+                            | ActionKind::Heartbeat
+                    )
+            })
+            .count();
         let mut heartbeat = scenario.steps[boot].clone();
         heartbeat.action = ActionKind::Heartbeat;
         heartbeat.payload = None;
@@ -72,10 +98,10 @@ fn repeat_scenario(mut scenario: ScenarioDefinition, first: &RunReport) -> Scena
         heartbeat.expect_response = None;
         heartbeat.expect_detail = None;
         heartbeat.expect_event = Some("heartbeat_result".to_owned());
-        for index in 0..2 {
-            let mut step = heartbeat.clone();
-            step.id = format!("repeat-heartbeat-{station}-{index}");
-            scenario.steps.insert(boot + 1 + index, step);
+        for index in 0..=calls_after_start {
+            let mut repeated_heartbeat = heartbeat.clone();
+            repeated_heartbeat.id = format!("repeat-heartbeat-{station}-{index}");
+            scenario.steps.insert(boot + 1 + index, repeated_heartbeat);
         }
     }
 
@@ -169,7 +195,10 @@ async fn run_exercise_session(
         "simulator failed: {:?}",
         report.failure
     );
-    for station in ["station-a", "station-b"] {
+    for (station, readiness_step) in [
+        ("station-a", "ready-for-stop-16"),
+        ("station-b", "ready-for-stop-201"),
+    ] {
         for action in [
             "await_remote_start",
             "start_transaction",
@@ -187,6 +216,15 @@ async fn run_exercise_session(
                 report.events
             );
         }
+        assert!(
+            report
+                .events
+                .iter()
+                .any(|e| e.station_id.as_deref() == Some(station)
+                    && e.event == "step_passed"
+                    && e.step_id.as_deref() == Some(readiness_step)),
+            "{station} did not acknowledge readiness after transaction start"
+        );
         for action in ["await_remote_start", "await_remote_stop"] {
             assert!(
                 report
@@ -248,8 +286,9 @@ async fn assert_example(base: &str) {
     );
     assert!(
         output.status.success(),
-        "example: {}",
-        String::from_utf8_lossy(&output.stdout)
+        "example stdout: {}; stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(result["status"], "passed");
