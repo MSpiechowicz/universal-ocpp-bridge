@@ -1,6 +1,8 @@
-use crate::{ManagementRouterOptions, router_with_options};
-use std::{future::Future, io, net::SocketAddr};
-use uob_application::Application;
+use crate::{ManagementRouterOptions, router_with_authenticated_events, router_with_options};
+use axum::Router;
+use serde_json::Value;
+use std::{future::Future, io, net::SocketAddr, sync::Arc};
+use uob_application::{Application, CanonicalQuerySource};
 
 /// Binds and serves the management adapter.
 ///
@@ -77,6 +79,67 @@ pub async fn serve_with_capture_and_release_readiness(
     shutdown: impl Future<Output = ()> + Send + 'static,
     ready: impl FnOnce() -> io::Result<()>,
 ) -> io::Result<()> {
+    let identity = application.identity().clone();
+    let router = router_with_options(application, options);
+    serve_configured_router(
+        address,
+        identity,
+        router,
+        capture,
+        release_read,
+        shutdown,
+        ready,
+    )
+    .await
+}
+
+/// Serves bearer-authenticated canonical reads and events alongside the existing capture and
+/// release-read routes, using the same listener and readiness policy as the unconfigured host.
+///
+/// # Errors
+/// Returns an I/O error for unsafe binding, readiness failure, or listener failure.
+#[allow(clippy::too_many_arguments)]
+pub async fn serve_with_authenticated_events_and_capture_and_release_readiness(
+    address: SocketAddr,
+    application: Application,
+    source: Arc<dyn CanonicalQuerySource<Value>>,
+    read_limits: crate::ManagementReadLimits,
+    event_configuration: crate::ManagementEventConfiguration,
+    options: ManagementRouterOptions,
+    capture: Option<crate::ManagementCaptureConfiguration>,
+    release_read: Option<crate::ManagementReleaseReadConfiguration>,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+    ready: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    let identity = application.identity().clone();
+    let router = router_with_authenticated_events(
+        application,
+        source,
+        read_limits,
+        event_configuration,
+        options,
+    );
+    serve_configured_router(
+        address,
+        identity,
+        router,
+        capture,
+        release_read,
+        shutdown,
+        ready,
+    )
+    .await
+}
+
+async fn serve_configured_router(
+    address: SocketAddr,
+    identity: uob_contracts::ServiceIdentity,
+    mut router: Router,
+    capture: Option<crate::ManagementCaptureConfiguration>,
+    release_read: Option<crate::ManagementReleaseReadConfiguration>,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+    ready: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
     if !address.ip().is_loopback() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -84,8 +147,6 @@ pub async fn serve_with_capture_and_release_readiness(
         ));
     }
     let listener = tokio::net::TcpListener::bind(address).await?;
-    let identity = application.identity().clone();
-    let mut router = router_with_options(application, options);
     if let Some(capture) = capture {
         router = router.merge(crate::capture_router(identity, capture));
     }

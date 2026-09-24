@@ -8,6 +8,8 @@ use uob_contracts::{ProtocolEdition, StationId};
 
 use crate::protocol_for_subprotocol;
 
+#[path = "security_demo.rs"]
+mod demo;
 mod tls;
 
 pub use tls::{
@@ -301,6 +303,7 @@ pub struct ResolvedStationCredential {
 struct RuntimeStation {
     registration: StationRegistration,
     credential: StationCredential,
+    expected_protocol: Option<ProtocolEdition>,
 }
 
 /// Complete immutable station allowlist used before allocating station runtime state.
@@ -363,6 +366,7 @@ impl StationAuthenticator {
                 RuntimeStation {
                     registration,
                     credential,
+                    expected_protocol: None,
                 },
             );
         }
@@ -387,6 +391,12 @@ impl StationAuthenticator {
             .stations
             .get(request.station_id)
             .ok_or(StationTransportAdmissionError::UnknownStation)?;
+        if station
+            .expected_protocol
+            .is_some_and(|expected| expected != protocol)
+        {
+            return Err(StationTransportAdmissionError::UnsupportedProtocol);
+        }
         let presented = request
             .credential
             .ok_or(StationTransportAdmissionError::MissingCredential)?;

@@ -1,17 +1,19 @@
 import { defineConfig } from '@playwright/test';
 
+const live = process.env.UOB_LIVE_BROWSER === '1';
 export default defineConfig({
   testDir: './tests',
-  testMatch: '*.browser.ts',
+  testMatch: live ? 'live-daemon.browser.ts' : '*.browser.ts',
+  testIgnore: live ? [] : ['live-daemon.browser.ts'],
   workers: 1,
-  timeout: 30000,
+  timeout: live ? 120000 : 30000,
   use: {
     baseURL: 'http://127.0.0.1:39189',
     viewport: { width: 1280, height: 900 },
     trace: 'off',
     launchOptions: process.env.UOB_BROWSER_EXECUTABLE ? { executablePath: process.env.UOB_BROWSER_EXECUTABLE } : {},
   },
-  webServer: [...[39189, 39190, 39191, 39192].map(port => ({
+  webServer: live ? [] : [...[39189, 39190, 39191, 39192].map(port => ({
     command: 'cargo run --locked -p uob-management-adapter --example browser_fixture',
     cwd: '..',
     env: { UOB_BROWSER_TEST_PORT: String(port) },

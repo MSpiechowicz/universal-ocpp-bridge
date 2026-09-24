@@ -4,7 +4,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use uob_contracts::{BridgeId, CanonicalResource, ResourceRef, StationId, TargetInstanceId};
+use uob_contracts::{
+    BridgeId, CanonicalResource, NativeProtocolReference, ResourceRef, StationId, TargetInstanceId,
+};
 
 use crate::{
     RetainedEventItem, RetainedEventQuery, TargetPortError, TargetPortErrorCode, TargetPortFuture,
@@ -93,6 +95,41 @@ impl TargetQueryAuthorization {
         self.resource_scopes
             .iter()
             .any(|scope| scope.allows(resource))
+    }
+
+    /// Station-only grants for SQL-filtered inventory reads. Child-resource grants
+    /// never authorize a station snapshot containing unrelated sibling resources.
+    pub fn station_resources(&self) -> impl Iterator<Item = ResourceRef> + '_ {
+        self.resource_scopes.iter().filter_map(|scope| match scope {
+            TargetResourceScope::Station {
+                bridge_id,
+                station_id,
+            } => Some(ResourceRef {
+                bridge_id: bridge_id.clone(),
+                station_id: station_id.clone(),
+                resource: None,
+                native_protocol_reference: None,
+            }),
+            TargetResourceScope::Resource(resource)
+                if resource.resource.is_none()
+                    && matches!(
+                        resource.native_protocol_reference,
+                        None | Some(
+                            NativeProtocolReference::Ocpp16 { connector_id: 0 }
+                                | NativeProtocolReference::Ocpp201 {
+                                    evse_id: 0,
+                                    connector_id: None,
+                                },
+                        )
+                    ) =>
+            {
+                Some(ResourceRef {
+                    native_protocol_reference: None,
+                    ..resource.clone()
+                })
+            }
+            TargetResourceScope::Resource(_) => None,
+        })
     }
 }
 

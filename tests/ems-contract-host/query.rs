@@ -7,17 +7,13 @@ use std::{
 use tokio::sync::mpsc;
 use uob_application::{
     CanonicalQuerySource, OperationalStore, Page, RetainedEventItem, RetainedEventQuery,
-    TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryAuthorization,
-    TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
+    StationEvent, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
+    TargetQueryAuthorization, TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
 };
 use uob_contracts::{ResourceRef, StationSnapshot, TransactionSnapshot};
 
-pub type Store = uob_storage_adapter::SqliteOperationalStore<
-    Value,
-    TransactionSnapshot,
-    TransactionSnapshot,
-    String,
->;
+pub type Store =
+    uob_storage_adapter::SqliteOperationalStore<Value, StationEvent, TransactionSnapshot, String>;
 
 pub struct Source(pub Store);
 fn error(_: uob_application::StorageError) -> TargetPortError {
@@ -38,35 +34,31 @@ async fn snapshot(
     store: &Store,
     resource: &ResourceRef,
 ) -> Result<Option<StationSnapshot>, TargetPortError> {
-    let page = store
-        .read_snapshots(uob_application::SnapshotQuery {
-            after: None,
-            limit: uob_application::PageLimit::new(100).unwrap(),
-        })
-        .await
-        .map_err(error)?;
-    Ok(page.items.into_iter().find(|snapshot| {
-        snapshot.station.bridge_id == resource.bridge_id
-            && snapshot.station.station_id == resource.station_id
-    }))
+    let station = ResourceRef {
+        bridge_id: resource.bridge_id.clone(),
+        station_id: resource.station_id.clone(),
+        resource: None,
+        native_protocol_reference: None,
+    };
+    store.station_snapshot(station).await.map_err(error)
 }
-impl CanonicalQuerySource<TransactionSnapshot> for Source {
+impl CanonicalQuerySource<StationEvent> for Source {
     fn query<'a>(
         &'a self,
         authorization: &'a TargetQueryAuthorization,
         query: TargetQuery,
-    ) -> TargetPortFuture<'a, TargetQueryResult<TransactionSnapshot>> {
+    ) -> TargetPortFuture<'a, TargetQueryResult<StationEvent>> {
         Box::pin(async move {
             Ok(match query {
                 TargetQuery::StationSnapshot(resource) => {
                     TargetQueryResult::StationSnapshot(snapshot(&self.0, &resource).await?)
                 }
-                TargetQuery::StationSnapshots(query) => {
-                    let mut page = self.0.read_snapshots(query).await.map_err(error)?;
-                    page.items
-                        .retain(|item| authorization.permits_resource(&item.station));
-                    TargetQueryResult::StationSnapshots(page)
-                }
+                TargetQuery::StationSnapshots(query) => TargetQueryResult::StationSnapshots(
+                    self.0
+                        .read_scoped_snapshots(query, authorization.station_resources().collect())
+                        .await
+                        .map_err(error)?,
+                ),
                 TargetQuery::CommandResult(id) => TargetQueryResult::CommandResult(
                     self.0
                         .command_result_by_request_id(id)
@@ -132,7 +124,7 @@ impl CanonicalQuerySource<TransactionSnapshot> for Source {
         &'a self,
         _authorization: &'a TargetQueryAuthorization,
         mut query: RetainedEventQuery,
-    ) -> TargetPortFuture<'a, TargetRetainedEventStream<TransactionSnapshot>> {
+    ) -> TargetPortFuture<'a, TargetRetainedEventStream<StationEvent>> {
         Box::pin(async move {
             let requested = query.resource.clone();
             if requested.resource.is_some() {
@@ -174,9 +166,7 @@ impl CanonicalQuerySource<TransactionSnapshot> for Source {
                     match page {
                         Ok(page) if !page.events.is_empty() => {
                             let cursor = page.resume_cursor.expect("event checkpoint");
-                            for mut event in page.events {
-                                // HTTP resource selectors name canonical identity, not its native address.
-                                event.resource = requested.clone();
+                            for event in page.events {
                                 if sender
                                     .send(Ok(RetainedEventItem {
                                         cursor: cursor.clone(),
@@ -211,18 +201,16 @@ impl CanonicalQuerySource<TransactionSnapshot> for Source {
                     }
                 }
             });
-            Ok(Box::pin(Subscription(receiver)) as TargetRetainedEventStream<TransactionSnapshot>)
+            Ok(Box::pin(Subscription(receiver)) as TargetRetainedEventStream<StationEvent>)
         })
     }
 }
-struct Subscription(
-    mpsc::Receiver<Result<RetainedEventItem<TransactionSnapshot>, TargetPortError>>,
-);
-impl TargetSubscription<TransactionSnapshot> for Subscription {
+struct Subscription(mpsc::Receiver<Result<RetainedEventItem<StationEvent>, TargetPortError>>);
+impl TargetSubscription<StationEvent> for Subscription {
     fn poll_event(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<RetainedEventItem<TransactionSnapshot>, TargetPortError>>> {
+    ) -> Poll<Option<Result<RetainedEventItem<StationEvent>, TargetPortError>>> {
         self.get_mut().0.poll_recv(cx)
     }
     fn capacity(&self) -> usize {

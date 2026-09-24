@@ -1,5 +1,8 @@
 use std::{io::Write, path::PathBuf};
 
+#[path = "cli_serve.rs"]
+mod serving;
+
 use crate::{configuration, event_stream, release_cli};
 
 const DEFAULT_CONFIGURATION_PATH: &str = "bridge.toml";
@@ -47,7 +50,7 @@ pub async fn execute(
         Command::Serve {
             configuration,
             no_ui,
-        } => serve(&configuration, no_ui).await,
+        } => serving::serve(&configuration, no_ui).await,
         Command::Check {
             configuration,
             secrets,
@@ -64,72 +67,6 @@ pub async fn execute(
                 failure(1, diagnostic)
             }
         },
-    }
-}
-
-async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> CliResult {
-    let configuration = match configuration::load(configuration_path) {
-        Ok(configuration) => configuration,
-        Err(error) => return failure(2, error.to_string()),
-    };
-    if let Err(error) = crate::staging_network::verify(
-        configuration
-            .service
-            .application
-            .identity()
-            .runtime
-            .environment,
-    ) {
-        return failure(1, error.to_owned());
-    }
-    let deployment = match configuration
-        .deployment
-        .as_ref()
-        .map(|layout| layout.open(configuration.service.application.identity()))
-        .transpose()
-    {
-        Ok(deployment) => deployment,
-        Err(error) => return failure(1, error.to_owned()),
-    };
-    let options = uob_management_adapter::ManagementRouterOptions {
-        static_assets: !no_ui,
-    };
-    let diagnostics = match configuration.diagnostics.resolve_with_resources(
-        configuration
-            .service
-            .application
-            .health()
-            .resources()
-            .clone(),
-    ) {
-        Ok(value) => value,
-        Err(error) => return failure(1, error.to_string()),
-    };
-    let release_read = match configuration.release_read.resolve() {
-        Ok(value) => value,
-        Err(error) => return failure(1, error.to_string()),
-    };
-    eprintln!(
-        "service listening on {} (static assets: {})",
-        configuration.management_address,
-        if no_ui { "disabled" } else { "enabled" }
-    );
-    let result = crate::lifecycle::serve(
-        configuration.management_address,
-        crate::diagnostics::instrument(
-            configuration.service.application,
-            diagnostics.manager.clone(),
-        ),
-        diagnostics,
-        release_read,
-        options,
-        configuration.shutdown_timeout,
-        deployment,
-    )
-    .await;
-    match result {
-        Ok(()) => success(),
-        Err(error) => failure(1, format!("service runtime {}", error.kind())),
     }
 }
 

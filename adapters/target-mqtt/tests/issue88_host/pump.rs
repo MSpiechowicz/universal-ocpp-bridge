@@ -10,7 +10,7 @@ use uob_application::{
     OperationalStore, PageLimit, PendingDeliveryQuery, RetainedEventQuery, SnapshotQuery,
     TargetDelivery, TargetDeliveryClass, TargetDeliveryStore, TargetMessage,
 };
-use uob_contracts::{StationSnapshot, TargetInstanceId, TransactionSnapshot, UtcTimestamp};
+use uob_contracts::{StationEvent, StationSnapshot, TargetInstanceId, UtcTimestamp};
 
 fn ready_at() -> UtcTimestamp {
     serde_json::from_str("\"2026-09-01T03:00:00Z\"").unwrap()
@@ -157,7 +157,7 @@ impl Drop for Pump {
 
 async fn dispatch_pending(
     store: &Store,
-    deliveries: &mpsc::Sender<TargetDelivery<TransactionSnapshot>>,
+    deliveries: &mpsc::Sender<TargetDelivery<StationEvent>>,
     pending: &mut BTreeSet<String>,
 ) {
     let entries = store

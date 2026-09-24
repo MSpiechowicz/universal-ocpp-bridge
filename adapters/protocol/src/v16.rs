@@ -8,7 +8,9 @@ mod transaction_input;
 mod transactions;
 pub use transactions::{TransactionServices, complete_transaction, transaction_call};
 mod registration;
-pub use registration::{complete_registration, registration_call};
+pub use registration::{
+    complete_registration, complete_registration_with_invalidation, registration_call,
+};
 
 pub use authorization::{Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call};
 

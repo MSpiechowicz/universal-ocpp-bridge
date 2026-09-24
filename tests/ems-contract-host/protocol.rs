@@ -14,7 +14,7 @@ use uob_application::{
     Application, AuthorizationChange, AuthorizationProvider, AuthorizationState, CommandClock,
     CommandCoordinator, CommandDispatchOutcome, LocalAuthorizationService, PageLimit,
     SensitiveAuthorizationToken, StationCommandContext, StationCommandError, StationCommandFuture,
-    StationCommandPort, registration::RegistrationDecision,
+    StationCommandPort, StationEvent, registration::RegistrationDecision,
 };
 use uob_contracts::{
     ArtifactDigest, AvailabilityState, BridgeId, CanonicalResource, Environment,
@@ -148,9 +148,9 @@ fn authenticator() -> StationAuthenticator {
     StationAuthenticator::new(configuration, credentials).unwrap()
 }
 
-type Auth = LocalAuthorizationService<Value, TransactionSnapshot, TransactionSnapshot, String>;
+type Auth = LocalAuthorizationService<Value, StationEvent, TransactionSnapshot, String>;
 type Port = dyn StationCommandPort<Value>;
-type Coordinator = CommandCoordinator<Value, TransactionSnapshot, TransactionSnapshot, String>;
+type Coordinator = CommandCoordinator<Value, StationEvent, TransactionSnapshot, String>;
 enum Control {
     V16(Arc<v16::remote_control::RemoteControlSession>),
     V201(Arc<v201::remote_control::RemoteControlSession>),

@@ -9,7 +9,7 @@ use uob_application::{
     ChargerObservation, OperationalStore, RegistrationObservation,
     registration::{self, RegistrationDecision, RegistrationError, v201::StatusObservation},
 };
-use uob_contracts::{StationSnapshot, UtcTimestamp};
+use uob_contracts::{EventEnvelope, StationSnapshot, UtcTimestamp};
 
 /// Processes a wire call for the authenticated station's authoritative, restored snapshot.
 /// The host serializes this with every other station mutation and supplies boot policy.
@@ -49,24 +49,87 @@ pub async fn complete_registration<
     interval_seconds: u32,
     now: UtcTimestamp,
 ) -> Result<Value, OcppCallError> {
+    complete_registration_inner(call, store, snapshot, decision, interval_seconds, now, None).await
+}
+
+/// Completes a decoded live station call with an atomic boot/heartbeat invalidation.
+/// # Errors
+/// Returns the same sanitized lifecycle errors as `complete_registration`.
+pub async fn complete_registration_with_invalidation<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    call: crate::DecodedCall,
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    decision: RegistrationDecision,
+    interval_seconds: u32,
+    now: UtcTimestamp,
+    invalidation: EventEnvelope<E>,
+) -> Result<Value, OcppCallError> {
+    complete_registration_inner(
+        call,
+        store,
+        snapshot,
+        decision,
+        interval_seconds,
+        now,
+        Some(invalidation),
+    )
+    .await
+}
+
+async fn complete_registration_inner<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    call: crate::DecodedCall,
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    decision: RegistrationDecision,
+    interval_seconds: u32,
+    now: UtcTimestamp,
+    invalidation: Option<EventEnvelope<E>>,
+) -> Result<Value, OcppCallError> {
     let response = match call.observation {
         ChargerObservation::Registration(observation) if observation.protocol == PROTOCOL => {
-            let status = registration::register(
-                store,
-                snapshot,
-                &observation,
-                decision,
-                interval_seconds,
-                now,
-            )
-            .await
+            let status = if let Some(invalidation) = invalidation {
+                registration::register_with_invalidation(
+                    store,
+                    snapshot,
+                    &observation,
+                    decision,
+                    interval_seconds,
+                    now,
+                    invalidation,
+                )
+                .await
+            } else {
+                registration::register(
+                    store,
+                    snapshot,
+                    &observation,
+                    decision,
+                    interval_seconds,
+                    now,
+                )
+                .await
+            }
             .map_err(|e| lifecycle_error(&e))?;
             json!({"status":status.as_str(),"currentTime":now,"interval":interval_seconds})
         }
         ChargerObservation::Heartbeat { protocol } if protocol == PROTOCOL => {
-            registration::v201::heartbeat(store, snapshot, now)
-                .await
-                .map_err(|e| lifecycle_error(&e))?;
+            if let Some(invalidation) = invalidation {
+                registration::v201::heartbeat_with_invalidation(store, snapshot, now, invalidation)
+                    .await
+            } else {
+                registration::v201::heartbeat(store, snapshot, now).await
+            }
+            .map_err(|e| lifecycle_error(&e))?;
             json!({"currentTime":now})
         }
         ChargerObservation::EvseConnectorStatus(observation) => {

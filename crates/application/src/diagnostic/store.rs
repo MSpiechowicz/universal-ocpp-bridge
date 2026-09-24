@@ -5,7 +5,9 @@ use crate::{
     OperationalStore, Page, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
     SnapshotCursor, SnapshotQuery, StorageFuture, StorageRetentionStatus,
 };
-use uob_contracts::{Command, CommandResult, RequestId, StationSnapshot, UtcTimestamp};
+use uob_contracts::{
+    Command, CommandResult, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+};
 /// Borrowed store adapter tying one ordered operation to its actual commit completion.
 pub struct DiagnosticStore<'a, C, E, D, R> {
     inner: &'a dyn OperationalStore<C, E, D, R>,
@@ -32,6 +34,9 @@ impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
 {
     fn reserve_transaction_id(&self) -> StorageFuture<'_, i32> {
         self.inner.reserve_transaction_id()
+    }
+    fn reserve_event_sequence(&self) -> StorageFuture<'_, u64> {
+        self.inner.reserve_event_sequence()
     }
 
     fn write_atomic(
@@ -65,6 +70,16 @@ impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
         query: SnapshotQuery,
     ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
         self.inner.read_snapshots(query)
+    }
+    fn station_snapshot(&self, station: ResourceRef) -> StorageFuture<'_, Option<StationSnapshot>> {
+        self.inner.station_snapshot(station)
+    }
+    fn read_scoped_snapshots(
+        &self,
+        query: SnapshotQuery,
+        stations: Vec<ResourceRef>,
+    ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>> {
+        self.inner.read_scoped_snapshots(query, stations)
     }
     fn read_retained_events(
         &self,

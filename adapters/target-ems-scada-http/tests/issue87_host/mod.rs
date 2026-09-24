@@ -12,7 +12,7 @@ use uob_application::{
     TargetQueryAuthorization, TargetQueryPermission, TargetResourceScope, TargetRuntimeLimits,
 };
 use uob_contracts::{
-    BridgeId, Environment, StationId, TargetInstanceId, TransactionSnapshot, UtcTimestamp,
+    BridgeId, Environment, StationEvent, StationId, TargetInstanceId, UtcTimestamp,
 };
 use uob_ems_scada_http_target_adapter::EmsScadaHttpTargetFactory;
 use uob_target_conformance::{
@@ -31,7 +31,7 @@ pub struct Host {
     pub target: tokio::task::JoinHandle<()>,
     pub command_task: tokio::task::JoinHandle<()>,
     pub reports: tokio::sync::mpsc::Receiver<DeliveryReport>,
-    pub deliveries: tokio::sync::mpsc::Sender<TargetDelivery<TransactionSnapshot>>,
+    pub deliveries: tokio::sync::mpsc::Sender<TargetDelivery<StationEvent>>,
     pub protocol: protocol::ProtocolHost,
 }
 fn free_addr() -> String {
@@ -53,7 +53,7 @@ fn credentials(path: &std::path::Path) -> CredentialReference {
 fn hosted(
     store: &Store,
     target_id: TargetInstanceId,
-) -> HostContext<TransactionSnapshot, serde_json::Value> {
+) -> HostContext<StationEvent, serde_json::Value> {
     let auth = TargetQueryAuthorization::new(
         target_id,
         vec![
@@ -75,7 +75,7 @@ fn hosted(
         Arc::new(Source(store.clone())),
         auth,
     ));
-    FakeTargetHost::<TransactionSnapshot, serde_json::Value>::build(
+    FakeTargetHost::<StationEvent, serde_json::Value>::build(
         HostCapacities {
             deliveries: 8,
             commands: 8,
@@ -110,12 +110,12 @@ impl Host {
                 ConfigurationValue::CredentialReference(creds),
             );
         let validated = <EmsScadaHttpTargetFactory as BridgeTargetFactory<
-            TransactionSnapshot,
+            StationEvent,
             serde_json::Value,
         >>::validate(&factory, &config)
         .unwrap();
         let target = <EmsScadaHttpTargetFactory as BridgeTargetFactory<
-            TransactionSnapshot,
+            StationEvent,
             serde_json::Value,
         >>::create(&factory, validated)
         .unwrap();

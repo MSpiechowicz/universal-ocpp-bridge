@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add read-only station, connector, multi-EVSE, transaction, capability and typed-point
+  views backed by opt-in demo-only authenticated OCPP 1.6J/2.0.1 ingress and private
+  durable SQLite. Scope management reads/events by station, resync stale browser
+  snapshots after gaps/reconnects, and gate real-daemon browser acceptance (#90).
 
 - Add an independent MQTT 3.1.1/TLS EMS/SCADA consumer and opt-in isolated broker
   acceptance for OCPP 1.6J and 2.0.1 commands, retained points, freshness,

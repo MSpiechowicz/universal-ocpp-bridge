@@ -39,6 +39,8 @@ struct FileConfiguration {
     data_export: DataExportSection,
     #[serde(default)]
     lifecycle: crate::lifecycle::LifecycleConfiguration,
+    #[serde(default)]
+    charging: charging::Configuration,
 }
 
 #[derive(Deserialize)]
@@ -117,6 +119,7 @@ pub(crate) struct ValidatedServiceConfiguration {
     pub management_address: SocketAddr,
     pub events: ValidatedEventClientConfiguration,
     pub deployment: Option<crate::deployment::DeploymentLayout>,
+    pub charging: Option<charging::ValidatedChargingConfiguration>,
     pub shutdown_timeout: std::time::Duration,
 }
 
@@ -150,6 +153,11 @@ fn validate(
     if configuration.data_export.enabled {
         return Err(ConfigurationLoadError::UnavailableDataExport);
     }
+    let charging = configuration.charging.validate(
+        configuration.bridge.environment,
+        configuration.management.listen_addr,
+        &configuration.bridge.id,
+    )?;
 
     let bridge_id = BridgeId::new(configuration.bridge.id)
         .map_err(|_| ConfigurationLoadError::InvalidIdentity)?;
@@ -217,6 +225,7 @@ fn validate(
         release_read,
         service,
         management_address: configuration.management.listen_addr,
+        charging,
         shutdown_timeout,
         deployment,
         events,
@@ -452,6 +461,7 @@ pub(crate) enum ConfigurationLoadError {
     InvalidShutdownTimeout,
     InvalidDeployment,
     UnsafeStagingNetwork,
+    InvalidCharging,
     Composition,
 }
 
@@ -466,6 +476,7 @@ impl Error for ConfigurationLoadError {}
 #[cfg(test)]
 mod tests;
 
+pub(crate) mod charging;
 mod secrets;
 mod staging;
 

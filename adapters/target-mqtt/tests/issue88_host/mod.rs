@@ -20,7 +20,7 @@ use uob_application::{
     TargetQueryAuthorization, TargetQueryPermission, TargetResourceScope, TargetRuntimeLimits,
 };
 use uob_contracts::{
-    BridgeId, Environment, StationId, TargetInstanceId, TransactionSnapshot, UtcTimestamp,
+    BridgeId, Environment, StationEvent, StationId, TargetInstanceId, UtcTimestamp,
 };
 use uob_mqtt_target_adapter::{EMS_SCADA_PROFILE, MqttTargetFactory};
 use uob_target_conformance::{
@@ -62,7 +62,7 @@ pub struct Host {
     pub target: tokio::task::JoinHandle<()>,
     pub command_task: tokio::task::JoinHandle<()>,
     pub reports: mpsc::Receiver<DeliveryReport>,
-    pub deliveries: mpsc::Sender<TargetDelivery<TransactionSnapshot>>,
+    pub deliveries: mpsc::Sender<TargetDelivery<StationEvent>>,
 }
 impl Host {
     pub async fn start() -> Self {
@@ -75,15 +75,15 @@ impl Host {
         let target_id = TargetInstanceId::new("main").unwrap();
         let config = target_configuration(target_id.clone());
         let validated = <MqttTargetFactory as BridgeTargetFactory<
-            TransactionSnapshot,
+            StationEvent,
             serde_json::Value,
         >>::validate(&factory, &config)
         .unwrap();
-        let target = <MqttTargetFactory as BridgeTargetFactory<
-            TransactionSnapshot,
-            serde_json::Value,
-        >>::create(&factory, validated)
-        .unwrap();
+        let target =
+            <MqttTargetFactory as BridgeTargetFactory<StationEvent, serde_json::Value>>::create(
+                &factory, validated,
+            )
+            .unwrap();
         let authorization = TargetQueryAuthorization::new(
             target_id,
             vec![
@@ -105,7 +105,7 @@ impl Host {
             Arc::new(Source(store.clone())),
             authorization,
         ));
-        let hosted: HostContext<TransactionSnapshot, serde_json::Value> = FakeTargetHost::build(
+        let hosted: HostContext<StationEvent, serde_json::Value> = FakeTargetHost::build(
             HostCapacities {
                 deliveries: 32,
                 commands: 8,

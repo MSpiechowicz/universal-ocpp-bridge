@@ -3,8 +3,8 @@ use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_contracts::{
     ArtifactDigest, BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource,
     ContractVersion, Environment, EventEnvelope, EventId, EventOrigin, EventType,
-    NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceRef, RuntimeIdentity, StationId,
-    UtcTimestamp,
+    NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceRef, RuntimeIdentity,
+    StationEvent, StationId, StationSnapshot, UtcTimestamp,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -172,4 +172,26 @@ fn deserialized_timestamps_are_normalized_before_reemission() {
 fn empty_identities_are_rejected_during_deserialization() {
     assert!(serde_json::from_str::<EventId>("\"  \"").is_err());
     assert!(serde_json::from_str::<BridgeId>("\"\"").is_err());
+}
+
+#[test]
+fn station_invalidation_has_a_distinct_bounded_payload_and_preserves_legacy_snapshots() {
+    let marker = StationEvent::Invalidation {
+        station_snapshot_invalidated: id(StationId::new, "station-7"),
+    };
+    let encoded = serde_json::to_value(&marker).unwrap();
+    assert_eq!(
+        encoded,
+        serde_json::json!({"station_snapshot_invalidated": "station-7"})
+    );
+    assert_eq!(
+        serde_json::from_value::<StationEvent>(encoded).unwrap(),
+        marker
+    );
+    let snapshot: StationSnapshot =
+        serde_json::from_slice(include_bytes!("fixtures/station-snapshot-ocpp16-v1.json")).unwrap();
+    assert_eq!(
+        serde_json::from_value::<StationEvent>(serde_json::to_value(&snapshot).unwrap()).unwrap(),
+        StationEvent::StationSnapshot(snapshot)
+    );
 }

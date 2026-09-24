@@ -20,7 +20,7 @@ pub use command::{
 };
 pub use event::{
     CorrelationId, EventEnvelope, EventId, EventIdentityError, EventOrigin, EventProvenance,
-    EventType, ReplayError,
+    EventType, ReplayError, StationEvent,
 };
 pub use export::{
     ExportBatch, ExportBatchError, ExportBatchId, ExportDestination, ExportDestinationId,

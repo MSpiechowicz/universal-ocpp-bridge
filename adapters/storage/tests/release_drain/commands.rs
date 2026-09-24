@@ -293,7 +293,5 @@ async fn unparseable_persisted_station_state_fails_closed() {
         .execute("INSERT INTO station_snapshots VALUES ('broken', '{}')", [])
         .unwrap();
     drop(connection);
-    let reopened = Store::open(database.path(), 8).unwrap();
-    let id = reopened.begin_drain(Window::from_secs(1)).await.unwrap();
-    assert!(reopened.observe_drain(id).await.is_err());
+    assert!(Store::open(database.path(), 8).is_err());
 }

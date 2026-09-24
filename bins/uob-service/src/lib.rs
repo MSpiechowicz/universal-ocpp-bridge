@@ -1,5 +1,6 @@
 #![doc = "Production service composition root."]
 
+mod charging;
 pub mod cli;
 mod configuration;
 mod deployment;
@@ -7,6 +8,8 @@ mod diagnostics;
 mod event_stream;
 mod identity;
 mod lifecycle;
+mod management_auth;
+mod management_source;
 mod release_cli;
 mod release_read;
 mod staging_network;

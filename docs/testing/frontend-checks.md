@@ -24,11 +24,12 @@ npm ci --ignore-scripts
 npm run check
 npm run check:reproducible
 git diff --exit-code -- ../adapters/management/ui
-cargo build --locked -p uob-service --bin uob
+cargo build --locked -p uob-service --bin uob --example charging_browser_peer
 cargo build --locked -p uob-sim --bin uob-sim
 cargo build --locked -p uob-management-adapter --example browser_fixture
 ./node_modules/.bin/playwright install --with-deps chromium
 npm run test:browser:ci
+UOB_LIVE_BROWSER=1 npm run test:browser:ci
 ```
 
 Oxlint checks correctness rules in application code, tests and tooling. The only
@@ -37,15 +38,21 @@ Control-character regular expressions remain permitted in the identity and SSE
 validators because rejecting those characters is intentional. React Compiler
 rules are not enabled: this project does not use that compiler.
 
-The suite starts four real management-router fixtures plus the actual `uob`
+The default suite starts four real management-router fixtures plus the actual `uob`
 executable, built after the asset build, on loopback ports 39189–39193, and a
 separate real simulator on port 39194 for read-only evidence tests. Occupied
-ports fail rather than reusing another process. The daemon uses an isolated
-API-only demo configuration without station, broker or external database peers.
-Its smoke test verifies compiled assets, runtime identity, credential clearing and
-the honest unavailable-query response. Existing router tests cover authenticated
-SSE, scope checks, diagnostics and inert rendering. This gate does not claim the
-full charging acceptance matrix or implement missing daemon query composition.
+ports fail rather than reusing another process. That daemon uses an isolated
+API-only demo configuration without charging peers; it still returns an honest 503 for
+unconfigured station reads.
+
+The separate `UOB_LIVE_BROWSER=1` suite launches a disposable, opt-in `uob serve`
+on management port 39195 with charging ingress on 39196. A compiled peer drives
+authenticated OCPP 1.6J and multi-EVSE OCPP 2.0.1 WebSockets into the live service;
+browser reads and SSE use its scoped bearer and durable SQLite state, not router
+fixtures or intercepted HTTP responses. The suite verifies station/connector/EVSE
+isolation, transactions, exact meter values, invalid measurements, explicit
+capabilities, disconnect/reconnect refresh and credential clearing. Both suites
+stop their processes and remove private temporary files.
 
 The capture-expiry browser test runs both deadline orderings. It changes only the
 browser's remaining-time estimate in the real start response, so either the local
@@ -65,23 +72,25 @@ are disabled; manual screenshots in the existing tests are skipped in report-onl
 mode. Raw stdout/stderr, errors and temporary Playwright output are discarded.
 The wrapper kills remaining child processes and removes raw output on completion.
 
-Only `frontend/test-results/ci-summary.json` is uploaded, for seven days. The
-report has a 64 KiB limit and retains at most 256 results; exceeding that result
-limit fails the check. It includes fixed statuses, integer counts/durations, line
-numbers and SHA-256 hashes of source basenames. It excludes test titles, absolute
-paths, assertion text, browser payloads, attachments and credentials. To locate a
-reported test, hash its source basename (without a newline) and use its line:
+Each browser mode produces a bounded `frontend/test-results/ci-summary.json`, uploaded
+separately as `frontend-browser-fixtures-*` and `frontend-browser-live-*` for seven
+days. The second mode overwrites the local summary only after the first is uploaded.
+Each report has a 64 KiB limit and retains at most 256 results; exceeding the result
+limit fails that browser check. Reports include only fixed statuses, integer
+counts/durations, line numbers and SHA-256 hashes of source basenames, not test titles,
+absolute paths, assertion text, browser payloads, attachments or credentials. Neither
+raw browser output nor disposable credentials are retained. To locate a reported test,
+hash its source basename (without a newline) and use its line:
 
 ```text
 node -e 'console.log(require("node:crypto").createHash("sha256").update("daemon.browser.ts").digest("hex"))'
 ```
 
-A missing report fails the browser command, including startup failures. A local
-`npm run test:browser` run provides full diagnostics and optional screenshots for
-debugging with public fixture credentials; do not upload those raw outputs.
-Focused unit tests exercise deliberately invalid type/lint inputs, oversized build
-output, a real failing Playwright run with reflected credentials, and report
-overflow/redaction.
+A missing report fails either browser command, including startup failures. A local
+`npm run test:browser` or `UOB_LIVE_BROWSER=1 npm run test:browser` run provides
+full diagnostics; do not upload those raw outputs. Focused unit tests exercise
+deliberately invalid type/lint inputs, oversized build output, a real failing
+Playwright run with reflected credentials, and report overflow/redaction.
 
 The npm bootstrap preserves the project's existing npm 12.0.2 pin. On 2026-09-12,
 `npm audit --prefix tooling` reports advisories in its bundled brace-expansion,

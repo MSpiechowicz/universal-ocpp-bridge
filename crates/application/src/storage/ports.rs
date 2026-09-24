@@ -1,4 +1,6 @@
-use uob_contracts::{Command, CommandResult, RequestId, StationSnapshot, UtcTimestamp};
+use uob_contracts::{
+    Command, CommandResult, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+};
 
 use super::{
     AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
@@ -24,6 +26,10 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
         })
     }
 
+    /// Reserves one durable, never-reused event sequence. A skipped reservation is allowed;
+    /// callers derive their globally scoped event ID from bridge identity and this sequence.
+    fn reserve_event_sequence(&self) -> StorageFuture<'_, u64>;
+
     /// Atomically persists one application operation and performs command deduplication.
     /// An identical duplicate returns `CommandAdmissionOutcome::Duplicate` without applying
     /// the bundled state, journal, delivery, or committed-record mutations again. Reusing a
@@ -37,6 +43,17 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
     fn read_snapshots(
         &self,
         query: SnapshotQuery,
+    ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>>;
+
+    /// Reads one exact canonical station key, without scanning a bounded inventory page.
+    fn station_snapshot(&self, station: ResourceRef) -> StorageFuture<'_, Option<StationSnapshot>>;
+
+    /// Applies the trusted station-key whitelist before cursor ordering and the page limit.
+    /// An empty whitelist grants no stations; callers must derive it from their authorization.
+    fn read_scoped_snapshots(
+        &self,
+        query: SnapshotQuery,
+        stations: Vec<ResourceRef>,
     ) -> StorageFuture<'_, Page<StationSnapshot, SnapshotCursor>>;
 
     /// Reads a bounded page from one retained durable business-event stream.

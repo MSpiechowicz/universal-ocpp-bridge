@@ -22,7 +22,8 @@ use std::fmt::Write;
 
 mod serving;
 pub use serving::{
-    serve, serve_with_capture_and_release_readiness, serve_with_options, serve_with_readiness,
+    serve, serve_with_authenticated_events_and_capture_and_release_readiness,
+    serve_with_capture_and_release_readiness, serve_with_options, serve_with_readiness,
     serve_with_shutdown,
 };
 
