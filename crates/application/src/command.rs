@@ -1,15 +1,20 @@
-use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc};
+mod configuration;
+mod errors;
+mod recovery;
+use configuration::{valid_configuration_read, valid_protected_change};
+use errors::{integrity_error, map_station_error, map_storage_error};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use uob_contracts::{
     Command, CommandError, CommandErrorCode, CommandLifecycle, CommandResult,
-    CommandValidationError, Connectivity, ContractVersion, ExternalCommand, ObservedCommandEffect,
-    RequestId, ResourceCapabilities, ResourceRef, UtcTimestamp,
+    CommandValidationError, Connectivity, ContractVersion, ExternalCommand, ResourceCapabilities,
+    ResourceRef, UtcTimestamp,
 };
 
 use crate::{
     AtomicStoreWrite, CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionFuture,
     CommandAdmissionOutcome, CommandAdmissionPort, FlowDiagnostics, FlowEvidence, FlowStage,
-    OperationalStore, PageLimit, RecoveryQuery, StorageError, StorageWritePurpose,
+    OperationalStore, StorageError, StorageWritePurpose,
 };
 
 /// Future returned by the station command boundary.
@@ -39,6 +44,12 @@ pub enum CommandDispatchOutcome {
         accepted: bool,
         /// Stable rejection detail, when the charger rejected it.
         error: Option<CommandError>,
+    },
+    /// Validated, sanitized OCPP configuration response, separate from subsequent observations.
+    ConfigurationResponse {
+        accepted: bool,
+        error: Option<CommandError>,
+        configuration: uob_contracts::ConfigurationResult,
     },
     /// Transmission may have occurred but no correlated response was recorded.
     TransmissionUncertain {
@@ -145,96 +156,6 @@ where
     D: Send + 'static,
     R: Send + 'static,
 {
-    /// Restores unresolved command state without automatically dispatching recovered work.
-    ///
-    /// A persisted `Dispatched` state is conservatively converted to `TransmissionUncertain`
-    /// because the process cannot prove whether the station acted before restart.
-    #[must_use]
-    pub fn recover_unresolved(
-        &self,
-        limit: PageLimit,
-    ) -> CommandAdmissionFuture<'_, CommandRecoveryBatch<P>> {
-        Box::pin(async move {
-            let now = self.clock.now();
-            let recovery = self
-                .store
-                .recover(RecoveryQuery { limit })
-                .await
-                .map_err(|error| map_storage_error(&error))?;
-            let mut results = recovery
-                .command_results
-                .into_iter()
-                .map(|result| (result.return_route.request_id.as_str().to_owned(), result))
-                .collect::<BTreeMap<_, _>>();
-            let mut commands = Vec::with_capacity(recovery.active_commands.len());
-            for command in recovery.active_commands {
-                let request_id = command.request_id.as_str();
-                let mut result = results
-                    .remove(request_id)
-                    .unwrap_or_else(|| command_result(&command, CommandLifecycle::Admitted, now));
-                if matches!(result.lifecycle, CommandLifecycle::Dispatched) {
-                    result.lifecycle = CommandLifecycle::TransmissionUncertain {
-                        detail: "service restarted before a charger response was recorded"
-                            .to_owned(),
-                    };
-                    result.recorded_at = now;
-                    self.persist_result(result.clone()).await?;
-                }
-                commands.push(RecoveredCommand { command, result });
-            }
-            Ok(CommandRecoveryBatch { commands })
-        })
-    }
-
-    /// Links later observed state evidence without changing protocol acknowledgement state.
-    #[must_use]
-    pub fn reconcile_observed_effect(
-        &self,
-        request_id: RequestId,
-        effect: ObservedCommandEffect,
-    ) -> CommandAdmissionFuture<'_, Option<CommandResult>> {
-        Box::pin(async move {
-            let Some(command) = self
-                .store
-                .command_by_request_id(request_id.clone())
-                .await
-                .map_err(|error| map_storage_error(&error))?
-            else {
-                return Ok(None);
-            };
-            let mut result = self
-                .store
-                .command_result_by_request_id(request_id)
-                .await
-                .map_err(|error| map_storage_error(&error))?
-                .unwrap_or_else(|| {
-                    command_result(&command, CommandLifecycle::Admitted, self.clock.now())
-                });
-            if !result
-                .observed_effects
-                .iter()
-                .any(|existing| existing.event_id == effect.event_id)
-            {
-                let event_id = effect.event_id.clone();
-                result.observed_effects.push(effect);
-                self.persist_result(result.clone()).await?;
-                self.diagnostics
-                    .span(
-                        result.correlation_id.clone(),
-                        Some(result.resource.station_id.clone()),
-                        None,
-                    )
-                    .with_request(command.request_id.clone())
-                    .emit_fields(
-                        FlowStage::ObservedEffect,
-                        FlowEvidence::Observed,
-                        vec![crate::SafeDiagnosticField::ObservedEvent(event_id)],
-                    );
-            }
-            Ok(Some(result))
-        })
-    }
-
     #[allow(clippy::too_many_lines)] // Keep the ordered admission/dispatch evidence beside each decision.
     async fn submit_at(
         &self,
@@ -254,6 +175,30 @@ where
                 external.origin.clone(),
             )],
         );
+        if let uob_contracts::CommandOperation::Ocpp(operation) = &external.request.operation {
+            if operation.protocol == uob_contracts::ProtocolEdition::Ocpp16j
+                && operation.action.as_str() == "ChangeConfiguration"
+                && !valid_protected_change(operation)
+            {
+                return Ok(rejected_external(
+                    &external,
+                    CommandErrorCode::InvalidParameters,
+                    "configuration value must use a protected reference",
+                    now,
+                ));
+            }
+            if operation.protocol == uob_contracts::ProtocolEdition::Ocpp16j
+                && operation.action.as_str() == "GetConfiguration"
+                && !valid_configuration_read(operation)
+            {
+                return Ok(rejected_external(
+                    &external,
+                    CommandErrorCode::InvalidParameters,
+                    "invalid configuration read request",
+                    now,
+                ));
+            }
+        }
         let context = self
             .stations
             .context(external.request.resource.clone())
@@ -325,6 +270,7 @@ where
         let dispatched = command_result(&command, CommandLifecycle::Dispatched, now);
         self.persist_result(dispatched).await?;
         trace.emit(FlowStage::CommandDispatch, FlowEvidence::Completed);
+        let mut config_response = None;
         let lifecycle = match self
             .stations
             .dispatch(command.clone())
@@ -355,12 +301,32 @@ where
                 );
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
+            CommandDispatchOutcome::ConfigurationResponse {
+                accepted,
+                error,
+                configuration,
+            } => {
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                config_response = Some(configuration);
+                CommandLifecycle::ProtocolResponse { accepted, error }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
             }
         };
-        let result = command_result(&command, lifecycle, self.clock.now());
+        let mut result = command_result(&command, lifecycle, self.clock.now());
+        if let Some(configuration) = config_response {
+            result.schema_version = ContractVersion::V1_CONFIGURATION;
+            result.configuration = Some(configuration);
+        }
         self.persist_result(result.clone()).await?;
         Ok(result)
     }
@@ -403,6 +369,8 @@ fn command_result<P>(
         lifecycle,
         recorded_at,
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }
 
@@ -428,6 +396,8 @@ fn rejected_external<P>(
         },
         recorded_at,
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }
 
@@ -450,26 +420,4 @@ fn validation_rejection<P>(
         },
         recorded_at,
     )
-}
-
-fn map_storage_error(error: &StorageError) -> CommandAdmissionError {
-    let code = match error.code() {
-        crate::StorageErrorCode::Conflict | crate::StorageErrorCode::InvalidRequest => {
-            CommandAdmissionErrorCode::InvalidRequest
-        }
-        crate::StorageErrorCode::Busy => CommandAdmissionErrorCode::Busy,
-        crate::StorageErrorCode::CapacityExhausted => {
-            CommandAdmissionErrorCode::StorageCapacityExhausted
-        }
-        _ => CommandAdmissionErrorCode::Unavailable,
-    };
-    CommandAdmissionError::new(code, error.detail())
-}
-
-fn map_station_error(error: &StationCommandError) -> CommandAdmissionError {
-    CommandAdmissionError::new(CommandAdmissionErrorCode::Unavailable, error.context())
-}
-
-fn integrity_error(context: &str) -> CommandAdmissionError {
-    CommandAdmissionError::new(CommandAdmissionErrorCode::Unavailable, context)
 }

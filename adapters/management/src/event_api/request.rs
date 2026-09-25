@@ -73,7 +73,7 @@ pub(super) fn validate_query(
     })
 }
 
-pub(super) fn bearer_token(headers: &HeaderMap) -> Result<&str, ()> {
+pub(crate) fn bearer_token(headers: &HeaderMap) -> Result<&str, ()> {
     let mut values = headers.get_all(header::AUTHORIZATION).iter();
     let value = values.next().ok_or(())?;
     if values.next().is_some() || value.as_bytes().len() > MAX_AUTHORIZATION_BYTES {

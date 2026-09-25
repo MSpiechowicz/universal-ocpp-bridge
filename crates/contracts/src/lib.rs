@@ -1,6 +1,7 @@
 #![doc = "Dependency-light shared contracts for Universal OCPP Bridge."]
 
 mod command;
+mod configuration;
 mod event;
 mod export;
 mod identity;
@@ -17,6 +18,10 @@ pub use command::{
     CommandReturnRoute, CommandValidationError, ExternalCommand, ObservedCommandEffect,
     PayloadSchemaId, PrincipalId, PrivilegedOcppOperation, ProtocolActionName, RequestId,
     TargetInstanceId,
+};
+pub use configuration::{
+    CONFIGURATION_CHANGE_REFERENCE_SCHEMA, ConfigurationChangeReference, ConfigurationKey,
+    ConfigurationObservation, ConfigurationResult, ConfigurationWriteStatus,
 };
 pub use event::{
     CorrelationId, EventEnvelope, EventId, EventIdentityError, EventOrigin, EventProvenance,
@@ -69,6 +74,11 @@ impl ContractVersion {
     pub const V1_INITIAL: Self = Self {
         major: 1,
         revision: 0,
+    };
+    /// Additive configuration-result revision of the command result contract.
+    pub const V1_CONFIGURATION: Self = Self {
+        major: 1,
+        revision: 1,
     };
 }
 

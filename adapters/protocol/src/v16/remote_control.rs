@@ -1,11 +1,17 @@
 //! OCPP 1.6 remote operations behind the ordinary durable application command path.
 use crate::remote_constraints as constraints;
+mod configuration;
+mod configuration_values;
 mod identity;
 mod mapping;
+pub(crate) use configuration_values::DeferredConfigurationCall;
+pub use configuration_values::{
+    LocalConfigurationValues, ProtectedConfigurationText, ProtectedConfigurationValue,
+};
 pub use identity::LocalRemoteStartIdentity;
 pub mod observation;
 
-use crate::{CallSessionHandle, OutboundCall, SessionCallOutcome, SessionSubmitError};
+use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
@@ -39,6 +45,8 @@ pub struct RemoteControlSession {
     handle: CallSessionHandle,
     snapshot: RwLock<StationSnapshot>,
     identity: Arc<dyn RemoteStartIdentity>,
+    configuration_values: Option<Arc<LocalConfigurationValues>>,
+    configuration_facts: RwLock<configuration::SessionFacts>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
 }
@@ -60,8 +68,16 @@ impl RemoteControlSession {
             snapshot: RwLock::new(snapshot),
             identity,
             clock,
+            configuration_values: None,
+            configuration_facts: RwLock::new(configuration::SessionFacts::default()),
             evidence,
         })
+    }
+    /// Installs locally provisioned station/key-bound values for this authenticated socket only.
+    #[must_use]
+    pub fn with_configuration_values(mut self, values: Arc<LocalConfigurationValues>) -> Self {
+        self.configuration_values = Some(values);
+        self
     }
 
     /// Publishes a snapshot only after the ordered station handler has committed it.
@@ -78,6 +94,85 @@ impl RemoteControlSession {
         }
         *current = snapshot;
         Ok(())
+    }
+
+    fn configuration_response(
+        &self,
+        action: &str,
+        payload: &Value,
+        command: &Command<Value>,
+    ) -> Result<CommandDispatchOutcome, StationCommandError> {
+        let uob_contracts::CommandOperation::Ocpp(operation) = &command.operation else {
+            return Ok(mapping::uncertain());
+        };
+        let configuration = if action == "GetConfiguration" {
+            configuration::read_response(payload, &operation.payload)
+        } else {
+            operation.payload["key"]
+                .as_str()
+                .and_then(|key| configuration::write_response(payload, key))
+        };
+        let Some(configuration) = configuration else {
+            return Ok(mapping::uncertain());
+        };
+        if action == "GetConfiguration" {
+            self.configuration_facts
+                .write()
+                .map_err(|_| state_error())?
+                .learn(&configuration);
+        }
+        let (accepted, error) = match &configuration {
+            uob_contracts::ConfigurationResult::Read { .. } => (true, None),
+            uob_contracts::ConfigurationResult::Write { status, .. } => {
+                let accepted = matches!(
+                    status,
+                    uob_contracts::ConfigurationWriteStatus::Accepted
+                        | uob_contracts::ConfigurationWriteStatus::RebootRequired
+                );
+                let error = (!accepted).then(|| uob_contracts::CommandError {
+                    code: CommandErrorCode::ProtocolRejected,
+                    detail: Some(format!("{status:?}")),
+                });
+                (accepted, error)
+            }
+        };
+        Ok(CommandDispatchOutcome::ConfigurationResponse {
+            accepted,
+            error,
+            configuration,
+        })
+    }
+
+    fn enqueue_call(
+        &self,
+        action: &str,
+        call: OutboundCall,
+        deadline: Instant,
+        resource: &ResourceRef,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        if action == "ChangeConfiguration" {
+            let provider = self
+                .configuration_values
+                .as_ref()
+                .expect("validated provider");
+            let deferred = DeferredConfigurationCall::new(
+                provider.clone(),
+                self.clock.clone(),
+                resource.clone(),
+                call.payload["key"]
+                    .as_str()
+                    .expect("validated key")
+                    .to_owned(),
+                call.payload["valueReference"]
+                    .as_str()
+                    .expect("validated reference")
+                    .to_owned(),
+            );
+            self.handle
+                .try_configuration_call_before(call, deadline, deferred)
+        } else {
+            self.handle.try_call_before(call, deadline)
+        }
     }
 }
 
@@ -114,10 +209,13 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 if self.handle.is_closed() {
                     return Ok(mapping::not_sent(CommandErrorCode::StationDisconnected));
                 }
+                let facts = self.configuration_facts.read().map_err(|_| state_error())?;
                 mapping::prepare(
                     &command,
                     &snapshot,
                     self.identity.as_ref(),
+                    self.configuration_values.as_deref(),
+                    &facts,
                     self.clock.now(),
                 )
             };
@@ -141,7 +239,8 @@ impl StationCommandPort<Value> for RemoteControlSession {
                         .expect("request identity")
                 }),
             };
-            let pending = match self.handle.try_call_before(call, deadline) {
+            let pending = self.enqueue_call(action, call, deadline, &command.resource);
+            let pending = match pending {
                 Ok(pending) => pending,
                 Err(error) => {
                     return Ok(mapping::not_sent(match error {
@@ -155,6 +254,9 @@ impl StationCommandPort<Value> for RemoteControlSession {
             };
             Ok(match pending.receive().await {
                 SessionCallOutcome::Result { payload, .. } => {
+                    if action == "GetConfiguration" || action == "ChangeConfiguration" {
+                        return self.configuration_response(action, &payload, &command);
+                    }
                     let outcome = mapping::response(action, &payload);
                     if action == "ChangeAvailability"
                         && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })

@@ -7,6 +7,7 @@ fn local(name: &str) -> Value {
     json!({"$ref":format!("#/components/schemas/{name}")})
 }
 
+#[allow(clippy::too_many_lines)] // Keep the declarative OpenAPI operation mapping together.
 pub(super) fn path(name: &str) -> Value {
     let (method, success, schema, description) = match name {
         "capabilities" => (
@@ -21,7 +22,7 @@ pub(super) fn path(name: &str) -> Value {
             json!({"type":"object"}),
             "Read the versioned OpenAPI document.",
         ),
-        "schemas" => (
+        "schemas" | "schemas_v1_1" => (
             "get",
             "200",
             json!({"type":"object"}),
@@ -74,7 +75,7 @@ pub(super) fn path(name: &str) -> Value {
     let mut responses = errors(name);
     let media = match name {
         "events" => "text/event-stream",
-        "schemas" => "application/schema+json",
+        "schemas" | "schemas_v1_1" => "application/schema+json",
         _ => "application/json",
     };
     responses.insert(
@@ -83,7 +84,10 @@ pub(super) fn path(name: &str) -> Value {
     );
     let mut operation = json!({"operationId":name, "summary":description, "responses":responses,
         "parameters":parameters(name)});
-    if matches!(name, "capabilities" | "openapi" | "schemas") {
+    if matches!(
+        name,
+        "capabilities" | "openapi" | "schemas" | "schemas_v1_1"
+    ) {
         operation["description"] = json!(
             "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required."
         );
@@ -135,7 +139,10 @@ fn errors(name: &str) -> Map<String, Value> {
                 | Error::CapacityExhausted
                 | Error::UnsupportedOperation
         );
-        let state = !matches!(name, "capabilities" | "openapi" | "schemas");
+        let state = !matches!(
+            name,
+            "capabilities" | "openapi" | "schemas" | "schemas_v1_1"
+        );
         let command_only = matches!(
             error,
             Error::RequestConflict
@@ -146,7 +153,7 @@ fn errors(name: &str) -> Map<String, Value> {
         );
         if common
             || (state && (!command_only || name == "commands"))
-            || (name == "schemas"
+            || (matches!(name, "schemas" | "schemas_v1_1")
                 && matches!(error, Error::UnknownResource | Error::InvalidRequest))
         {
             grouped
@@ -177,12 +184,18 @@ fn parameters(name: &str) -> Vec<Value> {
         "station" => Some("station_id"),
         "point" => Some("point_id"),
         "command_status" => Some("request_id"),
-        "schemas" => Some("schema"),
+        "schemas" | "schemas_v1_1" => Some("schema"),
         _ => None,
     };
     if let Some(path) = path {
         let schema = if path == "schema" {
-            json!({"type":"string","enum":super::schemas::CANONICAL.iter().map(|(file,_)|*file).collect::<Vec<_>>()})
+            let revision = if name == "schemas_v1_1" {
+                "v1.1"
+            } else {
+                "v1.0"
+            };
+            json!({"type":"string","enum":super::schemas::canonical(revision)
+                .iter().map(|(file,_)|*file).collect::<Vec<_>>()})
         } else {
             json!({"type":"string","minLength":1})
         };

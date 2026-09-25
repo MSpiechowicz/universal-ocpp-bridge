@@ -154,5 +154,7 @@ fn rejected<P>(
         },
         recorded_at,
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }

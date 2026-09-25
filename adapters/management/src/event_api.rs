@@ -30,7 +30,8 @@ use uob_contracts::ResourceRef;
 use crate::{ManagementReadLimits, ManagementState, read_api::ApiError};
 use payload::PayloadEncodingError;
 use recovery::{cursor_expired_response, error_event, gap_event};
-use request::{EventQuery, bearer_token, validate_query};
+pub(crate) use request::bearer_token;
+use request::{EventQuery, validate_query};
 use subscriber::{QueuedPayloadReservation, SubscriberBudget, SubscriberTask};
 
 const MAX_SSE_ID_BYTES: usize = 512;

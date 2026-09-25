@@ -1,3 +1,5 @@
+mod configuration;
+
 use std::sync::mpsc;
 
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
@@ -9,7 +11,7 @@ use uob_application::{
     RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError, StorageErrorCode,
     StorageRetentionStatus,
 };
-use uob_contracts::{Command, StationSnapshot};
+use uob_contracts::{Command, CommandResult, ConfigurationObservation, StationSnapshot};
 
 use crate::retention::SqliteRetentionPolicy;
 use crate::{
@@ -54,6 +56,11 @@ pub(crate) enum Request<C, E, D, R> {
     Recover(usize, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
     CommandResult(String, Reply<Option<uob_contracts::CommandResult>>),
+    AppendConfigurationObservation(
+        String,
+        ConfigurationObservation,
+        Reply<Option<CommandResult>>,
+    ),
     PruneCommands(i64, Reply<u64>),
     MaintainRetention(i64, Reply<StorageRetentionStatus>),
     RetentionStatus(Reply<StorageRetentionStatus>),
@@ -126,6 +133,21 @@ pub(crate) fn run<C, E, D, R>(
             }
             Request::CommandResult(request_id, reply) => {
                 respond(reply, recovery::command_result(&connection, &request_id));
+            }
+            Request::AppendConfigurationObservation(write_id, observation, reply) => {
+                respond(
+                    reply,
+                    drain
+                        .check_completion_write()
+                        .and_then(|()| drain.changed())
+                        .and_then(|()| {
+                            configuration::append_configuration_observation(
+                                &mut connection,
+                                &write_id,
+                                observation,
+                            )
+                        }),
+                );
             }
             Request::PruneCommands(now, reply) => {
                 respond(reply, command::prune::<C>(&mut connection, now));

@@ -78,16 +78,36 @@ pub(crate) async fn schema(
     headers: HeaderMap,
     path: Result<Path<String>, axum::extract::rejection::PathRejection>,
 ) -> Response {
+    serve_schema(&state, &headers, path, "v1.0")
+}
+
+pub(crate) async fn schema_v1_1(
+    State(state): State<IntegrationState>,
+    headers: HeaderMap,
+    path: Result<Path<String>, axum::extract::rejection::PathRejection>,
+) -> Response {
+    serve_schema(&state, &headers, path, "v1.1")
+}
+
+fn serve_schema(
+    state: &IntegrationState,
+    headers: &HeaderMap,
+    path: Result<Path<String>, axum::extract::rejection::PathRejection>,
+    revision: &str,
+) -> Response {
     let Ok(_permit) = state.acquire() else {
         return Error::CapacityExhausted.into_response();
     };
-    if let Err(error) = state.authenticate(&headers) {
+    if let Err(error) = state.authenticate(headers) {
         return error.into_response();
     }
     let Ok(Path(name)) = path else {
         return Error::InvalidRequest.into_response();
     };
-    match schemas::CANONICAL.iter().find(|(file, _)| *file == name) {
+    match schemas::canonical(revision)
+        .iter()
+        .find(|(file, _)| *file == name)
+    {
         Some((_, body)) => {
             ([(header::CONTENT_TYPE, "application/schema+json")], *body).into_response()
         }

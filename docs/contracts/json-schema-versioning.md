@@ -38,3 +38,13 @@ The optional OCPP 2.0.1 `remote_start_id` in transaction protocol evidence is pu
 v1.1 station-snapshot, export-record and export-batch schemas. Their v1.0 snapshots remain
 unchanged and compatibility tests compare the revisions. The generator takes the schema root
 and writes each contract to its current revision directory.
+
+OCPP 1.6 configuration evidence adds optional `configuration` and
+`configuration_observations` fields to the command result at v1.1. Because export
+record and export batch embed that result, their additive snapshots advance to
+v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
+`configuration-change-reference` v1.0 schema accepts only a key and an opaque
+protected reference; it is not the native OCA ChangeConfiguration request.
+
+The EMS HTTP contract serves both the earlier v1.0 and current v1.1 command-result
+schemas; command result responses reference the current version in OpenAPI.

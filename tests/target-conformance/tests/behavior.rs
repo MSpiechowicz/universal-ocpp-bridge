@@ -470,6 +470,8 @@ fn result_for(command: &ExternalCommand<()>) -> CommandResult {
         lifecycle: CommandLifecycle::Admitted,
         recorded_at: timestamp(1),
         observed_effects: vec![],
+        configuration: None,
+        configuration_observations: vec![],
     }
 }
 

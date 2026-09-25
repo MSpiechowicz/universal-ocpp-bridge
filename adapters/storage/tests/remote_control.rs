@@ -90,6 +90,8 @@ async fn allocation_is_atomic_recoverable_nonreused_and_bound_to_command_retenti
             error: None,
         },
         observed_effects: vec![],
+        configuration: None,
+        configuration_observations: Vec::new(),
     };
     let mut write = AtomicStoreWrite::empty();
     write.command_result = Some(result);

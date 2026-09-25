@@ -1,5 +1,6 @@
 use uob_contracts::{
-    Command, CommandResult, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+    Command, CommandResult, ConfigurationObservation, RequestId, ResourceRef, StationSnapshot,
+    UtcTimestamp,
 };
 
 use super::{
@@ -85,6 +86,23 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
         &self,
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<CommandResult>>;
+
+    /// Atomically appends one explicit configuration observation to the latest write result.
+    /// A duplicate read ID returns the unchanged result; a missing write returns `None`.
+    /// Stores without an atomic implementation must reject this operation, never emulate it
+    /// with a read followed by an unconditional whole-result write.
+    fn append_configuration_observation(
+        &self,
+        _write_id: RequestId,
+        _observation: ConfigurationObservation,
+    ) -> StorageFuture<'_, Option<CommandResult>> {
+        Box::pin(async {
+            Err(super::StorageError::new(
+                super::StorageErrorCode::Unavailable,
+                "atomic configuration observation append unsupported",
+            ))
+        })
+    }
 
     /// Removes resolved command identities whose seven-day retention period has elapsed.
     ///

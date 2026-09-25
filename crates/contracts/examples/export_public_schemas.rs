@@ -3,16 +3,17 @@ use std::{env, error::Error, fs, path::Path};
 use schemars::{JsonSchema, schema_for};
 use serde_json::Value;
 use uob_contracts::{
-    Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExportBatch,
-    ExportRecord, ExportReport, ResourceCapabilities, ResourceRef, RuntimeIdentity,
-    ServiceIdentity, StationSnapshot, TraceRecord,
+    Command, CommandResult, ConfigurationChangeReference, DataPointDescriptor, DataPointValue,
+    EventEnvelope, ExportBatch, ExportRecord, ExportReport, ResourceCapabilities, ResourceRef,
+    RuntimeIdentity, ServiceIdentity, StationSnapshot, TraceRecord,
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
-    let revision = u8::from(matches!(
-        name,
-        "station-snapshot" | "export-record" | "export-batch"
-    ));
+    let revision = match name {
+        "export-record" | "export-batch" => 2,
+        "station-snapshot" | "command-result" | "configuration-change-reference" => 1,
+        _ => 0,
+    };
     let output = output.join(format!("v1.{revision}"));
     fs::create_dir_all(&output)?;
     let schema = schema_for!(T);
@@ -53,6 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     publish::<DataPointValue>(output, "data-point-value")?;
     publish::<Command<Value>>(output, "command")?;
     publish::<CommandResult>(output, "command-result")?;
+    publish::<ConfigurationChangeReference>(output, "configuration-change-reference")?;
     publish::<EventEnvelope<Value>>(output, "event-envelope")?;
     publish::<TraceRecord>(output, "trace-record")?;
     publish::<ExportRecord>(output, "export-record")?;

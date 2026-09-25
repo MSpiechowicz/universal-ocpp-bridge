@@ -24,9 +24,10 @@ use uob_application::{
 };
 use uob_contracts::{
     ArtifactDigest, BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource,
-    Connectivity, ContractVersion, Environment, EventEnvelope, EventId, EventOrigin, EventType,
-    NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceCapabilities, ResourceRef,
-    RuntimeIdentity, ServiceIdentity, StationId, StationSnapshot, TargetInstanceId, UtcTimestamp,
+    CommandResult, Connectivity, ContractVersion, Environment, EventEnvelope, EventId, EventOrigin,
+    EventType, NativeProtocolReference, ProcessInstanceId, ReleaseId, ResourceCapabilities,
+    ResourceRef, RuntimeIdentity, ServiceIdentity, StationId, StationSnapshot, TargetInstanceId,
+    UtcTimestamp,
 };
 use uob_management_adapter::{
     AuthenticatedEventAccess, ManagementEventAuthenticator, ManagementEventConfiguration,
@@ -44,6 +45,7 @@ mod limits;
 #[derive(Default)]
 struct EventSource {
     events: Vec<RetainedEventItem<serde_json::Value>>,
+    command_result: Option<CommandResult>,
     expired: BTreeSet<String>,
     stream_error: Option<TargetPortErrorCode>,
     stay_open: bool,
@@ -66,6 +68,11 @@ impl CanonicalQuerySource<serde_json::Value> for EventSource {
                     authorization
                         .permits_resource(&resource)
                         .then(|| snapshot(resource)),
+                )),
+                TargetQuery::CommandResult(request_id) => Ok(TargetQueryResult::CommandResult(
+                    self.command_result
+                        .clone()
+                        .filter(|result| result.return_route.request_id == request_id),
                 )),
                 TargetQuery::StationSnapshots(query) => {
                     Ok(TargetQueryResult::StationSnapshots(Page {

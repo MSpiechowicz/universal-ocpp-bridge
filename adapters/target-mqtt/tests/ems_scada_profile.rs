@@ -322,6 +322,8 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         lifecycle: CommandLifecycle::Admitted,
         recorded_at: timestamp(),
         observed_effects: vec![],
+        configuration: None,
+        configuration_observations: vec![],
     };
     submission
         .respond(Ok(result.clone()))

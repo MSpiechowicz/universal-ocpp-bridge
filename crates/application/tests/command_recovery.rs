@@ -263,6 +263,8 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         lifecycle,
         recorded_at: timestamp(1),
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }
 

@@ -286,6 +286,8 @@ fn admitted_result(command: &ExternalCommand<()>) -> CommandResult {
         lifecycle: CommandLifecycle::Admitted,
         recorded_at: timestamp(3),
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }
 

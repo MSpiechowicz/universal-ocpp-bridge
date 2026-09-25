@@ -19,6 +19,8 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | RemoteStopTransaction | `Stop` with a canonical transaction ID belonging to the addressed resource; wire ID comes from persisted OCPP 1.6 evidence | Accepted / Rejected |
 | Reset | Privileged `Ocpp`, action `Reset`, schema `urn:OCPP:1.6:2019:12:ResetRequest`, payload `{"type":"Soft"}` or `{"type":"Hard"}`; station scope only | Accepted / Rejected |
 | UnlockConnector | Privileged `Ocpp`, action `UnlockConnector`, schema `urn:OCPP:1.6:2019:12:UnlockConnectorRequest`, payload connector ID matching an existing positive connector | Unlocked / UnlockFailed / NotSupported |
+| GetConfiguration | Privileged `Ocpp`, action `GetConfiguration`, pinned OCA request schema; station scope, absent/empty/selected key lists and learned `GetConfigurationMaxKeys` bound | Known keys (including read-only flags), unknown keys and optional omitted lists |
+| ChangeConfiguration | Privileged `Ocpp`, action `ChangeConfiguration`, bridge reference schema `urn:uob:ocpp16:ChangeConfigurationReference:1`; station scope and locally provisioned key-bound, expiring reference | Accepted / Rejected / RebootRequired / NotSupported |
 
 Unknown fields, wrong schemas, OCPP 2.0.1 reset types, unsupported operations and cross-resource
 native addresses fail closed. Unlock connector IDs use real topology rather than the pinned
@@ -32,6 +34,22 @@ opaque reference; token material is resolved only to construct the bounded socke
 A custom `RemoteStartIdentity` must provide equivalent bounded local policy checks. Charger-side
 Authorize/StartTransaction requests still use normal local authorization independently of the
 charger's `AuthorizeRemoteTxRequests` setting. Stop does not require renewed start permission.
+
+Configuration writes persist only `key` and an opaque `valueReference`; the actual value is held
+by `LocalConfigurationValues`. The queue contains only that reference; the authenticated
+socket owner rechecks station, key, expiry and revocation immediately before encoding and sending
+the native CALL. There is no inline-value fallback. Revocation after the asynchronous send starts
+cannot cancel that in-flight transmission. Construct and provision the provider in the trusted
+host; the management-only executable does not compose a charging host or expose a new
+configuration endpoint. Once a read has shown a key is read-only, a write to that key is denied
+locally for that socket session.
+
+The opt-in management command route requires a per-request bearer credential verified by the
+host's `ManagementCommandAuthenticator`; it never accepts an origin supplied by the request body.
+Query-backed command status requires the same authentication and checks the result's return-route
+origin, in addition to the host's station-scoped query authorization. Event-backed status uses its
+separate authenticated event read grant. An integrator must install a real verifier before mounting
+the command route; a host-owned fixed principal alone is not sufficient.
 
 Expiry is checked at admission, preparation, and immediately before queueing, then translated to
 a monotonic last-send deadline checked by the socket owner. Extremely distant expiries are capped
@@ -61,6 +79,15 @@ Uncertain and interrupted dispatches are recovered without retransmission. An id
 returns the stored result; an explicit new operator request is required for another attempt.
 No service restart or station reconnect silently executes old commands.
 
+GetConfiguration results retain the requested keys, returned keys, unknown keys, read-only
+flags and whether a value was absent or redacted. Only a small allowlist of numeric OCPP Core
+settings discloses a validated scalar; unknown/vendor and credential-like settings never expose
+their values in durable results, command status, exports, MQTT or diagnostic capture. A
+ChangeConfiguration acknowledgement records the exact native status, not proof that a setting
+changed. A later explicit GetConfiguration may be linked with
+`CommandCoordinator::reconcile_configuration_observation`; the read and write remain separate
+requests and no reboot or retry is initiated automatically.
+
 ## Verification and provenance
 
 The independent fixture corpus includes all four requests (both reset modes) and every native
@@ -76,3 +103,16 @@ invalid input, expired queued work, late and malformed replies, disconnection, p
 recovery and no automatic replay. The existing transaction/registration suites verify status
 ordering, reconnect continuity and failed commits. This is implementation evidence, not OCA
 certification or proof of physical charging hardware behavior.
+
+`cargo test --locked -p uob-protocol-adapter --test ocpp16_configuration --test
+ocpp16_configuration_outcomes --test ocpp16_configuration_policy` exercises the real
+authenticated WebSocket and SQLite command path: partial/unknown and redacted reads,
+read-only/unauthorized/disconnected writes, exact native statuses, request deduplication,
+later explicit observations and restart recovery. Pinned OCA GetConfiguration and
+ChangeConfiguration wire schemas and independent JSON examples are checked by
+`cargo run --locked -p uob-ocpp-fixtures`. This does not establish interoperability with
+physical stations or OCA certification.
+
+`cargo test --locked -p uob-mqtt-target-adapter --test ingress_wire --test outbound_wire`
+also verifies that both immediate and durable MQTT result publication carry configuration
+command-result v1.1 JSON, preserve v1.0, and reject unsupported future result revisions.

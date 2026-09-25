@@ -3,7 +3,9 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     time::Duration,
 };
-use support::{emit, expire_calls, finish_not_transmitted, retain_recent, uncertain_all};
+use support::{
+    emit, expire_calls, finish_not_transmitted, finish_response, retain_recent, uncertain_all,
+};
 
 use axum::extract::ws::Message;
 use tokio::{
@@ -21,8 +23,8 @@ use super::{
     types::{
         CallSessionConfiguration, CallSessionConfigurationError, CallSessionDiagnostic,
         CallSessionHandle, CallSessionOutputs, CallSessionTask, IncomingCall, IncomingCallReceiver,
-        IncomingCallResponder, PendingEntry, QueuedOutbound, QueuedReply, RemoteCallError,
-        SessionCallOutcome, TransmissionUncertainReason,
+        IncomingCallResponder, PendingEntry, QueuedOutbound, QueuedReply, QueuedWire,
+        RemoteCallError, SessionCallOutcome, TransmissionUncertainReason,
     },
 };
 use crate::{OcppCallError, OcppErrorCode, StationConnection, v16, v201};
@@ -221,8 +223,28 @@ async fn send_outbound(
     let trace = state.span(Some(queued.request.correlation_id.clone()));
     let message_id = queued.request.message_id.clone();
     let correlation_id = queued.request.correlation_id.clone();
+    // Resolve only at the socket-owner send boundary. There is no task suspension between
+    // this policy check and initiating the WebSocket send; a send already in flight remains
+    // uncertain if policy changes while its async write is pending.
+    let deferred_encoded = match &queued.wire {
+        QueuedWire::Ready(_) => None,
+        QueuedWire::Configuration(deferred) => {
+            let Some(encoded) = deferred.encode_at_send(&queued.request.message_id) else {
+                finish_not_transmitted(
+                    queued,
+                    "protected configuration reference unavailable before socket send",
+                );
+                return;
+            };
+            Some(encoded)
+        }
+    };
+    let encoded = match queued.wire {
+        QueuedWire::Ready(encoded) => encoded,
+        QueuedWire::Configuration(_) => deferred_encoded.expect("checked above"),
+    };
     if connection
-        .send(Message::Text(queued.encoded.into()))
+        .send(Message::Text(encoded.into()))
         .await
         .is_err()
     {
@@ -407,54 +429,6 @@ async fn process_incoming_call(
             rejected.responder.sender = None;
             send_capacity_error(connection, &message_id, state.protocol).await;
         }
-    }
-}
-
-fn finish_response(
-    message_id: String,
-    state: &mut SessionState,
-    diagnostics: &mpsc::Sender<CallSessionDiagnostic>,
-    outcome: impl FnOnce(CorrelationId) -> SessionCallOutcome,
-) {
-    if let Some(entry) = state.pending.remove(&message_id) {
-        entry
-            .trace
-            .emit(FlowStage::OcppReceive, FlowEvidence::Completed);
-        let result = outcome(entry.correlation_id);
-        let _ = entry.result.send(result);
-        retain_recent(
-            &mut state.retired_outbound,
-            message_id,
-            state.history_capacity,
-        );
-    } else if let Some(index) = state.timed_out.iter().position(|(id, _)| id == &message_id) {
-        let (_, correlation_id) = state
-            .timed_out
-            .remove(index)
-            .expect("located late response");
-        retain_recent(
-            &mut state.retired_outbound,
-            message_id.clone(),
-            state.history_capacity,
-        );
-        state
-            .span(Some(correlation_id.clone()))
-            .emit(FlowStage::OcppReceive, FlowEvidence::Stale);
-        emit(
-            diagnostics,
-            CallSessionDiagnostic::LateResponse {
-                message_id,
-                correlation_id,
-            },
-        );
-    } else {
-        state
-            .span(None)
-            .emit(FlowStage::OcppReceive, FlowEvidence::Uncorrelated);
-        emit(
-            diagnostics,
-            CallSessionDiagnostic::UnmatchedResponse { message_id },
-        );
     }
 }
 

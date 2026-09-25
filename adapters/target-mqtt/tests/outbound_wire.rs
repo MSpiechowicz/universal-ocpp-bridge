@@ -1,10 +1,13 @@
 mod support;
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use serde_json::Value;
 use uob_application::{DeliveryOutcome, TargetMessage};
-use uob_contracts::{CommandResult, Environment, EventEnvelope, StationSnapshot, TraceRecord};
+use uob_contracts::{
+    CommandLifecycle, CommandResult, ConfigurationResult, ConfigurationWriteStatus,
+    ContractVersion, Environment, EventEnvelope, StationSnapshot, TraceRecord,
+};
 use uob_mqtt_target_adapter::MqttRuntimeOptions;
 
 use support::{
@@ -65,6 +68,104 @@ async fn publishes_canonical_outputs_with_versioned_topics_and_broker_ack_truth(
         "uob/v1/demo/trusted%2Fbridge%2B%23/availability",
     )
     .await;
+}
+
+#[tokio::test]
+async fn publishes_configuration_result_and_rejects_future_result_revision() {
+    let broker = TestBroker::bind().await;
+    let mut target = start_target(
+        &broker,
+        "bridge-a",
+        MqttRuntimeOptions::default(),
+        standard_capacities(),
+    );
+    let mut peer = broker.accept(false).await;
+    let online = peer.next_publish().await;
+    peer.acknowledge(&online).await;
+
+    let mut delivery = result_delivery("bridge-a", "station-a", "configuration", "write-1");
+    let TargetMessage::CommandResult(result) =
+        Arc::get_mut(&mut delivery.message).expect("unique result delivery")
+    else {
+        unreachable!();
+    };
+    result.schema_version = ContractVersion::V1_CONFIGURATION;
+    result.lifecycle = CommandLifecycle::ProtocolResponse {
+        accepted: true,
+        error: None,
+    };
+    result.configuration = Some(ConfigurationResult::Write {
+        key: "HeartbeatInterval".to_owned(),
+        status: ConfigurationWriteStatus::RebootRequired,
+    });
+    let expected = result.clone();
+
+    target
+        .host
+        .try_deliver(delivery)
+        .expect("configuration delivery");
+    let publication = peer.next_publish().await;
+    assert_publication(
+        &publication,
+        "uob/v1/demo/bridge-a/results/station-a/write-1",
+        false,
+    );
+    let payload = json(&publication);
+    assert_eq!(
+        payload["schema_version"],
+        serde_json::json!({"major": 1, "revision": 1})
+    );
+    assert_eq!(
+        payload["configuration"],
+        serde_json::json!({
+            "kind": "write",
+            "key": "HeartbeatInterval",
+            "status": "RebootRequired"
+        })
+    );
+    assert_eq!(
+        serde_json::from_slice::<CommandResult>(&publication.payload)
+            .expect("configuration result JSON"),
+        expected
+    );
+    peer.acknowledge(&publication).await;
+    let report = tokio::time::timeout(Duration::from_secs(2), target.host.next_report())
+        .await
+        .expect("configuration delivery report timeout")
+        .expect("delivery report channel");
+    assert!(matches!(
+        report.outcome,
+        DeliveryOutcome::Acknowledged { .. }
+    ));
+
+    let mut future = result_delivery("bridge-a", "station-a", "future", "write-2");
+    let TargetMessage::CommandResult(result) =
+        Arc::get_mut(&mut future.message).expect("unique future delivery")
+    else {
+        unreachable!();
+    };
+    result.schema_version = ContractVersion {
+        major: 1,
+        revision: 2,
+    };
+    target.host.try_deliver(future).expect("future delivery");
+    let report = tokio::time::timeout(Duration::from_secs(2), target.host.next_report())
+        .await
+        .expect("future delivery report timeout")
+        .expect("delivery report channel");
+    assert_eq!(
+        report.outcome,
+        DeliveryOutcome::PermanentFailure {
+            reason: "mqtt.canonical_identity_mismatch".to_owned(),
+        }
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), peer.next_publish())
+            .await
+            .is_err(),
+        "unsupported result revision must not publish"
+    );
+    graceful_shutdown(&mut target, &mut peer, "uob/v1/demo/bridge-a/availability").await;
 }
 
 #[tokio::test]

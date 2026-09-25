@@ -34,7 +34,8 @@ use uob_application::{
 
 pub use assets::ManagementRouterOptions;
 pub use command_api::{
-    ManagementCommandConfiguration, PrivilegedPayloadValidator, router_with_queries_and_commands,
+    ConfigurationPayloadValidator, ManagementCommandAuthenticator, ManagementCommandConfiguration,
+    PrivilegedPayloadValidator, router_with_queries_and_commands,
 };
 pub use event_api::{
     AuthenticatedEventAccess, ManagementEventAuthenticator, ManagementEventConfiguration,

@@ -11,6 +11,8 @@ use uob_contracts::{
     TargetInstanceId,
 };
 
+#[path = "codec_configuration.rs"]
+mod configuration;
 #[path = "codec_helpers.rs"]
 mod helpers;
 use helpers::{
@@ -217,6 +219,7 @@ where
 pub(crate) fn encode_command<P: Serialize>(
     value: &Command<P>,
 ) -> Result<EncodedCommand, StorageError> {
+    configuration::validate_command(value)?;
     let admitted_at = value.admitted_at.into_inner().unix_timestamp();
     let retain_until = admitted_at
         .checked_add(COMMAND_DEDUPLICATION_RETENTION_SECONDS)

@@ -1,8 +1,12 @@
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use axum::{
     body::{Body, to_bytes},
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header},
 };
 use serde_json::Value;
 use tower::ServiceExt;
@@ -20,20 +24,22 @@ use uob_contracts::{
     RuntimeIdentity, ServiceIdentity, StationId, TargetInstanceId, UtcTimestamp,
 };
 use uob_management_adapter::{
-    ManagementCommandConfiguration, ManagementReadLimits, ManagementRouterOptions,
-    PrivilegedPayloadValidator, router_with_queries_and_commands,
+    ManagementCommandAuthenticator, ManagementCommandConfiguration, ManagementReadLimits,
+    ManagementRouterOptions, PrivilegedPayloadValidator, router_with_queries_and_commands,
 };
 
 #[derive(Default)]
 struct CommandState {
     result: Mutex<Option<CommandResult>>,
     failure: Mutex<Option<CommandAdmissionErrorCode>>,
+    admissions: AtomicUsize,
 }
 
 impl CommandAdmissionPort<Value> for CommandState {
     fn submit(&self, command: ExternalCommand<Value>) -> CommandAdmissionFuture<'_, CommandResult> {
+        self.admissions.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
-            if let Some(code) = *self.failure.lock().unwrap() {
+            if let Some(code) = *self.failure.lock() {
                 return Err(CommandAdmissionError::new(code, "fixture"));
             }
             let result = CommandResult {
@@ -50,8 +56,10 @@ impl CommandAdmissionPort<Value> for CommandState {
                 },
                 recorded_at: timestamp(),
                 observed_effects: vec![],
+                configuration: None,
+                configuration_observations: Vec::new(),
             };
-            *self.result.lock().unwrap() = Some(result.clone());
+            *self.result.lock() = Some(result.clone());
             Ok(result)
         })
     }
@@ -68,7 +76,6 @@ impl CanonicalQuerySource<Value> for CommandState {
                 TargetQuery::CommandResult(request_id) => Ok(TargetQueryResult::CommandResult(
                     self.result
                         .lock()
-                        .unwrap()
                         .clone()
                         .filter(|result| result.return_route.request_id == request_id),
                 )),
@@ -112,6 +119,21 @@ impl PrivilegedPayloadValidator for RejectPrivileged {
 fn origin() -> AuthenticatedCommandOrigin {
     AuthenticatedCommandOrigin::Management {
         principal_id: PrincipalId::new("operator-a").unwrap(),
+    }
+}
+
+struct CommandAuthenticator;
+
+impl ManagementCommandAuthenticator for CommandAuthenticator {
+    fn authenticate(&self, token: &str) -> Option<AuthenticatedCommandOrigin> {
+        let principal_id = match token {
+            "operator-secret" => "operator-a",
+            "other-secret" => "operator-b",
+            _ => return None,
+        };
+        Some(AuthenticatedCommandOrigin::Management {
+            principal_id: PrincipalId::new(principal_id).unwrap(),
+        })
     }
 }
 
@@ -162,7 +184,7 @@ fn router(state: Arc<CommandState>) -> axum::Router {
         ManagementReadLimits::default(),
         ManagementCommandConfiguration {
             admission,
-            origin: origin(),
+            authenticator: Arc::new(CommandAuthenticator),
             privileged_payloads: Arc::new(RejectPrivileged),
         },
         ManagementRouterOptions::default(),
@@ -189,6 +211,7 @@ async fn accepted_submission_has_status_link_and_status_keeps_effects_separate()
         .clone()
         .oneshot(
             Request::post("/api/v1/commands")
+                .header(header::AUTHORIZATION, "Bearer operator-secret")
                 .header("content-type", "application/json")
                 .body(Body::from(serde_json::to_vec(&request()).unwrap()))
                 .unwrap(),
@@ -205,6 +228,7 @@ async fn accepted_submission_has_status_link_and_status_keeps_effects_separate()
     let status = app
         .oneshot(
             Request::get("/api/v1/commands/request-a")
+                .header(header::AUTHORIZATION, "Bearer operator-secret")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -226,10 +250,11 @@ async fn persistence_failure_and_id_conflict_never_return_accepted() {
         ),
     ] {
         let state = Arc::new(CommandState::default());
-        *state.failure.lock().unwrap() = Some(failure);
+        *state.failure.lock() = Some(failure);
         let response = router(state)
             .oneshot(
                 Request::post("/api/v1/commands")
+                    .header(header::AUTHORIZATION, "Bearer operator-secret")
                     .header("content-type", "application/json")
                     .body(Body::from(serde_json::to_vec(&request()).unwrap()))
                     .unwrap(),
@@ -250,6 +275,7 @@ async fn request_cannot_supply_trusted_origin_and_unknown_fields_fail_closed() {
     let response = router(Arc::new(CommandState::default()))
         .oneshot(
             Request::post("/api/v1/commands")
+                .header(header::AUTHORIZATION, "Bearer operator-secret")
                 .header("content-type", "application/json")
                 .body(Body::from(serde_json::to_vec(&value).unwrap()))
                 .unwrap(),
@@ -260,4 +286,110 @@ async fn request_cannot_supply_trusted_origin_and_unknown_fields_fail_closed() {
     let body: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
     assert_eq!(body["error"], "command.invalid_request");
+}
+
+#[tokio::test]
+async fn missing_malformed_and_wrong_credentials_never_reach_admission() {
+    let state = Arc::new(CommandState::default());
+    let app = router(state.clone());
+    for authorization in [
+        None,
+        Some("Basic operator-secret"),
+        Some("Bearer"),
+        Some("Bearer operator-secret extra"),
+        Some("Bearer wrong-secret"),
+    ] {
+        let mut builder =
+            Request::post("/api/v1/commands").header(header::CONTENT_TYPE, "application/json");
+        if let Some(value) = authorization {
+            builder = builder.header(header::AUTHORIZATION, value);
+        }
+        let response = app
+            .clone()
+            .oneshot(
+                builder
+                    .body(Body::from(serde_json::to_vec(&request()).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "{authorization:?}"
+        );
+    }
+    assert_eq!(state.admissions.load(Ordering::SeqCst), 0);
+    assert!(state.result.lock().is_none());
+}
+
+#[tokio::test]
+async fn authenticated_submit_still_obeys_scoped_admission() {
+    let state = Arc::new(CommandState::default());
+    let mut outside = request();
+    outside.resource.station_id = StationId::new("station-b").unwrap();
+    let response = router(state.clone())
+        .oneshot(
+            Request::post("/api/v1/commands")
+                .header(header::AUTHORIZATION, "Bearer operator-secret")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&outside).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(state.admissions.load(Ordering::SeqCst), 0);
+    assert!(state.result.lock().is_none());
+}
+
+#[tokio::test]
+async fn command_status_requires_credential_and_exact_result_origin() {
+    let state = Arc::new(CommandState::default());
+    let app = router(state.clone());
+    let accepted = app
+        .clone()
+        .oneshot(
+            Request::post("/api/v1/commands")
+                .header(header::AUTHORIZATION, "Bearer operator-secret")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request()).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(accepted.status(), StatusCode::ACCEPTED);
+
+    for (authorization, expected) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some("Bearer wrong-secret"), StatusCode::UNAUTHORIZED),
+        (Some("Bearer other-secret"), StatusCode::FORBIDDEN),
+        (Some("Bearer operator-secret"), StatusCode::OK),
+    ] {
+        let mut builder = Request::get("/api/v1/commands/request-a");
+        if let Some(value) = authorization {
+            builder = builder.header(header::AUTHORIZATION, value);
+        }
+        let response = app
+            .clone()
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{authorization:?}");
+    }
+
+    {
+        let mut result = state.result.lock();
+        result.as_mut().unwrap().resource.station_id = StationId::new("station-b").unwrap();
+    }
+    let response = app
+        .oneshot(
+            Request::get("/api/v1/commands/request-a")
+                .header(header::AUTHORIZATION, "Bearer operator-secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }

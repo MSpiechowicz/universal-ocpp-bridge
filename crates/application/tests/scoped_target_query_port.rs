@@ -421,6 +421,8 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         lifecycle: CommandLifecycle::Admitted,
         recorded_at: timestamp(0),
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }
 
