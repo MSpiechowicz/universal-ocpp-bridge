@@ -18,7 +18,9 @@ use uob_application::{
     SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
     StorageRetentionStatus, TargetDeliveryStore,
 };
-use uob_contracts::{Command, RequestId, ResourceRef, StationSnapshot, UtcTimestamp};
+use uob_contracts::{
+    Command, ConfigurationObservation, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+};
 
 use crate::{
     SqliteRetentionPolicy, SqliteRuntimeConfiguration, codec,
@@ -293,6 +295,20 @@ where
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
         self.request(|reply| Request::CommandResult(request_id.as_str().to_owned(), reply))
+    }
+
+    fn append_configuration_observation(
+        &self,
+        write_id: RequestId,
+        observation: ConfigurationObservation,
+    ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
+        self.request(|reply| {
+            Request::AppendConfigurationObservation(
+                write_id.as_str().to_owned(),
+                observation,
+                reply,
+            )
+        })
     }
 
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {

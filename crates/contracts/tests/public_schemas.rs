@@ -1,11 +1,14 @@
+#[path = "public_schemas/compatibility.rs"]
+mod compatibility;
+
 use std::collections::BTreeSet;
 
 use schemars::{JsonSchema, schema_for};
 use serde_json::{Map, Value, json};
 use uob_contracts::{
-    Command, CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, ExportBatch,
-    ExportRecord, ExportReport, ResourceCapabilities, ResourceRef, RuntimeIdentity,
-    ServiceIdentity, StationSnapshot, TraceRecord,
+    Command, CommandResult, ConfigurationChangeReference, DataPointDescriptor, DataPointValue,
+    EventEnvelope, ExportBatch, ExportRecord, ExportReport, ResourceCapabilities, ResourceRef,
+    RuntimeIdentity, ServiceIdentity, StationSnapshot, TraceRecord,
 };
 
 const SCHEMAS: &[(&str, &str)] = &[
@@ -43,7 +46,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.0/command-result.schema.json"),
+        include_str!("../schemas/v1.1/command-result.schema.json"),
+    ),
+    (
+        "configuration-change-reference",
+        include_str!("../schemas/v1.1/configuration-change-reference.schema.json"),
     ),
     (
         "event-envelope",
@@ -55,11 +62,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.1/export-record.schema.json"),
+        include_str!("../schemas/v1.2/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.1/export-batch.schema.json"),
+        include_str!("../schemas/v1.2/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -76,10 +83,11 @@ fn published(name: &str) -> Value {
 }
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
-    let revision = u8::from(matches!(
-        name,
-        "station-snapshot" | "export-record" | "export-batch"
-    ));
+    let revision = match name {
+        "export-record" | "export-batch" => 2,
+        "station-snapshot" | "command-result" | "configuration-change-reference" => 1,
+        _ => 0,
+    };
     let mut value = serde_json::to_value(schema_for!(T)).expect("serialize generated schema");
     let object = value.as_object_mut().expect("schema object");
     object.insert(
@@ -143,6 +151,10 @@ fn published_schema_snapshots_match_the_rust_contracts() {
     assert_eq!(
         published("command-result"),
         generated::<CommandResult>("command-result")
+    );
+    assert_eq!(
+        published("configuration-change-reference"),
+        generated::<ConfigurationChangeReference>("configuration-change-reference")
     );
     assert_eq!(
         published("event-envelope"),
@@ -219,6 +231,33 @@ fn canonical_examples_validate_against_their_public_schemas() {
     );
     let export_batch: Value = serde_json::from_str(include_str!("fixtures/export-batch-v1.json"))
         .expect("export batch fixture");
+    for (batch_schema, record_schema) in [
+        (
+            include_str!("../schemas/v1.0/export-batch.schema.json"),
+            include_str!("../schemas/v1.0/export-record.schema.json"),
+        ),
+        (
+            include_str!("../schemas/v1.1/export-batch.schema.json"),
+            include_str!("../schemas/v1.1/export-record.schema.json"),
+        ),
+    ] {
+        let batch_validator =
+            jsonschema::draft202012::new(&serde_json::from_str(batch_schema).unwrap()).unwrap();
+        let record_validator =
+            jsonschema::draft202012::new(&serde_json::from_str(record_schema).unwrap()).unwrap();
+        assert!(
+            batch_validator.is_valid(&export_batch),
+            "legacy batch fixture must remain valid"
+        );
+        assert!(
+            export_batch["records"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|record| record_validator.is_valid(record)),
+            "legacy records must remain valid"
+        );
+    }
     assert_valid("export-batch", &export_batch);
     for record in export_batch["records"]
         .as_array()
@@ -334,125 +373,4 @@ fn compatibility_errors(old: &Value, new: &Value, path: &str) -> Vec<String> {
         }
     }
     errors
-}
-
-#[test]
-fn compatibility_check_detects_incompatible_v1_changes() {
-    let baseline = json!({
-        "type": "object",
-        "properties": {
-            "status": { "type": "string", "enum": ["ready", "degraded"] },
-            "detail": { "type": "string" }
-        },
-        "required": ["status"]
-    });
-    let additive = json!({
-        "type": "object",
-        "properties": {
-            "status": { "type": "string", "enum": ["ready", "degraded", "stopped"] },
-            "detail": { "type": "string" },
-            "optional_metric": { "type": "integer" }
-        },
-        "required": ["status"]
-    });
-    assert!(compatibility_errors(&baseline, &additive, "$").is_empty());
-
-    let removal = json!({
-        "type": "object",
-        "properties": { "status": { "type": "string", "enum": ["ready", "degraded"] } },
-        "required": ["status"]
-    });
-    assert!(
-        compatibility_errors(&baseline, &removal, "$")
-            .iter()
-            .any(|error| error.contains("property detail was removed"))
-    );
-
-    let changed_type = json!({
-        "type": "object",
-        "properties": {
-            "status": { "type": "integer", "enum": ["ready", "degraded"] },
-            "detail": { "type": "string" }
-        },
-        "required": ["status"]
-    });
-    assert!(
-        compatibility_errors(&baseline, &changed_type, "$")
-            .iter()
-            .any(|error| error.contains("type changed"))
-    );
-
-    let narrowed_enum = json!({
-        "type": "object",
-        "properties": {
-            "status": { "type": "string", "enum": ["ready"] },
-            "detail": { "type": "string" }
-        },
-        "required": ["status"]
-    });
-    assert!(
-        compatibility_errors(&baseline, &narrowed_enum, "$")
-            .iter()
-            .any(|error| error.contains("accepted enum value"))
-    );
-
-    let newly_required = json!({
-        "type": "object",
-        "properties": {
-            "status": { "type": "string", "enum": ["ready", "degraded"] },
-            "detail": { "type": "string" }
-        },
-        "required": ["status", "detail"]
-    });
-    assert!(
-        compatibility_errors(&baseline, &newly_required, "$")
-            .iter()
-            .any(|error| error.contains("became required"))
-    );
-}
-
-#[test]
-fn older_readers_tolerate_optional_response_and_event_fields() {
-    let event = include_str!("fixtures/event-envelope-v1.json").replace(
-        "\n  \"payload\"",
-        "\n  \"future_optional_event_field\": {\"enabled\": true},\n  \"payload\"",
-    );
-    serde_json::from_str::<EventEnvelope<Value>>(&event)
-        .expect("older event reader accepts optional field");
-
-    let mut result: Value = serde_json::from_str(include_str!("fixtures/command-results-v1.json"))
-        .expect("result fixture");
-    result[0]["future_optional_result_field"] = json!("new metadata");
-    serde_json::from_value::<CommandResult>(result[0].clone())
-        .expect("older result reader accepts optional field");
-}
-
-#[test]
-fn remote_correlation_is_an_additive_revision_of_released_schemas() {
-    for (name, previous) in [
-        (
-            "station-snapshot",
-            include_str!("../schemas/v1.0/station-snapshot.schema.json"),
-        ),
-        (
-            "export-record",
-            include_str!("../schemas/v1.0/export-record.schema.json"),
-        ),
-        (
-            "export-batch",
-            include_str!("../schemas/v1.0/export-batch.schema.json"),
-        ),
-    ] {
-        let old: Value = serde_json::from_str(previous).unwrap();
-        let new = published(name);
-        assert!(compatibility_errors(&old, &new, "$").is_empty());
-        for (definition, previous) in old["$defs"].as_object().unwrap() {
-            assert!(
-                compatibility_errors(previous, &new["$defs"][definition], definition).is_empty()
-            );
-        }
-        let state = &new["$defs"]["TransactionProtocolState"];
-        assert!(state["properties"].get("remote_start_id").is_some());
-        assert!(!strings(state.get("required")).contains("remote_start_id"));
-    }
 }

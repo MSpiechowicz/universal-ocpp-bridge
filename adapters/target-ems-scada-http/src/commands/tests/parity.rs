@@ -1,7 +1,12 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
-use axum::{Router, body::Body, http::StatusCode};
+use axum::{
+    Router,
+    body::Body,
+    http::{Request, StatusCode},
+};
 use serde_json::{Value, json};
+use tower::ServiceExt;
 use uob_application::{
     AccessGrant, AccessPermission, AccessPolicy, AccessResourceScope, Application,
     CommandAdmissionPort, OperationalStore, ScopedCommandAdmissionPort, TargetQueryAuthorization,
@@ -13,8 +18,8 @@ use uob_contracts::{
     RequestId, RuntimeIdentity, ServiceIdentity, StationId, TargetInstanceId, UtcTimestamp,
 };
 use uob_management_adapter::{
-    ManagementCommandConfiguration, ManagementReadLimits, ManagementRouterOptions,
-    PrivilegedPayloadValidator, router_with_queries_and_commands,
+    ManagementCommandAuthenticator, ManagementCommandConfiguration, ManagementReadLimits,
+    ManagementRouterOptions, PrivilegedPayloadValidator, router_with_queries_and_commands,
 };
 
 use super::support::{Harness, Source, payload, post, send};
@@ -26,6 +31,16 @@ impl PrivilegedPayloadValidator for RejectPrivileged {
         _: &uob_contracts::PrivilegedOcppOperation<Value>,
     ) -> Result<(), &'static str> {
         Err("not_granted")
+    }
+}
+
+struct ManagementAuthenticator;
+
+impl ManagementCommandAuthenticator for ManagementAuthenticator {
+    fn authenticate(&self, token: &str) -> Option<AuthenticatedCommandOrigin> {
+        (token == "management-secret").then(|| AuthenticatedCommandOrigin::Management {
+            principal_id: PrincipalId::new("management-operator").unwrap(),
+        })
     }
 }
 
@@ -67,7 +82,7 @@ fn management(harness: &Harness) -> Router {
                 harness.coordinator.clone(),
                 AccessPolicy::single(grant),
             )),
-            origin,
+            authenticator: Arc::new(ManagementAuthenticator),
             privileged_payloads: Arc::new(RejectPrivileged),
         },
         ManagementRouterOptions::default(),
@@ -82,7 +97,7 @@ async fn http_and_management_use_equivalent_durable_commands_and_keep_origins_se
         management(&harness),
         "POST",
         "/api/v1/commands",
-        "unused",
+        "management-secret",
         Body::from(payload("management", "station-a").to_string()),
     )
     .await;
@@ -143,6 +158,39 @@ async fn http_and_management_use_equivalent_durable_commands_and_keep_origins_se
         .0,
         StatusCode::FORBIDDEN
     );
+}
+
+#[tokio::test]
+async fn management_command_without_valid_bearer_is_not_persisted_or_sent() {
+    let harness = Harness::new();
+    for (id, credential) in [
+        ("missing-management", None),
+        ("wrong-management", Some("Bearer wrong")),
+    ] {
+        let mut builder =
+            Request::post("/api/v1/commands").header("content-type", "application/json");
+        if let Some(credential) = credential {
+            builder = builder.header("authorization", credential);
+        }
+        let response = management(&harness)
+            .oneshot(
+                builder
+                    .body(Body::from(payload(id, "station-a").to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(
+            harness
+                .store
+                .command_by_request_id(RequestId::new(id).unwrap())
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert_eq!(harness.stations.0.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]

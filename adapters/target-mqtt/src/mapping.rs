@@ -12,6 +12,10 @@ use crate::configuration::MQTT_TARGET_KIND;
 const MAX_TOPIC_BYTES: usize = 65_535;
 const MAX_CLIENT_ID_BYTES: usize = 128;
 
+fn supported_result_version(version: ContractVersion) -> bool {
+    version == ContractVersion::V1_INITIAL || version == ContractVersion::V1_CONFIGURATION
+}
+
 /// Trusted, versioned MQTT namespace shared by every outbound mapping.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TopicNamespace {
@@ -79,7 +83,7 @@ impl TopicNamespace {
         result: &CommandResult,
         maximum_payload_bytes: usize,
     ) -> Result<WirePublication, MappingError> {
-        if result.schema_version != ContractVersion::V1_INITIAL
+        if !supported_result_version(result.schema_version)
             || result.resource.bridge_id != self.bridge_id
             || !matches!(
                 &result.return_route.origin,
@@ -208,7 +212,7 @@ impl TopicNamespace {
                 )
             }
             TargetMessage::CommandResult(result) => {
-                if result.schema_version != ContractVersion::V1_INITIAL
+                if !supported_result_version(result.schema_version)
                     || result.resource != delivery.station_ordering_key
                 {
                     return Err(MappingError::IdentityMismatch);

@@ -1,0 +1,24 @@
+{
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.1/configuration-change-reference.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bridge-owned schema for a protected write; the native OCA request is reconstructed\nonly after station/key-bound reference resolution at the authenticated socket.",
+  "properties": {
+    "key": {
+      "type": "string"
+    },
+    "valueReference": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "valueReference"
+  ],
+  "title": "ConfigurationChangeReference",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 1
+  }
+}

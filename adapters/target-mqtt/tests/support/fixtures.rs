@@ -189,6 +189,8 @@ pub fn result_delivery(
             lifecycle: CommandLifecycle::Admitted,
             recorded_at: timestamp(),
             observed_effects: vec![],
+            configuration: None,
+            configuration_observations: vec![],
         }),
     )
 }

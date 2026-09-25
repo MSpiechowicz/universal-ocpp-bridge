@@ -72,6 +72,15 @@ impl Drain {
         self.changed()
     }
     pub(crate) fn check_write(&mut self, write: &EncodedWrite) -> Result<(), StorageError> {
+        self.check_write_admission(write.requires_start_admission)
+    }
+    pub(crate) fn check_completion_write(&mut self) -> Result<(), StorageError> {
+        self.check_write_admission(false)
+    }
+    fn check_write_admission(
+        &mut self,
+        requires_start_admission: bool,
+    ) -> Result<(), StorageError> {
         self.expire();
         if let Some(window) = &self.window {
             if window.sealed {
@@ -82,7 +91,7 @@ impl Drain {
             }
             // A station report is evidence of possibly autonomous charging: retain it during
             // drain so it invalidates idle. Only bridge-issued starts are denied here.
-            if write.requires_start_admission {
+            if requires_start_admission {
                 return Err(busy("new starts disabled for release drain"));
             }
         }

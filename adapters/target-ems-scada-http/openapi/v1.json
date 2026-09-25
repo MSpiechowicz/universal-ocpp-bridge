@@ -7,7 +7,7 @@
             "type": "string"
           },
           "result": {
-            "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+            "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
           },
           "status_url": {
             "type": "string"
@@ -716,7 +716,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
                     }
                   ]
                 }
@@ -762,7 +762,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
                     }
                   ]
                 }
@@ -809,7 +809,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
                     }
                   ]
                 }
@@ -829,7 +829,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
                     }
                   ]
                 }
@@ -862,7 +862,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
                     }
                   ]
                 }
@@ -949,7 +949,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.0/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.1/command-result.schema.json"
                 }
               }
             },
@@ -2483,6 +2483,188 @@
                 "export-record.schema.json",
                 "export-batch.schema.json",
                 "export-report.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "400": {
+            "description": "ems_scada_http.invalid_request",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request"
+            ]
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "404": {
+            "description": "ems_scada_http.unknown_resource",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.1/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "command-result.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.invalid_request",
+            "x-uob-error-codes": [
+              "ems_scada_http.invalid_request"
+            ]
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unknown_resource",
+            "x-uob-error-codes": [
+              "ems_scada_http.unknown_resource"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_1_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "command-result.schema.json"
               ],
               "type": "string"
             }

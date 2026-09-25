@@ -1,5 +1,5 @@
 use super::{
-    BTreeMap, CallSessionDiagnostic, FlowEvidence, FlowStage, Instant, PendingEntry,
+    BTreeMap, CallSessionDiagnostic, CorrelationId, FlowEvidence, FlowStage, Instant, PendingEntry,
     QueuedOutbound, SessionCallOutcome, SessionState, TransmissionUncertainReason, VecDeque, mpsc,
 };
 
@@ -25,6 +25,54 @@ pub(super) fn expire_calls(state: &mut SessionState, history_capacity: usize) {
             }
             state.timed_out.push_back((id, correlation_id));
         }
+    }
+}
+
+pub(super) fn finish_response(
+    message_id: String,
+    state: &mut SessionState,
+    diagnostics: &mpsc::Sender<CallSessionDiagnostic>,
+    outcome: impl FnOnce(CorrelationId) -> SessionCallOutcome,
+) {
+    if let Some(entry) = state.pending.remove(&message_id) {
+        entry
+            .trace
+            .emit(FlowStage::OcppReceive, FlowEvidence::Completed);
+        let result = outcome(entry.correlation_id);
+        let _ = entry.result.send(result);
+        retain_recent(
+            &mut state.retired_outbound,
+            message_id,
+            state.history_capacity,
+        );
+    } else if let Some(index) = state.timed_out.iter().position(|(id, _)| id == &message_id) {
+        let (_, correlation_id) = state
+            .timed_out
+            .remove(index)
+            .expect("located late response");
+        retain_recent(
+            &mut state.retired_outbound,
+            message_id.clone(),
+            state.history_capacity,
+        );
+        state
+            .span(Some(correlation_id.clone()))
+            .emit(FlowStage::OcppReceive, FlowEvidence::Stale);
+        emit(
+            diagnostics,
+            CallSessionDiagnostic::LateResponse {
+                message_id,
+                correlation_id,
+            },
+        );
+    } else {
+        state
+            .span(None)
+            .emit(FlowStage::OcppReceive, FlowEvidence::Uncorrelated);
+        emit(
+            diagnostics,
+            CallSessionDiagnostic::UnmatchedResponse { message_id },
+        );
     }
 }
 

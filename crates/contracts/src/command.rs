@@ -396,4 +396,10 @@ pub struct CommandResult {
     /// Later observed effects, linked independently from charger protocol acceptance.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub observed_effects: Vec<ObservedCommandEffect>,
+    /// Validated configuration reply, absent on older command results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<crate::ConfigurationResult>,
+    /// Explicit later read observations; never imply that a write took effect.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configuration_observations: Vec<crate::ConfigurationObservation>,
 }

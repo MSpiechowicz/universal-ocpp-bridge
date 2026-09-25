@@ -4,10 +4,10 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use time::OffsetDateTime;
-use uob_application::{TargetPortError, TargetPortErrorCode};
+use uob_application::{TargetDiagnostic, TargetHealthState, TargetPortError, TargetPortErrorCode};
 use uob_contracts::{
     AuthenticatedCommandOrigin, CommandLifecycle, CommandResult, CommandReturnRoute,
-    ContractVersion, UtcTimestamp,
+    ConfigurationResult, ConfigurationWriteStatus, ContractVersion, UtcTimestamp,
 };
 use uob_mqtt_target_adapter::MqttRuntimeOptions;
 
@@ -65,6 +65,106 @@ async fn subscribes_only_to_the_trusted_command_namespace_and_attaches_trusted_o
         result
     );
     peer.acknowledge(&published).await;
+
+    shutdown(&mut target, &mut peer).await;
+}
+
+#[tokio::test]
+async fn publishes_configuration_result_and_rejects_future_result_revision() {
+    let broker = TestBroker::bind().await;
+    let mut target = start_target(
+        &broker,
+        "bridge-a",
+        MqttRuntimeOptions::default(),
+        standard_capacities(),
+    );
+    let mut peer = broker.accept(false).await;
+    acknowledge_online(&mut peer).await;
+    ensure_subscription(&mut peer, "uob/v1/demo/bridge-a/commands/+/+").await;
+
+    for (packet_id, request_id, revision) in [(20, "configuration-write", 1), (21, "future", 2)] {
+        let payload = command("bridge-a", "station-a", request_id, future());
+        peer.publish_command(
+            &format!("uob/v1/demo/bridge-a/commands/station-a/{request_id}"),
+            &serde_json::to_vec(&payload).unwrap(),
+            packet_id,
+            false,
+            false,
+        )
+        .await;
+        let submission = tokio::time::timeout(Duration::from_secs(2), target.host.next_command())
+            .await
+            .expect("command admission timeout")
+            .expect("command admission");
+        let mut result = admitted(&submission.command);
+        result.schema_version = ContractVersion { major: 1, revision };
+        result.lifecycle = CommandLifecycle::ProtocolResponse {
+            accepted: true,
+            error: None,
+        };
+        result.configuration = Some(ConfigurationResult::Write {
+            key: "HeartbeatInterval".to_owned(),
+            status: ConfigurationWriteStatus::RebootRequired,
+        });
+        submission
+            .respond(Ok(result.clone()))
+            .expect("host response");
+
+        if revision == 1 {
+            let published = peer.next_publish().await;
+            assert_eq!(
+                published.topic,
+                format!("uob/v1/demo/bridge-a/results/station-a/{request_id}")
+            );
+            let payload: Value =
+                serde_json::from_slice(&published.payload).expect("configuration result JSON");
+            assert_eq!(
+                payload["schema_version"],
+                json!({"major": 1, "revision": 1})
+            );
+            assert_eq!(
+                payload["configuration"],
+                json!({
+                    "kind": "write",
+                    "key": "HeartbeatInterval",
+                    "status": "RebootRequired"
+                })
+            );
+            assert_eq!(
+                serde_json::from_slice::<CommandResult>(&published.payload)
+                    .expect("canonical configuration result"),
+                result
+            );
+            peer.acknowledge(&published).await;
+        } else {
+            tokio::time::timeout(Duration::from_secs(2), async {
+                loop {
+                    let diagnostic = target
+                        .host
+                        .next_diagnostic()
+                        .await
+                        .expect("diagnostic channel");
+                    if matches!(
+                        diagnostic,
+                        TargetDiagnostic::Health(health)
+                            if health.state == TargetHealthState::Degraded
+                                && health.reason.as_deref()
+                                    == Some("mqtt.canonical_identity_mismatch")
+                    ) {
+                        break;
+                    }
+                }
+            })
+            .await
+            .expect("unsupported version diagnostic timeout");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(100), peer.next_publish())
+                    .await
+                    .is_err(),
+                "unsupported result revision must not publish"
+            );
+        }
+    }
 
     shutdown(&mut target, &mut peer).await;
 }
@@ -315,6 +415,8 @@ fn admitted<P>(command: &uob_contracts::ExternalCommand<P>) -> CommandResult {
         lifecycle: CommandLifecycle::Admitted,
         recorded_at: timestamp(),
         observed_effects: vec![],
+        configuration: None,
+        configuration_observations: vec![],
     }
 }
 

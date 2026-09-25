@@ -1,16 +1,20 @@
+mod task;
+
 use std::{error::Error, fmt, time::Duration};
 
 use serde_json::Value;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
-    time::{Instant, timeout},
+    time::Instant,
 };
 use uob_application::{AdmissionError, Application, RuntimeReservation, WorkClass};
 use uob_contracts::{CorrelationId, ProtocolActionName, ProtocolEdition};
 
 use super::frame;
-use crate::{DecodedCall, OcppCallError, OcppErrorCode};
+use crate::{
+    DecodedCall, OcppCallError, OcppErrorCode, v16::remote_control::DeferredConfigurationCall,
+};
 
 /// Per-connection queue and response bounds for the OCPP call lifecycle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -59,12 +63,23 @@ impl fmt::Display for CallSessionConfigurationError {
 impl Error for CallSessionConfigurationError {}
 
 /// One validated bridge-originated OCPP CALL.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct OutboundCall {
     pub message_id: String,
     pub action: ProtocolActionName,
     pub payload: Value,
     pub correlation_id: CorrelationId,
+}
+impl fmt::Debug for OutboundCall {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OutboundCall")
+            .field("message_id", &self.message_id)
+            .field("action", &self.action)
+            .field("payload", &"[REDACTED]")
+            .field("correlation_id", &self.correlation_id)
+            .finish()
+    }
 }
 
 /// Sanitized charger CALLERROR without arbitrary remote description or detail content.
@@ -83,7 +98,7 @@ pub enum TransmissionUncertainReason {
 }
 
 /// Terminal result for one submitted outbound call.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum SessionCallOutcome {
     Result {
         payload: Value,
@@ -104,6 +119,45 @@ pub enum SessionCallOutcome {
         reason: TransmissionUncertainReason,
         correlation_id: CorrelationId,
     },
+}
+impl fmt::Debug for SessionCallOutcome {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Result { correlation_id, .. } => formatter
+                .debug_struct("Result")
+                .field("payload", &"[REDACTED]")
+                .field("correlation_id", correlation_id)
+                .finish(),
+            Self::Error {
+                error,
+                correlation_id,
+            } => formatter
+                .debug_struct("Error")
+                .field("error", error)
+                .field("correlation_id", correlation_id)
+                .finish(),
+            Self::TimedOut { correlation_id } => formatter
+                .debug_struct("TimedOut")
+                .field("correlation_id", correlation_id)
+                .finish(),
+            Self::NotTransmitted {
+                reason,
+                correlation_id,
+            } => formatter
+                .debug_struct("NotTransmitted")
+                .field("reason", reason)
+                .field("correlation_id", correlation_id)
+                .finish(),
+            Self::TransmissionUncertain {
+                reason,
+                correlation_id,
+            } => formatter
+                .debug_struct("TransmissionUncertain")
+                .field("reason", reason)
+                .field("correlation_id", correlation_id)
+                .finish(),
+        }
+    }
 }
 
 /// Failure to admit a call before any bytes can be transmitted.
@@ -133,9 +187,14 @@ impl PendingCall {
     }
 }
 
+pub(super) enum QueuedWire {
+    Ready(String),
+    Configuration(DeferredConfigurationCall),
+}
+
 pub(super) struct QueuedOutbound {
     pub request: OutboundCall,
-    pub encoded: String,
+    pub wire: QueuedWire,
     pub result: oneshot::Sender<SessionCallOutcome>,
     pub reservation: RuntimeReservation,
     pub send_before: Option<Instant>,
@@ -157,7 +216,7 @@ impl CallSessionHandle {
     ///
     /// Rejects malformed, over-budget, full, or stopped submissions before transmission.
     pub fn try_call(&self, request: OutboundCall) -> Result<PendingCall, SessionSubmitError> {
-        self.enqueue(request, None)
+        self.enqueue(request, None, None)
     }
 
     /// Admits work with a monotonic last-send deadline checked by the socket owner.
@@ -168,7 +227,16 @@ impl CallSessionHandle {
         request: OutboundCall,
         deadline: Instant,
     ) -> Result<PendingCall, SessionSubmitError> {
-        self.enqueue(request, Some(deadline))
+        self.enqueue(request, Some(deadline), None)
+    }
+
+    pub(crate) fn try_configuration_call_before(
+        &self,
+        request: OutboundCall,
+        deadline: Instant,
+        deferred: DeferredConfigurationCall,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        self.enqueue(request, Some(deadline), Some(deferred))
     }
 
     /// Exact authenticated socket identity; a handle never follows a reconnect.
@@ -193,28 +261,36 @@ impl CallSessionHandle {
         &self,
         request: OutboundCall,
         send_before: Option<Instant>,
+        deferred: Option<DeferredConfigurationCall>,
     ) -> Result<PendingCall, SessionSubmitError> {
         if request.message_id.trim().is_empty() || !request.payload.is_object() {
             return Err(SessionSubmitError::InvalidRequest);
         }
-        let encoded = frame::call(
-            &request.message_id,
-            request.action.as_str(),
-            &request.payload,
-        );
+        let (wire, bytes) = if let Some(deferred) = deferred {
+            let bytes = deferred.wire_size(&request.message_id).unwrap_or_default();
+            (QueuedWire::Configuration(deferred), bytes)
+        } else {
+            let encoded = frame::call(
+                &request.message_id,
+                request.action.as_str(),
+                &request.payload,
+            );
+            let bytes = encoded.len();
+            (QueuedWire::Ready(encoded), bytes)
+        };
         self.budget
-            .validate_ocpp_message(encoded.len())
+            .validate_ocpp_message(bytes)
             .map_err(SessionSubmitError::Resource)?;
         let reservation = self
             .budget
-            .try_reserve(WorkClass::PendingRequest, encoded.len())
+            .try_reserve(WorkClass::PendingRequest, bytes)
             .map_err(SessionSubmitError::Resource)?;
         let correlation_id = request.correlation_id.clone();
         let (result, receiver) = oneshot::channel();
         self.sender
             .try_send(QueuedOutbound {
                 request,
-                encoded,
+                wire,
                 result,
                 reservation,
                 send_before,
@@ -373,49 +449,6 @@ pub struct CallSessionOutputs {
 pub struct CallSessionTask {
     pub(super) shutdown: Option<oneshot::Sender<()>>,
     pub(super) join: Option<JoinHandle<()>>,
-}
-
-impl CallSessionTask {
-    /// Waits for peer disconnection or another terminal socket condition.
-    ///
-    /// # Errors
-    ///
-    /// Reports an unavailable, cancelled, or panicked session task.
-    pub async fn wait(mut self) -> Result<(), &'static str> {
-        let Some(join) = self.join.as_mut() else {
-            return Err("session task unavailable");
-        };
-        join.await.map_err(|_| "session task failed")
-    }
-
-    /// Requests graceful socket close within a caller-supplied deadline.
-    ///
-    /// # Errors
-    ///
-    /// Reports an unavailable, failed, or deadline-exceeding session task.
-    pub async fn shutdown(mut self, deadline: Duration) -> Result<(), &'static str> {
-        if let Some(shutdown) = self.shutdown.take() {
-            let _ = shutdown.send(());
-        }
-        let join = self.join.as_mut().ok_or("session task unavailable")?;
-        match timeout(deadline, &mut *join).await {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(_)) => Err("session task failed"),
-            Err(_) => {
-                join.abort();
-                let _ = join.await;
-                Err("session shutdown deadline exceeded")
-            }
-        }
-    }
-}
-
-impl Drop for CallSessionTask {
-    fn drop(&mut self) {
-        if let Some(join) = &self.join {
-            join.abort();
-        }
-    }
 }
 
 pub(super) struct PendingEntry {

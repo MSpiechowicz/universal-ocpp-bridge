@@ -1,4 +1,5 @@
 use super::RemoteStartIdentity;
+use super::{configuration, configuration_values::LocalConfigurationValues};
 use rust_ocpp::v1_6::messages::{
     change_availability::{ChangeAvailabilityRequest, ChangeAvailabilityResponse},
     remote_start_transaction::{RemoteStartTransactionRequest, RemoteStartTransactionResponse},
@@ -33,6 +34,8 @@ pub(super) fn prepare(
     command: &Command<Value>,
     snapshot: &StationSnapshot,
     identity: &dyn RemoteStartIdentity,
+    configuration_values: Option<&LocalConfigurationValues>,
+    facts: &configuration::SessionFacts,
     now: UtcTimestamp,
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, PolicyRejected, UnsupportedOperation};
@@ -106,7 +109,15 @@ pub(super) fn prepare(
             ))
         }
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp16j => {
-            privileged(operation, &command.resource, &snapshot.station, native)
+            privileged(
+                operation,
+                &command.resource,
+                &snapshot.station,
+                native,
+                configuration_values,
+                facts,
+                now,
+            )
         }
         _ => Err(UnsupportedOperation),
     }
@@ -116,9 +127,44 @@ fn privileged(
     resource: &ResourceRef,
     station: &ResourceRef,
     native: u32,
+    configuration_values: Option<&LocalConfigurationValues>,
+    facts: &configuration::SessionFacts,
+    now: UtcTimestamp,
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     match operation.action.as_str() {
+        "GetConfiguration" if operation.payload_schema.as_str() == configuration::GET_SCHEMA => {
+            if resource != station || native != 0 {
+                return Err(InvalidParameters);
+            }
+            Ok((
+                "GetConfiguration",
+                configuration::get_request(&operation.payload, facts.max_keys.unwrap_or(256))?,
+            ))
+        }
+        "ChangeConfiguration"
+            if operation.payload_schema.as_str() == configuration::CHANGE_REFERENCE_SCHEMA =>
+        {
+            if resource != station || native != 0 {
+                return Err(InvalidParameters);
+            }
+            let key = operation
+                .payload
+                .get("key")
+                .and_then(Value::as_str)
+                .ok_or(InvalidParameters)?;
+            // Once bounded session facts fill up, an unretained key may be read-only.
+            if facts.readonly.get(key) == Some(&true)
+                || (facts.readonly.len() == 256 && !facts.readonly.contains_key(key))
+            {
+                return Err(CommandErrorCode::PolicyRejected);
+            }
+            let provider = configuration_values.ok_or(CommandErrorCode::PolicyRejected)?;
+            Ok((
+                "ChangeConfiguration",
+                configuration::change_request(&operation.payload, resource, provider, now)?,
+            ))
+        }
         "ChangeAvailability"
             if operation.payload_schema.as_str()
                 == "urn:OCPP:1.6:2019:12:ChangeAvailabilityRequest" =>

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add OCPP 1.6J GetConfiguration and ChangeConfiguration through scoped privileged
+  command admission, per-request authenticated management access, authenticated station
+  sockets and durable SQLite results. Preserve native key/unknown/read-only and write-status
+  evidence, link explicit later reads, redact unclassified values and recheck protected
+  write references at the socket-send boundary. Pinned independent fixtures and real
+  WebSocket/SQLite scenarios cover denial, revocation, restart, deduplication and no
+  automatic replay (#108).
+
 - Add read-only station, connector, multi-EVSE, transaction, capability and typed-point
   views backed by opt-in demo-only authenticated OCPP 1.6J/2.0.1 ingress and private
   durable SQLite. Scope management reads/events by station, resync stale browser

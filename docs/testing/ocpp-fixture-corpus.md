@@ -52,3 +52,10 @@ complete protocol coverage, interoperability, resource safety, OCA certification
 Raspberry Pi performance. Rows advance to verified only when their stated observable behavior has
 the corresponding executable fixture and, where behavior is involved, independent scenario and
 state evidence.
+
+OCPP 1.6 GetConfiguration and ChangeConfiguration use the four unchanged request/response
+schemas from the pinned Edition 2 archive and hand-authored wire fixtures. They cover
+absent, empty and selected key lists; partial/unknown/read-only/omitted values; all
+four native write statuses and rejected commands. The corpus proves wire shape,
+while `ocpp16_configuration*` protocol integration tests exercise authenticated
+admission, redaction, persistent outcomes, recovery and one-shot dispatch.

@@ -284,6 +284,81 @@ async fn queued_transaction_linearizes_before_seal_and_sealed_boundary_refuses_l
 }
 
 #[tokio::test]
+async fn configuration_observation_append_invalidates_idle_and_seal_blocks_mutation() {
+    use uob_contracts::{
+        ConfigurationKey, ConfigurationObservation, ConfigurationResult, ConfigurationWriteStatus,
+    };
+
+    let database = TestDatabase::new();
+    let store = Store::open(database.path(), 8).unwrap();
+    let command = command("configuration-write", "station-a", start(None), 0);
+    let write_id = command.request_id.clone();
+    store
+        .write_atomic(command_write(command.clone()))
+        .await
+        .unwrap();
+
+    let mut completed = result(&command, accepted(), 1);
+    completed.configuration = Some(ConfigurationResult::Write {
+        key: "VendorPassword".to_owned(),
+        status: ConfigurationWriteStatus::Accepted,
+    });
+    let mut write = AtomicStoreWrite::empty();
+    write.command_result = Some(completed.clone());
+    store.write_atomic(write).await.unwrap();
+
+    let window = store.begin_drain(Window::from_secs(10)).await.unwrap();
+    let stale = store.observe_drain(window.clone()).await.unwrap();
+    assert!(stale.is_idle());
+    let observation = |id| ConfigurationObservation {
+        read_request_id: RequestId::new(id).unwrap(),
+        key: ConfigurationKey {
+            key: "VendorPassword".to_owned(),
+            readonly: false,
+            value: None,
+            redacted: true,
+        },
+    };
+    let first = observation("configuration-read-1");
+    let appended = store
+        .append_configuration_observation(write_id.clone(), first.clone())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(appended.configuration_observations, vec![first.clone()]);
+    assert_eq!(
+        store
+            .append_configuration_observation(write_id.clone(), first)
+            .await
+            .unwrap(),
+        Some(appended.clone()),
+        "duplicate read identity must not append another observation"
+    );
+    let fresh = store.observe_drain(window.clone()).await.unwrap();
+    assert!(fresh.revision > stale.revision);
+    assert!(fresh.is_idle());
+    assert_eq!(
+        store.seal_drain(stale).await.unwrap_err().code(),
+        StorageErrorCode::Busy
+    );
+    store.seal_drain(fresh).await.unwrap();
+
+    assert_eq!(
+        store
+            .append_configuration_observation(write_id.clone(), observation("configuration-read-2"))
+            .await
+            .unwrap_err()
+            .code(),
+        StorageErrorCode::Busy
+    );
+    assert_eq!(
+        store.command_result_by_request_id(write_id).await.unwrap(),
+        Some(appended),
+        "sealed append must not mutate the persisted command result"
+    );
+}
+
+#[tokio::test]
 async fn unparseable_persisted_station_state_fails_closed() {
     let database = TestDatabase::new();
     let store = Store::open(database.path(), 8).unwrap();

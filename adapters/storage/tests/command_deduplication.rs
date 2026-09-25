@@ -323,6 +323,8 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle, hour: i64) -> 
         lifecycle,
         recorded_at: timestamp(hour),
         observed_effects: Vec::new(),
+        configuration: None,
+        configuration_observations: Vec::new(),
     }
 }
 

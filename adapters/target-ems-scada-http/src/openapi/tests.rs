@@ -1,4 +1,7 @@
-use super::{openapi_document, schemas::CANONICAL};
+use super::{
+    openapi_document,
+    schemas::{CANONICAL, CANONICAL_V1_1},
+};
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
 use serde_json::{Value, json};
 
@@ -8,12 +11,16 @@ use serde_json::{Value, json};
 mod probe;
 
 fn registry() -> jsonschema::Registry<'static> {
-    let resources = CANONICAL.iter().map(|(file, source)| {
-        (
-            format!("https://bridge.test/bridge/v1/schemas/v1.0/{file}"),
-            serde_json::from_str::<Value>(source).unwrap(),
-        )
-    });
+    let resources = [("v1.0", CANONICAL), ("v1.1", CANONICAL_V1_1)]
+        .into_iter()
+        .flat_map(|(revision, schemas)| {
+            schemas.iter().map(move |(file, source)| {
+                (
+                    format!("https://bridge.test/bridge/v1/schemas/{revision}/{file}"),
+                    serde_json::from_str::<Value>(source).unwrap(),
+                )
+            })
+        });
     jsonschema::Registry::new()
         .extend(resources)
         .unwrap()
@@ -77,6 +84,27 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
         .unwrap()
         .validate(&document)
         .unwrap();
+    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.1/command-result.schema.json"});
+    assert_eq!(
+        document["paths"]["/bridge/v1/commands/{request_id}"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"],
+        result_ref
+    );
+    assert_eq!(
+        document["components"]["schemas"]["AcceptedCommand"]["properties"]["result"],
+        result_ref
+    );
+    for status in ["400", "403", "409", "410", "422"] {
+        assert_eq!(
+            document["paths"]["/bridge/v1/commands"]["post"]["responses"][status]["content"]["application/json"]
+                ["schema"]["oneOf"][1],
+            result_ref
+        );
+    }
+    assert_eq!(
+        document["paths"]["/bridge/v1/schemas/v1.1/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
+        json!(["command-result.schema.json"])
+    );
     for name in document["components"]["schemas"]
         .as_object()
         .unwrap()
@@ -111,15 +139,11 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
 }
 
 #[tokio::test]
-async fn document_and_exact_canonical_files_share_authentication_and_bounds() {
+async fn document_shares_authentication_and_serves_published_contract() {
     let router = authenticated_router();
-    for path in [
-        "/bridge/v1/openapi.json",
-        "/bridge/v1/schemas/v1.0/station-snapshot.schema.json",
-    ] {
-        assert_eq!(get(router.clone(), path, None).await.0, 401);
-        assert_eq!(get(router.clone(), path, Some("wrong")).await.0, 401);
-    }
+    let path = "/bridge/v1/openapi.json";
+    assert_eq!(get(router.clone(), path, None).await.0, 401);
+    assert_eq!(get(router.clone(), path, Some("wrong")).await.0, 401);
     let (status, document) = get(
         router.clone(),
         "/bridge/v1/openapi.json",
@@ -128,6 +152,18 @@ async fn document_and_exact_canonical_files_share_authentication_and_bounds() {
     .await;
     assert_eq!(status, 200);
     assert_eq!(document, openapi_document());
+}
+
+#[tokio::test]
+async fn schema_versions_serve_exact_canonical_files() {
+    let router = authenticated_router();
+    for path in [
+        "/bridge/v1/schemas/v1.0/station-snapshot.schema.json",
+        "/bridge/v1/schemas/v1.1/command-result.schema.json",
+    ] {
+        assert_eq!(get(router.clone(), path, None).await.0, 401);
+        assert_eq!(get(router.clone(), path, Some("wrong")).await.0, 401);
+    }
     for (file, source) in CANONICAL {
         let (status, body) = get(
             router.clone(),
@@ -138,6 +174,26 @@ async fn document_and_exact_canonical_files_share_authentication_and_bounds() {
         assert_eq!(status, 200);
         assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
     }
+    for (file, source) in CANONICAL_V1_1 {
+        let (status, body) = get(
+            router.clone(),
+            &format!("/bridge/v1/schemas/v1.1/{file}"),
+            Some(READER_TOKEN),
+        )
+        .await;
+        assert_eq!(status, 200);
+        assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
+    }
+    assert_eq!(
+        get(
+            router.clone(),
+            "/bridge/v1/schemas/v1.1/station-snapshot.schema.json",
+            Some(READER_TOKEN),
+        )
+        .await
+        .0,
+        404
+    );
     assert_eq!(
         get(
             router,

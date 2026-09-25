@@ -26,3 +26,14 @@ label type.
 Runtime identity is also a security boundary. Production rejects simulator and mock-checkout
 controls. Payment-dependent application logic accepts only provider-verified evidence; a browser
 `payment succeeded` assertion is untrusted in every environment.
+
+OCPP 1.6 configuration values are classified before durable command results or diagnostics
+are written. Only a small allowlist of numeric Core keys may expose validated decimal
+values; unknown/vendor, credential-like or malformed values are omitted with a redaction
+flag. Privileged ChangeConfiguration accepts an opaque, station/key-bound protected
+reference rather than an inline secret. The SQLite command codec refuses inline write
+values even if a caller bypasses normal admission. Queued writes contain only the reference:
+the trusted provider rechecks revocation, scope and expiry at the socket-send boundary.
+The encoded frame transiently holds the value; a revocation after sending starts cannot
+cancel an in-flight WebSocket send. Native write acknowledgements and later observations
+are distinct evidence, not claims of physical state change.
