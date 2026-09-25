@@ -1,11 +1,16 @@
 # Service packaging and shutdown
 
 `packaging/systemd/uob.service` runs the current `uob serve` executable as the dedicated
-`uob:uob` system account. The unit starts the management service without static UI assets.
-It does not enable the separately packaged simulator or the planned release supervisor.
-The current CLI validates target selection but does not yet compose a charging runtime;
-external database export remains unavailable. Installing this unit does not change those
-implementation boundaries.
+`uob:uob` system account. The unit starts the production management/storage service without
+static UI assets; it does not enable staging, the separately installed release supervisor, or
+production charging. The CLI also offers an opt-in demo-only loopback charging ingress, which
+is not enabled by this unit. Installing the service does not qualify external export or
+on-device release activation.
+
+For the complete clean-host ordering, separate supervisor installation and status with this
+service stopped, follow the [production operations runbook](operations-runbook.md). For
+incidents, follow [release recovery](release-recovery-runbook.md); neither systemd restart
+nor service packaging is a release rollback.
 
 ## Installation
 

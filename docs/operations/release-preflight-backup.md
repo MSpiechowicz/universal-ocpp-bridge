@@ -8,10 +8,12 @@ A missing policy, invalid configuration, inaccessible secret reference, failed c
 unproven compatibility, or failed backup returns `preflight_rejected`. No drain,
 service stop, artifact switch, migration, or database restore occurs.
 
-A successful preflight currently returns `activation_blocked`: idle/drain admission
-and production process control are separate work (#156–#157). The private backup
-metadata records successful preflight work; it does not authorize a later activation.
-A later promotion must run fresh checks, including qualification and production inputs.
+A successful public-IPC preflight currently returns `activation_blocked`: the
+standalone manager has no attached live drain/process-control host. Its private
+backup metadata records successful preflight work; it does not authorize a later
+activation. A later promotion must run fresh qualification and production-input
+checks. The internal [host-attached activation path](production-artifact-activation.md)
+does not change the public-command boundary.
 
 ## Administrator configuration
 
@@ -22,7 +24,7 @@ For example (replace numeric service identities and format versions with actual 
 ```json
 {
   "configuration": "/etc/uob/bridge.toml",
-  "operational_database": "/var/lib/uob/operational.sqlite",
+  "operational_database": "/var/lib/uob/operational.sqlite3",
   "expected_formats": {
     "public_contract": 1,
     "configuration": 1,
@@ -86,6 +88,11 @@ This keeps repeated requests from consuming unbounded disk space.
 Backups contain operational data and remain private. They are outside artifact pointers,
 qualification state, and routine rollback selection. Rollback must continue with the live
 SQLite and external databases; it must never restore these backup records automatically.
+
+Use the [release recovery runbook](release-recovery-runbook.md) to distinguish
+compatible application failure (current live database, **no restore**) from
+independently authorized storage disaster recovery. The one retained backup slot
+cannot reconstruct post-backup commits or independently restore external exports.
 
 ## Verification
 

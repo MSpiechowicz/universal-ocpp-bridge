@@ -8,9 +8,10 @@ Rust service and simulator architecture, selectable MQTT and EMS/SCADA targets
 protocols, external database export, browser debugging, staging, automatic
 rollback, and CI/release strategy.
 
-The workspace includes opt-in demo-only loopback charging ingress and scoped station
-views; production charging deployment, broader simulator scenarios and release
-supervision remain separate work.
+The workspace includes an opt-in demo-only loopback charging ingress and scoped station
+views. The packaged production service remains management/storage-only: installing it
+does not establish production charging, a connected supervisor activation host, or live
+rollback.
 
 ## Workspace foundation
 
@@ -250,6 +251,12 @@ broker-free Rust contract demo.
 
 See [service packaging and shutdown](docs/operations/service-lifecycle.md) for the non-root
 systemd unit, bounded journal namespace, shutdown deadlines, and SQLite drain/recovery contract.
+
+For a chronological production-only install with an independent supervisor status check
+while the bridge is stopped, follow the [operations runbook](docs/operations/operations-runbook.md).
+Use the [release recovery runbook](docs/operations/release-recovery-runbook.md) to distinguish
+compatible application failure from storage/OS disasters, and the
+[disposable rehearsal](docs/operations/runbook-rehearsal.md) for the existing testable boundary.
 
 See [production and staging filesystem isolation](docs/operations/environment-filesystem-isolation.md)
 for separate service accounts, units/slices, configuration, databases, runtime locks and journals,

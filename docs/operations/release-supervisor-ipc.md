@@ -7,18 +7,20 @@ change it. The existing offline `install` and `verify` commands remain available
 The [`uob release` commands](headless-cli.md#independent-release-control) provide the operator
 client without loading bridge configuration or depending on the HTTP API.
 
-This issue establishes the supervisor ownership and authorization boundary. Staging
-currently revalidates the installed candidate and persists `staged_verified_digest`.
-It does **not** claim that a staging process ran or passed qualification. Qualification now verifies signed harness evidence; see the
-[qualification gate](release-qualification.md). Promote and rollback require the
-activation permission. Unqualified promotion returns `qualification_required`; a
-qualified promotion runs [production preflight and backup](release-preflight-backup.md),
-returning `preflight_rejected` on failure or `activation_blocked` pending production admission
-and process control. Rollback remains `qualification_required`. The [activation journal and recovery state machine](release-activation-journal.md)
-now persist internal policy transitions and recover pointer operations before IPC starts.
-Production admission/activation (#156–#157) and
-automatic rollback (#160) must supply their gates before those operations can
-change a service or artifact pointer. Client permission is never qualification.
+The standalone supervisor owns the release authorization and persistence boundary.
+`stage` revalidates an installed candidate and persists `staged_verified_digest`;
+it does **not** assert that staging ran. `qualify` verifies signed harness evidence
+under the [qualification gate](release-qualification.md). Unqualified public
+promotion returns `qualification_required`; qualified promotion runs
+[production preflight and backup](release-preflight-backup.md), returning
+`preflight_rejected` on failure or `activation_blocked` without a live drain/process
+host. Public rollback remains `qualification_required`. The
+[activation coordinator](production-artifact-activation.md) and
+[one-attempt automatic fallback](automatic-rollback.md) are internal trusted-host
+paths, not connected to this standalone IPC service; the systemd observation collector
+is not installed. The [release recovery runbook](release-recovery-runbook.md)
+distinguishes those paths from operator commands. Client permission is never
+qualification or a process-control capability.
 
 ## Installation and independent lifecycle
 
@@ -51,6 +53,10 @@ through the host's administrator-managed package installation, then enable the
 manager independently. There is no `Requires`, `PartOf`, or `BindsTo` dependency on
 the application unit. Stopping the bridge does not stop release control.
 
+Follow the [chronological installation](operations-runbook.md) to verify independent
+status while the application is stopped. The platform CI application tarball does
+not include this independently provisioned supervisor executable.
+
 Only deliberately authorized local operator accounts should join the IPC group.
 Group membership allows connecting; it does **not** grant an operation. Configure
 each operator's numeric UID and exact permissions in `grants`. The optional
@@ -61,12 +67,13 @@ explicitly listed in the example and has no special protocol bypass. Restart the
 supervisor after changing grants or trust/revocation policy; those administrator
 files are loaded at startup. Restart does not discard persisted supervisor state.
 
-The current service has no executable activation backend and no service-control
-privileges. Its writable paths are its own state/runtime directories and the
-approved artifact store. The application and staging state/configuration are
-inaccessible by default; the optional preflight drop-in permits read-only production access. Adding future activation must retain a fixed application-service
-allowlist and all qualification gates; exposing arbitrary units or executable
-paths is not a supported extension.
+The standalone service has no attached production process-control backend or
+service-control privileges. Its writable paths are its own state/runtime directories
+and the approved artifact store. The application and staging state/configuration
+are inaccessible by default; the optional preflight drop-in permits read-only
+production access. A future connected activation host must retain a fixed
+application-service allowlist and all qualification gates; arbitrary units or
+executable paths are not supported.
 
 ## Local protocol v1
 

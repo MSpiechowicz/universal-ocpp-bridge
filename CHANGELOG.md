@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Document the production-only non-root installation and independent supervisor
+  status check with the bridge stopped; separate compatible application fallback
+  on current data from storage/OS disaster recovery, and provide a disposable
+  rehearsal checklist with explicit live-host evidence limits (#170).
+
 - Add OCPP 1.6J GetConfiguration and ChangeConfiguration through scoped privileged
   command admission, per-request authenticated management access, authenticated station
   sockets and durable SQLite results. Preserve native key/unknown/read-only and write-status
