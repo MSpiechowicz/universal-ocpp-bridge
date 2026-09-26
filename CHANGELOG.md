@@ -66,6 +66,9 @@ All notable changes to this project will be documented in this file. See [conven
   privilege/upgrade safety.
 
 ### Tests
+- Align release-manager preflight and rollback test fixtures with the operational
+  SQLite v9 format used by the browser command history migration (#91).
+
 - Stabilize the test-only EMS HTTP/SSE acceptance fixture for both OCPP protocols:
   establish post-start charger readiness before remote stop and preserve second-session
   event sequencing.
