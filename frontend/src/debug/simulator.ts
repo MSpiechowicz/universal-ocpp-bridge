@@ -4,7 +4,7 @@ import type { Identity } from '../identity';
 import { correlationId } from '../diagnostics/store';
 
 const optional = (value: unknown) => value == null ? undefined : boundedText(value, 256);
-function decimal(value: unknown): string {
+export function decimal(value: unknown): string {
   if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(value) || BigInt(value) > 18446744073709551615n) throw new Error('Invalid integer');
   return value;
 }
@@ -35,6 +35,8 @@ export function parseSimulator(value: unknown, environment: string, run: string)
       intervention: intervention ? boundedText(intervention.kind, 64) : undefined,
       interventionFault: intervention ? optional(intervention.fault) : undefined,
       delay: intervention && typeof intervention.delay_ms === 'number' && Number.isInteger(intervention.delay_ms) && intervention.delay_ms >= 0 && intervention.delay_ms <= 30000 ? intervention.delay_ms : undefined,
+      eligible: Array.isArray(step.eligible_controls) && step.eligible_controls.length <= 16
+        ? step.eligible_controls.map(value => boundedText(value, 64)) : [],
       correlation: correlationId(step.correlation_id),
     };
   });
@@ -44,7 +46,9 @@ export function parseSimulator(value: unknown, environment: string, run: string)
     return { id: boundedText(event.id, 128), event: boundedText(event.event, 64), status: boundedText(event.status, 32),
       step: optional(event.step_id), failure: optional(event.failure_code), category: optional(event.failure_category), correlation: correlationId(event.correlation_id) };
   });
-  return { run, environment, scenario: boundedText(data.scenario, 64), seed: decimal(data.seed), status: boundedText(data.status, 32), steps, events };
+  const failure = data.failure == null ? undefined : object(data.failure);
+  return { run, environment, scenario: boundedText(data.scenario, 64), seed: decimal(data.seed), status: boundedText(data.status, 32), steps, events,
+    failure: failure ? { category: boundedText(failure.category, 64), code: boundedText(failure.code, 128) } : undefined };
 }
 export type SimulatorEvidence = ReturnType<typeof parseSimulator>;
 

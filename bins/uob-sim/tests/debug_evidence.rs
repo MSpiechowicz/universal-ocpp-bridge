@@ -155,7 +155,7 @@ async fn debug_is_opt_in_get_only_origin_bound_and_cannot_use_control_credential
 #[tokio::test]
 async fn failed_run_preserves_actual_event_exact_seed_and_safe_failure_without_wire_details() {
     let fixture = Fixture::new(
-        &(wait_scenario("demo-alpha", 1).replace("seed = 42", "seed = 18446744073709551615")
+        &(wait_scenario("demo-alpha", 1).replace("seed = 42", "seed = \"18446744073709551615\"")
             + "expect_detail = \"private-expected-value\"\n"),
     );
     enable(&fixture, ORIGIN);

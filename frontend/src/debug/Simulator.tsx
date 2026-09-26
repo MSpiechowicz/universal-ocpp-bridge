@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { Identity } from '../identity';
+import { SimulatorControls } from './SimulatorControls';
 import { SimulatorReader } from './simulator';
 import type { SimulatorEvidence } from './simulator';
 
 export function Simulator({ identity, hidden }: { identity: Identity; hidden: boolean }) {
-  // Production never mounts the reader or exposes a simulator credential field.
-  return identity.runtime.environment === 'production' ? null : <Evidence identity={identity} hidden={hidden}/>;
-}
-function Evidence({ identity, hidden }: { identity: Identity; hidden: boolean }) {
   const [origin, setOrigin] = useState('http://127.0.0.1:9001');
+  if (identity.runtime.environment === 'production') return null;
+  return <><Evidence identity={identity} hidden={hidden} origin={origin} setOrigin={setOrigin}/>
+    <SimulatorControls identity={identity} hidden={hidden} origin={origin}/></>;
+}
+function Evidence({ identity, hidden, origin, setOrigin }: { identity: Identity; hidden: boolean; origin: string; setOrigin: (value: string) => void }) {
   const [run, setRun] = useState('1');
   const [reader, setReader] = useState<SimulatorReader>();
   const [snapshot, setSnapshot] = useState<{ data: SimulatorEvidence; at: number }>();
@@ -29,6 +31,7 @@ function Evidence({ identity, hidden }: { identity: Identity; hidden: boolean })
     window.addEventListener('pagehide', leave);
     return () => { leave(); window.removeEventListener('pagehide', leave); };
   }, []);
+  useEffect(() => { clear(); }, [identity, origin]);
   async function read(client: SimulatorReader) {
     const operation = ++generation.current;
     setPending(true); setFailure(false); setSnapshot(undefined);
@@ -67,7 +70,8 @@ function Evidence({ identity, hidden }: { identity: Identity; hidden: boolean })
     {hidden && <p className="notice">Hidden tab: evidence is stale. Refresh after returning.</p>}
     {data && <>
       <p className="notice">{data.environment.toUpperCase()} · {reader?.origin} · scenario {data.scenario} · run {data.run} · seed {data.seed} · {data.status}</p>
-      <p>Finite snapshot received {new Date(snapshot.at).toLocaleTimeString()}. Refresh explicitly for new progress. Events become available after run cleanup; pending steps may never have run.</p>
+      <p>Finite snapshot received {new Date(snapshot.at).toLocaleTimeString()}. Refresh explicitly for new progress. Pending steps may never have run.</p>
+      {data.failure && <p className="notice error">Terminal failure: {data.failure.category} · {data.failure.code}. A setup failure may leave every step pending.</p>}
       {data.events.filter(event => event.event === 'run_failed').map((event, index) => <p className="notice error" key={index}>Run failure: {event.category ?? 'Unavailable'} · {event.failure ?? 'Unavailable'} <Correlation value={event.correlation}/></p>)}
       <label>Inspect scenario step<select value={selected} onChange={e => setSelected(Number(e.target.value))}>
         {data.steps.map((step, index) => <option key={step.id} value={index}>{step.id} · {step.status}</option>)}
@@ -81,6 +85,7 @@ function Evidence({ identity, hidden }: { identity: Identity; hidden: boolean })
           <dt>Detail assertion</dt><dd>{step.detailAssertion ? 'Declared; wire values omitted' : 'None declared'}</dd>
           <dt>Failure</dt><dd>{step.category ?? 'None recorded'} · {step.failure ?? 'None recorded'}</dd>
           <dt>Configured fault / selected</dt><dd>{step.fault ?? 'None'} · {step.selected === undefined ? 'Not evaluated' : step.selected ? 'Selected' : 'Not selected'}</dd>
+          <dt>Server-eligible controls</dt><dd>{step.eligible.join(', ') || 'None'}</dd>
           <dt>Scheduled intervention</dt><dd>{step.intervention ?? 'None'} {step.interventionFault} {step.delay !== undefined && `· ${step.delay} ms`}</dd>
         </dl>
         <Correlation value={step.correlation}/>

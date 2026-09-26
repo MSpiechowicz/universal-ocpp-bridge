@@ -76,17 +76,26 @@ confirm only that uncertain request from later observed state and reports
 `confirmed_without_replay` with the same effect count.
 
 `start_delay_ms` adds a station-local delay before an action; `jitter_ms` adds a deterministic
-seed-derived value from zero through that bound. A heartbeat can carry a `[steps.fault]` table with
-`kind`, `probability_percent`, and (where required) `delay_ms`. Supported controls are:
+seed-derived value from zero through that bound. A heartbeat or compatible remote-command
+await step can carry a `[steps.fault]` table with `kind`, `probability_percent`, and (where
+required) `delay_ms`. Supported controls depend on the authored action:
 
 - `disconnect`: close the selected station before its heartbeat;
-- `response_delay`: hold the completed response for the configured delay;
-- `missing_response`: for heartbeat, start the exchange but suppress its observed completion until
-  its step timeout; for a tracked remote command, record a possible physical effect and require an
-  explicit `transmission_uncertain` expectation;
-- `out_of_order_response`: issue a bounded pair of exchanges, hold the first completion, and allow
-  the second correlated response to complete first; this requires `command_capacity` of at least
-  two.
+- `response_delay`: for heartbeat, hold simulator-observed step completion **after** the
+  Heartbeat exchange, without delaying a peer reply; for `await_remote_start` and
+  `await_remote_stop`, actually delay the simulator's OCPP CALLRESULT to the peer;
+- `missing_response`: for heartbeat, start the exchange but suppress its observed completion
+  until its step timeout; for a tracked remote command, record a possible physical effect
+  and require an explicit `transmission_uncertain` expectation;
+- `out_of_order_response`: for heartbeat, issue a bounded pair of exchanges, hold the first
+  completion, and allow the second correlated response to complete first; this requires
+  `command_capacity` of at least two.
+
+The opt-in [control API](control-api.md) exposes `response_delay_scope` as
+`"step_completion"` for heartbeat and `"peer_reply"` for remote-command await steps.
+Its `effect_status` reports an intervention's execution separately from a step's
+assertion result; applied interventions can still fail assertions. Remote-command
+response delays must be shorter than the step deadline.
 
 Fault selection is deterministic for the run seed, station ID, and step ID, and a selected control
 produces a `fault_selected` JSONL record. The heartbeat action can explicitly expect the
@@ -94,12 +103,16 @@ produces a `fault_selected` JSONL record. The heartbeat action can explicitly ex
 event. Unsupported versions, topologies, actions, messages, events, fault combinations, unknown
 fields, and station references fail closed.
 
-The scenario contains an explicit seed. `--seed` overrides it for a particular run. The seed and a
-monotonic logical sequence produce stable event identifiers, so the same validated scenario and
-seed have the same action/event order and IDs. Reports deliberately contain no wall-clock report
-timestamps. A `wait` action uses the injectable simulator clock in local tests, while every step,
-including real WebSocket operations, retains an independent Tokio wall-clock timeout. Advancing a
-test clock never advances bridge or network time.
+The scenario contains an explicit seed. `--seed` overrides it for a particular run.
+TOML integer seeds fit its signed 64-bit range; for the remaining unsigned 64-bit
+range use a quoted canonical decimal string, e.g. `seed = "18446744073709551615"`.
+Control API run IDs and all seed values use exact decimal strings on the JSON wire.
+The seed and a monotonic logical sequence produce stable event identifiers, so
+the same validated scenario and seed have the same action/event order and IDs.
+Reports deliberately contain no wall-clock report timestamps. A `wait` action uses the
+injectable simulator clock in local tests, while every step, including real WebSocket
+operations, retains an independent Tokio wall-clock timeout. Advancing a test clock
+never advances bridge or network time.
 
 Configuration can reference a credential file, but reports never serialize that path or the
 endpoint. Parser and connection failures use redacted messages instead of echoing TOML source,
