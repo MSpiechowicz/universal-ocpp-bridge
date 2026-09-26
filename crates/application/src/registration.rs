@@ -102,7 +102,38 @@ pub async fn register_with_invalidation<
         decision,
         interval_seconds,
         now,
-        Some(invalidation),
+        Some((invalidation, None)),
+    )
+    .await
+}
+/// Commits the normal boot invalidation and optional typed trigger marker atomically.
+/// The event pair holds the required invalidation followed by an optional trigger marker.
+///
+/// # Errors
+/// Rejects invalid connection, protocol, interval or event metadata, and persistence failures
+/// without changing the caller's snapshot.
+pub async fn register_with_trigger<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &RegistrationObservation,
+    decision: RegistrationDecision,
+    interval_seconds: u32,
+    now: UtcTimestamp,
+    events: (EventEnvelope<E>, Option<EventEnvelope<E>>),
+) -> Result<RegistrationDecision, RegistrationError> {
+    register_inner(
+        store,
+        snapshot,
+        observation,
+        decision,
+        interval_seconds,
+        now,
+        Some(events),
     )
     .await
 }
@@ -119,7 +150,7 @@ async fn register_inner<
     decision: RegistrationDecision,
     interval_seconds: u32,
     now: UtcTimestamp,
-    invalidation: Option<EventEnvelope<E>>,
+    events: Option<(EventEnvelope<E>, Option<EventEnvelope<E>>)>,
 ) -> Result<RegistrationDecision, RegistrationError> {
     connected_for(snapshot, observation.protocol)?;
     if interval_seconds == 0 {
@@ -153,7 +184,11 @@ async fn register_inner<
         );
     }
     activity(&mut next, now);
-    commit(store, snapshot, next, invalidation).await?;
+    let (invalidation, trigger) = match events {
+        Some((invalidation, trigger)) => (Some(invalidation), trigger),
+        None => (None, None),
+    };
+    commit(store, snapshot, next, invalidation, trigger).await?;
     Ok(decision)
 }
 
@@ -171,7 +206,7 @@ pub async fn heartbeat<
     snapshot: &mut StationSnapshot,
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
-    heartbeat_inner(store, snapshot, now, None).await
+    heartbeat_inner(store, snapshot, now, None, None).await
 }
 
 /// Atomically records accepted OCPP 1.6 heartbeat activity and its scoped invalidation.
@@ -188,7 +223,26 @@ pub async fn heartbeat_with_invalidation<
     now: UtcTimestamp,
     invalidation: EventEnvelope<E>,
 ) -> Result<(), RegistrationError> {
-    heartbeat_inner(store, snapshot, now, Some(invalidation)).await
+    heartbeat_inner(store, snapshot, now, Some(invalidation), None).await
+}
+/// Commits the normal heartbeat invalidation and optional typed trigger marker atomically.
+///
+/// # Errors
+/// Rejects unregistered stations or invalid event metadata, and persistence failures without
+/// changing the caller's snapshot.
+pub async fn heartbeat_with_trigger<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    now: UtcTimestamp,
+    invalidation: EventEnvelope<E>,
+    trigger: Option<EventEnvelope<E>>,
+) -> Result<(), RegistrationError> {
+    heartbeat_inner(store, snapshot, now, Some(invalidation), trigger).await
 }
 
 async fn heartbeat_inner<
@@ -201,11 +255,12 @@ async fn heartbeat_inner<
     snapshot: &mut StationSnapshot,
     now: UtcTimestamp,
     invalidation: Option<EventEnvelope<E>>,
+    trigger: Option<EventEnvelope<E>>,
 ) -> Result<(), RegistrationError> {
     accepted(snapshot)?;
     let mut next = snapshot.clone();
     activity(&mut next, now);
-    commit(store, snapshot, next, invalidation).await
+    commit(store, snapshot, next, invalidation, trigger).await
 }
 
 /// Stores exact connector status/error facts and a coarse canonical availability projection.
@@ -221,7 +276,7 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
     let next = status_snapshot(snapshot, observation, now)?;
-    commit(store, snapshot, next, None).await
+    commit(store, snapshot, next, None, None).await
 }
 
 fn status_snapshot(
@@ -371,15 +426,28 @@ async fn commit<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send
     current: &mut StationSnapshot,
     next: StationSnapshot,
     invalidation: Option<EventEnvelope<E>>,
+    trigger: Option<EventEnvelope<E>>,
 ) -> Result<(), RegistrationError> {
     if invalidation.as_ref().is_some_and(|event| {
         event.resource != next.station || event.schema_version != next.schema_version
     }) {
         return Err(RegistrationError::InvalidState);
     }
+    if trigger.as_ref().is_some_and(|event| {
+        event.resource != next.station
+            || event.schema_version != next.schema_version
+            || invalidation.as_ref().is_some_and(|original| {
+                original.sequence == event.sequence || original.event_id == event.event_id
+            })
+    }) {
+        return Err(RegistrationError::InvalidState);
+    }
     let mut write = AtomicStoreWrite::empty();
     write.station_snapshot = Some(next.clone());
     if let Some(event) = invalidation {
+        write.journal_events.push(event);
+    }
+    if let Some(event) = trigger {
         write.journal_events.push(event);
     }
     store

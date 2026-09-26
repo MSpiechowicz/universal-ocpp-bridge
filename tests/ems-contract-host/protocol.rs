@@ -343,16 +343,15 @@ async fn run_station(
             action.as_str(),
             "BootNotification" | "StatusNotification" | "Heartbeat"
         ) {
-            incoming
-                .complete_registration(
-                    &context.store,
-                    &mut snapshot,
-                    RegistrationDecision::Accepted,
-                    60,
-                    Clock.now(),
-                )
-                .await
-                .unwrap();
+            Box::pin(incoming.complete_registration(
+                &context.store,
+                &mut snapshot,
+                RegistrationDecision::Accepted,
+                60,
+                Clock.now(),
+            ))
+            .await
+            .unwrap();
         } else if version == ProtocolEdition::Ocpp16j {
             transactions::handle_16(
                 incoming,

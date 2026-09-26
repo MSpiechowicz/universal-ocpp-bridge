@@ -10,8 +10,9 @@ use uob_contracts::{
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let revision = match name {
-        "export-record" | "export-batch" => 2,
-        "station-snapshot" | "command-result" | "configuration-change-reference" => 1,
+        "export-record" | "export-batch" => 3,
+        "command-result" => 2,
+        "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
     let output = output.join(format!("v1.{revision}"));
@@ -31,10 +32,19 @@ fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error
         "x-uob-contract-version".to_owned(),
         serde_json::json!({ "major": 1, "revision": revision }),
     );
-    fs::write(
-        output.join(format!("{name}.schema.json")),
-        format!("{}\n", serde_json::to_string_pretty(&document)?),
-    )?;
+    let path = output.join(format!("{name}.schema.json"));
+    let contents = format!("{}\n", serde_json::to_string_pretty(&document)?);
+    if path.exists() {
+        if fs::read_to_string(&path)? != contents {
+            return Err(format!(
+                "published schema differs from generated contract: {}",
+                path.display()
+            )
+            .into());
+        }
+    } else {
+        fs::write(path, contents)?;
+    }
     Ok(())
 }
 

@@ -427,9 +427,9 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         observed_effects: Vec::new(),
         configuration: None,
         configuration_observations: Vec::new(),
+        trigger_observation: None,
     }
 }
-
 fn request_id() -> RequestId {
     text(RequestId::new, "request-1")
 }

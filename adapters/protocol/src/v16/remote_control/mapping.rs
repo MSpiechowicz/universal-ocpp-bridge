@@ -1,5 +1,4 @@
-use super::RemoteStartIdentity;
-use super::charging_limit;
+use super::{RemoteStartIdentity, charging_limit, trigger};
 use super::{configuration, configuration_values::LocalConfigurationValues};
 use rust_ocpp::v1_6::messages::{
     change_availability::{ChangeAvailabilityRequest, ChangeAvailabilityResponse},
@@ -9,7 +8,7 @@ use rust_ocpp::v1_6::messages::{
     unlock_connector::{UnlockConnectorRequest, UnlockConnectorResponse},
 };
 use serde_json::Value;
-use uob_application::CommandDispatchOutcome;
+use uob_application::{CommandDispatchOutcome, TriggerExpectation};
 use uob_contracts::{
     AvailabilityState, Command, CommandError, CommandErrorCode, CommandOperation, Connectivity,
     NativeProtocolReference, ProtocolEdition, ResourceCapabilities, ResourceRef, StationSnapshot,
@@ -49,7 +48,11 @@ pub(super) fn prepare(
     ) {
         return Err(CommandErrorCode::StationDisconnected);
     }
-    uob_application::registration::accepted(snapshot).map_err(|_| PolicyRejected)?;
+    if !boot_trigger(command) {
+        uob_application::registration::accepted(snapshot).map_err(|_| PolicyRejected)?;
+    } else if uob_application::registration::accepted(snapshot).is_ok() {
+        return Err(PolicyRejected);
+    }
     let capabilities = capabilities(snapshot, &command.resource).ok_or(InvalidParameters)?;
     command
         .validate_for_dispatch(capabilities, now)
@@ -113,6 +116,13 @@ pub(super) fn prepare(
             charging_limit::prepare(command, snapshot, limit)?,
         )),
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp16j => {
+            if operation.action.as_str() == "TriggerMessage" {
+                if operation.payload_schema.as_str() != trigger::SCHEMA {
+                    return Err(InvalidParameters);
+                }
+                return trigger::prepare(operation, &command.resource, snapshot)
+                    .map(|(payload, _)| ("TriggerMessage", payload));
+            }
             privileged(
                 operation,
                 &command.resource,
@@ -126,6 +136,45 @@ pub(super) fn prepare(
         CommandOperation::Ocpp(_) => Err(UnsupportedOperation),
     }
 }
+fn boot_trigger(command: &Command<Value>) -> bool {
+    matches!(
+        &command.operation,
+        CommandOperation::Ocpp(operation)
+            if operation.protocol == ProtocolEdition::Ocpp16j
+                && operation.action.as_str() == "TriggerMessage"
+                && operation.payload["requestedMessage"] == "BootNotification"
+    )
+}
+
+pub(super) fn trigger_expectation(
+    command: &Command<Value>,
+    snapshot: &StationSnapshot,
+    now: UtcTimestamp,
+) -> Option<TriggerExpectation> {
+    let CommandOperation::Ocpp(operation) = &command.operation else {
+        return None;
+    };
+    if operation.action.as_str() != "TriggerMessage"
+        || operation.protocol != ProtocolEdition::Ocpp16j
+        || operation.payload_schema.as_str() != trigger::SCHEMA
+        || boot_trigger(command) == uob_application::registration::accepted(snapshot).is_ok()
+    {
+        return None;
+    }
+    let capabilities = capabilities(snapshot, &command.resource)?;
+    command.validate_for_dispatch(capabilities, now).ok()?;
+    super::constraints::validate(
+        command,
+        capabilities
+            .require(&command.operation.required_capability())
+            .ok()?,
+    )
+    .ok()?;
+    trigger::prepare(operation, &command.resource, snapshot)
+        .ok()
+        .map(|(_, expectation)| expectation)
+}
+
 fn privileged(
     operation: &uob_contracts::PrivilegedOcppOperation<Value>,
     resource: &ResourceRef,
@@ -241,6 +290,9 @@ fn encode(value: impl serde::Serialize) -> Result<Value, CommandErrorCode> {
     serde_json::to_value(value).map_err(|_| CommandErrorCode::InvalidParameters)
 }
 pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome {
+    if action == "TriggerMessage" {
+        return trigger::response(payload);
+    }
     if exact_fields(payload, &["status"]).is_err() {
         return uncertain();
     }

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add opt-in OCPP 1.6J `TriggerMessage` with privileged demo admission,
+  scoped native replies and 60-second, non-causal observation of six station
+  message classes. Durable results distinguish missing/partial observations
+  from acceptance and finalize expired observations once in SQLite schema v10;
+  authenticated socket, storage, live-service and simulator scenarios cover
+  scope and no-replay recovery (#115).
+
 - Add opt-in demo/staging browser scenario controls with separate simulator bearer and
   console-origin allowlist, server-derived scenario and station/step catalog, exact
   decimal-string seeds/run IDs, pending-step disconnect/reconnect and fault scheduling.

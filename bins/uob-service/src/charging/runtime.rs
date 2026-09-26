@@ -2,6 +2,7 @@ mod calls;
 mod effects;
 mod session;
 mod state;
+mod trigger;
 
 use calls::{apply_observation, call_error, context, event_identity};
 pub(super) use state::reconcile;
@@ -55,6 +56,13 @@ struct CallContext<'a> {
     commands: &'a Arc<LiveCommands>,
     identity: &'a ServiceIdentity,
     target: Option<(TargetInstanceId, u64)>,
+    trigger_enabled: bool,
+}
+
+#[derive(Default)]
+struct CommitState {
+    committed: Option<EventId>,
+    trigger_committed: bool,
 }
 
 pub(super) async fn serve(
@@ -82,6 +90,8 @@ pub(super) async fn serve(
     };
     let (shutdown, _) = watch::channel(false);
     let mut tasks = JoinSet::new();
+    let mut trigger_cursor = None;
+    let mut trigger_timer = tokio::time::interval(Duration::from_secs(1));
     let result = {
         let server = endpoint.serve_plaintext(listener);
         tokio::pin!(server);
@@ -91,6 +101,11 @@ pub(super) async fn serve(
                 biased;
                 result = &mut server => break Err(io::Error::other(format!("charging listener stopped: {result:?}"))),
                 () = &mut stop => break Ok(()),
+                _ = trigger_timer.tick(), if context.commands_enabled => {
+                    if let Err(error) = trigger::sweep(&context.store, &context.commands, &mut trigger_cursor).await {
+                        break Err(error);
+                    }
+                },
                 result = tasks.join_next(), if !tasks.is_empty() => {
                     if let Some(result) = result {
                         match result {
@@ -180,6 +195,8 @@ async fn station(
                     commands,
                     identity,
                     target: target.clone(),
+                    trigger_enabled: configuration.control.trigger_message.enabled()
+                        && context.commands_enabled,
                 };
                 if let Err(failure) = handle_call(call, &mut snapshot, call_context).await {
                     error = Some(failure); break;
@@ -220,55 +237,92 @@ async fn handle_call(
         incoming.call.action.as_str(),
         "BootNotification" | "Heartbeat"
     ) {
-        let now = Clock.now();
-        let event = invalidation(services.store, snapshot, services.identity, now).await?;
-        let result = incoming
-            .complete_registration_with_invalidation(
-                services.store,
-                snapshot,
-                RegistrationDecision::Accepted,
-                60,
-                now,
-                event,
-            )
-            .await;
-        return if result.is_err_and(|error| error.code == OcppErrorCode::InternalError) {
-            Err(unavailable())
-        } else {
-            Ok(())
-        };
+        return complete_registration(incoming, snapshot, &services, protocol).await;
     }
     dispatch_call(incoming, snapshot, services, protocol).await
+}
+
+async fn complete_registration(
+    incoming: IncomingCall,
+    snapshot: &mut StationSnapshot,
+    services: &CallContext<'_>,
+    protocol: ProtocolEdition,
+) -> io::Result<()> {
+    let now = Clock.now();
+    let event = invalidation(services.store, snapshot, services.identity, now).await?;
+    let marker = if services.trigger_enabled && protocol == ProtocolEdition::Ocpp16j {
+        let class = if incoming.call.action.as_str() == "BootNotification" {
+            uob_contracts::TriggerMessageClass::BootNotification
+        } else {
+            uob_contracts::TriggerMessageClass::Heartbeat
+        };
+        trigger::marker(
+            services.store,
+            &snapshot.station,
+            services.identity,
+            class,
+            None,
+            None,
+            now,
+        )
+        .await?
+    } else {
+        None
+    };
+    let trigger_committed = marker.is_some();
+    // Registration commit futures are large; box only these uncommon branches,
+    // leaving the ordinary incoming CALL path allocation-free.
+    let result = if let Some(marker) = marker {
+        Box::pin(incoming.complete_registration_with_trigger(
+            services.store,
+            snapshot,
+            RegistrationDecision::Accepted,
+            60,
+            now,
+            (event, Some(marker)),
+        ))
+        .await
+    } else {
+        Box::pin(incoming.complete_registration_with_invalidation(
+            services.store,
+            snapshot,
+            RegistrationDecision::Accepted,
+            60,
+            now,
+            event,
+        ))
+        .await
+    };
+    if result.is_ok() && trigger_committed {
+        trigger::sweep(services.store, services.commands, &mut None).await?;
+    }
+    if result.is_err_and(|error| error.code == OcppErrorCode::InternalError) {
+        Err(unavailable())
+    } else {
+        Ok(())
+    }
 }
 
 async fn dispatch_call(
     incoming: IncomingCall,
     snapshot: &mut StationSnapshot,
-    services: CallContext<'_>,
+    mut services: CallContext<'_>,
     protocol: ProtocolEdition,
 ) -> io::Result<()> {
-    let mut committed = None;
+    let mut commits = CommitState::default();
     let response = match (protocol, incoming.call.action.as_str()) {
         (_, "StatusNotification") => {
-            complete_status(
-                incoming.call,
-                snapshot,
-                services.store,
-                services.identity,
-                protocol,
-                &mut committed,
-            )
-            .await?
+            complete_status(incoming.call, snapshot, &services, protocol, &mut commits).await?
         }
         (ProtocolEdition::Ocpp16j, "StartTransaction" | "StopTransaction") => {
             let context = context(
                 services.store,
                 services.identity,
                 &incoming,
-                services.target,
+                services.target.take(),
             )
             .await?;
-            committed = Some(context.event_id.clone());
+            commits.committed = Some(context.event_id.clone());
             let transaction_services = v16::TransactionServices {
                 store: services.store,
                 authorization: services.authorization,
@@ -290,29 +344,15 @@ async fn dispatch_call(
             .await
         }
         (ProtocolEdition::Ocpp201, "TransactionEvent") | (_, "MeterValues") => {
-            let now = Clock.now();
-            let accepted = match protocol {
-                ProtocolEdition::Ocpp16j => uob_application::registration::accepted(snapshot),
-                ProtocolEdition::Ocpp201 => uob_application::registration::v201::accepted(snapshot),
-            };
-            if accepted.is_err() {
-                Err(call_error(protocol, OcppErrorCode::ProtocolError))
-            } else {
-                apply_observation(
-                    &incoming,
-                    snapshot,
-                    services.store,
-                    services.identity,
-                    services.target,
-                    now,
-                    &mut committed,
-                )
-                .await
-            }
+            complete_observation(&incoming, snapshot, &mut services, protocol, &mut commits).await
         }
+        (
+            ProtocolEdition::Ocpp16j,
+            "DiagnosticsStatusNotification" | "FirmwareStatusNotification",
+        ) => complete_trigger_status(&incoming, snapshot, &services, &mut commits).await?,
         _ => Err(call_error(protocol, OcppErrorCode::NotImplemented)),
     };
-    if let (Ok(_), Some(event_id)) = (&response, committed) {
+    if let (Ok(_), Some(event_id)) = (&response, commits.committed) {
         effects::reconcile(
             services.store,
             services.commands,
@@ -320,6 +360,9 @@ async fn dispatch_call(
             event_id,
         )
         .await?;
+    }
+    if response.is_ok() && commits.trigger_committed {
+        trigger::sweep(services.store, services.commands, &mut None).await?;
     }
     let failed_storage = response
         .as_ref()
@@ -341,27 +384,117 @@ async fn dispatch_call(
     }
 }
 
+async fn complete_observation(
+    incoming: &IncomingCall,
+    snapshot: &mut StationSnapshot,
+    services: &mut CallContext<'_>,
+    protocol: ProtocolEdition,
+    commits: &mut CommitState,
+) -> Result<serde_json::Value, OcppCallError> {
+    let accepted = match protocol {
+        ProtocolEdition::Ocpp16j => uob_application::registration::accepted(snapshot),
+        ProtocolEdition::Ocpp201 => uob_application::registration::v201::accepted(snapshot),
+    };
+    if accepted.is_err() {
+        Err(call_error(protocol, OcppErrorCode::ProtocolError))
+    } else {
+        apply_observation(incoming, snapshot, services, Clock.now(), commits).await
+    }
+}
+
+async fn complete_trigger_status(
+    incoming: &IncomingCall,
+    snapshot: &StationSnapshot,
+    services: &CallContext<'_>,
+    commits: &mut CommitState,
+) -> io::Result<Result<serde_json::Value, OcppCallError>> {
+    let protocol = ProtocolEdition::Ocpp16j;
+    if uob_application::registration::accepted(snapshot).is_err() {
+        return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError)));
+    }
+    let uob_application::ChargerObservation::TriggerStatus { class, status } =
+        &incoming.call.observation
+    else {
+        return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError)));
+    };
+    let marker = if services.trigger_enabled {
+        trigger::marker(
+            services.store,
+            &snapshot.station,
+            services.identity,
+            *class,
+            None,
+            Some(status),
+            Clock.now(),
+        )
+        .await?
+    } else {
+        None
+    };
+    if let Some(marker) = marker {
+        trigger::commit_status(services.store, marker).await?;
+        commits.trigger_committed = true;
+    }
+    Ok(Ok(serde_json::json!([3, incoming.call.message_id, {}])))
+}
+
 async fn complete_status(
     call: DecodedCall,
     snapshot: &mut StationSnapshot,
-    store: &ChargingStore,
-    identity: &ServiceIdentity,
+    services: &CallContext<'_>,
     protocol: ProtocolEdition,
-    committed: &mut Option<EventId>,
+    commits: &mut CommitState,
 ) -> io::Result<Result<serde_json::Value, OcppCallError>> {
-    let (sequence, event_id) = event_identity(store, identity).await?;
-    *committed = Some(event_id.clone());
+    let (sequence, event_id) = event_identity(services.store, services.identity).await?;
+    commits.committed = Some(event_id.clone());
     let context = AvailabilityContext {
-        identity: identity.clone(),
+        identity: services.identity.clone(),
         event_id,
         sequence,
     };
     Ok(match protocol {
         ProtocolEdition::Ocpp16j => {
-            v16::availability::complete_status(call, store, snapshot, context, Clock.now()).await
+            let marker = if services.trigger_enabled {
+                let uob_application::ChargerObservation::ConnectorStatus(status) =
+                    &call.observation
+                else {
+                    return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError)));
+                };
+                trigger::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    uob_contracts::TriggerMessageClass::StatusNotification,
+                    Some(status.connector_id),
+                    None,
+                    Clock.now(),
+                )
+                .await?
+            } else {
+                None
+            };
+            let trigger_committed = marker.is_some();
+            let response = v16::availability::complete_status_with_trigger(
+                call,
+                services.store,
+                snapshot,
+                context,
+                Clock.now(),
+                marker,
+            )
+            .await;
+            commits.trigger_committed = trigger_committed && response.is_ok();
+            response
         }
         ProtocolEdition::Ocpp201 => {
-            v201::availability::complete_status(call, store, snapshot, context, Clock.now()).await
+            v201::availability::complete_status(
+                call,
+                services.store,
+                snapshot,
+                context,
+                Clock.now(),
+            )
+            .await
         }
     })
 }

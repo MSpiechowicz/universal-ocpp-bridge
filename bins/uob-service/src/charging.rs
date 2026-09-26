@@ -28,7 +28,9 @@ use uob_protocol_adapter::{
 };
 use uob_storage_adapter::{DEFAULT_WORK_QUEUE_CAPACITY, SqliteOperationalStore};
 
-use crate::configuration::charging::{ValidatedChargingConfiguration, ValidatedChargingStation};
+use crate::configuration::charging::{
+    StationControlOptions, ValidatedChargingConfiguration, ValidatedChargingStation,
+};
 
 pub(crate) type ChargingStore =
     SqliteOperationalStore<Value, StationEvent, TransactionSnapshot, String>;
@@ -61,9 +63,7 @@ pub(crate) struct ChargingRuntime {
 pub(super) struct StationSettings {
     protocol: ProtocolEdition,
     start: Option<provision::StartIdentity>,
-    change_availability: bool,
-    allow_stop: bool,
-    allow_charging_limit: bool,
+    control: StationControlOptions,
 }
 
 impl StationSettings {
@@ -73,13 +73,19 @@ impl StationSettings {
         if self.start.is_some() {
             operations.push(Operation::Start);
         }
-        if self.allow_stop {
+        if self.control.allow_stop {
             operations.push(Operation::Stop);
         }
-        if self.change_availability {
+        if self.control.change_availability {
             operations.push(Operation::ProtocolAction {
                 protocol: self.protocol,
                 action: "ChangeAvailability".to_owned(),
+            });
+        }
+        if self.control.trigger_message.enabled() {
+            operations.push(Operation::ProtocolAction {
+                protocol: ProtocolEdition::Ocpp16j,
+                action: "TriggerMessage".to_owned(),
             });
         }
         snapshot.capabilities = ResourceCapabilities {
@@ -94,7 +100,21 @@ impl StationSettings {
         };
         for entry in &mut snapshot.resources {
             entry.capabilities.operations.clear();
-            if self.allow_charging_limit
+            if self.control.trigger_message.enabled()
+                && matches!(
+                    entry.resource.native_protocol_reference,
+                    Some(NativeProtocolReference::Ocpp16 { connector_id: 1.. })
+                )
+            {
+                entry.capabilities.operations.push(SupportedOperation {
+                    operation: Operation::ProtocolAction {
+                        protocol: ProtocolEdition::Ocpp16j,
+                        action: "TriggerMessage".to_owned(),
+                    },
+                    parameters: vec![],
+                });
+            }
+            if self.control.allow_charging_limit
                 && matches!(
                     entry.resource.native_protocol_reference,
                     Some(
@@ -197,6 +217,7 @@ impl ChargingRuntime {
                     &read_grant,
                     control,
                     privileged,
+                    &resources,
                     &roster,
                     start_refs,
                 )
@@ -318,9 +339,7 @@ fn load_stations(
             StationSettings {
                 protocol: station.protocol,
                 start: None,
-                change_availability: station.change_availability,
-                allow_stop: station.allow_stop,
-                allow_charging_limit: station.allow_charging_limit,
+                control: station.control,
             },
         );
         resources.insert(station.station_id, station.resources);

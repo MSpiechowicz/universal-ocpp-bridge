@@ -372,6 +372,7 @@ fn result(command: &Command<String>, hour: i64) -> CommandResult {
         observed_effects: Vec::new(),
         configuration: None,
         configuration_observations: Vec::new(),
+        trigger_observation: None,
     }
 }
 fn timestamp(hour: i64) -> UtcTimestamp {

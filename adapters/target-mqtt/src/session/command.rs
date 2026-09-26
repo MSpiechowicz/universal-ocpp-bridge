@@ -9,7 +9,7 @@ use uob_contracts::CommandResult;
 use super::{PublishPurpose, Session};
 use crate::{
     error::permanent_data,
-    ingress::{Ingress, IngressContext, admission_rejection, classify},
+    ingress::{IngressAlternate, IngressContext, admission_rejection, classify},
 };
 
 impl<E, P> Session<E, P>
@@ -35,8 +35,10 @@ where
             topic,
             &publication.payload,
             publication.retain,
-        ) {
-            Ingress::Submit(command) if self.commands.len() < self.effective_command_limit() => {
+        )
+        .into_result()
+        {
+            Ok(command) if self.commands.len() < self.effective_command_limit() => {
                 let admission = std::sync::Arc::clone(&self.context.commands);
                 let rejection_context = command.clone();
                 self.commands.spawn(async move {
@@ -46,15 +48,17 @@ where
                     }
                 });
             }
-            Ingress::Submit(command) => {
+            Ok(command) => {
                 let error = CommandAdmissionError::new(
                     CommandAdmissionErrorCode::Busy,
                     "mqtt.command_capacity",
                 );
                 self.accept_command_result(&admission_rejection(&command, &error));
             }
-            Ingress::Reject(result) => self.accept_command_result(&result),
-            Ingress::Ignore(reason) => self.emit_health(TargetHealthState::Degraded, reason),
+            Err(IngressAlternate::Reject(result)) => self.accept_command_result(&result),
+            Err(IngressAlternate::Ignore(reason)) => {
+                self.emit_health(TargetHealthState::Degraded, reason);
+            }
         }
     }
 

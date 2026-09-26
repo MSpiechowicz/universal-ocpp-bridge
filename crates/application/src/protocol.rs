@@ -1,5 +1,8 @@
 mod persistence;
-pub use persistence::{ObservationCommitError, record_measurements, record_transaction_event};
+pub use persistence::{
+    ObservationCommitError, record_measurements, record_measurements_with_trigger,
+    record_transaction_event,
+};
 
 use uob_contracts::{
     DataPointValue, NativeProtocolReference, ProtocolEdition, StationSnapshot, TransactionId,
@@ -29,6 +32,11 @@ pub enum ChargerObservation {
     Heartbeat {
         /// Negotiated protocol edition.
         protocol: ProtocolEdition,
+    },
+    /// Validated OCPP 1.6 diagnostic or firmware status notification.
+    TriggerStatus {
+        class: uob_contracts::TriggerMessageClass,
+        status: String,
     },
     /// A transaction start was reported by the station.
     TransactionStarted(TransactionStartObservation),

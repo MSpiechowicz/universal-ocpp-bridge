@@ -30,11 +30,27 @@ pub(super) const CANONICAL_V1_1: &[(&str, &str)] = &[(
     include_str!("../../../../crates/contracts/schemas/v1.1/command-result.schema.json"),
 )];
 
+pub(super) const CANONICAL_V1_2: &[(&str, &str)] = &[(
+    "command-result.schema.json",
+    include_str!("../../../../crates/contracts/schemas/v1.2/command-result.schema.json"),
+)];
+
+pub(super) const CANONICAL_V1_3: &[(&str, &str)] = &[
+    (
+        "export-record.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.3/export-record.schema.json"),
+    ),
+    (
+        "export-batch.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.3/export-batch.schema.json"),
+    ),
+];
+
 pub(super) fn reference(name: &str) -> Value {
-    let revision = if name == "command-result" {
-        "v1.1"
-    } else {
-        "v1.0"
+    let revision = match name {
+        "command-result" => "v1.2",
+        "export-record" | "export-batch" => "v1.3",
+        _ => "v1.0",
     };
     json!({"$ref": format!("/bridge/v1/schemas/{revision}/{name}.schema.json")})
 }
@@ -43,6 +59,8 @@ pub(super) fn canonical(revision: &str) -> &'static [(&'static str, &'static str
     match revision {
         "v1.0" => CANONICAL,
         "v1.1" => CANONICAL_V1_1,
+        "v1.2" => CANONICAL_V1_2,
+        "v1.3" => CANONICAL_V1_3,
         _ => &[],
     }
 }
@@ -79,15 +97,21 @@ pub(super) fn add<T: JsonSchema>(components: &mut Map<String, Value>, name: &str
             }
         }
     }
-    for (file, source) in CANONICAL_V1_1 {
-        let schema: Value = serde_json::from_str(source).expect("canonical schema");
-        let base = format!("/bridge/v1/schemas/v1.1/{file}");
-        external.insert(schema["title"].as_str().unwrap().to_owned(), json!(base));
-        if let Some(defs) = schema["$defs"].as_object() {
-            for key in defs.keys() {
-                external
-                    .entry(key.clone())
-                    .or_insert_with(|| json!(format!("{base}#/$defs/{key}")));
+    for (revision, schemas) in [
+        ("v1.1", CANONICAL_V1_1),
+        ("v1.2", CANONICAL_V1_2),
+        ("v1.3", CANONICAL_V1_3),
+    ] {
+        for (file, source) in schemas {
+            let schema: Value = serde_json::from_str(source).expect("canonical schema");
+            let base = format!("/bridge/v1/schemas/{revision}/{file}");
+            external.insert(schema["title"].as_str().unwrap().to_owned(), json!(base));
+            if let Some(defs) = schema["$defs"].as_object() {
+                for key in defs.keys() {
+                    external
+                        .entry(key.clone())
+                        .or_insert_with(|| json!(format!("{base}#/$defs/{key}")));
+                }
             }
         }
     }

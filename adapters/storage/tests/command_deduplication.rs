@@ -374,6 +374,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle, hour: i64) -> 
         observed_effects: Vec::new(),
         configuration: None,
         configuration_observations: Vec::new(),
+        trigger_observation: None,
     }
 }
 

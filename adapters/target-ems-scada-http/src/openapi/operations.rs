@@ -22,7 +22,7 @@ pub(super) fn path(name: &str) -> Value {
             json!({"type":"object"}),
             "Read the versioned OpenAPI document.",
         ),
-        "schemas" | "schemas_v1_1" => (
+        "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3" => (
             "get",
             "200",
             json!({"type":"object"}),
@@ -75,7 +75,7 @@ pub(super) fn path(name: &str) -> Value {
     let mut responses = errors(name);
     let media = match name {
         "events" => "text/event-stream",
-        "schemas" | "schemas_v1_1" => "application/schema+json",
+        "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3" => "application/schema+json",
         _ => "application/json",
     };
     responses.insert(
@@ -86,7 +86,7 @@ pub(super) fn path(name: &str) -> Value {
         "parameters":parameters(name)});
     if matches!(
         name,
-        "capabilities" | "openapi" | "schemas" | "schemas_v1_1"
+        "capabilities" | "openapi" | "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3"
     ) {
         operation["description"] = json!(
             "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required."
@@ -141,7 +141,12 @@ fn errors(name: &str) -> Map<String, Value> {
         );
         let state = !matches!(
             name,
-            "capabilities" | "openapi" | "schemas" | "schemas_v1_1"
+            "capabilities"
+                | "openapi"
+                | "schemas"
+                | "schemas_v1_1"
+                | "schemas_v1_2"
+                | "schemas_v1_3"
         );
         let command_only = matches!(
             error,
@@ -153,8 +158,10 @@ fn errors(name: &str) -> Map<String, Value> {
         );
         if common
             || (state && (!command_only || name == "commands"))
-            || (matches!(name, "schemas" | "schemas_v1_1")
-                && matches!(error, Error::UnknownResource | Error::InvalidRequest))
+            || (matches!(
+                name,
+                "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3"
+            ) && matches!(error, Error::UnknownResource | Error::InvalidRequest))
         {
             grouped
                 .entry(error.status().as_u16())
@@ -184,15 +191,16 @@ fn parameters(name: &str) -> Vec<Value> {
         "station" => Some("station_id"),
         "point" => Some("point_id"),
         "command_status" => Some("request_id"),
-        "schemas" | "schemas_v1_1" => Some("schema"),
+        "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3" => Some("schema"),
         _ => None,
     };
     if let Some(path) = path {
         let schema = if path == "schema" {
-            let revision = if name == "schemas_v1_1" {
-                "v1.1"
-            } else {
-                "v1.0"
+            let revision = match name {
+                "schemas_v1_1" => "v1.1",
+                "schemas_v1_2" => "v1.2",
+                "schemas_v1_3" => "v1.3",
+                _ => "v1.0",
             };
             json!({"type":"string","enum":super::schemas::canonical(revision)
                 .iter().map(|(file,_)|*file).collect::<Vec<_>>()})

@@ -1,9 +1,13 @@
 mod configuration;
 mod errors;
 mod recovery;
+mod results;
+use results::{command_result, rejected_external, validation_rejection};
+mod trigger;
 use configuration::{valid_configuration_read, valid_protected_change};
 use errors::{integrity_error, map_station_error, map_storage_error};
 use std::{future::Future, pin::Pin, sync::Arc};
+pub use trigger::TriggerExpectation;
 
 use uob_contracts::{
     Command, CommandError, CommandErrorCode, CommandLifecycle, CommandResult,
@@ -56,6 +60,8 @@ pub enum CommandDispatchOutcome {
         /// Sanitized reason that observation is required before further action.
         detail: String,
     },
+    /// Exact OCPP 1.6 `TriggerMessage` native reply, never subsequent-message proof.
+    TriggerResponse(uob_contracts::TriggerNativeResponse),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -91,6 +97,10 @@ pub trait StationCommandPort<P>: Send + Sync {
     /// Opaque socket generation captured before admission; adapters without socket turnover
     /// may leave this absent.
     fn session_generation(&self, _resource: &ResourceRef) -> Option<u64> {
+        None
+    }
+    /// Explicit opt-in expectation captured before sending a `TriggerMessage`.
+    fn trigger_expectation(&self, _command: &Command<P>) -> Option<TriggerExpectation> {
         None
     }
 
@@ -315,10 +325,18 @@ where
         }
 
         trace.emit(FlowStage::DurableCommit, FlowEvidence::Completed);
-        let dispatched = command_result(&command, CommandLifecycle::Dispatched, now);
+        let trigger = self.stations.trigger_expectation(&command);
+        let dispatch_started_at = self.clock.now();
+        let mut dispatched =
+            command_result(&command, CommandLifecycle::Dispatched, dispatch_started_at);
+        if let Some(expectation) = trigger.as_ref() {
+            dispatched.schema_version = ContractVersion::V1_TRIGGER;
+            dispatched.trigger_observation = Some(expectation.start(dispatch_started_at)?);
+        }
         self.persist_result(dispatched).await?;
         trace.emit(FlowStage::CommandDispatch, FlowEvidence::Completed);
         let mut config_response = None;
+        let mut trigger_response = None;
         let lifecycle = match self
             .stations
             .dispatch_to_generation(command.clone(), generation)
@@ -365,17 +383,63 @@ where
                 config_response = Some(configuration);
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
+            CommandDispatchOutcome::TriggerResponse(response) => {
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if response == uob_contracts::TriggerNativeResponse::Accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                trigger_response = Some(response);
+                CommandLifecycle::ProtocolResponse {
+                    accepted: response == uob_contracts::TriggerNativeResponse::Accepted,
+                    error: None,
+                }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
             }
         };
+        if trigger_response.is_some() && trigger.is_none() {
+            return Err(integrity_error(
+                "trigger response has no dispatch expectation",
+            ));
+        }
         let mut result = command_result(&command, lifecycle, self.clock.now());
         if let Some(configuration) = config_response {
             result.schema_version = ContractVersion::V1_CONFIGURATION;
             result.configuration = Some(configuration);
         }
+        if let Some(expectation) = trigger.as_ref()
+            && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })
+        {
+            result.schema_version = ContractVersion::V1_TRIGGER;
+            result.trigger_observation = Some(expectation.start(dispatch_started_at)?);
+            if let Some(response) = trigger_response {
+                result
+                    .trigger_observation
+                    .as_mut()
+                    .expect("trigger expectation")
+                    .native_response = Some(response);
+            }
+            result
+                .trigger_observation
+                .as_mut()
+                .expect("trigger expectation")
+                .refresh_status(self.clock.now());
+        }
         self.persist_result(result).await?;
+        if trigger.is_some() {
+            return self
+                .store
+                .reconcile_trigger_observation(command.request_id.clone(), self.clock.now())
+                .await
+                .map_err(|error| map_storage_error(&error))?
+                .ok_or_else(|| integrity_error("completed trigger has no durable result"));
+        }
         self.store
             .command_result_by_request_id(command.request_id.clone())
             .await
@@ -406,70 +470,4 @@ where
         let now = self.clock.now();
         Box::pin(self.submit_at(command, now))
     }
-}
-
-fn command_result<P>(
-    command: &Command<P>,
-    lifecycle: CommandLifecycle,
-    recorded_at: UtcTimestamp,
-) -> CommandResult {
-    CommandResult {
-        schema_version: ContractVersion::V1_INITIAL,
-        correlation_id: command.correlation_id.clone(),
-        resource: command.resource.clone(),
-        return_route: command.return_route(),
-        lifecycle,
-        recorded_at,
-        observed_effects: Vec::new(),
-        configuration: None,
-        configuration_observations: Vec::new(),
-    }
-}
-
-fn rejected_external<P>(
-    command: &ExternalCommand<P>,
-    code: CommandErrorCode,
-    detail: &str,
-    recorded_at: UtcTimestamp,
-) -> CommandResult {
-    CommandResult {
-        schema_version: ContractVersion::V1_INITIAL,
-        correlation_id: command.request.correlation_id.clone(),
-        resource: command.request.resource.clone(),
-        return_route: uob_contracts::CommandReturnRoute {
-            request_id: command.request.request_id.clone(),
-            origin: command.origin.clone(),
-        },
-        lifecycle: CommandLifecycle::Rejected {
-            error: CommandError {
-                code,
-                detail: Some(detail.to_owned()),
-            },
-        },
-        recorded_at,
-        observed_effects: Vec::new(),
-        configuration: None,
-        configuration_observations: Vec::new(),
-    }
-}
-
-fn validation_rejection<P>(
-    command: &Command<P>,
-    error: &CommandValidationError,
-    recorded_at: UtcTimestamp,
-) -> CommandResult {
-    let code = match error {
-        CommandValidationError::Expired => CommandErrorCode::Expired,
-        CommandValidationError::UnsupportedOperation(_) => CommandErrorCode::UnsupportedOperation,
-    };
-    command_result(
-        command,
-        CommandLifecycle::Rejected {
-            error: CommandError {
-                code,
-                detail: Some(error.to_string()),
-            },
-        },
-        recorded_at,
-    )
 }

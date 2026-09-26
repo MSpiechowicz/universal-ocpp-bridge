@@ -18,6 +18,23 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
                          admitted_at DESC, request_id DESC);",
         )
         .map_err(unavailable)?;
+    if version < 10 {
+        transaction
+            .execute_batch("DROP INDEX IF EXISTS trigger_pending_results;")
+            .map_err(unavailable)?;
+    }
+    transaction
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS trigger_pending_results
+         ON command_results(json_extract(payload,'$.trigger_observation.status'), request_id)
+         WHERE trigger_reconcile_active = 1;
+         CREATE INDEX IF NOT EXISTS trigger_station_events
+         ON journal_events(resource, json_extract(payload,'$.payload.class'),
+            json_extract(payload,'$.payload.connector_id'),
+            julianday(json_extract(payload,'$.observed_at')))
+         WHERE json_valid(payload) AND json_type(payload,'$.payload.class') IS NOT NULL;",
+        )
+        .map_err(unavailable)?;
     // Snapshots are validated on every open. Journal rewrites are versioned so a
     // current database does not re-decode its entire retained history on restart.
     normalize_station_keys(&transaction, version < 8)?;
@@ -31,7 +48,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 9;")
+        .execute_batch("PRAGMA user_version = 10;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
 }
@@ -176,7 +193,8 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
              INSERT OR IGNORE INTO remote_start_counter VALUES (1, 0);\n\
              CREATE TABLE IF NOT EXISTS remote_control_evidence (request_id TEXT PRIMARY KEY REFERENCES commands(request_id) ON DELETE CASCADE, payload TEXT NOT NULL);\n\
              CREATE TABLE IF NOT EXISTS command_results (\n\
-                 request_id TEXT PRIMARY KEY, payload TEXT NOT NULL\n\
+                 request_id TEXT PRIMARY KEY, payload TEXT NOT NULL,\n\
+                 trigger_reconcile_active INTEGER NOT NULL DEFAULT 1 CHECK (trigger_reconcile_active IN (0, 1))\n\
              );\n\
              CREATE TABLE IF NOT EXISTS journal_events (\n\
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE,\n\
@@ -275,6 +293,12 @@ fn upgrade_columns(connection: &Connection) -> Result<(), StorageError> {
         "committed_records",
         "retain_until",
         "ALTER TABLE committed_records ADD COLUMN retain_until INTEGER",
+    )?;
+    add_column_if_missing(
+        connection,
+        "command_results",
+        "trigger_reconcile_active",
+        "ALTER TABLE command_results ADD COLUMN trigger_reconcile_active INTEGER NOT NULL DEFAULT 1 CHECK (trigger_reconcile_active IN (0, 1))",
     )?;
     Ok(())
 }

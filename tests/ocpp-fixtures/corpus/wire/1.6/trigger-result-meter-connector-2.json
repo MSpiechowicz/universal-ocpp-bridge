@@ -1,0 +1,1 @@
+[2,"result-meter-connector-2","MeterValues",{"connectorId":2,"meterValue":[{"timestamp":"2026-09-26T10:00:01Z","sampledValue":[{"value":"936.2","context":"Trigger","measurand":"Energy.Active.Import.Register","unit":"Wh"},{"value":"229.8","context":"Trigger","measurand":"Voltage","unit":"V"}]}]}]

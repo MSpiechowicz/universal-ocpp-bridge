@@ -27,6 +27,16 @@ impl Session {
         }
     }
 
+    fn trigger_expectation(
+        &self,
+        command: &Command<Value>,
+    ) -> Option<uob_application::TriggerExpectation> {
+        match self {
+            Self::V16(session) => session.trigger_expectation(command),
+            Self::V201(_) => None,
+        }
+    }
+
     async fn context(
         &self,
         resource: ResourceRef,
@@ -139,6 +149,14 @@ impl StationCommandPort<Value> for LiveCommands {
                 None => Ok(None),
             }
         })
+    }
+
+    fn trigger_expectation(
+        &self,
+        command: &Command<Value>,
+    ) -> Option<uob_application::TriggerExpectation> {
+        self.session(&command.resource.station_id)?
+            .trigger_expectation(command)
     }
 
     fn session_generation(&self, resource: &ResourceRef) -> Option<u64> {

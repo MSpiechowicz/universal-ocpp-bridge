@@ -1,27 +1,24 @@
 use std::io;
 
+use super::{CallContext, Clock, CommitState, trigger, unavailable};
+use crate::charging::ChargingStore;
 use serde_json::json;
 use uob_application::{
     ChargerObservation, CommandClock, ObservationCommitError, OperationalStore,
-    record_measurements, record_transaction_event, transaction16::TransactionContext,
+    record_transaction_event, transaction16::TransactionContext,
 };
 use uob_contracts::{
-    Connectivity, EventId, ProtocolEdition, ServiceIdentity, StationSnapshot, TargetInstanceId,
-    UtcTimestamp,
+    Connectivity, EventId, NativeProtocolReference, ProtocolEdition, ServiceIdentity,
+    StationSnapshot, TargetInstanceId, TriggerMessageClass, UtcTimestamp,
 };
 use uob_protocol_adapter::{IncomingCall, OcppCallError, OcppErrorCode};
-
-use super::{Clock, unavailable};
-use crate::charging::ChargingStore;
 
 pub(super) async fn apply_observation(
     incoming: &IncomingCall,
     snapshot: &mut StationSnapshot,
-    store: &ChargingStore,
-    identity: &ServiceIdentity,
-    target: Option<(TargetInstanceId, u64)>,
+    services: &mut CallContext<'_>,
     now: UtcTimestamp,
-    committed: &mut Option<EventId>,
+    commits: &mut CommitState,
 ) -> Result<serde_json::Value, OcppCallError> {
     let protocol = match &snapshot.connectivity {
         Connectivity::Connected { protocol, .. } => *protocol,
@@ -32,20 +29,52 @@ pub(super) async fn apply_observation(
             ));
         }
     };
-    let context = context(store, identity, incoming, target)
-        .await
-        .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?;
+    let marker = if services.trigger_enabled && protocol == ProtocolEdition::Ocpp16j {
+        if let ChargerObservation::Measurements(measurements) = &incoming.call.observation {
+            let NativeProtocolReference::Ocpp16 { connector_id } = measurements.native_resource
+            else {
+                return Err(call_error(protocol, OcppErrorCode::ProtocolError));
+            };
+            if connector_id == 0 {
+                None
+            } else {
+                trigger::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    TriggerMessageClass::MeterValues,
+                    Some(connector_id),
+                    None,
+                    now,
+                )
+                .await
+                .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let context = context(
+        services.store,
+        services.identity,
+        incoming,
+        services.target.take(),
+    )
+    .await
+    .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?;
     if matches!(
         incoming.call.observation,
         ChargerObservation::TransactionEvent(_)
     ) {
-        *committed = Some(context.event_id.clone());
+        commits.committed = Some(context.event_id.clone());
     }
     let reply = match &incoming.call.observation {
         ChargerObservation::TransactionEvent(observation)
             if protocol == ProtocolEdition::Ocpp201 =>
         {
-            record_transaction_event(store, snapshot, observation, context, now)
+            record_transaction_event(services.store, snapshot, observation, context, now)
                 .await
                 .map_err(|error| commit_error(protocol, &error))?;
             if observation.event == uob_application::TransactionEventKind::Started {
@@ -56,9 +85,18 @@ pub(super) async fn apply_observation(
             }
         }
         ChargerObservation::Measurements(measurements) if measurements.protocol == protocol => {
-            record_measurements(store, snapshot, measurements, context, now)
-                .await
-                .map_err(|error| commit_error(protocol, &error))?;
+            let trigger_committed = marker.is_some();
+            uob_application::record_measurements_with_trigger(
+                services.store,
+                snapshot,
+                measurements,
+                context,
+                now,
+                marker,
+            )
+            .await
+            .map_err(|error| commit_error(protocol, &error))?;
+            commits.trigger_committed = trigger_committed;
             json!({})
         }
         _ => return Err(call_error(protocol, OcppErrorCode::NotImplemented)),

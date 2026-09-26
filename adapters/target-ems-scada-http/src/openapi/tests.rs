@@ -1,6 +1,6 @@
 use super::{
     openapi_document,
-    schemas::{CANONICAL, CANONICAL_V1_1},
+    schemas::{CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3},
 };
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
 use serde_json::{Value, json};
@@ -11,16 +11,21 @@ use serde_json::{Value, json};
 mod probe;
 
 fn registry() -> jsonschema::Registry<'static> {
-    let resources = [("v1.0", CANONICAL), ("v1.1", CANONICAL_V1_1)]
-        .into_iter()
-        .flat_map(|(revision, schemas)| {
-            schemas.iter().map(move |(file, source)| {
-                (
-                    format!("https://bridge.test/bridge/v1/schemas/{revision}/{file}"),
-                    serde_json::from_str::<Value>(source).unwrap(),
-                )
-            })
-        });
+    let resources = [
+        ("v1.0", CANONICAL),
+        ("v1.1", CANONICAL_V1_1),
+        ("v1.2", CANONICAL_V1_2),
+        ("v1.3", CANONICAL_V1_3),
+    ]
+    .into_iter()
+    .flat_map(|(revision, schemas)| {
+        schemas.iter().map(move |(file, source)| {
+            (
+                format!("https://bridge.test/bridge/v1/schemas/{revision}/{file}"),
+                serde_json::from_str::<Value>(source).unwrap(),
+            )
+        })
+    });
     jsonschema::Registry::new()
         .extend(resources)
         .unwrap()
@@ -84,7 +89,7 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
         .unwrap()
         .validate(&document)
         .unwrap();
-    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.1/command-result.schema.json"});
+    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.2/command-result.schema.json"});
     assert_eq!(
         document["paths"]["/bridge/v1/commands/{request_id}"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"],
@@ -104,6 +109,14 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
     assert_eq!(
         document["paths"]["/bridge/v1/schemas/v1.1/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
         json!(["command-result.schema.json"])
+    );
+    assert_eq!(
+        document["paths"]["/bridge/v1/schemas/v1.2/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
+        json!(["command-result.schema.json"])
+    );
+    assert_eq!(
+        document["paths"]["/bridge/v1/schemas/v1.3/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
+        json!(["export-record.schema.json", "export-batch.schema.json"])
     );
     for name in document["components"]["schemas"]
         .as_object()
@@ -160,6 +173,8 @@ async fn schema_versions_serve_exact_canonical_files() {
     for path in [
         "/bridge/v1/schemas/v1.0/station-snapshot.schema.json",
         "/bridge/v1/schemas/v1.1/command-result.schema.json",
+        "/bridge/v1/schemas/v1.2/command-result.schema.json",
+        "/bridge/v1/schemas/v1.3/export-record.schema.json",
     ] {
         assert_eq!(get(router.clone(), path, None).await.0, 401);
         assert_eq!(get(router.clone(), path, Some("wrong")).await.0, 401);
@@ -183,6 +198,18 @@ async fn schema_versions_serve_exact_canonical_files() {
         .await;
         assert_eq!(status, 200);
         assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
+    }
+    for (revision, schemas) in [("v1.2", CANONICAL_V1_2), ("v1.3", CANONICAL_V1_3)] {
+        for (file, source) in schemas {
+            let (status, body) = get(
+                router.clone(),
+                &format!("/bridge/v1/schemas/{revision}/{file}"),
+                Some(READER_TOKEN),
+            )
+            .await;
+            assert_eq!(status, 200);
+            assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
+        }
     }
     assert_eq!(
         get(

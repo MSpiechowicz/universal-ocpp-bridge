@@ -107,6 +107,13 @@ async fn charging_call(
         ActionKind::StopTransaction => SimulatorAction::StopTransaction,
         _ => unreachable!(),
     };
+    if state.version == crate::OcppVersion::V1_6
+        && let Some(registered) = client
+            .as_deref()
+            .and_then(ProtocolClient::accepted_registration)
+    {
+        state.registered = registered;
+    }
     match state.version {
         crate::OcppVersion::V1_6 => validate_before_16(state, step, action)?,
         crate::OcppVersion::V2_0_1 => super::execution_201::validate_before(state, step, action)?,

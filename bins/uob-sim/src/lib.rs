@@ -9,13 +9,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ocpp_client::{
-    ConnectOptions, KeepaliveBehavior, ReconnectBehavior, ReconnectPolicy, connect_1_6,
-    connect_2_0_1,
+    ConnectOptions, KeepaliveBehavior, ReconnectBehavior, ReconnectPolicy, connect_2_0_1,
 };
 use tokio::sync::{mpsc, oneshot};
 
+mod client_impl;
 mod client_runtime;
 mod client_runtime_201;
+mod trigger;
+mod trigger_transport;
+pub use trigger::{TriggerObservation, TriggerReply, TriggerResponses};
 pub mod scenario;
 
 pub const PINNED_OCPP_CLIENT_VERSION: &str = "0.5.0";
@@ -45,6 +48,7 @@ pub enum TraceKind {
     RemoteStartReceived,
     RemoteStopReceived,
     ChargingCallSent,
+    TriggerReceived,
     ChargingCallResult,
     Reconnected,
     Failed,
@@ -90,6 +94,8 @@ pub struct SimulatorClientConfig {
     pub trace_capacity: usize,
     pub connectors: Vec<u16>,
     pub evse_connectors: Vec<(u16, u16)>,
+    pub trigger_responses: TriggerResponses,
+    pub trigger_observation: TriggerObservation,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -172,6 +178,11 @@ pub type ClientFuture<'a, T> =
 
 pub trait ProtocolClient: Send + Sync {
     fn version(&self) -> OcppVersion;
+    /// Live OCPP 1.6 registration, including an accepted triggered Boot.
+    /// Synthetic scenario clients use the scenario's own scripted state.
+    fn accepted_registration(&self) -> Option<bool> {
+        None
+    }
     fn heartbeat(&self) -> ClientFuture<'_, String>;
     fn call(&self, _call: SimulatorCall) -> ClientFuture<'_, serde_json::Value> {
         Box::pin(async {
@@ -224,6 +235,7 @@ pub struct SimulatorProtocolClient {
     emergency_client: EmergencyClient,
     rejected_commands: Arc<AtomicU64>,
     reply_delay: ReplyDelaySlot,
+    ocpp16_state: Option<Arc<Mutex<Ocpp16State>>>,
 }
 
 enum Command {
@@ -267,6 +279,10 @@ struct TraceBuffer {
 #[derive(Default)]
 struct Ocpp16State {
     active_transactions: HashMap<i64, u16>,
+    registered: bool,
+    boot: Option<serde_json::Value>,
+    status: HashMap<u16, serde_json::Value>,
+    meters: HashMap<u16, serde_json::Value>,
 }
 
 #[derive(Default)]
@@ -338,35 +354,20 @@ impl SimulatorProtocolClient {
         let (remote_commands, remote_receiver) = mpsc::channel(config.command_capacity);
         let reply_delay = Arc::new(Mutex::new(None));
         let rejected_commands = Arc::new(AtomicU64::new(0));
-        let state = Arc::new(Mutex::new(Ocpp16State::default()));
-
-        let (worker, emergency_client) = match config.version {
+        let (worker, emergency_client, ocpp16_state) = match config.version {
             OcppVersion::V1_6 => {
-                let client = connect_1_6(&config.endpoint, Some(options))
-                    .await
-                    .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
-                client_runtime::register_1_6_handlers(
-                    &client,
+                let state = Arc::new(Mutex::new(Ocpp16State::default()));
+                let (worker, emergency_client) = client_runtime::connect_and_run_1_6(
+                    &config,
                     &traces,
                     remote_commands,
-                    config.connectors.clone(),
-                    Arc::clone(&state),
-                    Arc::clone(&reply_delay),
-                )
-                .await;
-                client_runtime::register_1_6_reconnect(&client, &traces).await;
-                traces.push(TraceKind::Connected, OcppVersion::V1_6.websocket_protocol());
-                let emergency_client = EmergencyClient::V1_6(client.clone());
-                let worker = tokio::spawn(client_runtime::run_1_6(
-                    client,
                     receiver,
-                    traces.clone(),
-                    config.command_capacity,
                     remote_receiver,
-                    state,
-                ))
-                .abort_handle();
-                (worker, emergency_client)
+                    Arc::clone(&state),
+                    reply_delay.clone(),
+                )
+                .await?;
+                (worker, emergency_client, Some(state))
             }
             OcppVersion::V2_0_1 => {
                 let client = connect_2_0_1(&config.endpoint, Some(options))
@@ -397,7 +398,7 @@ impl SimulatorProtocolClient {
                     state,
                 ))
                 .abort_handle();
-                (worker, emergency_client)
+                (worker, emergency_client, None)
             }
         };
 
@@ -409,6 +410,7 @@ impl SimulatorProtocolClient {
             emergency_client,
             rejected_commands,
             reply_delay,
+            ocpp16_state,
         })
     }
 
@@ -425,75 +427,5 @@ impl SimulatorProtocolClient {
             }
         })?;
         receiver.await.map_err(|_| SimulatorClientError::Stopped)?
-    }
-}
-
-impl ProtocolClient for SimulatorProtocolClient {
-    fn version(&self) -> OcppVersion {
-        self.version
-    }
-
-    fn heartbeat(&self) -> ClientFuture<'_, String> {
-        Box::pin(async move { self.send_command(Command::Heartbeat).await })
-    }
-
-    fn call(&self, call: SimulatorCall) -> ClientFuture<'_, serde_json::Value> {
-        Box::pin(async move {
-            self.send_command(|result| Command::Call(call, result))
-                .await
-        })
-    }
-
-    fn next_remote_command(&self) -> ClientFuture<'_, RemoteCommand> {
-        Box::pin(async move { self.send_command(Command::NextRemote).await })
-    }
-
-    fn arm_remote_reply_delay(
-        &self,
-        kind: RemoteCommandKind,
-        duration: Duration,
-    ) -> Result<ReplyDelayReceipt, SimulatorClientError> {
-        if duration.is_zero() || duration > Duration::from_secs(30) {
-            return Err(SimulatorClientError::Protocol(
-                "invalid remote reply delay".to_owned(),
-            ));
-        }
-        let (receipt, observed) = oneshot::channel();
-        let mut slot = self.reply_delay.lock().expect("reply delay lock poisoned");
-        if slot.is_some() {
-            return Err(SimulatorClientError::Protocol(
-                "remote reply delay already armed".to_owned(),
-            ));
-        }
-        *slot = Some(ReplyDelay {
-            kind,
-            duration,
-            receipt,
-        });
-        Ok(observed)
-    }
-    fn shutdown(&self) -> ClientFuture<'_, ()> {
-        Box::pin(async move { self.send_command(Command::Shutdown).await })
-    }
-
-    fn force_shutdown(&self) -> ClientFuture<'_, ()> {
-        Box::pin(async move { self.emergency_client.disconnect().await })
-    }
-
-    fn abort(&self) {
-        self.traces
-            .push(TraceKind::Stopped, "client task force-stopped");
-        self.worker.abort();
-    }
-
-    fn traces(&self) -> Vec<TraceEvent> {
-        self.traces.snapshot()
-    }
-
-    fn diagnostics(&self) -> ClientDiagnostics {
-        ClientDiagnostics {
-            rejected_commands: self.rejected_commands.load(Ordering::Relaxed),
-            dropped_traces: self.traces.dropped(),
-        }
     }
 }

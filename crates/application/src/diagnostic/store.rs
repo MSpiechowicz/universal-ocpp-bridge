@@ -2,12 +2,13 @@
 use crate::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor,
     CommandHistoryQuery, CommandHistoryScope, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordQuery, FlowEvidence, FlowSpan, FlowStage, OperationalStore, Page, RecoveryBatch,
-    RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery,
-    StorageFuture, StorageRetentionStatus,
+    CommittedRecordQuery, FlowEvidence, FlowSpan, FlowStage, OperationalStore, Page, PageLimit,
+    RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor,
+    SnapshotQuery, StorageFuture, StorageRetentionStatus,
 };
 use uob_contracts::{
-    Command, CommandResult, CommandSummary, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+    Command, CommandResult, CommandSummary, RequestId, ResourceRef, StationSnapshot,
+    TriggerMessageClass, UtcTimestamp,
 };
 /// Borrowed store adapter tying one ordered operation to its actual commit completion.
 pub struct DiagnosticStore<'a, C, E, D, R> {
@@ -108,6 +109,28 @@ impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<CommandResult>> {
         self.inner.command_result_by_request_id(request_id)
+    }
+    fn trigger_pending_for_station(
+        &self,
+        station: ResourceRef,
+        class: TriggerMessageClass,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, bool> {
+        self.inner.trigger_pending_for_station(station, class, now)
+    }
+    fn trigger_reconciliation_candidates(
+        &self,
+        after: Option<RequestId>,
+        limit: PageLimit,
+    ) -> StorageFuture<'_, Vec<RequestId>> {
+        self.inner.trigger_reconciliation_candidates(after, limit)
+    }
+    fn reconcile_trigger_observation(
+        &self,
+        request_id: RequestId,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, Option<CommandResult>> {
+        self.inner.reconcile_trigger_observation(request_id, now)
     }
     fn read_command_history(
         &self,

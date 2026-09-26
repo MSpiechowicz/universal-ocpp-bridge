@@ -1,4 +1,5 @@
 mod configuration;
+mod reads;
 
 use std::sync::mpsc;
 
@@ -7,26 +8,27 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery,
-    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, Page,
-    RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RetainedEventCursor,
-    RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError, StorageErrorCode,
-    StorageRetentionStatus,
+    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, Page, RecordedDeliveryAttempt,
+    RecoveryBatch, RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError,
+    StorageErrorCode, StorageRetentionStatus,
 };
 use uob_contracts::{
-    Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope,
-    StationSnapshot,
+    Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope, ResourceRef,
+    StationSnapshot, TriggerMessageClass, UtcTimestamp,
 };
 
 use crate::retention::SqliteRetentionPolicy;
 use crate::{
     codec::{
-        self, EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent,
-        EncodedRecord, EncodedWrite,
+        EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent, EncodedRecord,
+        EncodedWrite,
     },
     command, command_history,
     configuration::unavailable,
     delivery, recovery, retention, snapshots,
 };
+
+use reads::{read_events, read_records};
 
 pub(crate) enum Request<C, E, D, R> {
     Drain(crate::drain::Operation, Reply<crate::drain::Outcome>),
@@ -79,6 +81,9 @@ pub(crate) enum Request<C, E, D, R> {
         ConfigurationObservation,
         Reply<Option<CommandResult>>,
     ),
+    TriggerPending(ResourceRef, TriggerMessageClass, UtcTimestamp, Reply<bool>),
+    TriggerCandidates(Option<String>, usize, Reply<Vec<uob_contracts::RequestId>>),
+    ReconcileTrigger(String, UtcTimestamp, Reply<Option<CommandResult>>),
     PruneCommands(i64, Reply<u64>),
     MaintainRetention(i64, Reply<StorageRetentionStatus>),
     RetentionStatus(Reply<StorageRetentionStatus>),
@@ -109,24 +114,14 @@ pub(crate) fn run<C, E, D, R>(
             Request::EventSequence(reply) => respond(reply, connection.query_row(
                 "UPDATE event_sequence_counter SET value = value + 1 WHERE id = 1 AND value < 9223372036854775807 RETURNING value",
                 [], |row| row.get::<_, i64>(0)).map_err(unavailable).map(i64::cast_unsigned)),
-            Request::RemoteControl(operation, reply) => {
-                let guard = match &operation {
-                    crate::remote_control::Operation::Read(_) => Ok(()),
-                    crate::remote_control::Operation::Reserve(_) => drain.check_remote_write(true),
-                    crate::remote_control::Operation::Response(..) => drain.check_remote_write(false),
-                };
-                respond(reply, guard.and_then(|()| crate::remote_control::apply(&mut connection, &operation)));
-            },
-            Request::Probe(reply) => respond(
+            Request::RemoteControl(operation, reply) => respond(
                 reply,
-                connection
-                    .query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))
-                    .map(|_| ())
-                    .map_err(unavailable),
+                apply_remote_control(&mut connection, &mut drain, &operation),
             ),
+            Request::Probe(reply) => respond(reply, probe(&connection)),
             Request::Write(write, reply) => respond(
                 reply,
-                drain.check_write(&write).and_then(|()| drain.changed()).and_then(|()| write_atomic(&mut connection, retention_policy, write)),
+                checked_write(&mut connection, &mut drain, retention_policy, write),
             ),
             Request::Snapshots(after, limit, reply) => {
                 respond(reply, snapshots::read(&connection, after, limit));
@@ -164,17 +159,23 @@ pub(crate) fn run<C, E, D, R>(
             Request::AppendConfigurationObservation(write_id, observation, reply) => {
                 respond(
                     reply,
-                    drain
-                        .check_completion_write()
-                        .and_then(|()| drain.changed())
-                        .and_then(|()| {
-                            configuration::append_configuration_observation(
-                                &mut connection,
-                                &write_id,
-                                observation,
-                            )
-                        }),
+                    append_configuration_observation(
+                        &mut connection,
+                        &mut drain,
+                        &write_id,
+                        observation,
+                    ),
                 );
+            }
+            Request::TriggerPending(station, class, now, reply) => {
+                respond(reply, crate::trigger::pending(&connection, &station, class, now));
+            }
+            Request::TriggerCandidates(after, limit, reply) => {
+                respond(reply, crate::trigger::candidates(&connection, after.as_deref(), limit));
+            }
+            Request::ReconcileTrigger(request_id, now, reply) => {
+                respond(reply, drain.check_completion_write().and_then(|()| drain.changed())
+                    .and_then(|()| crate::trigger::reconcile(&mut connection, &request_id, now)));
             }
             Request::PruneCommands(now, reply) => {
                 respond(reply, command::prune::<C>(&mut connection, now));
@@ -199,6 +200,52 @@ pub(crate) fn run<C, E, D, R>(
             ),
         }
     }
+}
+
+fn probe(connection: &Connection) -> Result<(), StorageError> {
+    connection
+        .query_row("PRAGMA schema_version", [], |row| row.get::<_, i64>(0))
+        .map(|_| ())
+        .map_err(unavailable)
+}
+
+fn apply_remote_control(
+    connection: &mut Connection,
+    drain: &mut crate::drain::Drain,
+    operation: &crate::remote_control::Operation,
+) -> Result<crate::remote_control::Outcome, StorageError> {
+    let guard = match operation {
+        crate::remote_control::Operation::Read(_) => Ok(()),
+        crate::remote_control::Operation::Reserve(_) => drain.check_remote_write(true),
+        crate::remote_control::Operation::Response(..) => drain.check_remote_write(false),
+    };
+    guard.and_then(|()| crate::remote_control::apply(connection, operation))
+}
+
+fn checked_write(
+    connection: &mut Connection,
+    drain: &mut crate::drain::Drain,
+    retention_policy: SqliteRetentionPolicy,
+    write: EncodedWrite,
+) -> Result<AtomicWriteOutcome, StorageError> {
+    drain
+        .check_write(&write)
+        .and_then(|()| drain.changed())
+        .and_then(|()| write_atomic(connection, retention_policy, write))
+}
+
+fn append_configuration_observation(
+    connection: &mut Connection,
+    drain: &mut crate::drain::Drain,
+    write_id: &str,
+    observation: ConfigurationObservation,
+) -> Result<Option<CommandResult>, StorageError> {
+    drain
+        .check_completion_write()
+        .and_then(|()| drain.changed())
+        .and_then(|()| {
+            configuration::append_configuration_observation(connection, write_id, observation)
+        })
 }
 
 fn respond<T>(reply: Reply<T>, result: Result<T, StorageError>) {
@@ -351,124 +398,4 @@ fn write_record(transaction: &Transaction<'_>, value: &EncodedRecord) -> Result<
         )
         .map(|_| ())
         .map_err(unavailable)
-}
-
-fn read_events<E: DeserializeOwned>(
-    connection: &Connection,
-    resource: &str,
-    after: Option<i64>,
-    limit: usize,
-) -> Result<RetainedEventPage<E>, StorageError> {
-    if let Some(cursor) = after {
-        let retained = connection
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM journal_events WHERE resource = ?1 AND row_id = ?2)",
-                params![resource, cursor],
-                |row| row.get::<_, bool>(0),
-            )
-            .map_err(unavailable)?;
-        if !retained {
-            return Err(StorageError::new(
-                StorageErrorCode::CursorExpired,
-                "durable event cursor expired; fetch a fresh snapshot",
-            ));
-        }
-    }
-    let mut statement = connection
-        .prepare(
-            "SELECT row_id, payload FROM journal_events WHERE resource = ?1 AND row_id > ?2\n\
-             ORDER BY row_id LIMIT ?3",
-        )
-        .map_err(unavailable)?;
-    let rows = statement
-        .query_map(
-            params![resource, after.unwrap_or(0), limit_plus_one(limit)?],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
-        )
-        .map_err(unavailable)?;
-    let mut values = collect_rows(rows)?;
-    let has_more = values.len() > limit;
-    values.truncate(limit);
-    let resume_position = values.last().map_or(after, |value| Some(value.0));
-    let resume_cursor = resume_position
-        .map(|position| {
-            RetainedEventCursor::new(format!("{RETAINED_EVENT_CURSOR_PREFIX}{position}"))
-        })
-        .transpose()?;
-    let events = values
-        .into_iter()
-        .map(|(_, payload)| codec::decode_event(&payload))
-        .collect::<Result<_, _>>()?;
-    Ok(RetainedEventPage {
-        events,
-        resume_cursor,
-        has_more,
-    })
-}
-
-fn read_records<R: DeserializeOwned>(
-    connection: &Connection,
-    after: Option<i64>,
-    limit: usize,
-    include_telemetry: bool,
-) -> Result<Page<CommittedRecord<R>, CommittedRecordCursor>, StorageError> {
-    let mut statement = connection
-        .prepare(
-            "SELECT row_id, record_id, durability, committed_at, payload\n\
-             FROM committed_records WHERE row_id > ?1 AND (?2 OR durability = 0)\n\
-             ORDER BY row_id LIMIT ?3",
-        )
-        .map_err(unavailable)?;
-    let rows = statement
-        .query_map(
-            params![
-                after.unwrap_or(0),
-                include_telemetry,
-                limit_plus_one(limit)?
-            ],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                ))
-            },
-        )
-        .map_err(unavailable)?;
-    let mut values = collect_rows(rows)?;
-    let has_more = values.len() > limit;
-    values.truncate(limit);
-    let next_cursor = has_more
-        .then(|| {
-            values
-                .last()
-                .map(|value| CommittedRecordCursor::new(value.0.to_string()))
-        })
-        .flatten()
-        .transpose()?;
-    let items = values
-        .into_iter()
-        .map(|(_, id, durability, at, payload)| codec::decode_record(id, durability, &at, &payload))
-        .collect::<Result<_, _>>()?;
-    Ok(Page { items, next_cursor })
-}
-
-fn collect_rows<T>(
-    rows: rusqlite::MappedRows<'_, impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>>,
-) -> Result<Vec<T>, StorageError> {
-    rows.collect::<Result<Vec<_>, _>>().map_err(unavailable)
-}
-
-fn limit_plus_one(limit: usize) -> Result<i64, StorageError> {
-    limit_i64(limit.saturating_add(1))
-}
-fn limit_i64(limit: usize) -> Result<i64, StorageError> {
-    i64::try_from(limit).map_err(|_| {
-        StorageError::new(
-            StorageErrorCode::InvalidRequest,
-            "page limit exceeds SQLite integer range",
-        )
-    })
 }

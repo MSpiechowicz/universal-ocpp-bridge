@@ -115,6 +115,21 @@ pub async fn record_measurements<C: Send + 'static, R: Send + 'static>(
     context: TransactionContext,
     now: UtcTimestamp,
 ) -> Result<(), ObservationCommitError> {
+    record_measurements_with_trigger(store, snapshot, observation, context, now, None).await
+}
+
+/// Commits meter state plus optional typed trigger evidence as one durable operation.
+/// # Errors
+/// Rejects invalid registration, native resource, measurement, context or trigger marker, and
+/// persistence failures without changing the caller's snapshot.
+pub async fn record_measurements_with_trigger<C: Send + 'static, R: Send + 'static>(
+    store: &dyn OperationalStore<C, StationEvent, TransactionSnapshot, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &MeasurementObservation,
+    context: TransactionContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<StationEvent>>,
+) -> Result<(), ObservationCommitError> {
     validate_context(snapshot, &context)?;
     match (observation.protocol, observation.native_resource) {
         (ProtocolEdition::Ocpp16j, NativeProtocolReference::Ocpp16 { .. }) => {
@@ -149,9 +164,19 @@ pub async fn record_measurements<C: Send + 'static, R: Send + 'static>(
         provenance: None,
         payload: StationEvent::StationSnapshot(next.clone()),
     };
+    if trigger.as_ref().is_some_and(|marker| {
+        marker.resource != next.station
+            || marker.sequence == event.sequence
+            || marker.event_id == event.event_id
+    }) {
+        return Err(ObservationCommitError::InvalidState);
+    }
     let mut write = AtomicStoreWrite::empty();
     write.station_snapshot = Some(next.clone());
     write.journal_events.push(event);
+    if let Some(marker) = trigger {
+        write.journal_events.push(marker);
+    }
     store
         .write_atomic(write)
         .await

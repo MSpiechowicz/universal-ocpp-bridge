@@ -1,6 +1,6 @@
 use uob_contracts::{
     Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope, EventId,
-    RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+    RequestId, ResourceRef, StationSnapshot, TriggerMessageClass, UtcTimestamp,
 };
 
 use super::{
@@ -115,6 +115,40 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
             Err(super::StorageError::new(
                 super::StorageErrorCode::Unavailable,
                 "scoped journal event lookup unsupported",
+            ))
+        })
+    }
+
+    /// Whether an OCPP 1.6 station message can match a dispatched trigger window.
+    /// Used to leave ordinary, default-off journal writes unchanged.
+    fn trigger_pending_for_station(
+        &self,
+        _station: ResourceRef,
+        _class: TriggerMessageClass,
+        _now: UtcTimestamp,
+    ) -> StorageFuture<'_, bool> {
+        Box::pin(async { Ok(false) })
+    }
+
+    /// Bounded IDs of trigger observations requiring restart or deadline reconciliation.
+    fn trigger_reconciliation_candidates(
+        &self,
+        _after: Option<RequestId>,
+        _limit: PageLimit,
+    ) -> StorageFuture<'_, Vec<RequestId>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Atomically matches durable station evidence and advances the independent deadline.
+    fn reconcile_trigger_observation(
+        &self,
+        _request_id: RequestId,
+        _now: UtcTimestamp,
+    ) -> StorageFuture<'_, Option<CommandResult>> {
+        Box::pin(async {
+            Err(super::StorageError::new(
+                super::StorageErrorCode::Unavailable,
+                "atomic trigger reconciliation unsupported",
             ))
         })
     }

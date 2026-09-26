@@ -1,14 +1,25 @@
 //! Pinned, explicitly supported privileged commands. Protocol edition is not a capability.
-use rust_ocpp::v1_6::messages::change_availability::ChangeAvailabilityRequest;
+use rust_ocpp::v1_6::messages::{
+    change_availability::ChangeAvailabilityRequest, trigger_message::TriggerMessageRequest,
+};
 use serde::Serialize;
 use serde_json::Value;
 use uob_contracts::{
-    CommandErrorCode, Connectivity, NativeProtocolReference, Operation, PrivilegedOcppOperation,
-    ProtocolEdition, ResourceRef, StationSnapshot, ValueType,
+    CanonicalResource, CommandErrorCode, Connectivity, NativeProtocolReference, Operation,
+    PrivilegedOcppOperation, ProtocolEdition, ResourceRef, StationSnapshot, ValueType,
 };
 
 const V16_SCHEMA: &str = "urn:OCPP:1.6:2019:12:ChangeAvailabilityRequest";
 const V201_SCHEMA: &str = "urn:OCPP:Cp:2:2020:3:ChangeAvailabilityRequest";
+const V16_TRIGGER_SCHEMA: &str = "urn:OCPP:1.6:2019:12:TriggerMessageRequest";
+const TRIGGER_VALUES: &[&str] = &[
+    "BootNotification",
+    "DiagnosticsStatusNotification",
+    "FirmwareStatusNotification",
+    "Heartbeat",
+    "MeterValues",
+    "StatusNotification",
+];
 
 /// One resource-scoped, pinned command schema that the management API may expose.
 #[derive(Clone, Debug, Serialize)]
@@ -36,19 +47,48 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
     let Connectivity::Connected { protocol, .. } = snapshot.connectivity else {
         return Vec::new();
     };
-    if !snapshot.capabilities.supports(&Operation::ProtocolAction {
+    let availability = Operation::ProtocolAction {
         protocol,
         action: "ChangeAvailability".to_owned(),
-    }) {
-        return Vec::new();
+    };
+    let mut descriptors = Vec::new();
+    if snapshot.capabilities.supports(&availability)
+        && let Some(descriptor) = availability_descriptor(snapshot, protocol)
+    {
+        descriptors.push(descriptor);
     }
+    if protocol == ProtocolEdition::Ocpp16j {
+        let trigger = Operation::ProtocolAction {
+            protocol,
+            action: "TriggerMessage".to_owned(),
+        };
+        if snapshot.capabilities.supports(&trigger) && station_scope(&snapshot.station) {
+            descriptors.push(trigger_descriptor(snapshot.station.clone()));
+        }
+        for connector in &snapshot.resources {
+            if connector.capabilities.supports(&trigger)
+                && connector_scope(&connector.resource).is_some()
+                && connector.resource.bridge_id == snapshot.station.bridge_id
+                && connector.resource.station_id == snapshot.station.station_id
+            {
+                descriptors.push(trigger_descriptor(connector.resource.clone()));
+            }
+        }
+    }
+    descriptors
+}
+
+fn availability_descriptor(
+    snapshot: &StationSnapshot,
+    protocol: ProtocolEdition,
+) -> Option<CommandSchemaDescriptor> {
     let (schema, fields) = match protocol {
         ProtocolEdition::Ocpp16j => {
             if !matches!(
                 snapshot.station.native_protocol_reference,
                 None | Some(NativeProtocolReference::Ocpp16 { connector_id: 0 })
             ) {
-                return Vec::new();
+                return None;
             }
             (
                 V16_SCHEMA,
@@ -70,7 +110,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         }
         ProtocolEdition::Ocpp201 => {
             if snapshot.station.native_protocol_reference.is_some() {
-                return Vec::new();
+                return None;
             }
             (
                 V201_SCHEMA,
@@ -83,13 +123,54 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
             )
         }
     };
-    vec![CommandSchemaDescriptor {
+    Some(CommandSchemaDescriptor {
         resource: snapshot.station.clone(),
         protocol,
         action: "ChangeAvailability",
         payload_schema: schema,
         fields,
-    }]
+    })
+}
+
+fn trigger_descriptor(resource: ResourceRef) -> CommandSchemaDescriptor {
+    CommandSchemaDescriptor {
+        resource,
+        protocol: ProtocolEdition::Ocpp16j,
+        action: "TriggerMessage",
+        payload_schema: V16_TRIGGER_SCHEMA,
+        fields: vec![
+            CommandSchemaField {
+                name: "requestedMessage",
+                value_type: ValueType::NamedEnum,
+                required: true,
+                enum_values: Some(TRIGGER_VALUES.to_vec()),
+            },
+            CommandSchemaField {
+                name: "connectorId",
+                value_type: ValueType::UnsignedInteger,
+                required: false,
+                enum_values: None,
+            },
+        ],
+    }
+}
+
+fn station_scope(resource: &ResourceRef) -> bool {
+    resource.resource.is_none()
+        && matches!(
+            resource.native_protocol_reference,
+            None | Some(NativeProtocolReference::Ocpp16 { connector_id: 0 })
+        )
+}
+
+fn connector_scope(resource: &ResourceRef) -> Option<u32> {
+    match (&resource.resource, resource.native_protocol_reference) {
+        (
+            Some(CanonicalResource::Connector { .. }),
+            Some(NativeProtocolReference::Ocpp16 { connector_id }),
+        ) if connector_id > 0 => Some(connector_id),
+        _ => None,
+    }
 }
 
 /// Validates an untrusted privileged request against the exact pinned schema and scope.
@@ -101,6 +182,9 @@ pub fn validate_privileged_operation(
     operation: &PrivilegedOcppOperation<Value>,
 ) -> Result<(), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
+    if operation.action.as_str() == "TriggerMessage" {
+        return validate_trigger(resource, operation);
+    }
     if operation.action.as_str() != "ChangeAvailability" {
         return Err(UnsupportedOperation);
     }
@@ -143,4 +227,51 @@ pub fn validate_privileged_operation(
         }
     }
     Ok(())
+}
+
+fn validate_trigger(
+    resource: &ResourceRef,
+    operation: &PrivilegedOcppOperation<Value>,
+) -> Result<(), CommandErrorCode> {
+    use CommandErrorCode::InvalidParameters;
+    if operation.protocol != ProtocolEdition::Ocpp16j
+        || operation.payload_schema.as_str() != V16_TRIGGER_SCHEMA
+    {
+        return Err(InvalidParameters);
+    }
+
+    let payload = operation.payload.as_object().ok_or(InvalidParameters)?;
+    if payload.len() != 1 && payload.len() != 2 {
+        return Err(InvalidParameters);
+    }
+    let class = payload
+        .get("requestedMessage")
+        .and_then(Value::as_str)
+        .filter(|value| TRIGGER_VALUES.contains(value))
+        .ok_or(InvalidParameters)?;
+    let connector_id = match payload.get("connectorId") {
+        Some(value) => Some(
+            u32::try_from(value.as_u64().ok_or(InvalidParameters)?)
+                .map_err(|_| InvalidParameters)?,
+        ),
+        None => None,
+    };
+    if payload.len() != 1 + usize::from(connector_id.is_some()) {
+        return Err(InvalidParameters);
+    }
+    let _: TriggerMessageRequest =
+        serde_json::from_value(operation.payload.clone()).map_err(|_| InvalidParameters)?;
+
+    match class {
+        "MeterValues" | "StatusNotification" => match connector_id {
+            Some(0) if class == "StatusNotification" && station_scope(resource) => Ok(()),
+            Some(1..) if connector_scope(resource) == connector_id => Ok(()),
+            None if station_scope(resource) => Ok(()),
+            _ => Err(InvalidParameters),
+        },
+        // The message class is leading (§5.17): a supplied connectorId has no scope
+        // effect for these four station-wide notifications.
+        _ if station_scope(resource) => Ok(()),
+        _ => Err(InvalidParameters),
+    }
 }

@@ -59,3 +59,60 @@ absent, empty and selected key lists; partial/unknown/read-only/omitted values; 
 four native write statuses and rejected commands. The corpus proves wire shape,
 while `ocpp16_configuration*` protocol integration tests exercise authenticated
 admission, redaction, persistent outcomes, recovery and one-shot dispatch.
+
+## OCPP 1.6 TriggerMessage fixtures
+
+The TriggerMessage source is the OCA **OCPP 1.6 Edition 2 with published JSON
+errata bundle dated 2025-04-29**, archive SHA-256
+`2a1d80284ca60449e85951fc55bc0538b5d45bd6f97c6d9228745acacb52c11b`,
+recorded in `provenance.json`. Four new schemas come from the archive's
+`OCPP_1.6_documentation/schemas/json/TriggerMessage.json`,
+`TriggerMessageResponse.json`, `DiagnosticsStatusNotification.json`, and
+`FirmwareStatusNotification.json`. They retain the OCA content with only CRLF
+normalized to LF, under OCA copyright and CC BY-ND 4.0. Existing corpus paths
+for `BootNotification.json`, `Heartbeat.json`, `MeterValues.json`, and
+`StatusNotification.json` are reused; they are not replaced or re-vendored.
+The wire arrays are independently authored and do not reproduce OCTT material.
+
+Fixture IDs beginning `wire.ocpp16.trigger-` contain eleven `TriggerMessage`
+CALLs, three native CALLRESULTs (`trigger-accepted`, `trigger-rejected`,
+`trigger-not-implemented`), and nine distinct station-originated `trigger-result-*`
+CALLs. The requests name all six permitted `requestedMessage` values.
+`trigger-status-station` addresses connector 0 only; `trigger-status-connector-1`
+addresses connector 1; `trigger-status-all` omits the ID and expects status for
+station 0 plus connectors 1 and 2. `trigger-meter-connector-{1,2}` addresses
+one connector each; `trigger-meter-all` omits the ID and expects both connector
+measurements, **not** a synthetic connector-0/all `MeterValues`. Both meter
+results contain current example values for configured energy and voltage
+measurands with `Trigger` context. `trigger-boot-irrelevant-connector` and
+`trigger-heartbeat-irrelevant-connector` demonstrate that the message class
+takes priority when a supplied connector ID is irrelevant.
+
+Edition 2 §§5.17 and 6.51 define request scoping: omitted ID means all
+applicable allowed IDs, whereas explicit 0 is specifically station status in
+the §5.17 example; explicit positive IDs address a connector. §5.17 requires
+the response before a subsequent requested CALL, allows the station to reject,
+and says an Accepted response should result in a current message, not historic
+data. The published OCPP-J errata restricts BootNotification triggers to
+pre-Accepted registration (including pending): after Accepted the CSMS SHALL
+NOT request another BootNotification until the station initiates a new boot.
+The `trigger-boot` fixture represents only that permitted pre-acceptance case.
+The `NotImplemented` fixture covers a station that does not implement a
+schema-recognized class; unrecognized strings cannot validate against the OCA
+request enum. The three reply fixtures share their corresponding request
+unique IDs, while resulting CALLs have their **own** unique IDs: OCPP 1.6 does
+not put the triggering request ID in a resulting CALL. Compatible observation
+within the 60-second dispatch-start observation window is not proof of
+causation or of success after reconnect/restart. CALLERROR is not included
+because the corpus checker currently admits only CALL and CALLRESULT envelopes.
+
+`ocpp16.remote-trigger` is `verified`: the checked outbound request fixtures
+are paired with named real-socket protocol, persistent storage, running-service
+and simulator behavior tests in `coverage.json`. Those tests exercise reply
+ordering, one-shot dispatch, scope reconciliation, non-causal observation
+outcomes and restart without replay. The row lists only outbound requests
+because the inventory labels that requirement `csms_to_charging_station`;
+the response and subsequent inbound CALL fixtures remain independently pinned
+in `fixtures.json`. This does not establish interoperability with physical
+stations, physical charging or OCA certification. `ocpp201.remote-trigger`
+remains planned.

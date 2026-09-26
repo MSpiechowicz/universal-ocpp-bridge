@@ -131,18 +131,39 @@ fn remote_correlation_is_an_additive_revision_of_released_schemas() {
 }
 
 #[test]
-fn configuration_result_adds_only_optional_fields_to_v1() {
-    let old: Value = serde_json::from_str(include_str!(
-        "../../schemas/v1.0/command-result.schema.json"
-    ))
-    .unwrap();
-    let new = published("command-result");
-    assert!(compatibility_errors(&old, &new, "$").is_empty());
-    for (definition, previous) in old["$defs"].as_object().unwrap() {
-        assert!(compatibility_errors(previous, &new["$defs"][definition], definition).is_empty());
-    }
-    for name in ["configuration", "configuration_observations"] {
-        assert!(new["properties"].get(name).is_some());
-        assert!(!strings(new.get("required")).contains(name));
+fn trigger_result_adds_only_optional_fields_to_released_schemas() {
+    for (name, previous) in [
+        (
+            "command-result",
+            include_str!("../../schemas/v1.0/command-result.schema.json"),
+        ),
+        (
+            "command-result",
+            include_str!("../../schemas/v1.1/command-result.schema.json"),
+        ),
+        (
+            "export-record",
+            include_str!("../../schemas/v1.2/export-record.schema.json"),
+        ),
+        (
+            "export-batch",
+            include_str!("../../schemas/v1.2/export-batch.schema.json"),
+        ),
+    ] {
+        let old: Value = serde_json::from_str(previous).unwrap();
+        let new = published(name);
+        assert!(compatibility_errors(&old, &new, "$").is_empty());
+        for (definition, previous) in old["$defs"].as_object().unwrap() {
+            assert!(
+                compatibility_errors(previous, &new["$defs"][definition], definition).is_empty()
+            );
+        }
+        let result = if name == "command-result" {
+            &new
+        } else {
+            &new["$defs"]["CommandResult"]
+        };
+        assert!(result["properties"].get("trigger_observation").is_some());
+        assert!(!strings(result.get("required")).contains("trigger_observation"));
     }
 }

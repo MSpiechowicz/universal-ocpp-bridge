@@ -30,6 +30,28 @@ where
     D: Send + 'static,
     R: Send + 'static,
 {
+    complete_status_with_trigger(call, store, snapshot, context, now, None).await
+}
+
+/// Completes a status observation and an optional independently reserved trigger
+/// evidence marker in the same snapshot/journal write.
+///
+/// # Errors
+/// Rejects non-status actions, invalid observations and failed persistence.
+pub async fn complete_status_with_trigger<C, E, D, R>(
+    call: DecodedCall,
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    context: AvailabilityContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<E>>,
+) -> Result<Value, OcppCallError>
+where
+    C: Send + 'static,
+    E: From<StationSnapshot> + Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+{
     let uob_application::ChargerObservation::ConnectorStatus(observation) = call.observation else {
         return Err(OcppCallError {
             protocol: ProtocolEdition::Ocpp16j,
@@ -38,7 +60,7 @@ where
             field_path: None,
         });
     };
-    availability::record_status(store, snapshot, &observation, context, now)
+    availability::record_status_with_trigger(store, snapshot, &observation, context, now, trigger)
         .await
         .map_err(|error| super::registration::lifecycle_error(&error))?;
     Ok(json!([3, call.message_id, {}]))

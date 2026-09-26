@@ -7,5 +7,7 @@ mod recovery;
 mod rejections;
 #[path = "ocpp16_remote_control/support.rs"]
 mod support;
+#[path = "ocpp16_remote_control/trigger.rs"]
+mod trigger;
 #[path = "ocpp16_remote_control/wire.rs"]
 mod wire;

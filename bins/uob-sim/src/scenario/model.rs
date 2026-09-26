@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use serde::{Deserialize, Serialize};
 
 use super::{ActionKind, FailureCategory, RunFailure, SCHEMA_VERSION};
-use crate::{OcppVersion, SimulatorClientConfig};
+use crate::{OcppVersion, SimulatorClientConfig, TriggerObservation, TriggerResponses};
 
 mod command;
 mod seed;
@@ -38,6 +38,10 @@ pub struct StationDefinition {
     #[serde(default)]
     pub evses: Vec<EvseDefinition>,
     pub credentials_file: Option<String>,
+    #[serde(default)]
+    pub trigger_responses: TriggerResponses,
+    #[serde(default)]
+    pub trigger_observation: TriggerObservation,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -76,6 +80,8 @@ impl StationDefinition {
             trace_capacity: self.trace_capacity,
             connectors: self.connector_ids(),
             evse_connectors: self.evse_connectors(),
+            trigger_responses: self.trigger_responses.clone(),
+            trigger_observation: self.trigger_observation.clone(),
         }
     }
 
@@ -279,6 +285,12 @@ fn validate_configuration(configuration: &SimulatorConfiguration) -> Result<(), 
             return Err(setup_failure(
                 "invalid_station_bound",
                 "station timeouts and capacities must be greater than zero",
+            ));
+        }
+        if station.trigger_observation.delay_ms > 30_000 {
+            return Err(setup_failure(
+                "invalid_trigger_observation_delay",
+                "trigger observation delay must not exceed 30000 milliseconds",
             ));
         }
         validate_station_topology(station)?;

@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use serde_json::Value;
 use subtle::ConstantTimeEq;
@@ -9,7 +6,10 @@ use uob_application::{
     AccessGrant, AccessPermission, AccessPolicy, AccessResourceScope, CommandAdmissionPort,
     ScopedCommandAdmissionPort,
 };
-use uob_contracts::{AuthenticatedCommandOrigin, Environment, PrincipalId, ResourceRef, StationId};
+use uob_contracts::{
+    AuthenticatedCommandOrigin, CanonicalResource, Environment, NativeProtocolReference,
+    PrincipalId, ResourceRef, StationId,
+};
 use uob_management_adapter::{
     ManagementCommandAuthenticator, ManagementCommandConfiguration, PrivilegedPayloadValidator,
     token_matches_environment,
@@ -23,7 +23,8 @@ pub(super) struct ControlCredentials {
     privileged: Option<ReadGrant>,
     control_origin: AuthenticatedCommandOrigin,
     privileged_origin: AuthenticatedCommandOrigin,
-    stations: BTreeSet<StationId>,
+    stations: Vec<ResourceRef>,
+    connectors: Vec<ResourceRef>,
     start_refs: BTreeMap<StationId, String>,
 }
 
@@ -33,6 +34,7 @@ impl ControlCredentials {
         read: &ReadGrant,
         control: ReadGrant,
         privileged: Option<ReadGrant>,
+        resources: &BTreeMap<StationId, Vec<ResourceRef>>,
         roster: &[ResourceRef],
         start_refs: BTreeMap<StationId, String>,
     ) -> Result<Self, &'static str> {
@@ -62,9 +64,20 @@ impl ControlCredentials {
                 principal_id: PrincipalId::new("management-privileged")
                     .map_err(|_| "invalid privileged origin")?,
             },
-            stations: roster
-                .iter()
-                .map(|resource| resource.station_id.clone())
+            stations: roster.to_vec(),
+            connectors: resources
+                .values()
+                .flat_map(|entries| entries.iter().skip(1))
+                .filter(|resource| {
+                    matches!(
+                        (&resource.resource, &resource.native_protocol_reference),
+                        (
+                            Some(CanonicalResource::Connector { .. }),
+                            Some(NativeProtocolReference::Ocpp16 { connector_id: 1.. })
+                        )
+                    )
+                })
+                .cloned()
                 .collect(),
             start_refs,
         })
@@ -130,11 +143,15 @@ impl ManagementCommandAuthenticator for ControlCredentials {
     }
 
     fn permits_schema(&self, origin: &AuthenticatedCommandOrigin, resource: &ResourceRef) -> bool {
-        resource.resource.is_none()
-            && resource.native_protocol_reference.is_none()
-            && self.stations.contains(&resource.station_id)
-            && (origin == &self.control_origin
-                || (self.privileged.is_some() && origin == &self.privileged_origin))
+        if resource.resource.is_none() && resource.native_protocol_reference.is_none() {
+            return self.stations.contains(resource)
+                && (origin == &self.control_origin
+                    || (self.privileged.is_some() && origin == &self.privileged_origin));
+        }
+
+        self.privileged.is_some()
+            && origin == &self.privileged_origin
+            && self.connectors.contains(resource)
     }
 
     fn start_reference(
@@ -190,7 +207,7 @@ impl PrivilegedPayloadValidator for PinnedPayloads {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uob_contracts::{BridgeId, StationId};
+    use uob_contracts::{BridgeId, CanonicalConnectorId, StationId};
 
     fn credential(letter: char) -> ReadGrant {
         super::super::files::grant(
@@ -206,6 +223,7 @@ mod tests {
             resource: None,
             native_protocol_reference: None,
         };
+        let resources = BTreeMap::from([(station.station_id.clone(), vec![station.clone()])]);
         let mut references = BTreeMap::new();
         references.insert(
             station.station_id.clone(),
@@ -216,6 +234,7 @@ mod tests {
             &credential('a'),
             credential('b'),
             Some(credential('c')),
+            &resources,
             std::slice::from_ref(&station),
             references,
         )
@@ -249,5 +268,71 @@ mod tests {
         };
         assert!(!authenticator.permits_schema(&control, &other));
         assert!(authenticator.start_reference(&control, &other).is_none());
+    }
+
+    #[test]
+    fn only_privileged_identity_can_discover_exact_rostered_native_connectors() {
+        let station = ResourceRef {
+            bridge_id: BridgeId::new("bridge-a").unwrap(),
+            station_id: StationId::new("station-a").unwrap(),
+            resource: None,
+            native_protocol_reference: None,
+        };
+        let connector = ResourceRef {
+            resource: Some(CanonicalResource::Connector {
+                connector_id: CanonicalConnectorId::new("connector-1").unwrap(),
+            }),
+            native_protocol_reference: Some(NativeProtocolReference::Ocpp16 { connector_id: 1 }),
+            ..station.clone()
+        };
+        let resources = BTreeMap::from([(
+            station.station_id.clone(),
+            vec![station.clone(), connector.clone()],
+        )]);
+        let authenticator = ControlCredentials::new(
+            Environment::Demo,
+            &credential('a'),
+            credential('b'),
+            Some(credential('c')),
+            &resources,
+            std::slice::from_ref(&station),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let control = authenticator
+            .authenticate(&format!("uob1.demo.{}", "b".repeat(32)))
+            .unwrap();
+        let privileged = authenticator
+            .authenticate(&format!("uob1.demo.{}", "c".repeat(32)))
+            .unwrap();
+        assert!(authenticator.permits_schema(&privileged, &connector));
+        assert!(!authenticator.permits_schema(&control, &connector));
+        assert!(
+            authenticator
+                .start_reference(&control, &connector)
+                .is_none()
+        );
+
+        let mut wrong = connector.clone();
+        wrong.bridge_id = BridgeId::new("bridge-b").unwrap();
+        assert!(!authenticator.permits_schema(&privileged, &wrong));
+        wrong = connector.clone();
+        wrong.station_id = StationId::new("station-b").unwrap();
+        assert!(!authenticator.permits_schema(&privileged, &wrong));
+        wrong = connector.clone();
+        wrong.resource = Some(CanonicalResource::Connector {
+            connector_id: CanonicalConnectorId::new("connector-2").unwrap(),
+        });
+        assert!(!authenticator.permits_schema(&privileged, &wrong));
+        wrong = connector.clone();
+        wrong.native_protocol_reference = Some(NativeProtocolReference::Ocpp16 { connector_id: 2 });
+        assert!(!authenticator.permits_schema(&privileged, &wrong));
+        wrong = station.clone();
+        wrong.bridge_id = BridgeId::new("bridge-b").unwrap();
+        assert!(!authenticator.permits_schema(&control, &wrong));
+        assert!(!authenticator.permits_schema(&privileged, &wrong));
+        wrong = station;
+        wrong.native_protocol_reference = Some(NativeProtocolReference::Ocpp16 { connector_id: 0 });
+        assert!(!authenticator.permits_schema(&privileged, &wrong));
     }
 }

@@ -5,6 +5,7 @@ mod configuration;
 mod configuration_values;
 mod identity;
 mod mapping;
+mod trigger;
 pub(crate) use configuration_values::DeferredConfigurationCall;
 pub use configuration_values::{
     LocalConfigurationValues, ProtectedConfigurationText, ProtectedConfigurationValue,
@@ -178,6 +179,16 @@ impl RemoteControlSession {
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn trigger_expectation(
+        &self,
+        command: &Command<Value>,
+    ) -> Option<uob_application::TriggerExpectation> {
+        if self.handle.is_closed() {
+            return None;
+        }
+        let snapshot = self.snapshot.read().ok()?;
+        mapping::trigger_expectation(command, &snapshot, self.clock.now())
+    }
     fn context(
         &self,
         resource: ResourceRef,
