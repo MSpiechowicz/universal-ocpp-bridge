@@ -87,6 +87,16 @@ All notable changes to this project will be documented in this file. See [conven
   ([RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285.html)).
 
 - - -
+## [v0.31.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e87ff4e4b3b76926eb40bb6a3745cee8e65efce7..v0.31.0) - 2026-09-26
+#### Features
+- (**console**) add authorized browser commands (#91) (#316) - ([c0b8ebe](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/c0b8ebe98613087de38863cac10f7df67c5097ed)) - Maciej Spiechowicz
+- (**ocpp**) implement OCPP 1.6 configuration commands (#314) - ([e87ff4e](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/e87ff4e4b3b76926eb40bb6a3745cee8e65efce7)) - Maciej Spiechowicz
+- (**sim**) add isolated browser scenario controls (#317) - ([b833c09](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/b833c097948fc251a7df4ba685eb375b769dece5)) - Maciej Spiechowicz
+#### Documentation
+- (**ops**) document installation and recovery runbooks (#315) - ([2778c01](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/2778c01e2ce44dfb0dd075e1acf3cdcb92f6dcdf)) - Maciej Spiechowicz
+
+- - -
+
 ## [v0.30.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/515dab0d381b3e139938bfb3a342f147ccc0d515..v0.30.0) - 2026-09-24
 #### Features
 - (**console**) implement live station views (#312) - ([01d4f98](https://github.com/MSpiechowicz/universal-ocpp-bridge/commit/01d4f9868d7cc8bda0fd2770c8659e1d0966282d)) - Maciej Spiechowicz
