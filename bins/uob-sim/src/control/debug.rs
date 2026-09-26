@@ -83,11 +83,5 @@ pub(super) async fn status(State(server): State<ControlServer>, Path(id): Path<u
     };
     let mut evidence = run.status(id, &server.configuration.environment);
     evidence["schema_version"] = json!(1);
-    // IDs and seeds are u64; preserve exact values in JavaScript.
-    evidence["run_id"] = json!(id.to_string());
-    evidence["seed"] = json!(run.seed.to_string());
-    for event in evidence["events"].as_array_mut().expect("event array") {
-        event["seed"] = json!(run.seed.to_string());
-    }
     Json(evidence).into_response()
 }

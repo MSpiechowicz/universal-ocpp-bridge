@@ -22,6 +22,7 @@ struct Document {
     simulator_file: String,
     scenarios: Vec<ScenarioFile>,
     debug: Option<DebugDocument>,
+    control_browser: Option<BrowserDocument>,
 }
 
 #[derive(Deserialize)]
@@ -30,10 +31,18 @@ struct DebugDocument {
     console_origin: String,
     token_file: String,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrowserDocument {
+    console_origin: String,
+}
 
 pub(super) struct DebugAccess {
     pub origin: String,
     pub token: String,
+}
+pub(super) struct BrowserAccess {
+    pub origin: String,
 }
 
 #[derive(Deserialize)]
@@ -54,6 +63,7 @@ pub struct ControlConfiguration {
     pub(super) scenarios: BTreeMap<String, ScenarioDefinition>,
     pub(super) imports: BTreeSet<String>,
     pub(super) debug: Option<DebugAccess>,
+    pub(super) browser: Option<BrowserAccess>,
 }
 
 impl ControlConfiguration {
@@ -83,6 +93,8 @@ impl ControlConfiguration {
             .debug
             .map(|debug| load_debug(debug, parent, &token))
             .transpose()?;
+        let browser = document.control_browser.map(load_browser).transpose()?;
+
         let simulator = parse_configuration(&read_bounded(
             &parent.join(document.simulator_file),
             DOCUMENT_LIMIT,
@@ -153,6 +165,7 @@ impl ControlConfiguration {
             scenarios,
             imports,
             debug,
+            browser,
         })
     }
 }
@@ -227,13 +240,10 @@ fn load_debug(
     parent: &Path,
     token: &str,
 ) -> Result<DebugAccess, &'static str> {
-    let origin = url::Url::parse(&debug.console_origin).map_err(|_| "invalid_debug_origin")?;
-    if origin.scheme() != "http"
-        || !matches!(origin.host_str(), Some("127.0.0.1" | "[::1]"))
-        || origin.origin().ascii_serialization() != debug.console_origin
-    {
-        return Err("literal_loopback_debug_origin_required");
-    }
+    validate_origin(
+        &debug.console_origin,
+        "literal_loopback_debug_origin_required",
+    )?;
     let debug_token = read_bounded(&parent.join(debug.token_file), 128)?
         .trim()
         .to_owned();
@@ -247,4 +257,25 @@ fn load_debug(
         origin: debug.console_origin,
         token: debug_token,
     })
+}
+
+fn load_browser(browser: BrowserDocument) -> Result<BrowserAccess, &'static str> {
+    validate_origin(
+        &browser.console_origin,
+        "literal_loopback_control_origin_required",
+    )?;
+    Ok(BrowserAccess {
+        origin: browser.console_origin,
+    })
+}
+
+fn validate_origin(origin: &str, error: &'static str) -> Result<(), &'static str> {
+    let parsed = url::Url::parse(origin).map_err(|_| error)?;
+    if parsed.scheme() != "http"
+        || !matches!(parsed.host_str(), Some("127.0.0.1" | "[::1]"))
+        || parsed.origin().ascii_serialization() != origin
+    {
+        return Err(error);
+    }
+    Ok(())
 }

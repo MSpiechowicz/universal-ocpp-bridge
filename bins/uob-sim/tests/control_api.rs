@@ -1,3 +1,5 @@
+#[path = "control_api/browser.rs"]
+mod browser;
 mod control_support;
 use axum::{
     body::Body,
@@ -6,7 +8,11 @@ use axum::{
 use control_support::{
     Fixture, HOST, TOKEN, control_document, finished, request, start, wait_scenario,
 };
+use futures::StreamExt;
 use serde_json::{Value, json};
+use tokio_tungstenite::tungstenite::handshake::server::{
+    ErrorResponse, Request as WsRequest, Response,
+};
 use tower::ServiceExt;
 use uob_sim::control::ControlConfiguration;
 
@@ -49,6 +55,11 @@ fn configuration_rejects_production_remote_peers_credentials_and_unbounded_work(
     assert_eq!(fixture.load().err(), Some("scenario_control_bound"));
     fixture.write("scenario.toml", &" ".repeat(65537));
     assert_eq!(fixture.load().err(), Some("document_limit"));
+    fixture.write(
+        "scenario.toml",
+        &wait_scenario("demo-alpha", 1).replace("seed = 42", "seed = \"01\""),
+    );
+    assert_eq!(fixture.load().err(), Some("invalid_scenario_toml"));
     fixture.write("token", "weak");
     assert_eq!(
         fixture.load().err(),
@@ -72,6 +83,19 @@ async fn api_requires_explicit_bearer_and_rejects_cross_origin_host_and_large_bo
             StatusCode::FORBIDDEN,
         ),
         (TOKEN, HOST, Some("null"), StatusCode::FORBIDDEN),
+        (TOKEN, HOST, Some("http://127.0.0.1:9001"), StatusCode::OK),
+        (
+            "production-token",
+            HOST,
+            Some("http://127.0.0.1:9001"),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            TOKEN,
+            HOST,
+            Some("http://127.0.0.1:9001/"),
+            StatusCode::FORBIDDEN,
+        ),
     ] {
         let mut request = Request::builder()
             .uri("/api/v1/scenarios")
@@ -86,7 +110,35 @@ async fn api_requires_explicit_bearer_and_rejects_cross_origin_host_and_large_bo
             .await
             .unwrap();
         assert_eq!(response.status(), expected);
+        assert!(
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .is_none()
+        );
     }
+    let preflight = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/api/v1/scenarios")
+                .header("Host", HOST)
+                .header("Origin", "http://127.0.0.1:9001")
+                .header("Access-Control-Request-Method", "GET")
+                .header("Access-Control-Request-Headers", "authorization")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(preflight.status(), StatusCode::FORBIDDEN);
+    assert!(
+        preflight
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none()
+    );
     let (status, catalog) = request(&router, "GET", "/api/v1/scenarios", Value::Null).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(catalog["environment"], "demo");
@@ -140,7 +192,7 @@ async fn stop_is_scoped_and_busy_stations_cannot_be_started_twice() {
         "station_busy"
     );
     let (_, beta) = request(&router, "POST", "/api/v1/runs", json!({"scenario":"beta"})).await;
-    let beta = beta["run_id"].as_u64().unwrap();
+    let beta = beta["run_id"].as_str().unwrap().to_owned();
     assert_eq!(
         request(
             &router,
@@ -159,7 +211,7 @@ async fn stop_is_scoped_and_busy_stations_cannot_be_started_twice() {
         json!({}),
     )
     .await;
-    let alpha_report = finished(&router, alpha).await;
+    let alpha_report = finished(&router, &alpha).await;
     assert_eq!(alpha_report["status"], "failed");
     assert_eq!(
         alpha_report["events"].as_array().unwrap().last().unwrap()["failure_category"],
@@ -213,10 +265,10 @@ async fn retained_run_capacity_is_finite_and_delete_reclaims_it() {
     );
     request(&router, "DELETE", "/api/v1/runs/1", Value::Null).await;
     let id = start(&router).await;
-    assert_eq!(id, 9);
+    assert_eq!(id, "9");
     let (_, listed) = request(&router, "GET", "/api/v1/runs", Value::Null).await;
     assert_eq!(listed["runs"].as_array().unwrap().len(), 8);
-    assert_eq!(listed["runs"][7]["run_id"], 9);
+    assert_eq!(listed["runs"][7]["run_id"], "9");
     finished(&router, id).await;
     server.shutdown().await;
 }
@@ -259,6 +311,11 @@ timeout_ms = 100
         ),
         (
             "checkpoint",
+            json!({"kind":"fault", "fault":"disconnect", "delay_ms":0}),
+            "invalid_fault_action",
+        ),
+        (
+            "checkpoint",
             json!({"kind":"fault", "fault":"response_delay", "delay_ms":30001}),
             "delay_limit",
         ),
@@ -285,4 +342,124 @@ timeout_ms = 100
         "step_not_editable"
     );
     server.shutdown().await;
+}
+
+const HEARTBEAT_DISCONNECT_SCENARIO: &str = r#"schema_version = 1
+seed = 42
+[[steps]]
+id = "connect"
+station = "demo-alpha"
+action = "connect"
+timeout_ms = 1000
+[[steps]]
+id = "checkpoint"
+station = "demo-alpha"
+action = "wait"
+duration_ms = 300
+timeout_ms = 1000
+[[steps]]
+id = "heartbeat"
+station = "demo-alpha"
+action = "heartbeat"
+timeout_ms = 1000
+"#;
+
+#[tokio::test]
+async fn heartbeat_disconnect_fault_is_distinct_from_a_wait_checkpoint() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("ws://{}", listener.local_addr().unwrap());
+    let peer = tokio::spawn(assert_no_heartbeats_after_disconnect(listener));
+    let fixture = Fixture::new(HEARTBEAT_DISCONNECT_SCENARIO);
+    fixture.write("simulator.toml", &control_support::configuration(&endpoint));
+    let server = fixture.server();
+    let router = server.router();
+    let (_, catalog) = request(&router, "GET", "/api/v1/scenarios", Value::Null).await;
+    assert_eq!(
+        catalog["scenarios"][0]["steps"][1]["eligible_controls"],
+        json!(["disconnect", "reconnect"])
+    );
+    assert_eq!(
+        catalog["scenarios"][0]["steps"][2]["eligible_controls"],
+        json!([
+            "disconnect",
+            "response_delay",
+            "missing_response",
+            "out_of_order_response"
+        ])
+    );
+
+    let id = start(&router).await;
+    let path = format!("/api/v1/runs/{id}/controls");
+    let (_, rejected) = request(
+        &router,
+        "POST",
+        &path,
+        json!({"step_id":"heartbeat","intervention":{"kind":"disconnect"}}),
+    )
+    .await;
+    assert_eq!(rejected["error"], "checkpoint_required");
+    let (status, accepted) = request(
+        &router,
+        "POST",
+        &path,
+        json!({"step_id":"heartbeat","intervention":{"kind":"fault","fault":"disconnect","delay_ms":0}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{accepted}");
+    assert_eq!(accepted["status"], "scheduled");
+    let report = finished(&router, &id).await;
+    assert_eq!(report["status"], "failed", "{report}");
+    assert_eq!(report["steps"][2]["action"], "heartbeat");
+    assert_eq!(report["steps"][2]["fault"], "disconnect");
+    assert_eq!(report["steps"][2]["fault_selected"], true);
+    assert_eq!(report["steps"][2]["effect_status"], "applied");
+    assert_eq!(report["steps"][2]["failure_code"], "not_connected");
+    server.shutdown().await;
+    tokio::time::timeout(std::time::Duration::from_secs(3), peer)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+async fn assert_no_heartbeats_after_disconnect(listener: tokio::net::TcpListener) {
+    let (tcp, _) = listener.accept().await.unwrap();
+    let mut socket = tokio_tungstenite::accept_hdr_async(tcp, select_protocol)
+        .await
+        .unwrap();
+    while let Some(Ok(message)) = socket.next().await {
+        assert!(!message.is_text(), "heartbeat sent after disconnect fault");
+    }
+}
+
+// Tungstenite's callback requires Result even when this test always accepts the handshake.
+#[allow(clippy::result_large_err, clippy::unnecessary_wraps)]
+fn select_protocol(request: &WsRequest, mut response: Response) -> Result<Response, ErrorResponse> {
+    response.headers_mut().insert(
+        "Sec-WebSocket-Protocol",
+        request.headers()["Sec-WebSocket-Protocol"].clone(),
+    );
+    Ok(response)
+}
+
+#[test]
+fn disconnect_fault_is_only_valid_for_heartbeat_scenarios() {
+    let fixture = Fixture::new(HEARTBEAT_DISCONNECT_SCENARIO);
+    fixture.write(
+        "scenario.toml",
+        &(HEARTBEAT_DISCONNECT_SCENARIO.to_owned()
+            + r#"
+[steps.fault]
+kind = "disconnect"
+"#),
+    );
+    assert!(fixture.load().is_ok());
+    fixture.write(
+        "scenario.toml",
+        &(wait_scenario("demo-alpha", 1)
+            + r#"
+[steps.fault]
+kind = "disconnect"
+"#),
+    );
+    assert_eq!(fixture.load().err(), Some("invalid_fault_action"));
 }

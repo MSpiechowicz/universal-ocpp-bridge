@@ -13,7 +13,11 @@ application lockfile. Node setup and npm cache
 are confined to the frontend job. Existing Rust daemon, simulator, commit and
 release-version checks continue to use committed static assets without Node.
 Only HTML, JavaScript and CSS enter the daemon through the existing Rust asset
-embedding; the build rejects extra files, source maps and assets over budget.
+embedding. The build rejects extra files and source maps, and bounds the three
+allowlisted assets at 384 KiB raw and 115 KiB aggregate gzip (measurement only).
+The approved browser scenario controls measured 387246 bytes raw and 116014 bytes
+gzip across those three assets. The separate Rust test bounds each served
+uncompressed response at 384 KiB; no HTTP gzip delivery is implied.
 
 With Node 26.8.1, run from `frontend` (the first command can use Node's bundled npm):
 
@@ -26,6 +30,7 @@ npm run check:reproducible
 git diff --exit-code -- ../adapters/management/ui
 cargo build --locked -p uob-service --bin uob --example charging_browser_peer
 cargo build --locked -p uob-sim --bin uob-sim
+cargo build --locked -p uob-sim --example browser_wire_peer
 cargo build --locked -p uob-management-adapter --example browser_fixture
 ./node_modules/.bin/playwright install --with-deps chromium
 npm run test:browser:ci
@@ -39,11 +44,17 @@ validators because rejecting those characters is intentional. React Compiler
 rules are not enabled: this project does not use that compiler.
 
 The default suite starts four real management-router fixtures plus the actual `uob`
-executable, built after the asset build, on loopback ports 39189–39193, and a
-separate real simulator on port 39194 for read-only evidence tests. Occupied
-ports fail rather than reusing another process. That daemon uses an isolated
-API-only demo configuration without charging peers; it still returns an honest 503 for
-unconfigured station reads.
+executable, built after the asset build, on loopback ports 39189–39193; an
+additional real simulator runs on 39194 with an isolated compiled OCPP peer on
+39195. Occupied ports fail rather than reusing another process. The API-only
+daemon uses an isolated demo configuration without charging peers and still
+returns an honest 503 for unconfigured station reads. The simulator browser
+case exercises separate Debug read/control credentials, origin/environment
+denial, server-derived catalog, exact decimal-string seeds, station-owned
+checkpoint disconnect/reconnect and an actual delayed OCPP 1.6 remote-start
+reply observed by the peer. It also checks safe setup failure and recovery of
+uncertain/stale control status. Run only that case after building the simulator
+and peer example: `npm run test:browser -- simulator.browser.ts` from `frontend`.
 
 The separate `UOB_LIVE_BROWSER=1` suite launches a disposable, opt-in `uob serve`
 on management port 39195 with charging ingress on 39196. A compiled peer drives

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add opt-in demo/staging browser scenario controls with separate simulator bearer and
+  console-origin allowlist, server-derived scenario and station/step catalog, exact
+  decimal-string seeds/run IDs, pending-step disconnect/reconnect and fault scheduling.
+  Distinguish delayed peer replies from heartbeat completion and intervention effect
+  from assertion outcome; real browser/peer coverage exercises recovery and safe
+  setup failure without granting broker/EMS or charging commands (#93).
+
 - Add opt-in demo charging commands to the browser console with independent
   read/control/privileged grants, per-station action permissions, protected start
   identities and schema-validated privileged operations. Keep admission, native

@@ -17,10 +17,13 @@ bytes; React runs on the operator's browser. The shell has no background animati
 IndexedDB or local/session-storage writes. The normal event summary retains counters and only the latest event type. Debug separately retains
 a bounded sanitized trace window when explicitly connected.
 
-The isolated frontend build enforces a 368 KiB total uncompressed asset budget and a 109 KiB
-gzip measurement budget for the three allowlisted assets. Browser command controls increased the
-measured footprint beyond the former 352/108 KiB ceiling. The Rust asset test separately bounds
-each served response; the server sends uncompressed assets, so gzip is not an HTTP compression claim.
+The isolated frontend build enforces a 384 KiB total uncompressed asset budget and a
+115 KiB aggregate gzip measurement budget for exactly three allowlisted assets. The
+approved browser scenario controls measured 387246 bytes raw and 116014 bytes gzip
+across those three assets, within both budgets. The Rust asset test separately bounds
+each served response at 384 KiB; the server sends uncompressed assets, so gzip is a
+build measurement, not an HTTP compression claim.
+
 There are only three allowlisted routes: `/`,
 `/ui/assets/console.js` and `/ui/assets/console.css`. Responses are `no-store` with explicit MIME,
 `nosniff`, no-referrer and a restrictive same-origin content security policy. Unknown asset paths
@@ -131,6 +134,55 @@ flow. Protocol acceptance is not observed charging success.
 This mode is **not** a production plaintext charging listener or production command exposure.
 See the [headless configuration guide](headless-cli.md#demo-charging-station-views).
 
+## Simulator scenario controls
+
+This panel is available only on demo/staging consoles and requires a separate opt-in
+`[control_browser]` `console_origin` in the simulator's `uob-sim serve` control
+configuration. Only canonical literal-loopback HTTP console origins can be allowlisted;
+without this block, cross-origin control requests are denied. Use the matching isolated
+test bridge origin and a simulator control bearer entered explicitly in the panel.
+The independent `[debug]` read credential cannot start or edit runs, bridge management
+credentials are not copied to the simulator, and this panel does not grant charging
+commands. CORS preflight allows only the configured origin, known routes/methods and
+Authorization (optionally Content-Type); requests require the bearer, never cookies.
+The simulator and browser must share a loopback network context. This is trusted
+operator setup, not an attestation of the peer.
+
+Enter the simulator origin in Debug, then enter the separate control credential and
+choose **Enter simulator controls**. The panel loads the server-derived authored
+scenario catalog and retained run list without starting a run. Selecting a scenario
+shows every station affected; **Station context** filters the displayed steps only,
+not the full scenario started. An optional seed override is an exact unsigned decimal
+string. The authored default, all run IDs and seeds returned by the API also remain
+decimal strings; full-range unsigned TOML seeds must be quoted, for example
+`seed = "18446744073709551615"`. Explicitly start the selected scenario, refresh
+its status, then choose a pending station-owned step and one of its server-advertised
+eligible interventions. Disconnect and reconnect replace authored `wait` checkpoints;
+other faults apply only to eligible authored actions. Scheduling is not execution:
+refresh to inspect `effect_status`, selected fault, assertion outcome and safe terminal
+failure category/code. An intervention can apply even if the step's assertion fails.
+
+`response_delay_scope = "peer_reply"` on a remote-start/stop await step actually
+delays the OCPP reply to the independent peer; `"step_completion"` on a heartbeat
+holds only simulator-observed completion after the Heartbeat exchange. Neither a
+heartbeat delay nor its missing-response fault delays or suppresses a peer socket
+reply. Stop requests require a later status refresh for terminal evidence. A
+connection failure, lost mutation response or refresh failure makes the last confirmed
+status stale and the result potentially unknown: use **Recover / refresh run list** and
+**Refresh selected run status** before any deliberate new action; the browser does not
+automatically retry. Setup failures, including unavailable peers, appear as terminal
+safe category/code without pretending a charging effect. Remove only confirmed
+terminal runs; leave controls to clear the credential. Hidden tabs cannot act.
+
+Station inventory and retained Debug links use the selected station as context only:
+the authorized inventory may not include that station, retained traces can be absent,
+and neither link proves an exact per-step correlation. The existing Debug evidence
+panel remains read-only. Broker/EMS controls are not offered because this isolated
+simulator harness exposes no broker/EMS control API; charging start/stop/limit commands
+remain on the separately authenticated bridge command API. See the
+[control API](../simulator/control-api.md) and
+[Debug evidence boundary](debug-simulator-evidence.md).
+
 ## Build and verification
 
 Build only on a developer or CI host, using Node 26.8.1 and npm 12.0.2:
@@ -142,6 +194,7 @@ npm run check
 cargo build --locked -p uob-service --bin uob --example charging_browser_peer
 cargo build --locked -p uob-management-adapter --example browser_fixture
 cargo build --locked -p uob-sim --bin uob-sim
+cargo build --locked -p uob-sim --example browser_wire_peer
 npm exec playwright install chromium
 npm run test:browser
 UOB_LIVE_BROWSER=1 npm run test:browser
@@ -154,11 +207,18 @@ second build must produce no asset diff. Rust release jobs consume those files w
 frontend tooling. The [frontend checks](../testing/frontend-checks.md) build the daemon and
 authenticated OCPP peer and run both router-fixture and real-daemon browser suites.
 
-The router fixtures on ports 39189–39192 cover scoped authentication, cursor resume, inert
-rendering, navigation and layout. The API-only daemon on 39193 proves the honest 503 path.
-The separate real daemon uses private SQLite/files, independently authenticated read/control/
-privileged grants, two OCPP editions and multi-EVSE traffic on 39195–39196. Its command scenario
-exercises rejected and expired requests, exact retry deduplication, start/limit/stop/availability
+The router fixtures on ports 39189–39192 cover scoped authentication, cursor resume,
+inert rendering, navigation and layout. The API-only daemon on 39193 proves the honest
+503 path. A separate real simulator on 39194 and isolated OCPP peer on 39195 exercise
+browser-owned scenario controls, real disconnect/reconnect, delayed remote-command
+reply and safe setup failure; the three-asset budget is checked by `npm run check`.
+For this case alone: `npm run test:browser -- simulator.browser.ts` from `frontend`
+after building both `uob-sim` and its `browser_wire_peer` example.
+
+The separate real charging daemon uses private SQLite/files and independently authenticated
+read/control/privileged grants, with two OCPP editions and multi-EVSE traffic on
+39195–39196. Its command scenario exercises rejected and expired requests, exact retry
+deduplication, start/limit/stop/availability
 protocol replies and later linked station/resource events without intercepting management responses:
 `UOB_LIVE_BROWSER=1 npm run test:browser -- live-command.browser.ts` from `frontend`.
 The broader live suite also verifies read/SSE isolation, topology, value quality, transaction

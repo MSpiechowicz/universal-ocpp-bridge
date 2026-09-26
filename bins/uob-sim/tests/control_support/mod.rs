@@ -122,14 +122,14 @@ pub async fn request(
     (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
 }
 
-pub async fn start(router: &Router) -> u64 {
+pub async fn start(router: &Router) -> String {
     let (status, value) =
         request(router, "POST", "/api/v1/runs", json!({"scenario":"sample"})).await;
     assert_eq!(status, StatusCode::OK, "{value}");
-    value["run_id"].as_u64().unwrap()
+    value["run_id"].as_str().unwrap().to_owned()
 }
 
-pub async fn finished(router: &Router, id: u64) -> Value {
+pub async fn finished(router: &Router, id: impl std::fmt::Display) -> Value {
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let (_, value) =

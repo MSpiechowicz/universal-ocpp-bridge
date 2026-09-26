@@ -28,6 +28,9 @@ pub struct StepProgress {
     pub fault_selected: Option<bool>,
     pub fault: Option<&'static str>,
     pub intervention: Option<Intervention>,
+    pub eligible_controls: &'static [&'static str],
+    pub effect_status: Option<&'static str>,
+    pub response_delay_scope: Option<&'static str>,
 }
 
 struct StepState {
@@ -62,6 +65,9 @@ impl LiveRun {
                         fault_selected: None,
                         fault: step.fault.as_ref().map(|fault| fault.kind.name()),
                         intervention: None,
+                        eligible_controls: step.eligible_controls(),
+                        effect_status: None,
+                        response_delay_scope: step.response_delay_scope(),
                     },
                 })
                 .collect(),
@@ -119,6 +125,18 @@ impl LiveRun {
                 if delay_ms > 30_000 {
                     return Err("delay_limit");
                 }
+                if !step.eligible_controls().contains(&fault.name()) {
+                    return Err("invalid_fault_action");
+                }
+                if fault == FaultKind::ResponseDelay
+                    && matches!(
+                        step.action,
+                        ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop
+                    )
+                    && delay_ms >= step.timeout_ms
+                {
+                    return Err("delay_exceeds_step_deadline");
+                }
                 step.fault = Some(FaultDefinition {
                     kind: fault,
                     delay_ms,
@@ -135,9 +153,22 @@ impl LiveRun {
         state.progress.action = step.action.name();
         state.progress.expectation.clone_from(&step.expect_event);
         state.progress.fault = step.fault.as_ref().map(|fault| fault.kind.name());
+        state.progress.eligible_controls = &[];
+        state.progress.effect_status = Some("scheduled");
         state.progress.intervention = Some(intervention);
         state.step = step;
         Ok(())
+    }
+
+    /// Reserve an authored step before arming a socket handler.
+    pub(super) fn prepare(&self, original: &StepDefinition) -> StepDefinition {
+        let mut states = self.0.lock().expect("live run lock");
+        let state = states
+            .iter_mut()
+            .find(|state| state.step.id == original.id)
+            .expect("validated step");
+        state.progress.status = "preparing";
+        state.step.clone()
     }
 
     pub(super) fn begin(&self, original: &StepDefinition) -> StepDefinition {
@@ -147,6 +178,9 @@ impl LiveRun {
             .find(|state| state.step.id == original.id)
             .expect("validated step");
         state.progress.status = "running";
+        if state.progress.intervention.is_some() {
+            state.progress.effect_status = Some("in_progress");
+        }
         state.step.clone()
     }
 
@@ -164,6 +198,24 @@ impl LiveRun {
         }
     }
 
+    pub(super) fn applied(&self, step_id: &str) {
+        let mut states = self.0.lock().expect("live run lock");
+        let state = states
+            .iter_mut()
+            .find(|state| state.step.id == step_id)
+            .expect("validated step");
+        if matches!(
+            state.progress.intervention.as_ref(),
+            Some(Intervention::Disconnect | Intervention::Reconnect)
+        ) || (matches!(
+            state.progress.intervention.as_ref(),
+            Some(Intervention::Fault { .. })
+        ) && state.progress.fault_selected == Some(true))
+        {
+            state.progress.effect_status = Some("applied");
+        }
+    }
+
     pub(super) fn finish(&self, step_id: &str, result: &Result<String, super::RunFailure>) {
         let passed = result.is_ok();
         let mut states = self.0.lock().expect("live run lock");
@@ -173,9 +225,31 @@ impl LiveRun {
             .expect("validated step");
         state.progress.status = if passed { "passed" } else { "failed" };
         state.progress.assertion_passed = Some(passed);
+        if state.progress.intervention.is_some() && state.progress.effect_status != Some("applied")
+        {
+            state.progress.effect_status = Some(if !passed {
+                "failed"
+            } else if matches!(
+                state.progress.intervention,
+                Some(Intervention::Fault { .. })
+            ) && state.progress.fault_selected == Some(false)
+            {
+                "not_selected"
+            } else {
+                "not_observed"
+            });
+        }
         if let Err(failure) = result {
             state.progress.failure_category = Some(failure.category);
             state.progress.failure_code = Some(failure.code);
+        }
+    }
+
+    pub(crate) fn finish_pending(&self) {
+        for state in self.0.lock().expect("live run lock").iter_mut() {
+            if state.progress.effect_status == Some("scheduled") {
+                state.progress.effect_status = Some("not_applied");
+            }
         }
     }
 }

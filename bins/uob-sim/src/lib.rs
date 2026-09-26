@@ -147,6 +147,26 @@ pub struct RemoteCommand {
     pub accepted: bool,
 }
 
+/// The receipt fires only after the socket handler has held the remote reply for the delay.
+pub type ReplyDelayReceipt = oneshot::Receiver<()>;
+
+struct ReplyDelay {
+    kind: RemoteCommandKind,
+    duration: Duration,
+    receipt: oneshot::Sender<()>,
+}
+
+type ReplyDelaySlot = Arc<Mutex<Option<ReplyDelay>>>;
+
+fn take_reply_delay(slot: &ReplyDelaySlot, kind: RemoteCommandKind) -> Option<ReplyDelay> {
+    let mut slot = slot.lock().expect("reply delay lock poisoned");
+    if slot.as_ref().is_some_and(|delay| delay.kind == kind) {
+        slot.take()
+    } else {
+        None
+    }
+}
+
 pub type ClientFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, SimulatorClientError>> + Send + 'a>>;
 
@@ -166,6 +186,19 @@ pub trait ProtocolClient: Send + Sync {
                 "remote commands are unsupported by this client".to_owned(),
             ))
         })
+    }
+    /// Arms a single matching remote-command reply delay.
+    ///
+    /// # Errors
+    /// Returns an error when the client cannot reserve a reply delay.
+    fn arm_remote_reply_delay(
+        &self,
+        _kind: RemoteCommandKind,
+        _duration: Duration,
+    ) -> Result<ReplyDelayReceipt, SimulatorClientError> {
+        Err(SimulatorClientError::Protocol(
+            "remote reply delay is unsupported by this client".to_owned(),
+        ))
     }
     fn shutdown(&self) -> ClientFuture<'_, ()>;
     fn force_shutdown(&self) -> ClientFuture<'_, ()>;
@@ -190,6 +223,7 @@ pub struct SimulatorProtocolClient {
     worker: tokio::task::AbortHandle,
     emergency_client: EmergencyClient,
     rejected_commands: Arc<AtomicU64>,
+    reply_delay: ReplyDelaySlot,
 }
 
 enum Command {
@@ -302,6 +336,7 @@ impl SimulatorProtocolClient {
         };
         let (commands, receiver) = mpsc::channel(config.command_capacity);
         let (remote_commands, remote_receiver) = mpsc::channel(config.command_capacity);
+        let reply_delay = Arc::new(Mutex::new(None));
         let rejected_commands = Arc::new(AtomicU64::new(0));
         let state = Arc::new(Mutex::new(Ocpp16State::default()));
 
@@ -316,6 +351,7 @@ impl SimulatorProtocolClient {
                     remote_commands,
                     config.connectors.clone(),
                     Arc::clone(&state),
+                    Arc::clone(&reply_delay),
                 )
                 .await;
                 client_runtime::register_1_6_reconnect(&client, &traces).await;
@@ -343,6 +379,7 @@ impl SimulatorProtocolClient {
                     remote_commands,
                     config.evse_connectors.clone(),
                     Arc::clone(&state),
+                    Arc::clone(&reply_delay),
                 )
                 .await;
                 client_runtime::register_2_0_1_reconnect(&client, &traces).await;
@@ -371,6 +408,7 @@ impl SimulatorProtocolClient {
             worker,
             emergency_client,
             rejected_commands,
+            reply_delay,
         })
     }
 
@@ -410,6 +448,30 @@ impl ProtocolClient for SimulatorProtocolClient {
         Box::pin(async move { self.send_command(Command::NextRemote).await })
     }
 
+    fn arm_remote_reply_delay(
+        &self,
+        kind: RemoteCommandKind,
+        duration: Duration,
+    ) -> Result<ReplyDelayReceipt, SimulatorClientError> {
+        if duration.is_zero() || duration > Duration::from_secs(30) {
+            return Err(SimulatorClientError::Protocol(
+                "invalid remote reply delay".to_owned(),
+            ));
+        }
+        let (receipt, observed) = oneshot::channel();
+        let mut slot = self.reply_delay.lock().expect("reply delay lock poisoned");
+        if slot.is_some() {
+            return Err(SimulatorClientError::Protocol(
+                "remote reply delay already armed".to_owned(),
+            ));
+        }
+        *slot = Some(ReplyDelay {
+            kind,
+            duration,
+            receipt,
+        });
+        Ok(observed)
+    }
     fn shutdown(&self) -> ClientFuture<'_, ()> {
         Box::pin(async move { self.send_command(Command::Shutdown).await })
     }

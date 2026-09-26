@@ -6,6 +6,7 @@ use super::{ActionKind, FailureCategory, RunFailure, SCHEMA_VERSION};
 use crate::{OcppVersion, SimulatorClientConfig};
 
 mod command;
+mod seed;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -108,6 +109,7 @@ impl StationDefinition {
 #[serde(deny_unknown_fields)]
 pub struct ScenarioDefinition {
     pub schema_version: u16,
+    #[serde(deserialize_with = "seed::deserialize")]
     pub seed: u64,
     pub steps: Vec<StepDefinition>,
 }
@@ -136,6 +138,22 @@ pub struct StepDefinition {
     pub delivery_id: Option<String>,
     pub expires_at_ms: Option<u64>,
     pub execute_at_ms: Option<u64>,
+}
+
+impl StepDefinition {
+    #[must_use]
+    pub fn eligible_controls(&self) -> &'static [&'static str] {
+        command::eligible_controls(self)
+    }
+
+    #[must_use]
+    pub fn response_delay_scope(&self) -> Option<&'static str> {
+        match self.action {
+            ActionKind::Heartbeat => Some("step_completion"),
+            ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop => Some("peer_reply"),
+            _ => None,
+        }
+    }
 }
 
 impl StepDefinition {

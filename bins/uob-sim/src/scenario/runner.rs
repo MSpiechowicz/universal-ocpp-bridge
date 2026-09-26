@@ -10,14 +10,17 @@ pub use super::cancellation::{CancellationHandle, CancellationToken, cancellatio
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 
-use super::execution::execute_action;
+use super::execution::{cleanup_client, execute_action};
 use super::fault::complete_heartbeat_pair_out_of_order;
 use super::scheduling::{StepWork, deterministic_jitter, fault_selected, validate_and_group_steps};
 use super::{
     DiagnosticCounts, FailureCategory, FaultKind, RunFailure, RunReport, ScenarioDefinition,
     SimulatorConfiguration, StationDefinition, StationState, StepDefinition,
 };
-use crate::{ClientDiagnostics, ProtocolClient, SimulatorClientConfig, SimulatorProtocolClient};
+use crate::{
+    ProtocolClient, RemoteCommandKind, ReplyDelayReceipt, SimulatorClientConfig,
+    SimulatorProtocolClient,
+};
 
 pub type ConnectFuture<'a> = Pin<
     Box<
@@ -225,27 +228,32 @@ async fn run_station(
     live: LiveRun,
 ) -> StationRun {
     let mut state = StationState::from_definition(&station);
-    let mut client = None;
+    let mut client: Option<Box<dyn ProtocolClient>> = None;
     let mut executions = Vec::new();
     let mut failure = None;
     let mut diagnostics = DiagnosticCounts::default();
 
     while let Some(mut work) = steps.recv().await {
-        work.step = live.begin(&work.step);
+        work.step = live.prepare(&work.step);
         let selected_fault = work
             .step
             .fault
             .as_ref()
             .filter(|fault| fault_selected(seed, &station.id, &work.step.id, fault))
             .map(|fault| fault.kind);
+        let delayed_reply = arm_reply_delay(&work.step, selected_fault, client.as_deref());
+        work.step = live.begin(&work.step);
         live.observe(&work.step.id, None, Some(selected_fault.is_some()));
-        let result = {
+        let result = if let Some(Err(failure)) = delayed_reply.as_ref() {
+            Err(failure.clone())
+        } else {
             let execution = execute_step(
                 &connector,
                 &clock,
                 &station,
                 &work.step,
                 selected_fault,
+                delayed_reply.and_then(Result::ok),
                 &mut client,
                 &mut state,
                 &mut diagnostics,
@@ -289,12 +297,47 @@ async fn run_station(
             FailureCategory::Timeout | FailureCategory::Cancelled
         )
     });
-    cleanup_client(&mut client, force, &mut diagnostics).await;
+    let _ = cleanup_client(&mut client, force, &mut diagnostics).await;
     StationRun {
         executions,
         failure,
         diagnostics,
     }
+}
+
+fn arm_reply_delay(
+    step: &StepDefinition,
+    selected_fault: Option<FaultKind>,
+    client: Option<&dyn ProtocolClient>,
+) -> Option<Result<ReplyDelayReceipt, RunFailure>> {
+    if selected_fault != Some(FaultKind::ResponseDelay)
+        || !matches!(
+            step.action,
+            super::ActionKind::AwaitRemoteStart | super::ActionKind::AwaitRemoteStop
+        )
+    {
+        return None;
+    }
+    let duration = Duration::from_millis(step.fault.as_ref().expect("selected fault").delay_ms);
+    let kind = if matches!(step.action, super::ActionKind::AwaitRemoteStart) {
+        RemoteCommandKind::StartTransaction
+    } else {
+        RemoteCommandKind::StopTransaction
+    };
+    Some(
+        client
+            .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))
+            .and_then(|connected| {
+                connected
+                    .arm_remote_reply_delay(kind, duration)
+                    .map_err(|_| {
+                        assertion_failure(
+                            "remote_delay_arm_failed",
+                            "remote reply delay could not be armed",
+                        )
+                    })
+            }),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -304,6 +347,7 @@ async fn execute_step(
     station: &StationDefinition,
     step: &StepDefinition,
     selected_fault: Option<FaultKind>,
+    delayed_reply: Option<ReplyDelayReceipt>,
     client: &mut Option<Box<dyn ProtocolClient>>,
     state: &mut StationState,
     diagnostics: &mut DiagnosticCounts,
@@ -317,8 +361,18 @@ async fn execute_step(
     }
 
     if matches!(selected_fault, Some(FaultKind::Disconnect)) {
-        cleanup_client(client, true, diagnostics).await;
+        let had_client = client.is_some();
+        let disconnected = cleanup_client(client, true, diagnostics).await;
         state.connected = false;
+        if had_client && !disconnected {
+            return Err(assertion_failure(
+                "disconnect_failed",
+                "socket disconnect failed",
+            ));
+        }
+        if disconnected {
+            live.applied(&step.id);
+        }
     }
     if matches!(selected_fault, Some(FaultKind::MissingResponse))
         && matches!(step.action, super::ActionKind::Heartbeat)
@@ -335,6 +389,7 @@ async fn execute_step(
             .ok_or_else(|| assertion_failure("not_connected", "station is not connected"))?;
         let delay = Duration::from_millis(step.fault.as_ref().map_or(0, |fault| fault.delay_ms));
         let result = complete_heartbeat_pair_out_of_order(connected, clock, delay).await?;
+        live.applied(&step.id);
         live.observe(&step.id, Some(step.action.event()), None);
         step.assert_detail(&result)?;
         return Ok(result);
@@ -348,15 +403,27 @@ async fn execute_step(
         client,
         state,
         selected_fault,
+        delayed_reply,
+        live,
     )
     .await;
     if result.is_ok() {
         live.observe(&step.id, Some(step.action.event()), None);
+        if matches!(
+            step.action,
+            super::ActionKind::Connect | super::ActionKind::Disconnect
+        ) {
+            live.applied(&step.id);
+        }
     }
     let result = expected_failure(step, result)?;
-    if matches!(selected_fault, Some(FaultKind::ResponseDelay)) {
+    if matches!(selected_fault, Some(FaultKind::ResponseDelay))
+        && matches!(step.action, super::ActionKind::Heartbeat)
+    {
+        // The heartbeat response has already arrived; this delays only step completion.
         let delay = step.fault.as_ref().map_or(0, |fault| fault.delay_ms);
         clock.sleep(Duration::from_millis(delay)).await;
+        live.applied(&step.id);
     }
     step.assert_detail(&result)?;
     Ok(result)
@@ -380,33 +447,6 @@ fn expected_failure(
             "step succeeded when a failure was expected",
         )),
     }
-}
-
-async fn cleanup_client(
-    client: &mut Option<Box<dyn ProtocolClient>>,
-    force: bool,
-    diagnostics: &mut DiagnosticCounts,
-) {
-    let Some(client) = client.take() else {
-        return;
-    };
-    merge_client_diagnostics(diagnostics, client.diagnostics());
-    let requires_force = force
-        || !matches!(
-            timeout(Duration::from_secs(2), client.shutdown()).await,
-            Ok(Ok(()))
-        );
-    if requires_force {
-        let _ = timeout(Duration::from_secs(2), client.force_shutdown()).await;
-        client.abort();
-    }
-    merge_client_diagnostics(diagnostics, client.diagnostics());
-    tokio::task::yield_now().await;
-}
-
-fn merge_client_diagnostics(counts: &mut DiagnosticCounts, client: ClientDiagnostics) {
-    counts.rejected_commands = counts.rejected_commands.max(client.rejected_commands);
-    counts.dropped_traces = counts.dropped_traces.max(client.dropped_traces);
 }
 
 fn report_step(report: &mut RunReport, execution: &StepExecution) {

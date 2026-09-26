@@ -69,9 +69,10 @@ impl ControlServer {
                     &scenario,
                     seed,
                     cancellation,
-                    progress,
+                    progress.clone(),
                 )
                 .await;
+            progress.finish_pending();
             // Keep only finite, payload-free browser evidence after the runner completes.
             for event in &mut report.events {
                 if let Some(identity) = &import_identity {
@@ -120,10 +121,20 @@ impl Run {
         // JSONL runner remains the detailed synthetic-fixture assertion authority.
         let events: Vec<_> = self.report.iter().flat_map(|report| &report.events).map(|event| json!({
             "id": event.id, "sequence": event.sequence, "event": event.event, "status": event.status,
-            "seed": event.seed, "step_id": event.step_id, "station_id": event.station_id,
+            "seed": event.seed.to_string(), "step_id": event.step_id, "station_id": event.station_id,
             "action": event.action, "failure_category": event.failure_category, "failure_code": event.failure_code,
         })).collect();
-        json!({ "run_id": id, "environment": environment, "scenario": self.scenario, "seed": self.seed,
-            "status": status, "steps": self.live.snapshot(), "events": events })
+        let failure = self
+            .report
+            .as_ref()
+            .and_then(|report| report.failure.as_ref())
+            .map(|failure| {
+                json!({
+                    "category": failure.category, "code": failure.code,
+                })
+            });
+        json!({ "run_id": id.to_string(), "environment": environment, "scenario": self.scenario,
+            "seed": self.seed.to_string(), "status": status, "steps": self.live.snapshot(),
+            "events": events, "failure": failure })
     }
 }

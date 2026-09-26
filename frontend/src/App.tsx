@@ -23,6 +23,7 @@ export function App() {
   const [store, setStore] = useState<StationStore>();
   const [connection, setConnection] = useState<ConnectionState>();
   const [hidden, setHidden] = useState(document.hidden);
+  const [stationContext, setStationContext] = useState('');
   const credential = useRef<HTMLInputElement>(null);
   const active = useRef<ApiClient | undefined>(undefined);
   const operation = useRef(0);
@@ -64,6 +65,24 @@ export function App() {
     });
     return () => { disposed = true; unsubscribe(); };
   }, [client, store, inventory?.selected]);
+  useEffect(() => {
+    const selectContext = (event: Event) => {
+      const id: unknown = (event as CustomEvent<unknown>).detail;
+      if (typeof id !== 'string' || !id || id.length > 64) return;
+      for (let index = 0; index < id.length; index++) {
+        const code = id.charCodeAt(index);
+        if (code <= 31 || code === 127) return;
+      }
+      if (!store || !inventory?.page?.items.some(item => item.station.station_id === id) || station && station !== id) {
+        setStationContext(`Station ${id} is not available in this connection's authorized, loaded inventory. Connect or load the relevant inventory page; the simulator step is not correlated to bridge state.`);
+        return;
+      }
+      store.select(id);
+      setStationContext(`Station ${id} selected in normal inventory for context only. Its observations do not prove this simulator step.`);
+    };
+    window.addEventListener('uob-simulator-station', selectContext);
+    return () => window.removeEventListener('uob-simulator-station', selectContext);
+  }, [store, inventory?.page, station]);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,6 +169,7 @@ export function App() {
           </dl>
           <p className="field-note">Stream activity confirms connectivity, not a charger action. Station observations refresh separately.</p>
         </section>}
+        {stationContext && <p className="notice" role="status">{stationContext}</p>}
         {client && store && inventory && <Stations state={inventory} store={store} scope={station} hidden={hidden}/>}
         {client && inventory?.detail && <Commands key={`${client.destinationKey}:${inventory.detail.station.station_id}`} client={client} snapshot={inventory.detail} hidden={hidden || !!inventory.stale}/>}
         <DiagnosticsPanel connection={connection} hidden={hidden}/>

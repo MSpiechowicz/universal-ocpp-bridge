@@ -2,11 +2,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::{
-    ActionKind, CommandAdmission, FailureCategory, FaultKind, RunFailure, ScenarioClock,
-    ScenarioConnector, StationDefinition, StationResource, StationState, StepDefinition,
+    ActionKind, CommandAdmission, DiagnosticCounts, FailureCategory, FaultKind, LiveRun,
+    RunFailure, ScenarioClock, ScenarioConnector, StationDefinition, StationResource, StationState,
+    StepDefinition,
 };
-use crate::{ProtocolClient, RemoteCommandKind, SimulatorAction, SimulatorCall};
+use crate::{
+    ClientDiagnostics, ProtocolClient, RemoteCommandKind, ReplyDelayReceipt, SimulatorAction,
+    SimulatorCall,
+};
+use tokio::time::timeout;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_action(
     connector: &Arc<dyn ScenarioConnector>,
     clock: &Arc<dyn ScenarioClock>,
@@ -15,6 +21,8 @@ pub(super) async fn execute_action(
     client: &mut Option<Box<dyn ProtocolClient>>,
     state: &mut StationState,
     selected_fault: Option<FaultKind>,
+    delayed_reply: Option<ReplyDelayReceipt>,
+    live: &LiveRun,
 ) -> Result<String, RunFailure> {
     match step.action {
         ActionKind::Connect => connect(connector, station, client, state).await,
@@ -31,7 +39,7 @@ pub(super) async fn execute_action(
         | ActionKind::MeterValues
         | ActionKind::StopTransaction => charging_call(step, client, state).await,
         ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop => {
-            remote_command(step, client, state, selected_fault).await
+            remote_command(step, client, state, selected_fault, delayed_reply, live).await
         }
         ActionKind::TargetOffline => Ok(target_state(state, false)),
         ActionKind::TargetOnline => Ok(target_state(state, true)),
@@ -127,6 +135,8 @@ async fn remote_command(
     client: &mut Option<Box<dyn ProtocolClient>>,
     state: &mut StationState,
     selected_fault: Option<FaultKind>,
+    delayed_reply: Option<ReplyDelayReceipt>,
+    live: &LiveRun,
 ) -> Result<String, RunFailure> {
     let tracked = step.request_id.as_deref().zip(step.delivery_id.as_deref());
     if let Some((request_id, delivery_id)) = tracked {
@@ -160,11 +170,23 @@ async fn remote_command(
             "received a different remote command than expected",
         ));
     }
+    if let Some(receipt) = delayed_reply {
+        receipt.await.map_err(|_| {
+            failure(
+                "remote_reply_delay_failed",
+                "remote command reply was not delayed on the socket",
+            )
+        })?;
+        live.applied(&step.id);
+    }
     let response = serde_json::json!({"accepted": command.accepted, "request": command.payload});
     assert_response(step, &response)?;
     if let Some((request_id, _)) = tracked {
         let response_lost = matches!(selected_fault, Some(FaultKind::MissingResponse));
         state.complete_command(request_id, command.accepted, response_lost);
+        if response_lost {
+            live.applied(&step.id);
+        }
         if response_lost && command.accepted {
             return Err(failure(
                 "transmission_uncertain",
@@ -388,4 +410,38 @@ fn active_resource(
 
 fn failure(code: &'static str, message: &'static str) -> RunFailure {
     RunFailure::new(FailureCategory::Assertion, code, message)
+}
+
+pub(super) async fn cleanup_client(
+    client: &mut Option<Box<dyn ProtocolClient>>,
+    force: bool,
+    diagnostics: &mut DiagnosticCounts,
+) -> bool {
+    let Some(client) = client.take() else {
+        return false;
+    };
+    merge_client_diagnostics(diagnostics, client.diagnostics());
+    let graceful = !force
+        && matches!(
+            timeout(Duration::from_secs(2), client.shutdown()).await,
+            Ok(Ok(()))
+        );
+    let stopped = if graceful {
+        true
+    } else {
+        let stopped = matches!(
+            timeout(Duration::from_secs(2), client.force_shutdown()).await,
+            Ok(Ok(()))
+        );
+        client.abort();
+        stopped
+    };
+    merge_client_diagnostics(diagnostics, client.diagnostics());
+    tokio::task::yield_now().await;
+    stopped
+}
+
+fn merge_client_diagnostics(counts: &mut DiagnosticCounts, client: ClientDiagnostics) {
+    counts.rejected_commands = counts.rejected_commands.max(client.rejected_commands);
+    counts.dropped_traces = counts.dropped_traces.max(client.dropped_traces);
 }

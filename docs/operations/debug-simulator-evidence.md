@@ -15,17 +15,20 @@ token_file = "simulator-debug-read.token"
 ```
 
 Place the block after the top-level settings; it is separate from `[[scenarios]]`.
-The read token must differ from the control token. Only canonical literal-loopback
-HTTP origins (`127.0.0.1` or `[::1]`) are accepted. Existing demo/staging station,
-endpoint and import-isolation validation still applies. The operator must point
-the allowlisted console origin at the corresponding test bridge. This is trusted
-local configuration, not remote attestation. The browser and simulator must share
+The Debug read token must differ from the control token. An independent `[control_browser]`
+block can allow browser controls for the same console origin; `[debug]` alone never grants them.
+Only canonical literal-loopback HTTP origins (`127.0.0.1` or `[::1]`) are accepted.
+Existing demo/staging station, endpoint and import-isolation validation still applies.
+The operator must point the allowlisted console origin at the corresponding test bridge.
+This is trusted local configuration, not remote attestation. The browser and simulator must share
 the same loopback network context. An isolated staging namespace requires running
 the browser in that test context; this feature creates no namespace bypass.
 
-Start scenarios with the existing authenticated control API or test harness. In
-Debug, enter the IPv4 simulator origin (`http://127.0.0.1:9001`), run ID and **Debug read** credential, then choose
-**Read simulator evidence**. The form identifies the destination before sending.
+Start scenarios using the authenticated control API or, after separately configuring
+`[control_browser]`, the demo/staging browser's **Simulator scenario controls** panel.
+In Debug, enter the IPv4 simulator origin (`http://127.0.0.1:9001`), run ID and
+**Debug read** credential, then choose **Read simulator evidence**. The form
+identifies the destination before sending.
 Bridge credentials are never copied to the simulator. The read credential stays
 only in tab memory and is cleared on disconnect, navigation or a failed read.
 Refresh is manual, with one request at a time, a five-second deadline and a 1 MiB
@@ -58,9 +61,11 @@ so its ordinary snapshots report missing links; it never substitutes its logical
 event IDs. A producer that supplies UUIDs must obtain them from server evidence.
 Browser tests exercise supplied-ID navigation separately from real simulator reads.
 
-This panel is inspection-only. It cannot replay imported events, inject faults,
-start/stop scenarios or issue charging commands. Existing simulator controls remain
-on their explicitly isolated API; general scenario controls belong to #93.
+This Debug evidence panel remains inspection-only: it cannot replay imported events,
+inject faults, start/stop scenarios or issue charging commands. A separate, explicitly
+opted-in [simulator control panel](browser-console.md#simulator-scenario-controls)
+uses the control bearer and server-derived scenario catalog; neither the Debug read
+credential nor the bridge management credential authorizes simulator changes.
 
 Tests use a real simulator run with an intentionally failed assertion and the actual
 daemon console, verify exact seeds and missing correlation, then exercise optional

@@ -13,8 +13,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
 use super::{
-    Command, Ocpp16State, RemoteCommand, RemoteCommandKind, SimulatorAction, SimulatorCall,
-    SimulatorClientError, TraceBuffer, TraceKind,
+    Command, Ocpp16State, RemoteCommand, RemoteCommandKind, ReplyDelaySlot, SimulatorAction,
+    SimulatorCall, SimulatorClientError, TraceBuffer, TraceKind, take_reply_delay,
 };
 
 pub(super) async fn register_1_6_handlers(
@@ -23,6 +23,7 @@ pub(super) async fn register_1_6_handlers(
     remote_commands: mpsc::Sender<RemoteCommand>,
     connectors: Vec<u16>,
     state: Arc<Mutex<Ocpp16State>>,
+    reply_delay: ReplyDelaySlot,
 ) {
     let reset_traces = traces.clone();
     client
@@ -39,6 +40,7 @@ pub(super) async fn register_1_6_handlers(
     let start_traces = traces.clone();
     let commands = remote_commands.clone();
     let start_state = Arc::clone(&state);
+    let start_delay = Arc::clone(&reply_delay);
     client
         .on_remote_start_transaction(move |request, _client| {
             let connector = request
@@ -57,6 +59,7 @@ pub(super) async fn register_1_6_handlers(
                 TraceKind::RemoteStartReceived,
                 if accepted { "accepted" } else { "rejected" },
             );
+            let delayed_reply = take_reply_delay(&start_delay, RemoteCommandKind::StartTransaction);
             let payload = serde_json::to_value(&request).unwrap_or(serde_json::Value::Null);
             let _ = commands.try_send(RemoteCommand {
                 kind: RemoteCommandKind::StartTransaction,
@@ -64,6 +67,10 @@ pub(super) async fn register_1_6_handlers(
                 accepted,
             });
             async move {
+                if let Some(delay) = delayed_reply {
+                    tokio::time::sleep(delay.duration).await;
+                    let _ = delay.receipt.send(());
+                }
                 Ok(RemoteStartTransactionResponse {
                     status: if accepted {
                         RemoteStartTransactionResponseStatus::Accepted
@@ -76,6 +83,7 @@ pub(super) async fn register_1_6_handlers(
         .await;
 
     let stop_traces = traces.clone();
+    let stop_delay = reply_delay;
     client
         .on_remote_stop_transaction(move |request, _client| {
             let accepted = state
@@ -88,12 +96,17 @@ pub(super) async fn register_1_6_handlers(
                 if accepted { "accepted" } else { "rejected" },
             );
             let payload = serde_json::to_value(&request).unwrap_or(serde_json::Value::Null);
+            let delayed_reply = take_reply_delay(&stop_delay, RemoteCommandKind::StopTransaction);
             let _ = remote_commands.try_send(RemoteCommand {
                 kind: RemoteCommandKind::StopTransaction,
                 payload,
                 accepted,
             });
             async move {
+                if let Some(delay) = delayed_reply {
+                    tokio::time::sleep(delay.duration).await;
+                    let _ = delay.receipt.send(());
+                }
                 Ok(RemoteStopTransactionResponse {
                     status: if accepted {
                         RemoteStopTransactionResponseStatus::Accepted
