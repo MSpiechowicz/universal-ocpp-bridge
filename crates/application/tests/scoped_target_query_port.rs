@@ -83,6 +83,10 @@ impl CanonicalQuerySource<String> for FakeSource {
                 TargetQuery::CommandResult(_) => {
                     TargetQueryResult::CommandResult(self.command_result.clone())
                 }
+                TargetQuery::CommandHistory(_) => TargetQueryResult::CommandHistory(Page {
+                    items: Vec::new(),
+                    next_cursor: None,
+                }),
                 TargetQuery::RetainedEvents(query) => {
                     let items = self
                         .events

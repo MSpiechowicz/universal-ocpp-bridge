@@ -3,6 +3,7 @@
 pub mod backup;
 mod codec;
 mod command;
+mod command_history;
 mod configuration;
 mod delivery;
 mod drain;

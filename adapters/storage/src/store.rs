@@ -11,15 +11,17 @@ use rusqlite::Connection;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
-    AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordQuery, DeliveryAttempt, DeliveryId, OperationalStore, Page,
-    PendingDeliveryQuery, RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch,
-    RecoveryQuery, RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery,
-    SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode, StorageFuture,
-    StorageRetentionStatus, TargetDeliveryStore,
+    AtomicStoreWrite, AtomicWriteOutcome, CommandHistoryCursor, CommandHistoryQuery,
+    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordQuery,
+    DeliveryAttempt, DeliveryId, OperationalStore, Page, PendingDeliveryQuery,
+    RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
+    RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery, SnapshotCursor,
+    SnapshotQuery, StorageError, StorageErrorCode, StorageFuture, StorageRetentionStatus,
+    TargetDeliveryStore,
 };
 use uob_contracts::{
-    Command, ConfigurationObservation, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+    Command, CommandSummary, ConfigurationObservation, EventEnvelope, EventId, RequestId,
+    ResourceRef, StationSnapshot, UtcTimestamp,
 };
 
 use crate::{
@@ -295,6 +297,48 @@ where
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
         self.request(|reply| Request::CommandResult(request_id.as_str().to_owned(), reply))
+    }
+
+    fn command_candidates(
+        &self,
+        station: ResourceRef,
+        observed_at: UtcTimestamp,
+        after: Option<RequestId>,
+        limit: uob_application::PageLimit,
+    ) -> StorageFuture<'_, Vec<Command<C>>> {
+        self.request(|reply| {
+            Request::CommandCandidates(
+                station.bridge_id.as_str().to_owned(),
+                station.station_id.as_str().to_owned(),
+                observed_at.into_inner().unix_timestamp(),
+                after.map(|value| value.as_str().to_owned()),
+                usize::from(limit.get()),
+                reply,
+            )
+        })
+    }
+
+    fn journal_event_by_id(
+        &self,
+        event_id: EventId,
+        station: ResourceRef,
+    ) -> StorageFuture<'_, Option<EventEnvelope<E>>> {
+        self.request(|reply| {
+            Request::JournalEvent(
+                event_id.as_str().to_owned(),
+                station.bridge_id.as_str().to_owned(),
+                station.station_id.as_str().to_owned(),
+                reply,
+            )
+        })
+    }
+
+    fn read_command_history(
+        &self,
+        query: CommandHistoryQuery,
+        scope: CommandHistoryScope,
+    ) -> StorageFuture<'_, Page<CommandSummary, CommandHistoryCursor>> {
+        self.request(|reply| Request::CommandHistory(query, scope, reply))
     }
 
     fn append_configuration_observation(

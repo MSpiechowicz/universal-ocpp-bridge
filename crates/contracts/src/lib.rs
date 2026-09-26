@@ -14,10 +14,10 @@ mod trace;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
-    CommandIdentityError, CommandLifecycle, CommandOperation, CommandRequest, CommandResult,
-    CommandReturnRoute, CommandValidationError, ExternalCommand, ObservedCommandEffect,
-    PayloadSchemaId, PrincipalId, PrivilegedOcppOperation, ProtocolActionName, RequestId,
-    TargetInstanceId,
+    CommandIdentityError, CommandLifecycle, CommandOperation, CommandOperationKind, CommandRequest,
+    CommandResult, CommandReturnRoute, CommandSummary, CommandValidationError, ExternalCommand,
+    ObservedCommandEffect, PayloadSchemaId, PrincipalId, PrivilegedOcppOperation,
+    ProtocolActionName, RequestId, TargetInstanceId,
 };
 pub use configuration::{
     CONFIGURATION_CHANGE_REFERENCE_SCHEMA, ConfigurationChangeReference, ConfigurationKey,

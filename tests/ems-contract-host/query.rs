@@ -6,11 +6,12 @@ use std::{
 };
 use tokio::sync::mpsc;
 use uob_application::{
-    CanonicalQuerySource, OperationalStore, Page, RetainedEventItem, RetainedEventQuery,
-    StationEvent, TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery,
-    TargetQueryAuthorization, TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
+    CanonicalQuerySource, CommandHistoryQuery, OperationalStore, Page, RetainedEventItem,
+    RetainedEventQuery, StationEvent, StorageError, StorageErrorCode, TargetPortError,
+    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryAuthorization,
+    TargetQueryPermission, TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
 };
-use uob_contracts::{ResourceRef, StationSnapshot, TransactionSnapshot};
+use uob_contracts::{NativeProtocolReference, ResourceRef, StationSnapshot, TransactionSnapshot};
 
 pub type Store =
     uob_storage_adapter::SqliteOperationalStore<Value, StationEvent, TransactionSnapshot, String>;
@@ -24,6 +25,17 @@ fn error(_: uob_application::StorageError) -> TargetPortError {
 }
 fn expired() -> TargetPortError {
     TargetPortError::new(TargetPortErrorCode::CursorExpired, "storage.cursor_expired")
+}
+fn history_error(error: &StorageError) -> TargetPortError {
+    let code = match error.code() {
+        StorageErrorCode::InvalidRequest => TargetPortErrorCode::InvalidRequest,
+        StorageErrorCode::CursorExpired => TargetPortErrorCode::CursorExpired,
+        StorageErrorCode::Busy | StorageErrorCode::CapacityExhausted => TargetPortErrorCode::Busy,
+        StorageErrorCode::Conflict
+        | StorageErrorCode::Unavailable
+        | StorageErrorCode::IntegrityFailure => TargetPortErrorCode::Unavailable,
+    };
+    TargetPortError::new(code, "query.storage_unavailable")
 }
 fn resource_matches(actual: &ResourceRef, desired: &ResourceRef) -> bool {
     actual.bridge_id == desired.bridge_id
@@ -41,6 +53,59 @@ async fn snapshot(
         native_protocol_reference: None,
     };
     store.station_snapshot(station).await.map_err(error)
+}
+async fn command_history(
+    store: &Store,
+    authorization: &TargetQueryAuthorization,
+    query: CommandHistoryQuery,
+) -> Result<TargetQueryResult<StationEvent>, TargetPortError> {
+    if !authorization.permits(TargetQueryPermission::CommandStatus) {
+        return Err(TargetPortError::new(
+            TargetPortErrorCode::Unsupported,
+            "query.operation_not_granted",
+        ));
+    }
+    if query.station.resource.is_some()
+        || !matches!(
+            query.station.native_protocol_reference,
+            None | Some(
+                NativeProtocolReference::Ocpp16 { connector_id: 0 }
+                    | NativeProtocolReference::Ocpp201 {
+                        evse_id: 0,
+                        connector_id: None,
+                    }
+            )
+        )
+    {
+        return Err(TargetPortError::new(
+            TargetPortErrorCode::InvalidRequest,
+            "query.station_required",
+        ));
+    }
+
+    let scope = authorization.command_history_scope(&query.station);
+    if scope.is_empty() {
+        return Err(TargetPortError::new(
+            TargetPortErrorCode::Unauthorized,
+            "query.result_outside_scope",
+        ));
+    }
+    let page = store
+        .read_command_history(query.clone(), scope.clone())
+        .await
+        .map_err(|error| history_error(&error))?;
+    if page.items.len() > usize::from(query.limit.get())
+        || page
+            .items
+            .iter()
+            .any(|item| !scope.permits(&item.resource, &query.station))
+    {
+        return Err(TargetPortError::new(
+            TargetPortErrorCode::Unauthorized,
+            "query.result_outside_scope",
+        ));
+    }
+    Ok(TargetQueryResult::CommandHistory(page))
 }
 impl CanonicalQuerySource<StationEvent> for Source {
     fn query<'a>(
@@ -65,6 +130,9 @@ impl CanonicalQuerySource<StationEvent> for Source {
                         .await
                         .map_err(error)?,
                 ),
+                TargetQuery::CommandHistory(query) => {
+                    command_history(&self.0, authorization, query).await?
+                }
                 TargetQuery::Capabilities(resource) => TargetQueryResult::Capabilities(
                     snapshot(&self.0, &resource).await?.and_then(|snapshot| {
                         if resource.resource.is_none() {

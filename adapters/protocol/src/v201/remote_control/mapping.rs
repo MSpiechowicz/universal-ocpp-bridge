@@ -1,4 +1,5 @@
 use super::RemoteStartIdentity;
+use super::charging_limit;
 use rust_ocpp::v2_0_1::messages::{
     change_availability::ChangeAvailabilityResponse,
     request_start_transaction::{RequestStartTransactionRequest, RequestStartTransactionResponse},
@@ -127,10 +128,14 @@ pub(super) fn prepare(
                 })?,
             ))
         }
+        CommandOperation::SetChargingLimit(limit) => Ok((
+            "SetChargingProfile",
+            charging_limit::prepare(command, snapshot, limit)?,
+        )),
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp201 => {
             privileged(operation, &command.resource, &snapshot.station, native)
         }
-        _ => Err(UnsupportedOperation),
+        CommandOperation::Ocpp(_) => Err(UnsupportedOperation),
     }
 }
 fn privileged(
@@ -141,7 +146,12 @@ fn privileged(
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     match operation.action.as_str() {
-        "ChangeAvailability" => super::super::availability::prepare(operation, resource, station),
+        "ChangeAvailability" => {
+            if resource == station {
+                crate::command_registry::validate_privileged_operation(resource, operation)?;
+            }
+            super::super::availability::prepare(operation, resource, station)
+        }
         "Reset" if operation.payload_schema.as_str() == "urn:OCPP:Cp:2:2020:3:ResetRequest" => {
             fields(&operation.payload, &["type", "evseId"])?;
             let request: ResetRequest =
@@ -246,6 +256,7 @@ pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome 
         "ChangeAvailability" => {
             serde_json::from_value::<ChangeAvailabilityResponse>(payload.clone()).is_ok()
         }
+        "SetChargingProfile" => charging_limit::valid_response(payload),
         "Reset" => serde_json::from_value::<ResetResponse>(payload.clone()).is_ok(),
         "UnlockConnector" => {
             serde_json::from_value::<UnlockConnectorResponse>(payload.clone()).is_ok()
@@ -291,7 +302,7 @@ pub(super) fn uncertain() -> CommandDispatchOutcome {
     CommandDispatchOutcome::TransmissionUncertain { detail: "OCPP 2.0.1 command has no valid authoritative response; observe state before further action".to_owned() }
 }
 
-fn valid_details(payload: &Value) -> bool {
+pub(super) fn valid_details(payload: &Value) -> bool {
     if payload.get("transactionId").is_some_and(|id| {
         id.as_str()
             .is_none_or(|id| id.is_empty() || id.chars().count() > 36)

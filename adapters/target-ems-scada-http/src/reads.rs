@@ -64,12 +64,12 @@ impl<E: Send + 'static> IntegrationReads for SupervisedReads<E> {
                 TargetQueryResult::CommandResult(result) => {
                     Ok(CanonicalRead::CommandResult(Box::new(result)))
                 }
-                TargetQueryResult::Capabilities(_) | TargetQueryResult::RetainedEvents(_) => {
-                    Err(TargetPortError::new(
-                        TargetPortErrorCode::InvalidRequest,
-                        "query.response_type_mismatch",
-                    ))
-                }
+                TargetQueryResult::Capabilities(_)
+                | TargetQueryResult::CommandHistory(_)
+                | TargetQueryResult::RetainedEvents(_) => Err(TargetPortError::new(
+                    TargetPortErrorCode::InvalidRequest,
+                    "query.response_type_mismatch",
+                )),
             }
         })
     }

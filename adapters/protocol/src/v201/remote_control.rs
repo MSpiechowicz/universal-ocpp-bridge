@@ -1,5 +1,6 @@
 //! OCPP 2.0.1 remote operations behind the ordinary durable application command path.
 use crate::remote_constraints as constraints;
+mod charging_limit;
 mod identity;
 mod mapping;
 pub use identity::LocalRemoteStartIdentity;
@@ -172,7 +173,9 @@ impl StationCommandPort<Value> for RemoteControlSession {
             Ok(match pending.receive().await {
                 SessionCallOutcome::Result { payload, .. } => {
                     let outcome = mapping::response(action, &payload);
-                    if matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. }) {
+                    if action != "SetChargingProfile"
+                        && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })
+                    {
                         let status = payload["status"]
                             .as_str()
                             .expect("validated status")

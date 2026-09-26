@@ -13,5 +13,5 @@ for (const file of files) {
   raw += bytes.length;
   compressed += gzipSync(bytes).length;
 }
-if (raw > 352 * 1024 || compressed > 108 * 1024) throw new Error('Pi console asset budget exceeded');
+if (raw > 368 * 1024 || compressed > 109 * 1024) throw new Error('Pi console asset budget exceeded');
 console.log(`Static console: ${raw} bytes raw; ${compressed} bytes gzip (measurement only)`);

@@ -1,4 +1,5 @@
 use super::RemoteStartIdentity;
+use super::charging_limit;
 use super::{configuration, configuration_values::LocalConfigurationValues};
 use rust_ocpp::v1_6::messages::{
     change_availability::{ChangeAvailabilityRequest, ChangeAvailabilityResponse},
@@ -62,11 +63,10 @@ pub(super) fn prepare(
             .require(&command.operation.required_capability())
             .map_err(|_| UnsupportedOperation)?,
     )?;
-    let Some(NativeProtocolReference::Ocpp16 {
-        connector_id: native,
-    }) = command.resource.native_protocol_reference
-    else {
-        return Err(InvalidParameters);
+    let native = match command.resource.native_protocol_reference {
+        Some(NativeProtocolReference::Ocpp16 { connector_id }) => connector_id,
+        None if command.resource == snapshot.station && command.resource.resource.is_none() => 0,
+        _ => return Err(InvalidParameters),
     };
     match &command.operation {
         CommandOperation::Start {
@@ -108,6 +108,10 @@ pub(super) fn prepare(
                 })?,
             ))
         }
+        CommandOperation::SetChargingLimit(limit) => Ok((
+            "SetChargingProfile",
+            charging_limit::prepare(command, snapshot, limit)?,
+        )),
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp16j => {
             privileged(
                 operation,
@@ -119,7 +123,7 @@ pub(super) fn prepare(
                 now,
             )
         }
-        _ => Err(UnsupportedOperation),
+        CommandOperation::Ocpp(_) => Err(UnsupportedOperation),
     }
 }
 fn privileged(
@@ -169,6 +173,9 @@ fn privileged(
             if operation.payload_schema.as_str()
                 == "urn:OCPP:1.6:2019:12:ChangeAvailabilityRequest" =>
         {
+            if resource == station {
+                crate::command_registry::validate_privileged_operation(resource, operation)?;
+            }
             exact_fields(&operation.payload, &["connectorId", "type"])?;
             let request: ChangeAvailabilityRequest =
                 serde_json::from_value(operation.payload.clone()).map_err(|_| InvalidParameters)?;
@@ -249,6 +256,7 @@ pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome 
             serde_json::from_value::<ChangeAvailabilityResponse>(payload.clone()).is_ok()
         }
         "Reset" => serde_json::from_value::<ResetResponse>(payload.clone()).is_ok(),
+        "SetChargingProfile" => charging_limit::valid_response(payload),
         "UnlockConnector" => {
             serde_json::from_value::<UnlockConnectorResponse>(payload.clone()).is_ok()
         }

@@ -58,9 +58,13 @@ with no Node runtime on the Raspberry Pi. It verifies destination identity, keep
 credentials in tab memory, binds diagnostic tokens to their environment, requires explicit destination
 confirmation for controls, and shows bounded authenticated SSE connection and stale-state evidence.
 The [demo charging station configuration](docs/operations/headless-cli.md#demo-charging-station-views)
-connects authenticated OCPP 1.6J and 2.0.1 peers to durable, read-only station,
-EVSE, connector, transaction and measurement views. It is not a production
-plaintext listener or a command-authority grant.
+connects authenticated OCPP 1.6J and 2.0.1 peers to durable station, EVSE, connector,
+transaction and measurement views. Separately provisioned read, control and privileged grants
+plus per-station action opt-ins permit the browser's supported start, stop, charging-limit and
+schema-validated privileged commands. Request admission, charger response and later linked
+observed effects remain distinct; acceptance does not prove physical charging. The opt-in
+loopback plaintext listener and these local grants are **demo-only**, not production charging
+ingress or command exposure.
 
 The [Debug operational panels](docs/operations/debug-operational-panels.md) separate local persistence,
 resource pressure and remote export evidence with explicit unavailable observations.

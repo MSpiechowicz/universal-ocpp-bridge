@@ -10,9 +10,18 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let transaction = connection.unchecked_transaction().map_err(unavailable)?;
     create_schema(&transaction)?;
     upgrade_columns(&transaction)?;
-    // Validate station snapshots on every open; only the legacy journal needs v8 rewriting.
+    transaction
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS commands_station_history
+             ON commands(json_extract(payload, '$.resource.bridge_id'),
+                         json_extract(payload, '$.resource.station_id'),
+                         admitted_at DESC, request_id DESC);",
+        )
+        .map_err(unavailable)?;
+    // Snapshots are validated on every open. Journal rewrites are versioned so a
+    // current database does not re-decode its entire retained history on restart.
     normalize_station_keys(&transaction, version < 8)?;
-    if version < 8 {
+    if version < 9 {
         normalize_event_stream_keys(&transaction)?;
     }
     transaction.execute(
@@ -22,7 +31,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 8;")
+        .execute_batch("PRAGMA user_version = 9;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
 }

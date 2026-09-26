@@ -18,8 +18,10 @@ use uob_contracts::{
     RequestId, RuntimeIdentity, ServiceIdentity, StationId, TargetInstanceId, UtcTimestamp,
 };
 use uob_management_adapter::{
-    ManagementCommandAuthenticator, ManagementCommandConfiguration, ManagementReadLimits,
-    ManagementRouterOptions, PrivilegedPayloadValidator, router_with_queries_and_commands,
+    AuthenticatedEventAccess, ManagementCommandAuthenticator, ManagementCommandConfiguration,
+    ManagementEventAuthenticator, ManagementEventConfiguration, ManagementEventLimits,
+    ManagementReadLimits, ManagementRouterOptions, PrivilegedPayloadValidator,
+    router_with_commands_and_authenticated_events,
 };
 
 use super::support::{Harness, Source, payload, post, send};
@@ -44,19 +46,46 @@ impl ManagementCommandAuthenticator for ManagementAuthenticator {
     }
 }
 
+struct ReadAuthenticator;
+
+impl ManagementEventAuthenticator for ReadAuthenticator {
+    fn authenticate(&self, token: &str) -> Option<AuthenticatedEventAccess> {
+        (token == "management-read-secret").then(|| AuthenticatedEventAccess {
+            authorization: TargetQueryAuthorization::new(
+                TargetInstanceId::new("management-read").unwrap(),
+                vec![
+                    TargetQueryPermission::StationSnapshots,
+                    TargetQueryPermission::CommandStatus,
+                    TargetQueryPermission::RetainedEvents,
+                ],
+                vec![TargetResourceScope::Station {
+                    bridge_id: BridgeId::new("site-01").unwrap(),
+                    station_id: StationId::new("station-a").unwrap(),
+                }],
+            ),
+            default_resource: uob_contracts::ResourceRef {
+                bridge_id: BridgeId::new("site-01").unwrap(),
+                station_id: StationId::new("station-a").unwrap(),
+                resource: None,
+                native_protocol_reference: None,
+            },
+        })
+    }
+}
+
 fn management(harness: &Harness) -> Router {
     let origin = AuthenticatedCommandOrigin::Management {
         principal_id: PrincipalId::new("management-operator").unwrap(),
     };
     let grant = AccessGrant::new(
         origin.clone(),
-        vec![AccessPermission::Read, AccessPermission::Control],
+        vec![AccessPermission::Control],
         vec![AccessResourceScope::Bridge(
             BridgeId::new("site-01").unwrap(),
         )],
     )
     .unwrap();
-    router_with_queries_and_commands(
+    router_with_commands_and_authenticated_events(
         Application::new(ServiceIdentity {
             bridge_id: BridgeId::new("site-01").unwrap(),
             runtime: RuntimeIdentity {
@@ -68,14 +97,6 @@ fn management(harness: &Harness) -> Router {
             selected_target_id: Some(TargetInstanceId::new("main").unwrap()),
         }),
         Arc::new(Source(harness.store.clone())),
-        TargetQueryAuthorization::new(
-            TargetInstanceId::new("management").unwrap(),
-            vec![TargetQueryPermission::CommandStatus],
-            vec![TargetResourceScope::Station {
-                bridge_id: BridgeId::new("site-01").unwrap(),
-                station_id: StationId::new("station-a").unwrap(),
-            }],
-        ),
         ManagementReadLimits::default(),
         ManagementCommandConfiguration {
             admission: Arc::new(ScopedCommandAdmissionPort::new(
@@ -85,15 +106,72 @@ fn management(harness: &Harness) -> Router {
             authenticator: Arc::new(ManagementAuthenticator),
             privileged_payloads: Arc::new(RejectPrivileged),
         },
+        ManagementEventConfiguration {
+            authenticator: Arc::new(ReadAuthenticator),
+            limits: ManagementEventLimits::default(),
+        },
         ManagementRouterOptions::default(),
     )
+}
+
+async fn assert_management_read_access(harness: &Harness, management_result: &Value) {
+    let read_url = "/api/v1/commands/management";
+    let missing_read = management(harness)
+        .oneshot(Request::get(read_url).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(missing_read.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        send(
+            management(harness),
+            "GET",
+            read_url,
+            "management-secret",
+            Body::empty(),
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (read_status, read_result) = send(
+        management(harness),
+        "GET",
+        read_url,
+        "management-read-secret",
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(read_status, StatusCode::OK);
+    assert_eq!(read_result, management_result["result"]);
+
+    let missing_station_read = management(harness)
+        .oneshot(
+            Request::get("/api/v1/stations/station-a")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_station_read.status(), StatusCode::UNAUTHORIZED);
+    for (station, token, expected) in [
+        ("station-a", "management-secret", StatusCode::UNAUTHORIZED),
+        ("station-b", "management-read-secret", StatusCode::FORBIDDEN),
+    ] {
+        let url = format!("/api/v1/stations/{station}");
+        assert_eq!(
+            send(management(harness), "GET", &url, token, Body::empty())
+                .await
+                .0,
+            expected
+        );
+    }
 }
 
 #[tokio::test]
 async fn http_and_management_use_equivalent_durable_commands_and_keep_origins_separate() {
     let harness = Harness::new();
     let (_, http) = post(harness.router(), "operator", payload("http", "station-a")).await;
-    let (status, management) = send(
+    let (status, management_result) = send(
         management(&harness),
         "POST",
         "/api/v1/commands",
@@ -101,12 +179,16 @@ async fn http_and_management_use_equivalent_durable_commands_and_keep_origins_se
         Body::from(payload("management", "station-a").to_string()),
     )
     .await;
-    assert_eq!(status, StatusCode::ACCEPTED, "{management}");
-    assert_eq!(management["result"]["resource"], http["result"]["resource"]);
+    assert_eq!(status, StatusCode::ACCEPTED, "{management_result}");
     assert_eq!(
-        management["result"]["lifecycle"],
+        management_result["result"]["resource"],
+        http["result"]["resource"]
+    );
+    assert_eq!(
+        management_result["result"]["lifecycle"],
         http["result"]["lifecycle"]
     );
+    assert_management_read_access(&harness, &management_result).await;
     for id in ["http", "management"] {
         let stored = harness
             .store

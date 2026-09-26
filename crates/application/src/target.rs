@@ -8,13 +8,13 @@ use std::{
 };
 
 use uob_contracts::{
-    CommandResult, DataPointDescriptor, DataPointValue, EventEnvelope, PointId, RequestId,
-    ResourceCapabilities, ResourceRef, StationSnapshot, TraceRecord, UtcTimestamp,
+    CommandResult, CommandSummary, DataPointDescriptor, DataPointValue, EventEnvelope, PointId,
+    RequestId, ResourceCapabilities, ResourceRef, StationSnapshot, TraceRecord, UtcTimestamp,
 };
 
 use crate::{
-    CommandAdmissionPort, Page, RetainedEventCursor, RetainedEventQuery, SnapshotCursor,
-    SnapshotQuery,
+    CommandAdmissionPort, CommandHistoryCursor, CommandHistoryQuery, Page, RetainedEventCursor,
+    RetainedEventQuery, SnapshotCursor, SnapshotQuery,
 };
 
 mod configuration;
@@ -294,6 +294,8 @@ pub enum TargetQuery {
     Capabilities(ResourceRef),
     /// Read the latest canonical result for one command request.
     CommandResult(RequestId),
+    /// Read scoped, retained command summaries for one station.
+    CommandHistory(CommandHistoryQuery),
     /// Read a bounded page of retained events.
     RetainedEvents(RetainedEventQuery),
 }
@@ -313,6 +315,8 @@ pub enum TargetQueryResult<E> {
     Capabilities(Option<ResourceCapabilities>),
     /// Latest command result, when known and authorized.
     CommandResult(Option<CommandResult>),
+    /// Retained command summaries without raw request parameters or privileged payloads.
+    CommandHistory(Page<CommandSummary, CommandHistoryCursor>),
     /// Bounded retained-event page.
     RetainedEvents(Page<EventEnvelope<E>, RetainedEventCursor>),
 }

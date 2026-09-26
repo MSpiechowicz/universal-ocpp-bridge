@@ -88,6 +88,21 @@ pub trait StationCommandPort<P>: Send + Sync {
         resource: ResourceRef,
     ) -> StationCommandFuture<'_, Option<StationCommandContext>>;
 
+    /// Opaque socket generation captured before admission; adapters without socket turnover
+    /// may leave this absent.
+    fn session_generation(&self, _resource: &ResourceRef) -> Option<u64> {
+        None
+    }
+
+    /// Dispatches only to the socket observed before durable admission.
+    fn dispatch_to_generation(
+        &self,
+        command: Command<P>,
+        _generation: Option<u64>,
+    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
+        self.dispatch(command)
+    }
+
     /// Attempts one dispatch against the same live-session registry.
     ///
     /// Implementations must classify whether bytes were definitely not sent or transmission is
@@ -151,7 +166,7 @@ impl<P, E, D, R> CommandCoordinator<P, E, D, R> {
 
 impl<P, E, D, R> CommandCoordinator<P, E, D, R>
 where
-    P: Clone + Send + Sync + 'static,
+    P: Clone + PartialEq + Send + Sync + 'static,
     E: Send + 'static,
     D: Send + 'static,
     R: Send + 'static,
@@ -175,6 +190,30 @@ where
                 external.origin.clone(),
             )],
         );
+        // Idempotency is durable identity, not another admission attempt. Compare the complete
+        // authenticated request before consulting the transient socket or its expiry deadline.
+        if let Some(existing) = self
+            .store
+            .command_by_request_id(external.request.request_id.clone())
+            .await
+            .map_err(|error| map_storage_error(&error))?
+        {
+            let mut candidate = external.clone().admit(existing.admitted_at);
+            candidate.schema_version = existing.schema_version;
+            if candidate != existing {
+                return Err(CommandAdmissionError::new(
+                    crate::CommandAdmissionErrorCode::InvalidRequest,
+                    "request ID is already associated with another command",
+                ));
+            }
+            trace.emit(FlowStage::Deduplication, FlowEvidence::Duplicate);
+            return self
+                .store
+                .command_result_by_request_id(existing.request_id.clone())
+                .await
+                .map_err(|error| map_storage_error(&error))?
+                .ok_or_else(|| integrity_error("admitted command has no durable result"));
+        }
         if let uob_contracts::CommandOperation::Ocpp(operation) = &external.request.operation {
             if operation.protocol == uob_contracts::ProtocolEdition::Ocpp16j
                 && operation.action.as_str() == "ChangeConfiguration"
@@ -199,6 +238,15 @@ where
                 ));
             }
         }
+        if now >= external.request.expires_at {
+            trace.emit(FlowStage::Validation, FlowEvidence::Rejected);
+            return Ok(validation_rejection(
+                &external.clone().admit(now),
+                &CommandValidationError::Expired,
+                now,
+            ));
+        }
+        let generation = self.stations.session_generation(&external.request.resource);
         let context = self
             .stations
             .context(external.request.resource.clone())
@@ -273,7 +321,7 @@ where
         let mut config_response = None;
         let lifecycle = match self
             .stations
-            .dispatch(command.clone())
+            .dispatch_to_generation(command.clone(), generation)
             .await
             .map_err(|error| map_station_error(&error))?
         {
@@ -327,8 +375,12 @@ where
             result.schema_version = ContractVersion::V1_CONFIGURATION;
             result.configuration = Some(configuration);
         }
-        self.persist_result(result.clone()).await?;
-        Ok(result)
+        self.persist_result(result).await?;
+        self.store
+            .command_result_by_request_id(command.request_id.clone())
+            .await
+            .map_err(|error| map_storage_error(&error))?
+            .ok_or_else(|| integrity_error("completed command has no durable result"))
     }
 
     async fn persist_result(&self, result: CommandResult) -> Result<(), CommandAdmissionError> {
@@ -345,7 +397,7 @@ where
 
 impl<P, E, D, R> CommandAdmissionPort<P> for CommandCoordinator<P, E, D, R>
 where
-    P: Clone + Send + Sync + 'static,
+    P: Clone + PartialEq + Send + Sync + 'static,
     E: Send + 'static,
     D: Send + 'static,
     R: Send + 'static,

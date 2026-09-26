@@ -129,6 +129,146 @@ async fn legacy_controller_address_keeps_payload_and_resolves_canonical_scoped_k
     let _ = std::fs::remove_file(file);
 }
 
+#[tokio::test]
+async fn version_eight_native_child_events_replay_in_canonical_stream_with_stable_cursor() {
+    let file = legacy_file();
+    let snapshot = snapshot();
+    let transaction = snapshot.transactions[0].clone();
+    let native_child = transaction.resource.clone();
+    let mut canonical_child = native_child.clone();
+    canonical_child.native_protocol_reference = None;
+    let sibling = snapshot.resources[1].resource.clone();
+    let mut event = legacy_journal_event(&snapshot, 1);
+    event.resource = native_child.clone();
+    event.event_type = EventType::new("transaction.started").unwrap();
+    event.payload = StationEvent::Transaction(transaction);
+
+    let connection = Connection::open(&file).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE journal_events(row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+         event_id TEXT NOT NULL UNIQUE, resource TEXT NOT NULL, sequence INTEGER NOT NULL,
+         payload TEXT NOT NULL, retain_until INTEGER, UNIQUE(resource, sequence));
+         PRAGMA user_version = 8;",
+        )
+        .unwrap();
+    connection.execute(
+        "INSERT INTO journal_events(event_id, resource, sequence, payload) VALUES (?1, ?2, 1, ?3)",
+        params![event.event_id.as_str(), serde_json::to_string(&native_child).unwrap(),
+            serde_json::to_string(&event).unwrap()],
+    ).unwrap();
+    let legacy_row: i64 = connection.last_insert_rowid();
+    drop(connection);
+
+    let store = Store::open(&file, 8).unwrap();
+    let page = store
+        .read_retained_events(RetainedEventQuery {
+            resource: canonical_child.clone(),
+            after: None,
+            limit: PageLimit::new(1).unwrap(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(page.events, vec![event.clone()]);
+    let cursor = page.resume_cursor.unwrap();
+    assert_eq!(cursor.as_str(), format!("uob:event:{legacy_row}"));
+
+    let sibling_page = store
+        .read_retained_events(RetainedEventQuery {
+            resource: sibling,
+            after: None,
+            limit: PageLimit::new(1).unwrap(),
+        })
+        .await
+        .unwrap();
+    assert!(sibling_page.events.is_empty());
+    assert!(sibling_page.resume_cursor.is_none());
+
+    let native_page = store
+        .read_retained_events(RetainedEventQuery {
+            resource: native_child,
+            after: None,
+            limit: PageLimit::new(1).unwrap(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(native_page.events, vec![event]);
+    assert_eq!(native_page.resume_cursor, Some(cursor.clone()));
+    store
+        .shutdown(std::time::Duration::from_secs(1))
+        .await
+        .unwrap();
+    drop(store);
+
+    let reopened = Store::open(&file, 8).unwrap();
+    let resumed = reopened
+        .read_retained_events(RetainedEventQuery {
+            resource: canonical_child,
+            after: Some(cursor.clone()),
+            limit: PageLimit::new(1).unwrap(),
+        })
+        .await
+        .unwrap();
+    assert!(resumed.events.is_empty());
+    assert_eq!(resumed.resume_cursor, Some(cursor));
+    reopened
+        .shutdown(std::time::Duration::from_secs(1))
+        .await
+        .unwrap();
+    drop(reopened);
+
+    let connection = Connection::open(&file).unwrap();
+    assert_eq!(
+        connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        9
+    );
+    drop(connection);
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn version_eight_mismatched_child_key_rejects_migration_without_changes() {
+    let file = legacy_file();
+    let snapshot = snapshot();
+    let mut event = legacy_journal_event(&snapshot, 1);
+    event.resource = snapshot.transactions[0].resource.clone();
+    let sibling_key = serde_json::to_string(&snapshot.resources[1].resource).unwrap();
+    let connection = Connection::open(&file).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TABLE journal_events(row_id INTEGER PRIMARY KEY AUTOINCREMENT,
+         event_id TEXT NOT NULL UNIQUE, resource TEXT NOT NULL, sequence INTEGER NOT NULL,
+         payload TEXT NOT NULL, retain_until INTEGER, UNIQUE(resource, sequence));
+         PRAGMA user_version = 8;",
+        )
+        .unwrap();
+    connection.execute(
+        "INSERT INTO journal_events(event_id, resource, sequence, payload) VALUES (?1, ?2, 1, ?3)",
+        params![event.event_id.as_str(), &sibling_key, serde_json::to_string(&event).unwrap()],
+    ).unwrap();
+    drop(connection);
+
+    assert_eq!(
+        Store::open(&file, 8).err().unwrap().code(),
+        StorageErrorCode::IntegrityFailure
+    );
+    let connection = Connection::open(&file).unwrap();
+    assert_eq!(
+        connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        8
+    );
+    let stored: String = connection
+        .query_row("SELECT resource FROM journal_events", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(stored, sibling_key);
+    drop(connection);
+    let _ = std::fs::remove_file(file);
+}
+
 #[test]
 fn ambiguous_legacy_station_keys_fail_without_partial_migration() {
     let file = legacy_file();

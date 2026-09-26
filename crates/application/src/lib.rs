@@ -93,7 +93,8 @@ pub use security::{IsolatedControl, RuntimeSecurityPolicy, SecurityPolicyError};
 pub use station::{SizedStationOutput, StationEffects, StationInput, StationStateMachine};
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommandAdmissionOutcome,
+    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, COMMAND_HISTORY_CURSOR_PREFIX,
+    CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery, CommandHistoryScope,
     CommittedRecord, CommittedRecordCursor, CommittedRecordId, CommittedRecordQuery,
     DEFAULT_ACTIVE_SESSION_RESERVE_BYTES, DEFAULT_OPERATIONAL_STORAGE_BUDGET_BYTES,
     DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, Durability,

@@ -7,8 +7,7 @@ use uob_application::{
     PendingDelivery, RecordedDeliveryAttempt, StorageError, StorageErrorCode, StorageWritePurpose,
 };
 use uob_contracts::{
-    Command, CommandLifecycle, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot,
-    TargetInstanceId,
+    Command, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot, TargetInstanceId,
 };
 
 #[path = "codec_configuration.rs"]
@@ -45,7 +44,6 @@ pub(crate) struct EncodedCommand {
 #[derive(Debug)]
 pub(crate) struct EncodedCommandResult {
     pub request_id: String,
-    pub unresolved: bool,
     pub payload: String,
 }
 
@@ -149,12 +147,6 @@ where
         .map(|value| {
             Ok(EncodedCommandResult {
                 request_id: value.return_route.request_id.as_str().to_owned(),
-                unresolved: matches!(
-                    value.lifecycle,
-                    CommandLifecycle::Admitted
-                        | CommandLifecycle::Dispatched
-                        | CommandLifecycle::TransmissionUncertain { .. }
-                ),
                 payload: json(&value)?,
             })
         })

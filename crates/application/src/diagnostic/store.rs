@@ -1,12 +1,13 @@
 //! Scoped persistence observer; delegates all business decisions to the authoritative store.
 use crate::{
-    AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionOutcome, CommittedRecord,
-    CommittedRecordCursor, CommittedRecordQuery, FlowEvidence, FlowSpan, FlowStage,
-    OperationalStore, Page, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
-    SnapshotCursor, SnapshotQuery, StorageFuture, StorageRetentionStatus,
+    AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor,
+    CommandHistoryQuery, CommandHistoryScope, CommittedRecord, CommittedRecordCursor,
+    CommittedRecordQuery, FlowEvidence, FlowSpan, FlowStage, OperationalStore, Page, RecoveryBatch,
+    RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery,
+    StorageFuture, StorageRetentionStatus,
 };
 use uob_contracts::{
-    Command, CommandResult, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
+    Command, CommandResult, CommandSummary, RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
 };
 /// Borrowed store adapter tying one ordered operation to its actual commit completion.
 pub struct DiagnosticStore<'a, C, E, D, R> {
@@ -107,6 +108,13 @@ impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<CommandResult>> {
         self.inner.command_result_by_request_id(request_id)
+    }
+    fn read_command_history(
+        &self,
+        query: CommandHistoryQuery,
+        scope: CommandHistoryScope,
+    ) -> StorageFuture<'_, Page<CommandSummary, CommandHistoryCursor>> {
+        self.inner.read_command_history(query, scope)
     }
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
         self.inner.prune_command_deduplication(now)

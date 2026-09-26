@@ -13,8 +13,9 @@ use uob_application::{
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandLifecycle, CommandOperation,
-    CommandRequest, CommandResult, ContractVersion, ExternalCommand, PrincipalId, RequestId,
-    ResourceRef, StationId, TransactionId, UtcTimestamp,
+    CommandRequest, CommandResult, ContractVersion, EventId, EventType, ExternalCommand,
+    ObservedCommandEffect, PrincipalId, RequestId, ResourceRef, StationId, TransactionId,
+    UtcTimestamp,
 };
 use uob_storage_adapter::SqliteOperationalStore;
 use uuid::Uuid;
@@ -232,6 +233,54 @@ fn recovery_returns_only_unresolved_commands_and_latest_results() {
             .expect("read resolved result"),
         Some(resolved_result)
     );
+}
+
+#[test]
+fn observed_effect_before_response_survives_final_result_and_stale_effect_write() {
+    let database = TestDatabase::new();
+    let store = Store::open(database.path(), 8).expect("open SQLite store");
+    let command = command("event-before-reply", "station-a", start(None), 0);
+    block_on(store.write_atomic(command_write(command.clone()))).expect("admit");
+
+    let dispatched = result(&command, CommandLifecycle::Dispatched, 0);
+    let mut write = AtomicStoreWrite::empty();
+    write.command_result = Some(dispatched.clone());
+    block_on(store.write_atomic(write)).expect("mark dispatched");
+
+    let mut effect_before_reply = dispatched.clone();
+    effect_before_reply
+        .observed_effects
+        .push(ObservedCommandEffect {
+            event_id: text(EventId::new, "station-event-1"),
+            event_type: text(EventType::new, "transaction.started"),
+            observed_at: timestamp(1),
+        });
+    let mut write = AtomicStoreWrite::empty();
+    write.command_result = Some(effect_before_reply.clone());
+    block_on(store.write_atomic(write)).expect("commit early observation");
+
+    let mut write = AtomicStoreWrite::empty();
+    write.command_result = Some(result(&command, accepted(), 2));
+    block_on(store.write_atomic(write)).expect("commit response");
+    let after_reply = block_on(store.command_result_by_request_id(command.request_id.clone()))
+        .expect("read result")
+        .expect("durable result");
+    assert!(matches!(
+        after_reply.lifecycle,
+        CommandLifecycle::ProtocolResponse { accepted: true, .. }
+    ));
+    assert_eq!(
+        after_reply.observed_effects,
+        effect_before_reply.observed_effects
+    );
+
+    let mut write = AtomicStoreWrite::empty();
+    write.command_result = Some(effect_before_reply);
+    block_on(store.write_atomic(write)).expect("stale effect writer");
+    let after_stale = block_on(store.command_result_by_request_id(command.request_id))
+        .expect("read result")
+        .expect("durable result");
+    assert_eq!(after_stale, after_reply);
 }
 
 #[test]

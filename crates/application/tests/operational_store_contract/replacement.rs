@@ -81,6 +81,14 @@ impl
         self.0.command_result_by_request_id(request_id)
     }
 
+    fn read_command_history(
+        &self,
+        query: CommandHistoryQuery,
+        scope: CommandHistoryScope,
+    ) -> StorageFuture<'_, Page<CommandSummary, CommandHistoryCursor>> {
+        self.0.read_command_history(query, scope)
+    }
+
     fn prune_command_deduplication(&self, now: UtcTimestamp) -> StorageFuture<'_, u64> {
         self.0.prune_command_deduplication(now)
     }
@@ -95,4 +103,20 @@ impl
     fn storage_retention_status(&self) -> StorageFuture<'_, StorageRetentionStatus> {
         self.0.storage_retention_status()
     }
+}
+
+pub(super) fn assert_store_is_replaceable(
+    store: &dyn OperationalStore<
+        TestCommandPayload,
+        TestEventPayload,
+        TestDeliveryPayload,
+        TestCommittedPayload,
+    >,
+) {
+    let page = block_on(store.read_snapshots(SnapshotQuery {
+        after: None,
+        limit: PageLimit::new(1).expect("bounded page"),
+    }))
+    .expect("snapshot read");
+    assert!(page.items.len() <= 1);
 }

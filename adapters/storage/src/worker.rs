@@ -6,12 +6,16 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
-    AtomicWriteOutcome, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor, Page,
+    AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery,
+    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, Page,
     RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RetainedEventCursor,
     RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError, StorageErrorCode,
     StorageRetentionStatus,
 };
-use uob_contracts::{Command, CommandResult, ConfigurationObservation, StationSnapshot};
+use uob_contracts::{
+    Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope,
+    StationSnapshot,
+};
 
 use crate::retention::SqliteRetentionPolicy;
 use crate::{
@@ -19,7 +23,7 @@ use crate::{
         self, EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent,
         EncodedRecord, EncodedWrite,
     },
-    command,
+    command, command_history,
     configuration::unavailable,
     delivery, recovery, retention, snapshots,
 };
@@ -56,6 +60,20 @@ pub(crate) enum Request<C, E, D, R> {
     Recover(usize, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
     CommandResult(String, Reply<Option<uob_contracts::CommandResult>>),
+    CommandCandidates(
+        String,
+        String,
+        i64,
+        Option<String>,
+        usize,
+        Reply<Vec<Command<C>>>,
+    ),
+    JournalEvent(String, String, String, Reply<Option<EventEnvelope<E>>>),
+    CommandHistory(
+        CommandHistoryQuery,
+        CommandHistoryScope,
+        Reply<Page<CommandSummary, CommandHistoryCursor>>,
+    ),
     AppendConfigurationObservation(
         String,
         ConfigurationObservation,
@@ -134,6 +152,15 @@ pub(crate) fn run<C, E, D, R>(
             Request::CommandResult(request_id, reply) => {
                 respond(reply, recovery::command_result(&connection, &request_id));
             }
+            Request::CommandCandidates(bridge, station, before, after, limit, reply) => {
+                respond(reply, command::candidates(&connection, &bridge, &station, before, after.as_deref(), limit));
+            }
+            Request::JournalEvent(id, bridge, station, reply) => {
+                respond(reply, command::journal_event(&connection, &id, &bridge, &station));
+            }
+            Request::CommandHistory(query, scope, reply) => {
+                respond(reply, command_history::read(&connection, &query, &scope));
+            }
             Request::AppendConfigurationObservation(write_id, observation, reply) => {
                 respond(
                     reply,
@@ -207,19 +234,7 @@ fn write_atomic(
         write_authorization(&transaction, &change)?;
     }
     if let Some(result) = write.command_result {
-        transaction
-            .execute(
-                "INSERT INTO command_results(request_id, payload) VALUES (?1, ?2)\n\
-                 ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload",
-                params![result.request_id, result.payload],
-            )
-            .map_err(unavailable)?;
-        transaction
-            .execute(
-                "UPDATE commands SET unresolved = ?2 WHERE request_id = ?1",
-                params![result.request_id, i64::from(result.unresolved)],
-            )
-            .map_err(unavailable)?;
+        command::write_result(&transaction, &result)?;
     }
     if let Some(sequence) = write.events.iter().map(|event| event.sequence).max() {
         transaction

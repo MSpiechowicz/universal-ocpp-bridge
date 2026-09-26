@@ -208,6 +208,64 @@ fn uncertain_transmission_is_not_resent_and_observation_does_not_manufacture_suc
 }
 
 #[test]
+fn admitted_retry_survives_expiry_disconnect_and_restart_without_dispatch() {
+    block_on(async {
+        let store = Arc::new(MemoryStore::default());
+        let stations = Arc::new(Stations::new(connected(), accepted_outcome()));
+        let first = coordinator(Arc::clone(&store), Arc::clone(&stations))
+            .submit(external())
+            .await
+            .expect("first response");
+        assert!(matches!(
+            first.lifecycle,
+            CommandLifecycle::ProtocolResponse { accepted: true, .. }
+        ));
+        *stations.context.lock().expect("station context") = None;
+
+        let restarted = CommandCoordinator::new(
+            Arc::clone(&store) as Arc<dyn OperationalStore<String, String, String, String>>,
+            Arc::clone(&stations) as Arc<dyn StationCommandPort<String>>,
+            Arc::new(FixedClock(timestamp(11))),
+        );
+        let retry = restarted
+            .submit(external())
+            .await
+            .expect("durable duplicate");
+        assert_eq!(retry, first);
+        assert_eq!(*stations.dispatches.lock().expect("dispatch count"), 1);
+
+        let mut conflict = external();
+        conflict.request.expires_at = timestamp(12);
+        assert_eq!(
+            restarted
+                .submit(conflict)
+                .await
+                .expect_err("different identity")
+                .code(),
+            CommandAdmissionErrorCode::InvalidRequest,
+        );
+        assert_eq!(*stations.dispatches.lock().expect("dispatch count"), 1);
+
+        let mut fresh = external();
+        fresh.request.request_id = id(RequestId::new, "fresh-expired");
+        assert!(matches!(
+            restarted
+                .submit(fresh)
+                .await
+                .expect("expired request")
+                .lifecycle,
+            CommandLifecycle::Rejected {
+                error: CommandError {
+                    code: CommandErrorCode::Expired,
+                    ..
+                }
+            }
+        ));
+        assert_eq!(*stations.dispatches.lock().expect("dispatch count"), 1);
+    });
+}
+
+#[test]
 fn restart_converts_in_flight_dispatch_to_uncertain_without_replay() {
     block_on(async {
         let store = Arc::new(MemoryStore::default());

@@ -1,27 +1,34 @@
-use std::{collections::BTreeMap, io, sync::Arc, time::Duration};
+mod calls;
+mod effects;
+mod session;
+mod state;
 
-use serde_json::json;
+use calls::{apply_observation, call_error, context, event_identity};
+pub(super) use state::reconcile;
+use state::{invalidation, store_snapshot};
+
+use std::{io, sync::Arc, time::Duration};
+
 use tokio::{sync::watch, task::JoinSet};
 use uob_application::{
-    AtomicStoreWrite, ChargerObservation, CommandClock, ObservationCommitError, OperationalStore,
-    record_measurements, record_transaction_event,
+    CommandClock,
     registration::{RegistrationDecision, availability::AvailabilityContext},
-    transaction16::TransactionContext,
 };
 use uob_contracts::{
-    AvailabilityState, ChargingResourceSnapshot, Connectivity, ContractVersion, EventEnvelope,
-    EventId, EventOrigin, EventType, ProtocolEdition, ResourceCapabilities, ResourceRef,
-    ServiceIdentity, StationEvent, StationId, StationSnapshot, TargetInstanceId, UtcTimestamp,
+    AvailabilityState, Connectivity, EventId, ProtocolEdition, ResourceRef, ServiceIdentity,
+    StationSnapshot, TargetInstanceId, UtcTimestamp,
 };
 use uob_protocol_adapter::{
-    CallSessionConfiguration, IncomingCall, OcppCallError, OcppErrorCode, StationConnection,
-    spawn_call_session, v16, v201,
+    CallSessionConfiguration, DecodedCall, IncomingCall, OcppCallError, OcppErrorCode,
+    StationConnection, spawn_call_session, v16, v201,
 };
 use uob_provider_adapter::{LocalAuthorizationProvider, LocalChargingIdentityProvider};
 
-use super::{ChargingAuthorization, ChargingRuntime, ChargingStore};
+use super::{
+    ChargingAuthorization, ChargingRuntime, ChargingStore, StationSettings, commands::LiveCommands,
+};
 
-struct Clock;
+pub(super) struct Clock;
 impl CommandClock for Clock {
     fn now(&self) -> UtcTimestamp {
         UtcTimestamp::new(time::OffsetDateTime::now_utc())
@@ -31,78 +38,23 @@ fn unavailable() -> io::Error {
     io::Error::other("charging station state unavailable")
 }
 
-pub(super) async fn reconcile(
-    store: &ChargingStore,
-    resources: &BTreeMap<StationId, Vec<ResourceRef>>,
-    identity: &ServiceIdentity,
-) -> io::Result<()> {
-    for expected in resources.values() {
-        let Some(mut snapshot) = store
-            .station_snapshot(expected[0].clone())
-            .await
-            .map_err(|_| unavailable())?
-        else {
-            continue;
-        };
-        if snapshot.station != expected[0]
-            || snapshot
-                .resources
-                .iter()
-                .map(|item| &item.resource)
-                .ne(expected.iter().skip(1))
-        {
-            return Err(io::Error::other(
-                "charging topology differs from persisted station state",
-            ));
-        }
-        if snapshot.connectivity != Connectivity::Disconnected {
-            snapshot.connectivity = Connectivity::Disconnected;
-            for resource in &mut snapshot.resources {
-                resource.availability = AvailabilityState::Unknown;
-            }
-            store_snapshot(store, snapshot, identity).await?;
-        }
-    }
-    Ok(())
+#[derive(Clone)]
+struct StationContext {
+    store: ChargingStore,
+    authorization: Arc<ChargingAuthorization>,
+    commands: Arc<LiveCommands>,
+    commands_enabled: bool,
+    application: uob_application::Application,
+    identity: ServiceIdentity,
+    target: Option<(TargetInstanceId, u64)>,
 }
 
-async fn store_snapshot(
-    store: &ChargingStore,
-    snapshot: StationSnapshot,
-    identity: &ServiceIdentity,
-) -> io::Result<()> {
-    let event = invalidation(store, &snapshot, identity, snapshot.observed_at).await?;
-    let mut write = AtomicStoreWrite::empty();
-    write.station_snapshot = Some(snapshot);
-    write.journal_events.push(event);
-    store.write_atomic(write).await.map_err(|_| unavailable())?;
-    Ok(())
-}
-
-async fn invalidation(
-    store: &ChargingStore,
-    snapshot: &StationSnapshot,
-    identity: &ServiceIdentity,
-    observed_at: UtcTimestamp,
-) -> io::Result<EventEnvelope<StationEvent>> {
-    let (sequence, event_id) = event_identity(store, identity).await?;
-    Ok(EventEnvelope {
-        event_id,
-        schema_version: snapshot.schema_version,
-        runtime: identity.runtime.clone(),
-        resource: snapshot.station.clone(),
-        source_time: None,
-        observed_at,
-        event_type: EventType::new("station.snapshot.invalidated").map_err(|_| unavailable())?,
-        origin: EventOrigin::Bridge,
-        sequence,
-        correlation_id: None,
-        causation_id: None,
-        provenance: None,
-        payload: StationEvent::Invalidation {
-            station_snapshot_invalidated: snapshot.station.station_id.clone(),
-        },
-    })
+struct CallContext<'a> {
+    store: &'a ChargingStore,
+    authorization: &'a ChargingAuthorization,
+    commands: &'a Arc<LiveCommands>,
+    identity: &'a ServiceIdentity,
+    target: Option<(TargetInstanceId, u64)>,
 }
 
 pub(super) async fn serve(
@@ -116,11 +68,18 @@ pub(super) async fn serve(
         endpoint,
         mut receiver,
         resources,
+        settings,
         target,
     } = runtime;
-    let store = state.store.clone();
-    let authorization = state.authorization.clone();
-    let identity = application.identity().clone();
+    let context = StationContext {
+        store: state.store.clone(),
+        authorization: state.authorization.clone(),
+        commands: state.commands.clone(),
+        commands_enabled: state.credentials.is_some(),
+        identity: application.identity().clone(),
+        application,
+        target,
+    };
     let (shutdown, _) = watch::channel(false);
     let mut tasks = JoinSet::new();
     let result = {
@@ -143,7 +102,8 @@ pub(super) async fn serve(
                 connection = receiver.receive() => {
                     let Some(connection) = connection else { break Err(unavailable()); };
                     let Some(mapped) = resources.get(&connection.station().station_id) else { break Err(unavailable()); };
-                    tasks.spawn(station(connection, mapped.clone(), store.clone(), authorization.clone(), application.clone(), identity.clone(), target.clone(), shutdown.subscribe()));
+                    let Some(configuration) = settings.get(&connection.station().station_id) else { break Err(unavailable()); };
+                    tasks.spawn(station(connection, mapped.clone(), configuration.clone(), context.clone(), shutdown.subscribe()));
                 }
             }
         }
@@ -161,58 +121,34 @@ pub(super) async fn serve(
     result
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn station(
     connection: StationConnection,
     resources: Vec<ResourceRef>,
-    store: ChargingStore,
-    authorization: Arc<ChargingAuthorization>,
-    application: uob_application::Application,
-    identity: ServiceIdentity,
-    target: Option<(TargetInstanceId, u64)>,
+    configuration: StationSettings,
+    context: StationContext,
     mut stop: watch::Receiver<bool>,
 ) -> io::Result<()> {
     let station = connection.station().clone();
-    let now = Clock.now();
-    let mut snapshot = store
-        .station_snapshot(resources[0].clone())
-        .await
-        .map_err(|_| unavailable())?
-        .unwrap_or_else(|| StationSnapshot {
-            schema_version: ContractVersion::V1_INITIAL,
-            station: resources[0].clone(),
-            observed_at: now,
-            connectivity: Connectivity::Disconnected,
-            capabilities: ResourceCapabilities::default(),
-            resources: resources
-                .iter()
-                .skip(1)
-                .cloned()
-                .map(|resource| ChargingResourceSnapshot {
-                    resource,
-                    availability: AvailabilityState::Unknown,
-                    capabilities: ResourceCapabilities::default(),
-                    data_points: vec![],
-                    current_values: vec![],
-                })
-                .collect(),
-            transactions: vec![],
-            current_values: vec![],
-        });
-    snapshot.connectivity = Connectivity::Connected {
-        protocol: station.protocol,
-        connected_at: now,
-        last_message_at: None,
-    };
-    // A transport reconnect is not a new accepted BootNotification, even after a clean restart.
-    snapshot
-        .current_values
-        .retain(|value| !value.point_id.as_str().ends_with("/registration/status"));
-    snapshot.observed_at = now;
-    store_snapshot(&store, snapshot.clone(), &identity).await?;
+    let StationContext {
+        store,
+        authorization,
+        commands,
+        application,
+        identity,
+        target,
+        ..
+    } = &context;
+    let mut snapshot = state::connected_snapshot(
+        store,
+        &resources,
+        &configuration,
+        station.protocol,
+        identity,
+    )
+    .await?;
     let (handle, mut outputs, task) = spawn_call_session(
         connection,
-        &application,
+        application,
         CallSessionConfiguration {
             pending_call_capacity: 16,
             incoming_call_capacity: 16,
@@ -221,6 +157,15 @@ async fn station(
         },
     )
     .map_err(|_| unavailable())?;
+    let generation = session::attach(
+        &context,
+        &station.station_id,
+        station.protocol,
+        &configuration,
+        &handle,
+        &snapshot,
+    )
+    .await?;
     drop(handle);
     let mut error = None;
     loop {
@@ -229,11 +174,24 @@ async fn station(
             changed = stop.changed() => { if changed.is_err() || *stop.borrow() { break; } },
             call = outputs.incoming.receive() => {
                 let Some(call) = call else { break; };
-                if let Err(failure) = handle_call(call, &mut snapshot, &store, &authorization, &identity, target.clone()).await {
+                let call_context = CallContext {
+                    store,
+                    authorization,
+                    commands,
+                    identity,
+                    target: target.clone(),
+                };
+                if let Err(failure) = handle_call(call, &mut snapshot, call_context).await {
                     error = Some(failure); break;
+                }
+                if generation.is_some_and(|generation| commands.update(&station.station_id, generation, snapshot.clone()).is_err()) {
+                    error = Some(unavailable()); break;
                 }
             }
         }
+    }
+    if let Some(generation) = generation {
+        commands.remove(&station.station_id, generation);
     }
     if task.shutdown(Duration::from_secs(3)).await.is_err() {
         error = Some(unavailable());
@@ -243,7 +201,7 @@ async fn station(
     for resource in &mut snapshot.resources {
         resource.availability = AvailabilityState::Unknown;
     }
-    if store_snapshot(&store, snapshot, &identity).await.is_err() {
+    if store_snapshot(store, snapshot, identity).await.is_err() {
         error = Some(unavailable());
     }
     error.map_or(Ok(()), Err)
@@ -252,10 +210,7 @@ async fn station(
 async fn handle_call(
     incoming: IncomingCall,
     snapshot: &mut StationSnapshot,
-    store: &ChargingStore,
-    authorization: &ChargingAuthorization,
-    identity: &ServiceIdentity,
-    target: Option<(TargetInstanceId, u64)>,
+    services: CallContext<'_>,
 ) -> io::Result<()> {
     let protocol = match &snapshot.connectivity {
         Connectivity::Connected { protocol, .. } => *protocol,
@@ -266,10 +221,10 @@ async fn handle_call(
         "BootNotification" | "Heartbeat"
     ) {
         let now = Clock.now();
-        let event = invalidation(store, snapshot, identity, now).await?;
+        let event = invalidation(services.store, snapshot, services.identity, now).await?;
         let result = incoming
             .complete_registration_with_invalidation(
-                store,
+                services.store,
                 snapshot,
                 RegistrationDecision::Accepted,
                 60,
@@ -283,74 +238,51 @@ async fn handle_call(
             Ok(())
         };
     }
-    dispatch_call(
-        incoming,
-        snapshot,
-        store,
-        authorization,
-        identity,
-        target,
-        protocol,
-    )
-    .await
+    dispatch_call(incoming, snapshot, services, protocol).await
 }
 
 async fn dispatch_call(
     incoming: IncomingCall,
     snapshot: &mut StationSnapshot,
-    store: &ChargingStore,
-    authorization: &ChargingAuthorization,
-    identity: &ServiceIdentity,
-    target: Option<(TargetInstanceId, u64)>,
+    services: CallContext<'_>,
     protocol: ProtocolEdition,
 ) -> io::Result<()> {
+    let mut committed = None;
     let response = match (protocol, incoming.call.action.as_str()) {
         (_, "StatusNotification") => {
-            let (sequence, event_id) = event_identity(store, identity).await?;
-            let context = AvailabilityContext {
-                identity: identity.clone(),
-                event_id,
-                sequence,
-            };
-            match protocol {
-                ProtocolEdition::Ocpp16j => {
-                    v16::availability::complete_status(
-                        incoming.call,
-                        store,
-                        snapshot,
-                        context,
-                        Clock.now(),
-                    )
-                    .await
-                }
-                ProtocolEdition::Ocpp201 => {
-                    v201::availability::complete_status(
-                        incoming.call,
-                        store,
-                        snapshot,
-                        context,
-                        Clock.now(),
-                    )
-                    .await
-                }
-            }
+            complete_status(
+                incoming.call,
+                snapshot,
+                services.store,
+                services.identity,
+                protocol,
+                &mut committed,
+            )
+            .await?
         }
         (ProtocolEdition::Ocpp16j, "StartTransaction" | "StopTransaction") => {
-            let context = context(store, identity, &incoming, target).await?;
-            let services = v16::TransactionServices {
-                store,
-                authorization,
+            let context = context(
+                services.store,
+                services.identity,
+                &incoming,
+                services.target,
+            )
+            .await?;
+            committed = Some(context.event_id.clone());
+            let transaction_services = v16::TransactionServices {
+                store: services.store,
+                authorization: services.authorization,
                 provider: &LocalAuthorizationProvider,
                 clock: &Clock,
                 authorization_timeout: Duration::from_secs(2),
             };
-            v16::complete_transaction(incoming.call, snapshot, &services, context).await
+            v16::complete_transaction(incoming.call, snapshot, &transaction_services, context).await
         }
         (ProtocolEdition::Ocpp201, "Authorize") => {
             v201::complete_authorization(
                 incoming.call,
                 &snapshot.station,
-                authorization,
+                services.authorization,
                 &LocalChargingIdentityProvider,
                 &Clock,
                 Duration::from_secs(2),
@@ -366,11 +298,29 @@ async fn dispatch_call(
             if accepted.is_err() {
                 Err(call_error(protocol, OcppErrorCode::ProtocolError))
             } else {
-                apply_observation(&incoming, snapshot, store, identity, target, now).await
+                apply_observation(
+                    &incoming,
+                    snapshot,
+                    services.store,
+                    services.identity,
+                    services.target,
+                    now,
+                    &mut committed,
+                )
+                .await
             }
         }
         _ => Err(call_error(protocol, OcppErrorCode::NotImplemented)),
     };
+    if let (Ok(_), Some(event_id)) = (&response, committed) {
+        effects::reconcile(
+            services.store,
+            services.commands,
+            &snapshot.station,
+            event_id,
+        )
+        .await?;
+    }
     let failed_storage = response
         .as_ref()
         .is_err_and(|error| error.code == OcppErrorCode::InternalError);
@@ -391,95 +341,27 @@ async fn dispatch_call(
     }
 }
 
-async fn apply_observation(
-    incoming: &IncomingCall,
+async fn complete_status(
+    call: DecodedCall,
     snapshot: &mut StationSnapshot,
     store: &ChargingStore,
     identity: &ServiceIdentity,
-    target: Option<(TargetInstanceId, u64)>,
-    now: UtcTimestamp,
-) -> Result<serde_json::Value, OcppCallError> {
-    let protocol = match &snapshot.connectivity {
-        Connectivity::Connected { protocol, .. } => *protocol,
-        _ => {
-            return Err(call_error(
-                ProtocolEdition::Ocpp16j,
-                OcppErrorCode::InternalError,
-            ));
-        }
-    };
-    let context = context(store, identity, incoming, target)
-        .await
-        .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?;
-    let reply = match &incoming.call.observation {
-        ChargerObservation::TransactionEvent(observation)
-            if protocol == ProtocolEdition::Ocpp201 =>
-        {
-            record_transaction_event(store, snapshot, observation, context, now)
-                .await
-                .map_err(|error| commit_error(protocol, &error))?;
-            if observation.event == uob_application::TransactionEventKind::Started {
-                // A transaction report is not evidence of an authorization grant.
-                json!({"idTokenInfo":{"status":"Invalid"}})
-            } else {
-                json!({})
-            }
-        }
-        ChargerObservation::Measurements(measurements) if measurements.protocol == protocol => {
-            record_measurements(store, snapshot, measurements, context, now)
-                .await
-                .map_err(|error| commit_error(protocol, &error))?;
-            json!({})
-        }
-        _ => return Err(call_error(protocol, OcppErrorCode::NotImplemented)),
-    };
-    Ok(json!([3, incoming.call.message_id, reply]))
-}
-
-async fn context(
-    store: &ChargingStore,
-    identity: &ServiceIdentity,
-    incoming: &IncomingCall,
-    target: Option<(TargetInstanceId, u64)>,
-) -> io::Result<TransactionContext> {
+    protocol: ProtocolEdition,
+    committed: &mut Option<EventId>,
+) -> io::Result<Result<serde_json::Value, OcppCallError>> {
     let (sequence, event_id) = event_identity(store, identity).await?;
-    Ok(TransactionContext {
+    *committed = Some(event_id.clone());
+    let context = AvailabilityContext {
         identity: identity.clone(),
         event_id,
         sequence,
-        correlation_id: Some(incoming.correlation_id.clone()),
-        target,
-        delivery_deadline: UtcTimestamp::new(Clock.now().into_inner() + time::Duration::days(1)),
-    })
-}
-
-async fn event_identity(
-    store: &ChargingStore,
-    identity: &ServiceIdentity,
-) -> io::Result<(u64, EventId)> {
-    let sequence = store
-        .reserve_event_sequence()
-        .await
-        .map_err(|_| unavailable())?;
-    let event_id = EventId::new(format!("{}/event/{sequence}", identity.bridge_id.as_str()))
-        .map_err(|_| unavailable())?;
-    Ok((sequence, event_id))
-}
-
-fn commit_error(protocol: ProtocolEdition, error: &ObservationCommitError) -> OcppCallError {
-    let code = if matches!(error, ObservationCommitError::Storage(_)) {
-        OcppErrorCode::InternalError
-    } else {
-        OcppErrorCode::ProtocolError
     };
-    call_error(protocol, code)
-}
-
-fn call_error(protocol: ProtocolEdition, code: OcppErrorCode) -> OcppCallError {
-    OcppCallError {
-        protocol,
-        code,
-        description: "Charging operation could not be completed",
-        field_path: None,
-    }
+    Ok(match protocol {
+        ProtocolEdition::Ocpp16j => {
+            v16::availability::complete_status(call, store, snapshot, context, Clock.now()).await
+        }
+        ProtocolEdition::Ocpp201 => {
+            v201::availability::complete_status(call, store, snapshot, context, Clock.now()).await
+        }
+    })
 }

@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    Router,
-    routing::{get, post},
-};
+use axum::{Router, routing::get};
 use serde_json::Value;
 use uob_application::{Application, CanonicalQuerySource, TargetQueryAuthorization};
 
@@ -101,7 +98,11 @@ pub fn router_with_commands_and_authenticated_events(
         ManagementState {
             application,
             queries: None,
-            commands: Some(command_api::ManagementCommands::new(commands)),
+            commands: Some(command_api::ManagementCommands::new(
+                commands,
+                Some(source.clone()),
+                read_limits,
+            )),
             events: Some(event_api::ManagementEvents::new(
                 source,
                 event_configuration,
@@ -121,8 +122,12 @@ pub(crate) fn base_router(state: ManagementState, options: ManagementRouterOptio
         .route("/api/v1/stations", get(read_api::stations))
         .route("/api/v1/stations/{station_id}", get(read_api::station))
         .route("/api/v1/events", get(event_api::events))
-        .route("/api/v1/commands", post(command_api::submit))
-        .route("/api/v1/commands/{request_id}", get(command_api::status));
+        .route(
+            "/api/v1/commands",
+            get(command_api::history).post(command_api::submit),
+        )
+        .route("/api/v1/commands/{request_id}", get(command_api::status))
+        .route("/api/v1/command-schemas", get(command_api::schemas));
     let router = if options.static_assets {
         router
             .route("/", get(assets::browser_entry))

@@ -110,8 +110,45 @@ The management console on `http://127.0.0.1:8080` requires manual entry of the r
 token and shows only committed observations. A report of a transaction is not proof
 of authorization or physical charging: with no provisioned local authorization grant
 the demo replies `Invalid`. Disabling `[charging]` leaves station/event reads
-unavailable (503) rather than serving a synthetic inventory. Do not forward plaintext
-charging ingress off the loopback host.
+unavailable (503) rather than serving a synthetic inventory. The configuration above intentionally
+enables **read-only** views; do not forward plaintext charging ingress off the loopback host.
+
+To opt in to demo commands, provision **distinct** protected grant files and add
+`control_grant_file` and, for privileged actions, `privileged_grant_file` under `[charging]`.
+Neither is the read grant or a station's WebSocket credential. A privileged grant requires
+a control grant to be configured, but does not itself authorize standard control operations.
+The files must be separate from one another, station credentials, start identities and the
+private state directory; use the same owner, modes and demo-bound bearer format as the read
+grant. The service rejects command opt-ins without a control grant and
+`change_availability = true` without a privileged grant.
+
+Enable actions individually under each `[[charging.stations]]`: `start_token_file` points to
+a private local charging authorization identity for start, `allow_stop = true` enables stop,
+`allow_charging_limit = true` enables charging limits, and `change_availability = true` enables
+the privileged OCPP `ChangeAvailability` operation. The start token is not a management bearer:
+it is resolved to a protected, station-scoped authorization reference at startup; the console
+uses that reference, not the token's secret value. Missing opt-ins remain disabled. The service
+advertises operations only for supported resources: start, stop and availability at station
+level, charging limits on native OCPP 1.6J connectors or OCPP 2.0.1 EVSE resources with a
+positive native ID. Control options and privileged schemas are authenticated per request.
+Privileged actions require the privileged grant, the advertised protocol action, a pinned
+server schema and valid typed fields; a displayed schema alone never grants permission.
+
+The console requires a fresh destination/station confirmation and the appropriate independent
+credential for every command submission. Expired, malformed, out-of-scope and unsupported
+requests are rejected. An HTTP 202 records admission, not native acceptance or physical effect.
+Inspect the station-scoped sanitized command history or detail by request ID before deciding
+whether to intentionally retry the **same unexpired request**; an exact duplicate does not
+redispatch, while changed content under the same ID conflicts. History/detail distinguish
+admission, dispatch, protocol response and later linked observed effects. Event IDs connect
+observations to the station/resource stream; the correlation link searches the separately
+retained, possibly incomplete Debug timeline. A pending native transaction can receive a
+transaction-bound `TxProfile` charging limit without proof of power flow; even an accepted
+profile is not observed charging success. Start/stop/availability observations appear only
+after later station reports, not merely because the protocol replied `Accepted`.
+
+The optional plaintext demo listener and its local grants do **not** expose charging ingress
+or command authority in production.
 
 ## Commands and exit codes
 

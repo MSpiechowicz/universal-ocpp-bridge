@@ -1,10 +1,10 @@
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::{Serialize, de::DeserializeOwned};
 use uob_application::{CommandAdmissionOutcome, StorageError, StorageErrorCode};
-use uob_contracts::CommandLifecycle;
+use uob_contracts::{Command, CommandLifecycle, EventEnvelope};
 
 use crate::{
-    codec::{self, EncodedCommand},
+    codec::{self, EncodedCommand, EncodedCommandResult},
     configuration::unavailable,
 };
 
@@ -60,6 +60,157 @@ pub(crate) fn admit(
         )
         .map_err(unavailable)?;
     Ok(Some(CommandAdmissionOutcome::Admitted))
+}
+
+pub(crate) fn write_result(
+    transaction: &Transaction<'_>,
+    encoded: &EncodedCommandResult,
+) -> Result<(), StorageError> {
+    let mut incoming = codec::decode_result(&encoded.payload)?;
+    let previous = transaction
+        .query_row(
+            "SELECT payload FROM command_results WHERE request_id = ?1",
+            [&encoded.request_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(unavailable)?
+        .map(|payload| codec::decode_result(&payload))
+        .transpose()?;
+
+    if let Some(mut previous) = previous {
+        if previous.return_route != incoming.return_route || previous.resource != incoming.resource
+        {
+            return Err(StorageError::new(
+                StorageErrorCode::IntegrityFailure,
+                "command result identity changed",
+            ));
+        }
+        for effect in previous.observed_effects.drain(..) {
+            if !incoming
+                .observed_effects
+                .iter()
+                .any(|item| item.event_id == effect.event_id)
+            {
+                incoming.observed_effects.push(effect);
+            }
+        }
+        // An effect writer may have read Dispatched before a response writer committed.
+        // Only the station response advances the lifecycle; an old effect cannot roll it back.
+        let previous_rank = lifecycle_rank(&previous.lifecycle);
+        let incoming_rank = lifecycle_rank(&incoming.lifecycle);
+        if previous_rank > incoming_rank || (previous_rank == 2 && incoming_rank == 2) {
+            incoming.lifecycle = previous.lifecycle;
+            incoming.recorded_at = previous.recorded_at;
+            incoming.schema_version = previous.schema_version;
+            incoming.configuration = previous.configuration;
+        }
+        for observation in previous.configuration_observations {
+            if !incoming
+                .configuration_observations
+                .iter()
+                .any(|item| item.read_request_id == observation.read_request_id)
+            {
+                incoming.configuration_observations.push(observation);
+            }
+        }
+    }
+
+    let unresolved = matches!(
+        incoming.lifecycle,
+        CommandLifecycle::Admitted
+            | CommandLifecycle::Dispatched
+            | CommandLifecycle::TransmissionUncertain { .. }
+    );
+    let payload = serde_json::to_string(&incoming).map_err(|_| {
+        StorageError::new(
+            StorageErrorCode::InvalidRequest,
+            "command result encoding failed",
+        )
+    })?;
+    transaction
+        .execute(
+            "INSERT INTO command_results(request_id, payload) VALUES (?1, ?2)
+         ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload",
+            params![encoded.request_id, payload],
+        )
+        .map_err(unavailable)?;
+    transaction
+        .execute(
+            "UPDATE commands SET unresolved = ?2 WHERE request_id = ?1",
+            params![encoded.request_id, i64::from(unresolved)],
+        )
+        .map_err(unavailable)?;
+    Ok(())
+}
+
+fn lifecycle_rank(value: &CommandLifecycle) -> u8 {
+    match value {
+        CommandLifecycle::Admitted => 0,
+        CommandLifecycle::Dispatched => 1,
+        CommandLifecycle::Rejected { .. }
+        | CommandLifecycle::ProtocolResponse { .. }
+        | CommandLifecycle::TransmissionUncertain { .. } => 2,
+    }
+}
+
+pub(crate) fn candidates<C: DeserializeOwned>(
+    connection: &Connection,
+    bridge: &str,
+    station: &str,
+    observed_before: i64,
+    after: Option<&str>,
+    limit: usize,
+) -> Result<Vec<Command<C>>, StorageError> {
+    let limit = i64::try_from(limit).map_err(|_| {
+        StorageError::new(
+            StorageErrorCode::InvalidRequest,
+            "command candidate limit exceeds SQLite integer range",
+        )
+    })?;
+
+    let mut statement = connection
+        .prepare(
+            "SELECT payload FROM commands INDEXED BY commands_station_history
+         WHERE json_extract(payload, '$.resource.bridge_id') = ?1
+           AND json_extract(payload, '$.resource.station_id') = ?2
+           AND admitted_at <= ?3
+           AND (?4 IS NULL OR (admitted_at, request_id) <
+                (SELECT admitted_at, request_id FROM commands WHERE request_id = ?4))
+         ORDER BY admitted_at DESC, request_id DESC LIMIT ?5",
+        )
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map(
+            params![bridge, station, observed_before, after, limit],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(unavailable)?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(unavailable)?
+        .into_iter()
+        .map(|payload| codec::decode_command(&payload))
+        .collect()
+}
+
+pub(crate) fn journal_event<E: DeserializeOwned>(
+    connection: &Connection,
+    id: &str,
+    bridge: &str,
+    station: &str,
+) -> Result<Option<EventEnvelope<E>>, StorageError> {
+    connection
+        .query_row(
+            "SELECT payload FROM journal_events WHERE event_id = ?1
+         AND json_extract(payload, '$.resource.bridge_id') = ?2
+         AND json_extract(payload, '$.resource.station_id') = ?3",
+            params![id, bridge, station],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(unavailable)?
+        .map(|payload| codec::decode_event(&payload))
+        .transpose()
 }
 
 pub(crate) fn prune<C: DeserializeOwned + Serialize>(

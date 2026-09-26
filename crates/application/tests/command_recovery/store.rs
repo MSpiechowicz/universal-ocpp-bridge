@@ -182,6 +182,20 @@ impl OperationalStore<String, String, String, String> for MemoryStore {
         })
     }
 
+    fn read_command_history(
+        &self,
+        _query: uob_application::CommandHistoryQuery,
+        _scope: uob_application::CommandHistoryScope,
+    ) -> StorageFuture<'_, Page<uob_contracts::CommandSummary, uob_application::CommandHistoryCursor>>
+    {
+        Box::pin(async {
+            Err(uob_application::StorageError::new(
+                uob_application::StorageErrorCode::Unavailable,
+                "in-memory recovery fixture does not implement command history",
+            ))
+        })
+    }
+
     fn prune_command_deduplication(&self, _now: UtcTimestamp) -> StorageFuture<'_, u64> {
         Box::pin(async { Ok(0) })
     }

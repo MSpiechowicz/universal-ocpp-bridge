@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add opt-in demo charging commands to the browser console with independent
+  read/control/privileged grants, per-station action permissions, protected start
+  identities and schema-validated privileged operations. Keep admission, native
+  response and linked later observations distinct in station-scoped durable
+  history/detail; a pending transaction's accepted `TxProfile` is not proof of
+  physical charging. A real-daemon browser case covers both OCPP editions,
+  rejection, exact retry deduplication and linked events (#91).
+
 - Document the production-only non-root installation and independent supervisor
   status check with the bridge stopped; separate compatible application fallback
   on current data from storage/OS disaster recovery, and provide a disposable

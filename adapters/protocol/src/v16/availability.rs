@@ -79,12 +79,16 @@ pub fn observed_effect(
     }
     let native = payload.get("connectorId")?.as_u64()?;
     let native = u32::try_from(native).ok()?;
-    if command.resource.native_protocol_reference
-        != Some(NativeProtocolReference::Ocpp16 {
-            connector_id: native,
-        })
-        || (native == 0) != (command.resource == snapshot.station)
-    {
+    let native_matches = match command.resource.native_protocol_reference {
+        Some(NativeProtocolReference::Ocpp16 { connector_id }) => connector_id == native,
+        None => {
+            native == 0
+                && command.resource == snapshot.station
+                && command.resource.resource.is_none()
+        }
+        _ => false,
+    };
+    if !native_matches || (native == 0) != (command.resource == snapshot.station) {
         return None;
     }
     let operative = match payload.get("type")?.as_str()? {

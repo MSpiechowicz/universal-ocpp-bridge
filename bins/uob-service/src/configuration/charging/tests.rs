@@ -217,6 +217,38 @@ fn station_limit_and_credential_uniqueness_are_enforced() {
 }
 
 #[test]
+fn opt_in_control_grants_and_local_token_are_distinct_private_references() {
+    let enabled = CHARGING
+        .replace("read_grant_file='/run/uob-demo/read-grant'",
+            "read_grant_file='/run/uob-demo/read-grant'\ncontrol_grant_file='/run/uob-demo/control'\nprivileged_grant_file='/run/uob-demo/privileged'")
+        .replace("credential_file='/run/uob-demo/station-a'",
+            "credential_file='/run/uob-demo/station-a'\nstart_token_file='/run/uob-demo/start-token'\nallow_stop=true\nallow_charging_limit=true\nchange_availability=true");
+    let configured = validate_document(&format!("{BASE}{enabled}"))
+        .unwrap()
+        .unwrap();
+    assert!(configured.control_grant_file.is_some());
+    assert!(configured.privileged_grant_file.is_some());
+    assert!(configured.stations[0].start_token_file.is_some());
+    assert!(configured.stations[0].allow_charging_limit);
+    for invalid in [
+        enabled.replace("/run/uob-demo/privileged", "/run/uob-demo/control"),
+        enabled.replace("/run/uob-demo/start-token", "/run/uob-demo/read-grant"),
+        enabled.replace(
+            "/run/uob-demo/start-token",
+            "/var/lib/uob-demo/private/start-token",
+        ),
+        enabled.replace("control_grant_file='/run/uob-demo/control'\n", ""),
+        enabled.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
+    ] {
+        assert_eq!(
+            validate_document(&format!("{BASE}{invalid}")).err(),
+            Some(ConfigurationLoadError::InvalidCharging),
+        );
+    }
+    assert!(validate_document(&format!("{BASE}{CHARGING}")).is_ok());
+}
+
+#[test]
 fn evse_identity_cannot_be_reassigned_to_a_second_native_evse() {
     let first = CHARGING
         .replace("protocol='ocpp16j'", "protocol='ocpp201'")

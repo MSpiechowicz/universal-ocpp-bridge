@@ -46,10 +46,10 @@ locally for that socket session.
 
 The opt-in management command route requires a per-request bearer credential verified by the
 host's `ManagementCommandAuthenticator`; it never accepts an origin supplied by the request body.
-Query-backed command status requires the same authentication and checks the result's return-route
-origin, in addition to the host's station-scoped query authorization. Event-backed status uses its
-separate authenticated event read grant. An integrator must install a real verifier before mounting
-the command route; a host-owned fixed principal alone is not sufficient.
+Command status and history use the separate authenticated, station-scoped event read grant;
+command submission credentials do not authorize these reads. An integrator must install real
+verifiers for both credentials before mounting the combined command-and-read route; a host-owned
+fixed principal alone is not sufficient.
 
 Expiry is checked at admission, preparation, and immediately before queueing, then translated to
 a monotonic last-send deadline checked by the socket owner. Extremely distant expiries are capped
