@@ -5,8 +5,8 @@ use tokio::sync::oneshot;
 use uob_application::{Application, OperationalStore};
 use uob_contracts::{TargetInstanceId, UtcTimestamp};
 use uob_management_adapter::{
-    ManagementEventConfiguration, ManagementEventLimits, ManagementReadLimits,
-    ManagementRouterOptions,
+    ManagementCommandConfiguration, ManagementEventConfiguration, ManagementEventLimits,
+    ManagementReadLimits, ManagementRouterOptions,
 };
 
 use crate::{
@@ -49,6 +49,20 @@ pub(crate) struct ServeSettings {
     pub charging: Option<ChargingRuntime>,
 }
 
+struct ChargingManagement {
+    source: Arc<ManagementSource>,
+    events: ManagementEventConfiguration,
+    commands: Option<ManagementCommandConfiguration>,
+}
+
+struct ManagementListener {
+    address: SocketAddr,
+    diagnostics: uob_management_adapter::ManagementCaptureConfiguration,
+    release_read: Option<uob_management_adapter::ManagementReleaseReadConfiguration>,
+    options: ManagementRouterOptions,
+    charging: Option<ChargingManagement>,
+}
+
 pub(crate) async fn serve(application: Application, settings: ServeSettings) -> io::Result<()> {
     let ServeSettings {
         address,
@@ -59,7 +73,6 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
         deployment,
         charging,
     } = settings;
-    // Install handlers and bind charging ingress before reporting either listener ready.
     let signal = stop_signal()?;
     tokio::pin!(signal);
     let notifier = Notifier::from_environment()?;
@@ -83,31 +96,18 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
         }
     };
     tokio::pin!(charging_server);
-    let readiness_notifier = &notifier;
-    let server = async move {
-        let shutdown = async move {
-            let _ = stopped.await;
-        };
-        let ready =
-            || readiness_notifier.send("READY=1\nSTATUS=Local storage and management initialized");
-        if let Some((source, events)) = management {
-            uob_management_adapter::serve_with_authenticated_events_and_capture_and_release_readiness(
-                address, application, source, ManagementReadLimits::default(), events,
-                options, Some(diagnostics), release_read, shutdown, ready,
-            ).await
-        } else {
-            uob_management_adapter::serve_with_capture_and_release_readiness(
-                address,
-                application,
-                options,
-                Some(diagnostics),
-                release_read,
-                shutdown,
-                ready,
-            )
-            .await
-        }
-    };
+    let server = serve_management(
+        application,
+        ManagementListener {
+            address,
+            diagnostics,
+            release_read,
+            options,
+            charging: management,
+        },
+        stopped,
+        &notifier,
+    );
     tokio::pin!(server);
     let SupervisionResult {
         early_result,
@@ -142,10 +142,73 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
     .await
 }
 
+async fn serve_management(
+    application: Application,
+    listener: ManagementListener,
+    stopped: oneshot::Receiver<()>,
+    notifier: &Notifier,
+) -> io::Result<()> {
+    let ManagementListener {
+        address,
+        diagnostics,
+        release_read,
+        options,
+        charging,
+    } = listener;
+    let shutdown = async move {
+        let _ = stopped.await;
+    };
+    let ready = || notifier.send("READY=1\nSTATUS=Local storage and management initialized");
+    if let Some(ChargingManagement {
+        source,
+        events,
+        commands,
+    }) = charging
+    {
+        if let Some(commands) = commands {
+            let identity = application.identity().clone();
+            let router = uob_management_adapter::router_with_commands_and_authenticated_events(
+                application,
+                source,
+                ManagementReadLimits::default(),
+                commands,
+                events,
+                options,
+            );
+            uob_management_adapter::serve_router_with_capture_and_release_readiness(
+                address,
+                identity,
+                router,
+                Some(diagnostics),
+                release_read,
+                shutdown,
+                ready,
+            )
+            .await
+        } else {
+            uob_management_adapter::serve_with_authenticated_events_and_capture_and_release_readiness(
+                address, application, source, ManagementReadLimits::default(), events,
+                options, Some(diagnostics), release_read, shutdown, ready,
+            ).await
+        }
+    } else {
+        uob_management_adapter::serve_with_capture_and_release_readiness(
+            address,
+            application,
+            options,
+            Some(diagnostics),
+            release_read,
+            shutdown,
+            ready,
+        )
+        .await
+    }
+}
+
 fn charging_management(
     application: &Application,
     charging: Option<&ChargingRuntime>,
-) -> io::Result<Option<(Arc<ManagementSource>, ManagementEventConfiguration)>> {
+) -> io::Result<Option<ChargingManagement>> {
     charging
         .map(|runtime| {
             let roster = &runtime.state.roster;
@@ -164,13 +227,14 @@ fn charging_management(
                 runtime.state.read_grant.token(),
             )
             .map_err(|_| io::Error::other("charging management read grant unavailable"))?;
-            Ok((
-                Arc::new(ManagementSource::new(runtime.state.store.clone())),
-                ManagementEventConfiguration {
+            Ok(ChargingManagement {
+                source: Arc::new(ManagementSource::new(runtime.state.store.clone())),
+                events: ManagementEventConfiguration {
                     authenticator: Arc::new(authenticator),
                     limits: ManagementEventLimits::default(),
                 },
-            ))
+                commands: runtime.state.command_configuration(application)?,
+            })
         })
         .transpose()
 }

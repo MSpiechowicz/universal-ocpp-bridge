@@ -59,6 +59,60 @@ test('commands require distinct explicit authority and preserve admission eviden
   api.close();
 });
 
+test('a successful HTTP response without durable admission is not reported as submitted', async () => {
+  const api = new ApiClient(origin, identity, 'read-fixture', async url =>
+    String(url).endsWith('/identity') ? Response.json(identity) : Response.json({ result: { lifecycle: { stage: 'admitted' } } }));
+  await assert.rejects(api.submitCommand({
+    request_id: 'request-1', expires_at: '2099-01-01T00:00:00Z',
+    resource: { bridge_id: identity.bridge_id, station_id: 'station-a' },
+    operation: { kind: 'start', parameters: { authorization_reference: 'opaque' } },
+  }, 'control-fixture', api.destinationKey), (error: ApiError) => error.kind === 'command.unexpected_status');
+  api.close();
+});
+
+test('command rejection is bounded and sanitized; unknown POST is never replayed and status uses read authority', async () => {
+  const station = { bridge_id: identity.bridge_id, station_id: 's1' };
+  const headers: string[] = [];
+  let posts = 0;
+  const api = new ApiClient(origin, identity, 'read-only', async (url, options) => {
+    if (String(url).endsWith('/identity')) return Response.json(identity);
+    headers.push(new Headers(options?.headers).get('Authorization') ?? '');
+    if (options?.method === 'POST') {
+      posts++;
+      return Response.json({ error: 'command.unsupported', confidential: 'private payload' }, { status: 422 });
+    }
+    return Response.json({ schema_version: { major: 1, revision: 0 }, resource: station,
+      return_route: { request_id: 'request-1', origin: { principal_id: 'private' } },
+      lifecycle: { stage: 'admitted' }, recorded_at: '2026-09-25T12:00:00Z', observed_effects: [] });
+  });
+  await assert.rejects(api.submitCommand({ request_id: 'request-1', expires_at: '2026-09-25T12:02:00Z', resource: station,
+    operation: { kind: 'start', parameters: { authorization_reference: 'ref' } } }, 'separate-control', api.destinationKey),
+  (error: ApiError) => error.kind === 'command.unsupported' && !error.message.includes('private'));
+  assert.equal(posts, 1);
+  assert.equal((await api.commandStatus('request-1', station)).lifecycle?.stage, 'admitted');
+  assert.deepEqual(headers, ['Bearer separate-control', 'Bearer read-only']);
+  api.close();
+});
+
+test('protected command options require explicitly supplied control credential and changed identity blocks lookup', async () => {
+  const station = { bridge_id: identity.bridge_id, station_id: 's1' };
+  const seen: string[] = [];
+  let current = identity;
+  const api = new ApiClient(origin, identity, 'read-only', async (url, options) => {
+    if (String(url).endsWith('/identity')) return Response.json(current);
+    seen.push(new Headers(options?.headers).get('Authorization') ?? '');
+    return Response.json({ items: [], start: { resource: station, authorization_reference: 'protected-reference' } });
+  });
+  await assert.rejects(api.commandSchemas(station, ''), (error: ApiError) => error.status === 401);
+  assert.equal(seen.length, 0);
+  assert.equal((await api.commandSchemas(station, 'control-only')).start?.authorization_reference, 'protected-reference');
+  assert.deepEqual(seen, ['Bearer control-only']);
+  current = { ...identity, runtime: { ...identity.runtime, process_instance_id: 'another' } };
+  await assert.rejects(api.commandSchemas(station, 'control-only'), (error: ApiError) => error.kind === 'identity');
+  assert.deepEqual(seen, ['Bearer control-only']);
+  api.close();
+});
+
 test('malformed identity and oversized JSON are rejected; raw errors never escape', async () => {
   assert.throws(() => parseIdentity({ ...identity, runtime: { ...identity.runtime, environment: 'unknown' } }));
   assert.throws(() => new ApiClient('http://pi.local', identity, 'read-fixture'));
@@ -103,6 +157,84 @@ test('pagination uses opaque cursor without changing authority and rejects incon
   await api.stations('opaque+/==');
   assert.equal(new URL(seen.find(url => url.includes('after='))!).searchParams.get('after'), 'opaque+/==');
   await assert.rejects(api.station('s / 1'), (error: ApiError) => error.kind === 'identity');
+  api.close();
+});
+
+test('long request IDs keep command history pagination and status readable without widening station cursors', async () => {
+  const station = { bridge_id: 'bridge-a', station_id: 's1' };
+  const anchor = 'r'.repeat(5000);
+  const cursor = `uob:command:${'a'.repeat(64)}:opaque-anchor`;
+  const lastCursor = 'uob:command:last-page';
+  const rows = Array.from({ length: 21 }, (_, index) => ({
+    request_id: index === 19 ? anchor : `request-${index}`,
+    resource: station,
+    observed_effects: [],
+  }));
+  const api = new ApiClient(origin, identity, 'read-fixture', async url => {
+    const path = new URL(String(url));
+    if (path.pathname === '/api/v1/identity') return Response.json(identity);
+    if (path.pathname === `/api/v1/commands/${anchor}`) {
+      return Response.json({ ...rows[19], return_route: { request_id: anchor } });
+    }
+    if (path.searchParams.get('after') === lastCursor) return Response.json({ items: rows.slice(20) });
+    if (path.searchParams.get('after') === cursor) return Response.json({ items: rows.slice(10, 20), next_cursor: lastCursor });
+    if (path.searchParams.has('after') || path.searchParams.get('limit') !== '10') return new Response(null, { status: 400 });
+    return Response.json({ items: rows.slice(0, 10), next_cursor: cursor });
+  });
+
+  const first = await api.commandHistory(station);
+  assert.equal(first.items.length, 10);
+  assert.equal(first.next_cursor, cursor);
+  const second = await api.commandHistory(station, first.next_cursor);
+  assert.equal(second.items[9].request_id, anchor);
+  assert.equal(second.next_cursor, lastCursor);
+  const third = await api.commandHistory(station, second.next_cursor);
+  assert.deepEqual(third.items.map(item => item.request_id), ['request-20']);
+  assert.equal((await api.commandStatus(second.items[9].request_id, station)).request_id, anchor);
+  await assert.rejects(api.commandHistory(station, `uob:command:${'a'.repeat(8181)}`), /Invalid response/);
+  await assert.rejects(api.commandHistory(station, `uob:command:${'é'.repeat(4090)}`), /Invalid response/);
+  await assert.rejects(api.commandHistory(station, 'uob:command:bad\ncursor'), /Invalid response/);
+  await assert.rejects(api.stations(cursor), /Invalid response/);
+  api.close();
+});
+
+test('twenty large accepted IDs and a following page stay readable without widening other responses or authority', async () => {
+  const station = { bridge_id: 'bridge-a', station_id: 's1' };
+  const rows = Array.from({ length: 21 }, (_, index) => ({
+    request_id: `${index}:` + 'r'.repeat(55_000),
+    resource: station,
+    observed_effects: [],
+  }));
+  const cursor = 'uob:command:next-page';
+  const firstPage = JSON.stringify({ items: rows.slice(0, 20), next_cursor: cursor });
+  assert.ok(Buffer.byteLength(firstPage) > 1024 * 1024);
+  assert.ok(Buffer.byteLength(firstPage) < 2 * 1024 * 1024);
+  const seen: { path: URL; authorization: string }[] = [];
+  const api = new ApiClient(origin, identity, 'read-fixture', async (url, options) => {
+    const path = new URL(String(url));
+    if (path.pathname === '/api/v1/identity') return Response.json(identity);
+    seen.push({ path, authorization: new Headers(options?.headers).get('Authorization') ?? '' });
+    if (path.pathname === '/api/v1/commands' && path.searchParams.get('after') === cursor) {
+      return Response.json({ items: rows.slice(20) });
+    }
+    if (path.pathname === '/api/v1/commands' && !path.searchParams.has('after')) return new Response(firstPage);
+    if (path.pathname === `/api/v1/commands/${rows[0].request_id}`) {
+      return Response.json({ ...rows[0], return_route: { request_id: rows[0].request_id }, ignored: 'x'.repeat(1024 * 1024) });
+    }
+    return new Response('x'.repeat(2 * 1024 * 1024 + 1));
+  });
+
+  const first = await api.commandHistory(station);
+  assert.equal(first.items.length, 20);
+  assert.equal(first.items[19].request_id, rows[19].request_id);
+  const second = await api.commandHistory(station, first.next_cursor);
+  assert.equal(second.items[0].request_id, rows[20].request_id);
+  assert.equal(second.next_cursor, undefined);
+  await assert.rejects(api.commandHistory(station, 'uob:command:oversized'), (error: ApiError) => error.kind === 'limit');
+  await assert.rejects(api.commandStatus(rows[0].request_id, station), (error: ApiError) => error.kind === 'limit');
+  assert.deepEqual(seen.slice(0, 3).map(({ path }) => [path.searchParams.get('limit'), path.searchParams.get('after')]),
+    [['10', null], ['10', cursor], ['10', 'uob:command:oversized']]);
+  assert.ok(seen.every(({ authorization }) => authorization === 'Bearer read-fixture'));
   api.close();
 });
 

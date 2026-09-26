@@ -119,6 +119,37 @@ async fn save_event(store: &ManagementStore, name: &str, id: &str) {
     store.write_atomic(write).await.unwrap();
 }
 
+fn connector(name: &str, id: &str, native_id: u32) -> ResourceRef {
+    ResourceRef {
+        resource: Some(CanonicalResource::Connector {
+            connector_id: CanonicalConnectorId::new(id).unwrap(),
+        }),
+        native_protocol_reference: Some(NativeProtocolReference::Ocpp16 {
+            connector_id: native_id,
+        }),
+        ..station(name)
+    }
+}
+
+fn transaction_event(name: &str, id: &str) -> EventEnvelope<StationEvent> {
+    let resource = connector(name, "connector-1", 1);
+    let mut event = event(name, id);
+    event.resource = resource.clone();
+    event.event_type = EventType::new("transaction.started").unwrap();
+    event.payload = StationEvent::Transaction(
+        serde_json::from_value(serde_json::json!({
+            "transaction_id": format!("tx-{id}"),
+            "resource": resource,
+            "state": "active",
+            "started_at": timestamp(),
+            "ended_at": null,
+            "protocol_state": null
+        }))
+        .unwrap(),
+    );
+    event
+}
+
 #[tokio::test]
 async fn inventory_filters_before_limit_and_exact_detail_ignores_inventory_position() {
     let database = TestDatabase::new();
@@ -273,6 +304,90 @@ async fn retained_page_cursor_advances_only_in_the_requested_resource_stream() {
     assert_eq!(second.items[0].event_id.as_str(), "second");
     assert!(second.next_cursor.is_none());
     assert_eq!(second.items[0].resource, station("allowed"));
+}
+
+#[tokio::test]
+async fn linked_native_child_event_replays_through_management_page_and_subscription() {
+    let database = TestDatabase::new();
+    let store = ManagementStore::open(database.path(), 8).unwrap();
+    let original = transaction_event("allowed", "first");
+    let mut write = AtomicStoreWrite::empty();
+    write.journal_events.push(original.clone());
+    store.write_atomic(write).await.unwrap();
+
+    let port = ScopedTargetQueryPort::new(source(&store), authorization(&["allowed"]));
+    let mut resource = original.resource.clone();
+    resource.native_protocol_reference = None;
+    let query = |resource, after| RetainedEventQuery {
+        resource,
+        after,
+        limit: one(),
+    };
+    let TargetQueryResult::RetainedEvents(page) = port
+        .query(TargetQuery::RetainedEvents(query(resource.clone(), None)))
+        .await
+        .unwrap()
+    else {
+        panic!("retained page expected");
+    };
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].resource, original.resource);
+
+    let mut sibling = connector("allowed", "connector-2", 2);
+    sibling.native_protocol_reference = None;
+    let TargetQueryResult::RetainedEvents(sibling_page) = port
+        .query(TargetQuery::RetainedEvents(query(sibling.clone(), None)))
+        .await
+        .unwrap()
+    else {
+        panic!("retained page expected");
+    };
+    assert!(sibling_page.items.is_empty());
+
+    let mut stream = port
+        .subscribe_retained_events(query(resource.clone(), None))
+        .await
+        .unwrap();
+    let first = std::future::poll_fn(|cx| stream.as_mut().poll_event(cx))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first.event.resource, original.resource);
+    let next = transaction_event("allowed", "second");
+    let mut write = AtomicStoreWrite::empty();
+    write.journal_events.push(next.clone());
+    store.write_atomic(write).await.unwrap();
+    let second = tokio::time::timeout(
+        Duration::from_secs(2),
+        std::future::poll_fn(|cx| stream.as_mut().poll_event(cx)),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    assert_eq!(second.event.resource, next.resource);
+    assert_eq!(second.event.event_id, next.event_id);
+    assert_ne!(first.cursor, second.cursor);
+    let TargetQueryResult::RetainedEvents(resumed) = port
+        .query(TargetQuery::RetainedEvents(query(
+            resource,
+            Some(first.cursor.clone()),
+        )))
+        .await
+        .unwrap()
+    else {
+        panic!("retained page expected");
+    };
+    assert_eq!(resumed.items.len(), 1);
+    assert_eq!(resumed.items[0].event_id, next.event_id);
+    let wrong_cursor = port
+        .query(TargetQuery::RetainedEvents(query(
+            sibling,
+            Some(first.cursor),
+        )))
+        .await
+        .unwrap_err();
+    assert_eq!(wrong_cursor.code(), TargetPortErrorCode::CursorExpired);
 }
 
 #[tokio::test]

@@ -1,13 +1,14 @@
 use uob_contracts::{
-    Command, CommandResult, ConfigurationObservation, RequestId, ResourceRef, StationSnapshot,
-    UtcTimestamp,
+    Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope, EventId,
+    RequestId, ResourceRef, StationSnapshot, UtcTimestamp,
 };
 
 use super::{
-    AtomicStoreWrite, AtomicWriteOutcome, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordQuery, DeliveryAttempt, DeliveryId, Page, PageLimit, PendingDeliveryQuery,
-    RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
-    ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageFuture, StorageRetentionStatus,
+    AtomicStoreWrite, AtomicWriteOutcome, CommandHistoryCursor, CommandHistoryQuery,
+    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordQuery,
+    DeliveryAttempt, DeliveryId, Page, PageLimit, PendingDeliveryQuery, RecordedDeliveryAttempt,
+    RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery, ScheduledDelivery,
+    SnapshotCursor, SnapshotQuery, StorageFuture, StorageRetentionStatus,
 };
 
 /// Application-owned authoritative persistence and committed-record read ports.
@@ -86,6 +87,45 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
         &self,
         request_id: RequestId,
     ) -> StorageFuture<'_, Option<CommandResult>>;
+
+    /// Reads a bounded newest-first station candidate set for a committed station observation.
+    /// The adapter must enforce the canonical bridge/station scope before the limit.
+    fn command_candidates(
+        &self,
+        _station: ResourceRef,
+        _observed_at: UtcTimestamp,
+        _after: Option<RequestId>,
+        _limit: PageLimit,
+    ) -> StorageFuture<'_, Vec<Command<C>>> {
+        Box::pin(async {
+            Err(super::StorageError::new(
+                super::StorageErrorCode::Unavailable,
+                "station command candidate query unsupported",
+            ))
+        })
+    }
+
+    /// Reads one exact retained journal event only within its authenticated station scope.
+    fn journal_event_by_id(
+        &self,
+        _event_id: EventId,
+        _station: ResourceRef,
+    ) -> StorageFuture<'_, Option<EventEnvelope<E>>> {
+        Box::pin(async {
+            Err(super::StorageError::new(
+                super::StorageErrorCode::Unavailable,
+                "scoped journal event lookup unsupported",
+            ))
+        })
+    }
+
+    /// Reads a bounded newest-first page of sanitized retained commands. Implementations must
+    /// apply station identity and trusted canonical-resource grants in storage before LIMIT.
+    fn read_command_history(
+        &self,
+        query: CommandHistoryQuery,
+        scope: CommandHistoryScope,
+    ) -> StorageFuture<'_, Page<CommandSummary, CommandHistoryCursor>>;
 
     /// Atomically appends one explicit configuration observation to the latest write result.
     /// A duplicate read ID returns the unchanged result; a missing write returns `None`.

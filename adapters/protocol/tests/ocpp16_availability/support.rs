@@ -35,6 +35,8 @@ pub async fn setup(
     ))
     .unwrap();
     snapshot.station.station_id = StationId::new("alpha").unwrap();
+    // A station-only grant need not carry a native connector address; OCPP uses zero.
+    snapshot.station.native_protocol_reference = None;
     snapshot.transactions.clear();
     snapshot.observed_at = Clock.now();
     let operation = SupportedOperation {

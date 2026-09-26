@@ -48,11 +48,17 @@ unconfigured station reads.
 The separate `UOB_LIVE_BROWSER=1` suite launches a disposable, opt-in `uob serve`
 on management port 39195 with charging ingress on 39196. A compiled peer drives
 authenticated OCPP 1.6J and multi-EVSE OCPP 2.0.1 WebSockets into the live service;
-browser reads and SSE use its scoped bearer and durable SQLite state, not router
-fixtures or intercepted HTTP responses. The suite verifies station/connector/EVSE
-isolation, transactions, exact meter values, invalid measurements, explicit
-capabilities, disconnect/reconnect refresh and credential clearing. Both suites
-stop their processes and remove private temporary files.
+browser reads, commands and SSE use independently provisioned read/control/privileged
+grants and private durable SQLite, not router fixtures or intercepted HTTP responses.
+The suite verifies station/connector/EVSE isolation, transactions, exact meter values,
+invalid measurements, explicit capabilities, disconnect/reconnect refresh and credential
+clearing. Its command scenario additionally checks read/control/privileged separation,
+invalid and expired requests, exact retry deduplication, start/charging-limit/stop/availability
+native replies versus later linked resource/station events, and a pending transaction that
+receives a transaction-bound `TxProfile` without proof of physical charging. To run just
+that real-daemon browser case from `frontend`, after building the service and compiled
+peer as above: `UOB_LIVE_BROWSER=1 npm run test:browser -- live-command.browser.ts`.
+Both suites stop their processes and remove private temporary files.
 
 The capture-expiry browser test runs both deadline orderings. It changes only the
 browser's remaining-time estimate in the real start response, so either the local

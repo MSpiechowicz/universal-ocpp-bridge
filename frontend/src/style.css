@@ -139,3 +139,16 @@ select { font: inherit; padding: 10px; border: 1px solid var(--line); background
 .point-list p { margin: 4px 0; }
 .resource-card { padding: 16px; border: 1px solid var(--line); border-radius: 5px; margin: 12px 0; }
 @media (max-width: 900px) { .station-columns { grid-template-columns: 1fr; } }
+
+.commands-panel { border-top: 1px solid var(--line); padding: 28px 0; overflow-wrap: anywhere; }
+.commands-panel form, .command-evidence { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; margin: 16px 0; }
+.commands-panel form label:not(.destination-confirmation) { display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px; }
+.commands-panel form input, .commands-panel form select { width: 100%; margin: 0; }
+.commands-panel .destination-confirmation { display: flex; align-items: flex-start; gap: 12px; margin: 8px 0 16px; line-height: 1.5; }
+.commands-panel .destination-confirmation input { width: auto; flex: none; margin: 3px 0; }
+.command-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+.command-actions h3 { margin-right: auto; }
+.command-history { padding: 0; list-style: none; }
+.command-history li { border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.command-evidence p { margin: 6px 0; }
+.command-evidence code, .commands-panel code { overflow-wrap: anywhere; }

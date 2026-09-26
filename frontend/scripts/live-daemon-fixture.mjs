@@ -28,7 +28,7 @@ async function stop(child) {
   if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await new Promise(resolve => child.once('exit', resolve)); }
 }
 
-export async function startLiveDaemon() {
+export async function startLiveDaemon({ commands = false } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'uob-live-browser-'));
   chmodSync(directory, 0o700);
   let daemon;
@@ -57,6 +57,10 @@ export async function startLiveDaemon() {
     const state = join(directory, 'state');
     mkdirSync(state, { mode: 0o700 });
     const grantPath = write('read-grant', `uob1.demo.${randomBytes(32).toString('hex')}`);
+    const controlPath = commands ? write('control-grant', `uob1.demo.${randomBytes(32).toString('hex')}`) : undefined;
+    const privilegedPath = commands ? write('privileged-grant', `uob1.demo.${randomBytes(32).toString('hex')}`) : undefined;
+    const startAlpha = commands ? write('start-a', randomBytes(10).toString('hex')) : undefined;
+    const startBravo = commands ? write('start-b', randomBytes(10).toString('hex')) : undefined;
     const alpha = write('station-a', randomBytes(32).toString('hex'));
     const bravo = write('station-b', randomBytes(32).toString('hex'));
     const config = write('bridge.toml', `[bridge]
@@ -69,10 +73,18 @@ enabled = true
 listen_addr = "127.0.0.1:39196"
 state_directory = ${JSON.stringify(state)}
 read_grant_file = ${JSON.stringify(grantPath)}
+${commands ? `control_grant_file = ${JSON.stringify(controlPath)}
+privileged_grant_file = ${JSON.stringify(privilegedPath)}
+` : ''}
 [[charging.stations]]
 id = "station-a"
 protocol = "ocpp16j"
 credential_file = ${JSON.stringify(alpha)}
+${commands ? `start_token_file = ${JSON.stringify(startAlpha)}
+allow_stop = true
+allow_charging_limit = true
+change_availability = true
+` : ''}
 [[charging.stations.resources]]
 connector_id = "connector-1"
 native_connector_id = 1
@@ -80,6 +92,11 @@ native_connector_id = 1
 id = "station-b"
 protocol = "ocpp201"
 credential_file = ${JSON.stringify(bravo)}
+${commands ? `start_token_file = ${JSON.stringify(startBravo)}
+allow_stop = true
+allow_charging_limit = true
+change_availability = true
+` : ''}
 [[charging.stations.resources]]
 evse_id = "evse-1"
 native_evse_id = 1
@@ -131,10 +148,28 @@ native_connector_id = 1
       if (peers.exitCode !== null || peers.pid === undefined) throw new Error(`peer exited before ${expected}`);
       if (command) peers.stdin.write(`${command}\n`);
       const line = await deadline(received.length ? Promise.resolve(received.shift()) : new Promise(resolve => pending.push(resolve)), 15000, `peer ${expected} timed out`);
-      if (line !== expected) throw new Error(`peer ${expected} failed`);
+      if (line !== expected && !(expected === 'counts' && line.startsWith('counts '))) throw new Error(`peer ${expected} failed`);
+      return line;
+    };
+    const counts = async () => {
+      if (!commands) throw new Error('peer counts require command fixture');
+      const line = await phase('counts', 'counts');
+      const fields = line.match(/^counts ((?:[ab]-(?:start|stop|limit|availability|started|ended|availability-observed)=\d+\s?)+)$/);
+      if (!fields) throw new Error('invalid bounded peer counts');
+      const entries = fields[1].trim().split(' ').map(pair => {
+        const [name, raw] = pair.split('=');
+        const value = Number(raw);
+        if (!Number.isSafeInteger(value) || value > 1000) throw new Error('invalid bounded peer count');
+        return [name, value];
+      });
+      if (entries.length !== 14 || new Set(entries.map(([name]) => name)).size !== 14) throw new Error('invalid peer counter set');
+      return Object.fromEntries(entries);
     };
     await phase(null, 'ready');
-    return { base: management, grant: () => readFileSync(grantPath, 'utf8'), phase, cleanup };
+    return { base: management, grant: () => readFileSync(grantPath, 'utf8'),
+      control: () => { if (!controlPath) throw new Error('control grant unavailable'); return readFileSync(controlPath, 'utf8'); },
+      privileged: () => { if (!privilegedPath) throw new Error('privileged grant unavailable'); return readFileSync(privilegedPath, 'utf8'); },
+      phase, counts, cleanup };
   } catch (error) {
     await cleanup();
     throw error;

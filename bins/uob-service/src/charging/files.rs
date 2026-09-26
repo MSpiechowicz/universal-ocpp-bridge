@@ -17,6 +17,9 @@ impl ReadGrant {
     pub(crate) fn token(&self) -> Vec<u8> {
         self.0.clone()
     }
+    pub(crate) fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
 }
 
 impl Drop for ReadGrant {

@@ -89,6 +89,7 @@ impl ManagementEventAuthenticator {
                     vec![
                         TargetQueryPermission::StationSnapshots,
                         TargetQueryPermission::RetainedEvents,
+                        TargetQueryPermission::CommandStatus,
                     ],
                     scopes,
                 ),

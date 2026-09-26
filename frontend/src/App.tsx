@@ -9,6 +9,7 @@ import { subscribe } from './events';
 import type { ConnectionState } from './events';
 import { Fields } from './Fields';
 import { Stations } from './stations/Stations';
+import { Commands } from './commands/Commands';
 import { StationStore } from './stations/store';
 import type { InventoryState } from './stations/store';
 
@@ -108,6 +109,7 @@ export function App() {
         <p className="section-label">Workspace</p>
         <a className="nav-active" href="#connection" aria-current="page">Connection</a>
         <a href="#stations" className="debug-nav">Stations</a>
+        <a href="#commands" className="debug-nav">Commands</a>
         <a href="#debug" className="debug-nav">Debug timeline</a>
         <a href="/?offline=1">Offline capture inspector</a>
         <div className="sidebar-note">Local management<br/><span>HTTP / JSON + SSE</span></div>
@@ -149,6 +151,7 @@ export function App() {
           <p className="field-note">Stream activity confirms connectivity, not a charger action. Station observations refresh separately.</p>
         </section>}
         {client && store && inventory && <Stations state={inventory} store={store} scope={station} hidden={hidden}/>}
+        {client && inventory?.detail && <Commands key={`${client.destinationKey}:${inventory.detail.station.station_id}`} client={client} snapshot={inventory.detail} hidden={hidden || !!inventory.stale}/>}
         <DiagnosticsPanel connection={connection} hidden={hidden}/>
         {identity && <Debug key={JSON.stringify(identity)} identity={identity} hidden={hidden}/>}
         <footer>Independent management interface <span>Bound to the destination shown above</span></footer>

@@ -9,7 +9,7 @@ use crate::{CommandAdmissionFuture, FlowEvidence, FlowStage, PageLimit, Recovery
 
 impl<P, E, D, R> CommandCoordinator<P, E, D, R>
 where
-    P: Clone + Send + Sync + 'static,
+    P: Clone + PartialEq + Send + Sync + 'static,
     E: Send + 'static,
     D: Send + 'static,
     R: Send + 'static,
@@ -73,7 +73,7 @@ where
             };
             let mut result = self
                 .store
-                .command_result_by_request_id(request_id)
+                .command_result_by_request_id(request_id.clone())
                 .await
                 .map_err(|error| map_storage_error(&error))?
                 .unwrap_or_else(|| {
@@ -100,7 +100,10 @@ where
                         vec![crate::SafeDiagnosticField::ObservedEvent(event_id)],
                     );
             }
-            Ok(Some(result))
+            self.store
+                .command_result_by_request_id(request_id)
+                .await
+                .map_err(|error| map_storage_error(&error))
         })
     }
 }

@@ -131,6 +131,32 @@ pub async fn serve_with_authenticated_events_and_capture_and_release_readiness(
     .await
 }
 
+/// Serves a host-composed router with the same loopback, capture, release and readiness gates.
+/// The caller must compose all protected routes before accepting listener traffic.
+///
+/// # Errors
+/// Returns an I/O error for unsafe binding, readiness failure, or listener failure.
+pub async fn serve_router_with_capture_and_release_readiness(
+    address: SocketAddr,
+    identity: uob_contracts::ServiceIdentity,
+    router: Router,
+    capture: Option<crate::ManagementCaptureConfiguration>,
+    release_read: Option<crate::ManagementReleaseReadConfiguration>,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+    ready: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    serve_configured_router(
+        address,
+        identity,
+        router,
+        capture,
+        release_read,
+        shutdown,
+        ready,
+    )
+    .await
+}
+
 async fn serve_configured_router(
     address: SocketAddr,
     identity: uob_contracts::ServiceIdentity,

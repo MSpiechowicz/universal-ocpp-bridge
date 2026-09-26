@@ -24,15 +24,22 @@ use uob_contracts::{
     RuntimeIdentity, ServiceIdentity, StationId, TargetInstanceId, UtcTimestamp,
 };
 use uob_management_adapter::{
-    ManagementCommandAuthenticator, ManagementCommandConfiguration, ManagementReadLimits,
-    ManagementRouterOptions, PrivilegedPayloadValidator, router_with_queries_and_commands,
+    AuthenticatedEventAccess, ManagementCommandAuthenticator, ManagementCommandConfiguration,
+    ManagementEventAuthenticator, ManagementEventConfiguration, ManagementEventLimits,
+    ManagementReadLimits, ManagementRouterOptions, PrivilegedPayloadValidator,
+    router_with_commands_and_authenticated_events,
 };
+
+#[path = "command_api/read_auth.rs"]
+mod read_auth;
+use read_auth::ReadAuthenticator;
 
 #[derive(Default)]
 struct CommandState {
     result: Mutex<Option<CommandResult>>,
     failure: Mutex<Option<CommandAdmissionErrorCode>>,
     admissions: AtomicUsize,
+    queries: AtomicUsize,
 }
 
 impl CommandAdmissionPort<Value> for CommandState {
@@ -72,6 +79,7 @@ impl CanonicalQuerySource<Value> for CommandState {
         query: TargetQuery,
     ) -> TargetPortFuture<'a, TargetQueryResult<Value>> {
         Box::pin(async move {
+            self.queries.fetch_add(1, Ordering::SeqCst);
             match query {
                 TargetQuery::CommandResult(request_id) => Ok(TargetQueryResult::CommandResult(
                     self.result
@@ -82,6 +90,10 @@ impl CanonicalQuerySource<Value> for CommandState {
                 TargetQuery::StationSnapshots(_) => Ok(TargetQueryResult::StationSnapshots(Page {
                     items: vec![],
                     next_cursor: None::<SnapshotCursor>,
+                })),
+                TargetQuery::CommandHistory(_) => Ok(TargetQueryResult::CommandHistory(Page {
+                    items: vec![],
+                    next_cursor: None,
                 })),
                 _ => Err(TargetPortError::new(
                     TargetPortErrorCode::Unsupported,
@@ -135,6 +147,13 @@ impl ManagementCommandAuthenticator for CommandAuthenticator {
             principal_id: PrincipalId::new(principal_id).unwrap(),
         })
     }
+    fn permits_schema(
+        &self,
+        authenticated_origin: &AuthenticatedCommandOrigin,
+        station: &ResourceRef,
+    ) -> bool {
+        *authenticated_origin == origin() && *station == resource()
+    }
 }
 
 fn resource() -> ResourceRef {
@@ -163,29 +182,25 @@ fn router(state: Arc<CommandState>) -> axum::Router {
     });
     let grant = AccessGrant::new(
         origin(),
-        vec![AccessPermission::Read, AccessPermission::Control],
+        vec![AccessPermission::Control],
         vec![AccessResourceScope::Resource(resource())],
     )
     .unwrap();
     let admission: Arc<dyn CommandAdmissionPort<Value>> = Arc::new(
         ScopedCommandAdmissionPort::new(state.clone(), AccessPolicy::single(grant)),
     );
-    router_with_queries_and_commands(
+    router_with_commands_and_authenticated_events(
         application,
         state,
-        TargetQueryAuthorization::new(
-            TargetInstanceId::new("management-api").unwrap(),
-            vec![TargetQueryPermission::CommandStatus],
-            vec![TargetResourceScope::Station {
-                bridge_id: BridgeId::new("bridge-api").unwrap(),
-                station_id: StationId::new("station-a").unwrap(),
-            }],
-        ),
         ManagementReadLimits::default(),
         ManagementCommandConfiguration {
             admission,
             authenticator: Arc::new(CommandAuthenticator),
             privileged_payloads: Arc::new(RejectPrivileged),
+        },
+        ManagementEventConfiguration {
+            authenticator: Arc::new(ReadAuthenticator),
+            limits: ManagementEventLimits::default(),
         },
         ManagementRouterOptions::default(),
     )
@@ -228,7 +243,7 @@ async fn accepted_submission_has_status_link_and_status_keeps_effects_separate()
     let status = app
         .oneshot(
             Request::get("/api/v1/commands/request-a")
-                .header(header::AUTHORIZATION, "Bearer operator-secret")
+                .header(header::AUTHORIZATION, "Bearer reader-secret")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -298,6 +313,7 @@ async fn missing_malformed_and_wrong_credentials_never_reach_admission() {
         Some("Bearer"),
         Some("Bearer operator-secret extra"),
         Some("Bearer wrong-secret"),
+        Some("Bearer reader-secret"),
     ] {
         let mut builder =
             Request::post("/api/v1/commands").header(header::CONTENT_TYPE, "application/json");
@@ -344,7 +360,7 @@ async fn authenticated_submit_still_obeys_scoped_admission() {
 }
 
 #[tokio::test]
-async fn command_status_requires_credential_and_exact_result_origin() {
+async fn command_status_requires_independent_station_read_grant() {
     let state = Arc::new(CommandState::default());
     let app = router(state.clone());
     let accepted = app
@@ -363,8 +379,9 @@ async fn command_status_requires_credential_and_exact_result_origin() {
     for (authorization, expected) in [
         (None, StatusCode::UNAUTHORIZED),
         (Some("Bearer wrong-secret"), StatusCode::UNAUTHORIZED),
-        (Some("Bearer other-secret"), StatusCode::FORBIDDEN),
-        (Some("Bearer operator-secret"), StatusCode::OK),
+        (Some("Bearer other-secret"), StatusCode::UNAUTHORIZED),
+        (Some("Bearer operator-secret"), StatusCode::UNAUTHORIZED),
+        (Some("Bearer reader-secret"), StatusCode::OK),
     ] {
         let mut builder = Request::get("/api/v1/commands/request-a");
         if let Some(value) = authorization {
@@ -385,11 +402,95 @@ async fn command_status_requires_credential_and_exact_result_origin() {
     let response = app
         .oneshot(
             Request::get("/api/v1/commands/request-a")
-                .header(header::AUTHORIZATION, "Bearer operator-secret")
+                .header(header::AUTHORIZATION, "Bearer reader-secret")
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn command_history_requires_independent_station_read_grant_before_query() {
+    let state = Arc::new(CommandState::default());
+    let app = router(state.clone());
+
+    for (url, authorization, expected) in [
+        (
+            "/api/v1/commands?station_id=station-a",
+            None,
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "/api/v1/commands?station_id=station-a",
+            Some("Bearer wrong-secret"),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "/api/v1/commands?station_id=station-a",
+            Some("Bearer other-secret"),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "/api/v1/commands?station_id=station-a",
+            Some("Bearer operator-secret"),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "/api/v1/commands?station_id=station-b",
+            Some("Bearer reader-secret"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            "/api/v1/commands?station_id=station-a&limit=0",
+            None,
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let mut builder = Request::get(url);
+        if let Some(value) = authorization {
+            builder = builder.header(header::AUTHORIZATION, value);
+        }
+        let response = app
+            .clone()
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{url} {authorization:?}");
+        assert_eq!(state.queries.load(Ordering::SeqCst), 0);
+    }
+
+    let response = app
+        .oneshot(
+            Request::get("/api/v1/commands?station_id=station-a")
+                .header(header::AUTHORIZATION, "Bearer reader-secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(state.queries.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn station_inventory_requires_independent_read_bearer() {
+    let app = router(Arc::new(CommandState::default()));
+    for (token, expected) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (Some("Bearer operator-secret"), StatusCode::UNAUTHORIZED),
+        (Some("Bearer reader-secret"), StatusCode::OK),
+    ] {
+        let mut builder = Request::get("/api/v1/stations");
+        if let Some(token) = token {
+            builder = builder.header(header::AUTHORIZATION, token);
+        }
+        let response = app
+            .clone()
+            .oneshot(builder.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{token:?}");
+    }
 }

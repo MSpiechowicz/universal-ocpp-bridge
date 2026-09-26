@@ -40,7 +40,7 @@ function unsigned(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 4294967295) throw new Error('Unsafe native number');
   return value;
 }
-function ref(value: unknown): ResourceRef {
+export function parseResourceRef(value: unknown): ResourceRef {
   const item = object(value);
   const resource = item.resource == null ? undefined : object(item.resource);
   let canonical: ResourceRef['resource'];
@@ -110,7 +110,7 @@ function points(value: unknown): PointValue[] {
   });
 }
 export function parseStation(value: unknown, bridge: string): StationSnapshot {
-  const row = object(value), station = ref(row.station), connectivity = object(row.connectivity);
+  const row = object(value), station = parseResourceRef(row.station), connectivity = object(row.connectivity);
   if (station.bridge_id !== bridge || station.resource) throw new Error('Station identity mismatch');
   const version = object(row.schema_version);
   if (typeof version.major !== 'number' || !Number.isSafeInteger(version.major) || version.major !== 1 ||
@@ -118,15 +118,15 @@ export function parseStation(value: unknown, bridge: string): StationSnapshot {
   return { schema_version: { major: version.major, revision: version.revision }, station, observed_at: text(row.observed_at),
     connectivity: { status: text(connectivity.status, 64), protocol: optional(connectivity.protocol), connected_at: optional(connectivity.connected_at), last_message_at: optional(connectivity.last_message_at) },
     capabilities: capabilities(row.capabilities),
-    resources: list(row.resources, entry => { const resource = object(entry), address = ref(resource.resource);
+    resources: list(row.resources, entry => { const resource = object(entry), address = parseResourceRef(resource.resource);
       if (address.bridge_id !== bridge || address.station_id !== station.station_id || !address.resource) throw new Error('Resource identity mismatch');
       return { resource: address, availability: text(resource.availability, 64), capabilities: capabilities(resource.capabilities),
-        data_points: list(resource.data_points, descriptor => { const point = object(descriptor), owner = ref(point.resource);
+        data_points: list(resource.data_points, descriptor => { const point = object(descriptor), owner = parseResourceRef(point.resource);
           if (owner.bridge_id !== bridge || owner.station_id !== station.station_id) throw new Error('Point identity mismatch');
           return { point_id: text(point.point_id), semantic_name: text(point.semantic_name), value_type: text(point.value_type, 64),
             unit: optional(point.unit), access: text(point.access, 64), constraints: constraints(point.constraints) }; }), current_values: points(resource.current_values) };
     }),
-    transactions: list(row.transactions, entry => { const tx = object(entry), address = ref(tx.resource);
+    transactions: list(row.transactions, entry => { const tx = object(entry), address = parseResourceRef(tx.resource);
       if (address.bridge_id !== bridge || address.station_id !== station.station_id) throw new Error('Transaction identity mismatch');
       return { transaction_id: text(tx.transaction_id), resource: address, state: text(tx.state, 64), started_at: text(tx.started_at), ended_at: optional(tx.ended_at) }; }),
     current_values: points(row.current_values) };

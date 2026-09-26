@@ -1,6 +1,7 @@
 #![doc = "Protocol adapter boundary. Concrete protocol model crates belong here."]
 
 mod call;
+pub mod command_registry;
 mod endpoint;
 mod error;
 pub mod multipart;

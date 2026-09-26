@@ -21,6 +21,7 @@ mod security;
 use std::fmt::Write;
 
 mod serving;
+pub use serving::serve_router_with_capture_and_release_readiness;
 pub use serving::{
     serve, serve_with_authenticated_events_and_capture_and_release_readiness,
     serve_with_capture_and_release_readiness, serve_with_options, serve_with_readiness,
@@ -35,7 +36,7 @@ use uob_application::{
 pub use assets::ManagementRouterOptions;
 pub use command_api::{
     ConfigurationPayloadValidator, ManagementCommandAuthenticator, ManagementCommandConfiguration,
-    PrivilegedPayloadValidator, router_with_queries_and_commands,
+    PrivilegedPayloadValidator,
 };
 pub use event_api::{
     AuthenticatedEventAccess, ManagementEventAuthenticator, ManagementEventConfiguration,
@@ -54,7 +55,7 @@ pub use security::{
     ManagementListenerConfiguration, ManagementListenerPolicyError, ManagementTlsConfiguration,
 };
 
-pub(crate) use routing::{ManagementState, base_router};
+pub(crate) use routing::ManagementState;
 
 async fn health(State(state): State<ManagementState>) -> impl IntoResponse {
     health_view::health_response(&state.application)

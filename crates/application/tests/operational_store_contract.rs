@@ -9,17 +9,18 @@ use std::{
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, CommandAdmissionOutcome, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordId, CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page,
-    PageLimit, PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor,
-    RetainedEventPage, RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageAdmissionState,
-    StorageError, StorageErrorCode, StorageFuture, StorageRetentionStatus,
+    AuthorizationState, CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery,
+    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordId,
+    CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page, PageLimit,
+    PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventPage,
+    RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageAdmissionState, StorageError,
+    StorageErrorCode, StorageFuture, StorageRetentionStatus,
 };
 use uob_contracts::{
-    AuthenticatedCommandOrigin, BridgeId, Command, CommandOperation, CommandRequest, Connectivity,
-    ContractVersion, EventEnvelope, EventId, EventOrigin, EventType, ExternalCommand, PrincipalId,
-    ProcessInstanceId, ReleaseId, RequestId, ResourceCapabilities, ResourceRef, RuntimeIdentity,
-    StationId, StationSnapshot, TargetInstanceId, UtcTimestamp,
+    AuthenticatedCommandOrigin, BridgeId, Command, CommandOperation, CommandRequest,
+    CommandSummary, Connectivity, ContractVersion, EventEnvelope, EventId, EventOrigin, EventType,
+    ExternalCommand, PrincipalId, ProcessInstanceId, ReleaseId, RequestId, ResourceCapabilities,
+    ResourceRef, RuntimeIdentity, StationId, StationSnapshot, TargetInstanceId, UtcTimestamp,
 };
 
 type TestCommandPayload = String;
@@ -34,6 +35,8 @@ struct MemoryState {
     authorization: Vec<AuthorizationChange>,
     events: Vec<EventEnvelope<TestEventPayload>>,
     command_results: Vec<uob_contracts::CommandResult>,
+    history_cursors: BTreeMap<String, (ResourceRef, CommandHistoryScope, RequestId)>,
+    next_history_cursor: u64,
     deliveries: Vec<PendingDelivery<TestDeliveryPayload>>,
     records: Vec<CommittedRecord<TestCommittedPayload>>,
     next_event_sequence: u64,
@@ -307,6 +310,13 @@ impl
                 .cloned())
         })
     }
+    fn read_command_history(
+        &self,
+        query: CommandHistoryQuery,
+        scope: CommandHistoryScope,
+    ) -> StorageFuture<'_, Page<CommandSummary, CommandHistoryCursor>> {
+        Box::pin(async move { self.history_page(&query, scope) })
+    }
 
     fn prune_command_deduplication(&self, _now: UtcTimestamp) -> StorageFuture<'_, u64> {
         Box::pin(async { Ok(0) })
@@ -324,9 +334,12 @@ impl
     }
 }
 
+#[path = "operational_store_contract/history.rs"]
+mod history;
+
 #[path = "operational_store_contract/replacement.rs"]
 mod replacement;
-use replacement::ReplacementMemoryStore;
+use replacement::{ReplacementMemoryStore, assert_store_is_replaceable};
 
 fn empty_retention_status() -> StorageRetentionStatus {
     StorageRetentionStatus {
@@ -477,22 +490,6 @@ fn populated_write()
             },
         ],
     }
-}
-
-fn assert_store_is_replaceable(
-    store: &dyn OperationalStore<
-        TestCommandPayload,
-        TestEventPayload,
-        TestDeliveryPayload,
-        TestCommittedPayload,
-    >,
-) {
-    let page = block_on(store.read_snapshots(SnapshotQuery {
-        after: None,
-        limit: PageLimit::new(1).expect("bounded page"),
-    }))
-    .expect("snapshot read");
-    assert!(page.items.len() <= 1);
 }
 
 #[path = "operational_store_contract/cases.rs"]

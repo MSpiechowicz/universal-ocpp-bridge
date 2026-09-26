@@ -1,30 +1,36 @@
+import { commandHistoryCursor, commandRequestId, parseDetail, parseHistory, parseSchemas } from './commands/model';
 import { diagnostics, requestArea } from './diagnostics/store';
 import { boundedText, identityKey, object, parseIdentity } from './identity';
 import type { Identity } from './identity';
 import { parsePage, parseStation } from './stations/schema';
+import type { ResourceRef } from './stations/schema';
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly kind = 'request') {
     super(kind === 'destination' ? 'Confirm the visible destination before this control operation.'
       : kind === 'identity' ? 'Service identity changed. Disconnect and authenticate again.'
+      : kind === 'command.unexpected_status' ? 'Command admission was not confirmed. Check request status before retry.'
+      : kind.startsWith('command.') ? `Command rejected: ${kind}. Check permission, scope and parameters.`
       : status === 401 || status === 403 ? 'Access denied. Check the credential and resource scope.'
       : status === 503 ? 'Management data is unavailable on this service configuration.'
-      : status === 429 ? 'Service is busy. Retrying with a delay.'
+      : status === 429 ? 'Service is busy. Try again later; check command status before any intentional retry.'
       : 'Request failed. Data may be stale.');
   }
 }
 
-export async function readJson(response: Response, exactIntegers = false): Promise<unknown> {
+// Only command history pages have a larger cap; all other JSON responses stay at 1 MiB.
+export async function readJson(response: Response, exactIntegers = false, historyPage = false): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new ApiError(0);
-  const bytes = new Uint8Array(1024 * 1024);
+  const limit = historyPage ? 2 * 1024 * 1024 : 1024 * 1024;
+  const bytes = new Uint8Array(limit);
   let length = 0;
   try {
     while (true) {
       const part = await reader.read();
       if (part.done) break;
       length += part.value.byteLength;
-      if (length > 1024 * 1024) throw new ApiError(0, 'limit');
+      if (length > limit) throw new ApiError(0, 'limit');
       bytes.set(part.value, length - part.value.length);
     }
     const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, length));
@@ -120,7 +126,7 @@ export class ApiClient {
 
   get destinationKey(): string { return JSON.stringify([this.origin, identityKey(this.identity)]); }
 
-  async request(path: string, options: RequestInit = {}, commandToken?: string, confirmedDestination?: string, exactIntegers = false): Promise<unknown> {
+  async request(path: string, options: RequestInit = {}, commandToken?: string, confirmedDestination?: string, exactIntegers = false, expectedStatus?: number): Promise<unknown> {
     if (!['GET', 'HEAD'].includes((options.method ?? 'GET').toUpperCase()) && confirmedDestination !== this.destinationKey) {
       throw new ApiError(0, 'destination');
     }
@@ -135,9 +141,26 @@ export class ApiClient {
         headers: { Authorization: `Bearer ${commandToken === undefined ? this.token : credential(commandToken)}`,
           ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
       });
-      if (!response.ok) { await response.body?.cancel(); throw new ApiError(response.status); }
+      if (!response.ok) {
+        if (url.includes('/api/v1/commands')) {
+          try {
+            const error = object(await readJson(response));
+            if (typeof error.error === 'string' && /^command\.[a-z_]{1,64}$/.test(error.error)) throw new ApiError(response.status, error.error);
+            if (object(error.lifecycle).stage === 'rejected') {
+              const code = object(object(error.lifecycle).error).code;
+              if (typeof code === 'string' && /^[a-z_]{1,64}$/.test(code)) throw new ApiError(response.status, `command.${code}`);
+            }
+          } catch (error) { if (error instanceof ApiError) throw error; }
+        }
+        await response.body?.cancel();
+        throw new ApiError(response.status);
+      }
+      if (expectedStatus !== undefined && response.status !== expectedStatus) {
+        await response.body?.cancel();
+        throw new ApiError(response.status, 'command.unexpected_status');
+      }
       if (response.status === 204) { await response.body?.cancel(); return undefined; }
-      return await readJson(response, exactIntegers);
+      return await readJson(response, exactIntegers, path.startsWith('/api/v1/commands?'));
     } finally { this.activeReads--; }
   }
 
@@ -154,8 +177,20 @@ export class ApiClient {
     return snapshot;
   }
 
-  commandStatus(requestId: string) {
-    return this.request(`/api/v1/commands/${encodeURIComponent(boundedText(requestId))}`);
+  async commandStatus(requestId: string, station: ResourceRef) {
+    const id = commandRequestId(requestId);
+    return parseDetail(await this.request(`/api/v1/commands/${encodeURIComponent(id)}`), id, station);
+  }
+
+  async commandHistory(station: ResourceRef, after?: string) {
+    const query = new URLSearchParams({ station_id: boundedText(station.station_id), limit: '10' });
+    if (after !== undefined) query.set('after', commandHistoryCursor(after));
+    return parseHistory(await this.request(`/api/v1/commands?${query}`), station);
+  }
+
+  async commandSchemas(station: ResourceRef, controlCredential: string) {
+    const query = new URLSearchParams({ station_id: boundedText(station.station_id) });
+    return parseSchemas(await this.request(`/api/v1/command-schemas?${query}`, {}, credential(controlCredential)), station);
   }
 
   // Explicit control credential; the read credential is never promoted to command authority.
@@ -168,7 +203,7 @@ export class ApiClient {
     boundedText(command.expires_at);
     const body = JSON.stringify(request);
     if (new TextEncoder().encode(body).length > 64 * 1024) throw new ApiError(0, 'limit');
-    return this.request('/api/v1/commands', { method: 'POST', body }, control, confirmedDestination);
+    return this.request('/api/v1/commands', { method: 'POST', body }, control, confirmedDestination, false, 202);
   }
 
   async openEvents(station: string, cursor: string | undefined, signal: AbortSignal) {

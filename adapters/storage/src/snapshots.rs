@@ -1,6 +1,9 @@
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::Serialize;
 use uob_application::{Page, SnapshotCursor, StorageError, StorageErrorCode};
-use uob_contracts::{NativeProtocolReference, ResourceRef, StationSnapshot};
+use uob_contracts::{
+    BridgeId, CanonicalResource, NativeProtocolReference, ResourceRef, StationId, StationSnapshot,
+};
 
 use crate::{codec, configuration::unavailable};
 
@@ -32,13 +35,30 @@ pub(crate) fn station_key(value: &ResourceRef) -> Result<String, StorageError> {
     })
 }
 
-/// Retained station events share one canonical stream independent of native controller
-/// addressing; child-resource events keep their exact original resource identity.
+/// Retained streams use canonical resource identities; native controller addresses
+/// remain in event envelopes but never split a station or child stream.
 pub(crate) fn event_stream_key(value: &ResourceRef) -> Result<String, StorageError> {
-    if value.resource.is_none() {
-        station_key(value)
+    if let Some(resource) = value.resource.as_ref() {
+        #[derive(Serialize)]
+        struct CanonicalChildKey<'a> {
+            bridge_id: &'a BridgeId,
+            station_id: &'a StationId,
+            resource: &'a CanonicalResource,
+        }
+
+        serde_json::to_string(&CanonicalChildKey {
+            bridge_id: &value.bridge_id,
+            station_id: &value.station_id,
+            resource,
+        })
+        .map_err(|_| {
+            StorageError::new(
+                StorageErrorCode::InvalidRequest,
+                "record serialization failed",
+            )
+        })
     } else {
-        codec::resource_key(value)
+        station_key(value)
     }
 }
 

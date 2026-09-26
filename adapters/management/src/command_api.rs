@@ -1,49 +1,29 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
-    extract::rejection::JsonRejection,
-    extract::{Path, State},
+    Json,
+    extract::{State, rejection::JsonRejection},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
 use serde_json::Value;
+use tokio::sync::Semaphore;
 use uob_application::{
-    Application, CanonicalQuerySource, CommandAdmissionError, CommandAdmissionErrorCode,
-    CommandAdmissionPort, TargetQuery, TargetQueryAuthorization, TargetQueryResult,
+    CanonicalQuerySource, CommandAdmissionError, CommandAdmissionErrorCode, CommandAdmissionPort,
+    ScopedTargetQueryPort, TargetPortErrorCode, TargetQuery, TargetQueryAuthorization,
+    TargetQueryPermission, TargetQueryPort, TargetQueryResult, TargetResourceScope,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, CONFIGURATION_CHANGE_REFERENCE_SCHEMA, CommandLifecycle,
     CommandOperation, CommandRequest, ConfigurationChangeReference, ExternalCommand,
-    PrivilegedOcppOperation, RequestId,
+    PrivilegedOcppOperation,
 };
 
-use crate::{ManagementReadLimits, ManagementRouterOptions, ManagementState};
+use crate::{ManagementReadLimits, ManagementState};
 
-/// Builds the management router with scoped canonical reads and authenticated command access.
-pub fn router_with_queries_and_commands(
-    application: Application,
-    source: Arc<dyn CanonicalQuerySource<Value>>,
-    authorization: TargetQueryAuthorization,
-    read_limits: ManagementReadLimits,
-    commands: ManagementCommandConfiguration,
-    options: ManagementRouterOptions,
-) -> Router {
-    crate::base_router(
-        ManagementState {
-            application,
-            queries: Some(crate::read_api::ManagementQueries::new(
-                source,
-                authorization,
-                read_limits,
-            )),
-            commands: Some(ManagementCommands::new(commands)),
-            events: None,
-        },
-        options,
-    )
-}
+mod reads;
+pub(crate) use reads::{history, schemas, status};
 
 /// Schema-aware validation boundary for privileged OCPP payloads.
 pub trait PrivilegedPayloadValidator: Send + Sync {
@@ -54,6 +34,32 @@ pub trait PrivilegedPayloadValidator: Send + Sync {
     /// Returns a stable sanitized code when the action/schema is unknown or the payload fails
     /// its pinned schema.
     fn validate(&self, operation: &PrivilegedOcppOperation<Value>) -> Result<(), &'static str>;
+    /// Validates the addressed resource as well as the pinned payload when supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable sanitized code when the resource, action, schema, or payload is invalid.
+    fn validate_resource(
+        &self,
+        resource: &uob_contracts::ResourceRef,
+        operation: &PrivilegedOcppOperation<Value>,
+    ) -> Result<(), &'static str> {
+        let _ = resource;
+        self.validate(operation)
+    }
+    /// Descriptors offered by a connected, explicitly capable station.
+    fn schemas(&self, _snapshot: &uob_contracts::StationSnapshot) -> Vec<Value> {
+        vec![]
+    }
+    /// Requires an exact descriptor match at HTTP admission before durable dispatch.
+    fn offers(
+        &self,
+        _snapshot: &uob_contracts::StationSnapshot,
+        _resource: &uob_contracts::ResourceRef,
+        _operation: &PrivilegedOcppOperation<Value>,
+    ) -> bool {
+        false
+    }
 }
 /// Enforces the protected configuration envelope while preserving an existing pinned registry
 /// for all other privileged actions. Install around the host's existing validator.
@@ -133,6 +139,22 @@ impl PrivilegedPayloadValidator for ConfigurationPayloadValidator {
 pub trait ManagementCommandAuthenticator: Send + Sync {
     /// Authenticates one syntactically valid bearer token as a management origin.
     fn authenticate(&self, bearer_token: &str) -> Option<AuthenticatedCommandOrigin>;
+    /// Whether this authenticated principal may inspect control options for this station.
+    fn permits_schema(
+        &self,
+        _origin: &AuthenticatedCommandOrigin,
+        _resource: &uob_contracts::ResourceRef,
+    ) -> bool {
+        false
+    }
+    /// Protected, station-scoped opaque start reference; never raw charging identity.
+    fn start_reference(
+        &self,
+        _origin: &AuthenticatedCommandOrigin,
+        _resource: &uob_contracts::ResourceRef,
+    ) -> Option<String> {
+        None
+    }
 }
 
 /// Authenticated command dependencies installed by the composition root.
@@ -150,14 +172,124 @@ pub(crate) struct ManagementCommands {
     admission: Arc<dyn CommandAdmissionPort<Value>>,
     authenticator: Arc<dyn ManagementCommandAuthenticator>,
     privileged_payloads: Arc<dyn PrivilegedPayloadValidator>,
+    source: Option<Arc<dyn CanonicalQuerySource<Value>>>,
+    permits: Arc<Semaphore>,
+    timeout: std::time::Duration,
 }
 
 impl ManagementCommands {
-    pub(crate) fn new(configuration: ManagementCommandConfiguration) -> Self {
+    pub(crate) fn new(
+        configuration: ManagementCommandConfiguration,
+        source: Option<Arc<dyn CanonicalQuerySource<Value>>>,
+        limits: ManagementReadLimits,
+    ) -> Self {
         Self {
             admission: configuration.admission,
             authenticator: configuration.authenticator,
             privileged_payloads: configuration.privileged_payloads,
+            source,
+            permits: Arc::new(Semaphore::new(limits.maximum_concurrent_queries)),
+            timeout: limits.query_timeout,
+        }
+    }
+
+    async fn station_snapshot(
+        &self,
+        station: uob_contracts::ResourceRef,
+    ) -> Result<Option<uob_contracts::StationSnapshot>, Box<Response>> {
+        let Some(source) = &self.source else {
+            return Err(Box::new(error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "command.schema_unavailable",
+            )));
+        };
+        let _permit = self.permits.clone().try_acquire_owned().map_err(|_| {
+            Box::new(error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "query.concurrency_limit",
+            ))
+        })?;
+        let authorization = TargetQueryAuthorization::new(
+            uob_contracts::TargetInstanceId::new("management-command-schema")
+                .expect("static identity"),
+            vec![TargetQueryPermission::StationSnapshots],
+            vec![TargetResourceScope::Station {
+                bridge_id: station.bridge_id.clone(),
+                station_id: station.station_id.clone(),
+            }],
+        );
+        let port = ScopedTargetQueryPort::new(source.clone(), authorization);
+        match tokio::time::timeout(
+            self.timeout,
+            port.query(TargetQuery::StationSnapshot(station)),
+        )
+        .await
+        {
+            Ok(Ok(TargetQueryResult::StationSnapshot(snapshot))) => Ok(snapshot),
+            Ok(Ok(_)) => Err(Box::new(error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "command.response_type_mismatch",
+            ))),
+            Ok(Err(_)) => Err(Box::new(error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "command.schema_unavailable",
+            ))),
+            Err(_) => Err(Box::new(error(
+                StatusCode::GATEWAY_TIMEOUT,
+                "query.deadline_exceeded",
+            ))),
+        }
+    }
+
+    async fn matching_command_result(
+        &self,
+        request: &CommandRequest<Value>,
+        origin: &AuthenticatedCommandOrigin,
+    ) -> Result<bool, Box<Response>> {
+        let Some(source) = &self.source else {
+            return Err(Box::new(error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "command.schema_unavailable",
+            )));
+        };
+        let _permit = self.permits.clone().try_acquire_owned().map_err(|_| {
+            Box::new(error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "query.concurrency_limit",
+            ))
+        })?;
+        let authorization = TargetQueryAuthorization::new(
+            uob_contracts::TargetInstanceId::new("management-command-retry")
+                .expect("static identity"),
+            vec![TargetQueryPermission::CommandStatus],
+            vec![TargetResourceScope::Resource(request.resource.clone())],
+        );
+        let port = ScopedTargetQueryPort::new(source.clone(), authorization);
+        match tokio::time::timeout(
+            self.timeout,
+            port.query(TargetQuery::CommandResult(request.request_id.clone())),
+        )
+        .await
+        {
+            Ok(Ok(TargetQueryResult::CommandResult(Some(result)))) => {
+                // The result cannot prove payload equality. Only the durable coordinator can
+                // compare the complete authenticated command; this only skips transient offers.
+                Ok(result.resource == request.resource && result.return_route.origin == *origin)
+            }
+            Ok(Ok(TargetQueryResult::CommandResult(None))) => Ok(false),
+            Ok(Err(value)) if value.code() == TargetPortErrorCode::Unauthorized => Ok(false),
+            Ok(Ok(_)) => Err(Box::new(error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "command.response_type_mismatch",
+            ))),
+            Ok(Err(_)) => Err(Box::new(error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "command.schema_unavailable",
+            ))),
+            Err(_) => Err(Box::new(error(
+                StatusCode::GATEWAY_TIMEOUT,
+                "query.deadline_exceeded",
+            ))),
         }
     }
 }
@@ -189,10 +321,8 @@ pub(crate) async fn submit(
     if request.resource.bridge_id != state.application.identity().bridge_id {
         return error(StatusCode::FORBIDDEN, "command.resource_unauthorized");
     }
-    if let CommandOperation::Ocpp(operation) = &request.operation
-        && let Err(code) = commands.privileged_payloads.validate(operation)
-    {
-        return error(StatusCode::BAD_REQUEST, code);
+    if let Some(response) = privileged_schema_error(&commands, &origin, &request).await {
+        return response;
     }
     let trace = state.application.diagnostics().span(
         request.correlation_id.clone(),
@@ -247,57 +377,58 @@ pub(crate) async fn submit(
     }
 }
 
-pub(crate) async fn status(
-    State(state): State<ManagementState>,
-    headers: HeaderMap,
-    Path(request_id): Path<String>,
-) -> Response {
-    if state.queries.is_none() && state.events.is_none() {
-        return error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "command.status_unavailable",
-        );
-    }
-    // Event-backed reads use their own authenticated read grant. Query-backed reads
-    // require the command caller's credential as well as the host's query scope.
-    let origin = if state.events.is_none() {
-        let Some(commands) = &state.commands else {
-            return error(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "command.status_unavailable",
-            );
-        };
-        let Ok(origin) = commands.authenticate(&headers) else {
-            return authentication_error();
-        };
-        Some(origin)
-    } else {
-        None
+async fn privileged_schema_error(
+    commands: &ManagementCommands,
+    origin: &AuthenticatedCommandOrigin,
+    request: &CommandRequest<Value>,
+) -> Option<Response> {
+    let CommandOperation::Ocpp(operation) = &request.operation else {
+        return None;
     };
-    let Ok(request_id) = RequestId::new(request_id) else {
-        return error(StatusCode::BAD_REQUEST, "command.invalid_request_id");
-    };
-    match crate::read_api::execute_query(&state, &headers, TargetQuery::CommandResult(request_id))
-        .await
+    if let Err(code) = commands
+        .privileged_payloads
+        .validate_resource(&request.resource, operation)
     {
-        Ok(TargetQueryResult::CommandResult(Some(result))) => {
-            if origin
-                .as_ref()
-                .is_some_and(|origin| *origin != result.return_route.origin)
-            {
-                return error(StatusCode::FORBIDDEN, "command.unauthorized");
-            }
-            Json(result).into_response()
-        }
-        Ok(TargetQueryResult::CommandResult(None)) => {
-            error(StatusCode::NOT_FOUND, "command.not_found")
-        }
-        Ok(_) => error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "command.response_type_mismatch",
-        ),
-        Err(error_value) => error_value.into_response(),
+        return Some(error(StatusCode::BAD_REQUEST, code));
     }
+    let station = uob_contracts::ResourceRef {
+        bridge_id: request.resource.bridge_id.clone(),
+        station_id: request.resource.station_id.clone(),
+        resource: None,
+        native_protocol_reference: None,
+    };
+    if !commands.authenticator.permits_schema(origin, &station) {
+        return Some(error(StatusCode::FORBIDDEN, "command.unauthorized"));
+    }
+    // A result scoped to this exact resource and authenticated origin is only a hint to
+    // consult durable deduplication; the coordinator still checks the complete request and
+    // scoped admission still authorizes the command.
+    match commands.matching_command_result(request, origin).await {
+        Ok(true) => return None,
+        Ok(false) => {}
+        Err(response) => return Some(*response),
+    }
+
+    let snapshot = match commands.station_snapshot(station).await {
+        Ok(Some(snapshot)) => snapshot,
+        Ok(None) => {
+            return Some(error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "command.unsupported_schema",
+            ));
+        }
+        Err(response) => return Some(*response),
+    };
+    if !commands
+        .privileged_payloads
+        .offers(&snapshot, &request.resource, operation)
+    {
+        return Some(error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "command.unsupported_schema",
+        ));
+    }
+    None
 }
 
 impl ManagementCommands {

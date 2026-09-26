@@ -27,6 +27,8 @@ pub(crate) struct Configuration {
     listen_addr: Option<SocketAddr>,
     state_directory: Option<String>,
     read_grant_file: Option<String>,
+    control_grant_file: Option<String>,
+    privileged_grant_file: Option<String>,
     stations: Vec<StationConfiguration>,
 }
 
@@ -37,6 +39,13 @@ struct StationConfiguration {
     protocol: ProtocolEdition,
     credential_file: String,
     resources: Vec<ResourceConfiguration>,
+    #[serde(default)]
+    change_availability: bool,
+    start_token_file: Option<String>,
+    #[serde(default)]
+    allow_stop: bool,
+    #[serde(default)]
+    allow_charging_limit: bool,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +69,8 @@ pub(crate) struct ValidatedChargingConfiguration {
     /// Require a protected file at runtime; never embed bearer credentials in TOML.
     pub read_grant_file: CredentialReference,
     pub stations: Vec<ValidatedChargingStation>,
+    pub control_grant_file: Option<CredentialReference>,
+    pub privileged_grant_file: Option<CredentialReference>,
 }
 
 pub(crate) struct ValidatedChargingStation {
@@ -69,6 +80,10 @@ pub(crate) struct ValidatedChargingStation {
     pub credential_file: CredentialReference,
     /// Includes the station-only address, plus exactly the declared connector/EVSE addresses.
     pub resources: Vec<ResourceRef>,
+    pub change_availability: bool,
+    pub start_token_file: Option<CredentialReference>,
+    pub allow_stop: bool,
+    pub allow_charging_limit: bool,
 }
 
 impl Configuration {
@@ -83,6 +98,8 @@ impl Configuration {
             return if self.listen_addr.is_none()
                 && self.state_directory.is_none()
                 && self.read_grant_file.is_none()
+                && self.control_grant_file.is_none()
+                && self.privileged_grant_file.is_none()
                 && self.stations.is_empty()
             {
                 Ok(None)
@@ -107,12 +124,54 @@ impl Configuration {
         }
         let read_grant_file = CredentialReference::new(grant_path.to_string_lossy().into_owned())
             .map_err(|_| fail)?;
-        let stations = validate_stations(self.stations, &state_directory, grant_path, bridge_name)?;
+        if self.privileged_grant_file.is_some() && self.control_grant_file.is_none() {
+            return Err(fail);
+        }
+        if self.control_grant_file.is_none()
+            && self.stations.iter().any(|station| {
+                station.start_token_file.is_some()
+                    || station.allow_stop
+                    || station.allow_charging_limit
+                    || station.change_availability
+            })
+        {
+            return Err(fail);
+        }
+        if self.privileged_grant_file.is_none()
+            && self
+                .stations
+                .iter()
+                .any(|station| station.change_availability)
+        {
+            return Err(fail);
+        }
+        let mut paths = BTreeSet::from([grant_path.clone()]);
+        let mut credential =
+            |value: Option<String>| -> Result<Option<CredentialReference>, ConfigurationLoadError> {
+                value
+                    .map(|value| {
+                        let path = private_absolute_path(&value)?;
+                        if path == state_directory
+                            || path.starts_with(&state_directory)
+                            || !paths.insert(path.clone())
+                        {
+                            return Err(fail);
+                        }
+                        CredentialReference::new(path.to_string_lossy().into_owned())
+                            .map_err(|_| fail)
+                    })
+                    .transpose()
+            };
+        let control_grant_file = credential(self.control_grant_file)?;
+        let privileged_grant_file = credential(self.privileged_grant_file)?;
+        let stations = validate_stations(self.stations, &state_directory, paths, bridge_name)?;
         Ok(Some(ValidatedChargingConfiguration {
             listen_addr,
             state_directory,
             read_grant_file,
             stations,
+            control_grant_file,
+            privileged_grant_file,
         }))
     }
 }
@@ -120,7 +179,7 @@ impl Configuration {
 fn validate_stations(
     entries: Vec<StationConfiguration>,
     state_directory: &Path,
-    grant_path: PathBuf,
+    grant_paths: BTreeSet<PathBuf>,
     bridge_name: &str,
 ) -> Result<Vec<ValidatedChargingStation>, ConfigurationLoadError> {
     let fail = ConfigurationLoadError::InvalidCharging;
@@ -129,8 +188,7 @@ fn validate_stations(
     }
     let bridge_id = BridgeId::new(bridge_name.to_owned()).map_err(|_| fail)?;
     let mut station_ids = BTreeSet::new();
-    let mut credential_files = BTreeSet::new();
-    credential_files.insert(grant_path);
+    let mut credential_files = grant_paths;
     let mut stations = Vec::with_capacity(entries.len());
     let mut total_resources = 0;
     for station in entries {
@@ -147,6 +205,19 @@ fn validate_stations(
         }
         let credential_file =
             CredentialReference::new(path.to_string_lossy().into_owned()).map_err(|_| fail)?;
+        let start_token_file = station
+            .start_token_file
+            .map(|value| {
+                let path = private_absolute_path(&value)?;
+                if path == state_directory
+                    || path.starts_with(state_directory)
+                    || !credential_files.insert(path.clone())
+                {
+                    return Err(fail);
+                }
+                CredentialReference::new(path.to_string_lossy().into_owned()).map_err(|_| fail)
+            })
+            .transpose()?;
         if station.resources.is_empty() || station.resources.len() > MAX_RESOURCES_PER_STATION {
             return Err(fail);
         }
@@ -160,6 +231,10 @@ fn validate_stations(
             station_id,
             protocol: station.protocol,
             credential_file,
+            change_availability: station.change_availability,
+            start_token_file,
+            allow_stop: station.allow_stop,
+            allow_charging_limit: station.allow_charging_limit,
             resources,
         });
     }

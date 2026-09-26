@@ -403,3 +403,44 @@ pub struct CommandResult {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub configuration_observations: Vec<crate::ConfigurationObservation>,
 }
+
+/// Safe operation category for a browsable command, never including parameters or payloads.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandOperationKind {
+    /// Start charging.
+    Start,
+    /// Stop charging.
+    Stop,
+    /// Set a charging limit.
+    SetChargingLimit,
+    /// Execute an explicitly privileged protocol action.
+    Ocpp,
+}
+
+/// Retained command history entry containing metadata, not request bodies or credentials.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct CommandSummary {
+    /// Stable request identity used for authorized detail lookup.
+    pub request_id: RequestId,
+    /// Correlation identity, when supplied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correlation_id: Option<CorrelationId>,
+    /// Exact canonical resource, subject to the caller's read grant.
+    pub resource: ResourceRef,
+    /// Safe operation category without its parameters.
+    pub operation: CommandOperationKind,
+    /// Durable admission time.
+    pub admitted_at: UtcTimestamp,
+    /// Immutable request deadline.
+    pub expires_at: UtcTimestamp,
+    /// Latest persisted lifecycle, if a result has been written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<CommandLifecycle>,
+    /// Time at which the latest result was recorded, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_at: Option<UtcTimestamp>,
+    /// Separately observed effects, not proof inferred from protocol acceptance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observed_effects: Vec<ObservedCommandEffect>,
+}

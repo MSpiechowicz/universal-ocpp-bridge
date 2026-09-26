@@ -2,11 +2,12 @@
 
 The management adapter embeds the compiled TypeScript/React console in the Rust binary. Open the
 management origin in a browser to see bridge, environment, release, process and selected-target
-identity before connecting. A demo-only charging listener can supply durable station inventory,
-connector/EVSE topology, current and recently ended transactions, typed observations and explicit
-capabilities. The [bounded Debug timeline](debug-timeline.md) retains its separate diagnostic
-capture and trace inspection boundary. Command widgets and configuration screens remain separate
-work.
+identity before connecting. An opt-in, demo-only charging listener can supply durable station
+inventory, connector/EVSE topology, transactions, typed observations and explicit capabilities.
+With separately provisioned command grants and station opt-ins, the console also submits supported
+start, stop, charging-limit and schema-validated privileged actions. The [bounded Debug timeline](debug-timeline.md)
+retains its separate diagnostic capture and trace inspection boundary. Configuration and release
+controls remain separate work.
 
 ## Raspberry Pi deployment
 
@@ -16,10 +17,10 @@ bytes; React runs on the operator's browser. The shell has no background animati
 IndexedDB or local/session-storage writes. The normal event summary retains counters and only the latest event type. Debug separately retains
 a bounded sanitized trace window when explicitly connected.
 
-The isolated frontend build enforces a 352 KiB total uncompressed asset budget and a 108 KiB
-gzip measurement budget. Station and EVSE views increased the measured checked-in footprint
-from the former 320/100 KiB ceiling; the limits remain enforced in both the frontend build and
-Rust asset test. The server sends uncompressed assets; gzip is not an HTTP compression claim.
+The isolated frontend build enforces a 368 KiB total uncompressed asset budget and a 109 KiB
+gzip measurement budget for the three allowlisted assets. Browser command controls increased the
+measured footprint beyond the former 352/108 KiB ceiling. The Rust asset test separately bounds
+each served response; the server sends uncompressed assets, so gzip is not an HTTP compression claim.
 There are only three allowlisted routes: `/`,
 `/ui/assets/console.js` and `/ui/assets/console.css`. Responses are `no-store` with explicit MIME,
 `nosniff`, no-referrer and a restrictive same-origin content security policy. Unknown asset paths
@@ -65,16 +66,20 @@ supplies command authorization. Custom external token verifiers must enforce an 
 binding. Host-configured command authentication remains required by `ManagementCommandConfiguration`.
 
 Every browser mutation requires confirmation of the visible origin, environment, bridge, release,
-and selected target. Capture start/stop consume the checkbox confirmation even on failure; status
-inspection needs no confirmation. The common client rejects mutations without a matching destination
-key and rechecks live identity before sending credentials. Future command/release widgets must use
-this same boundary, collect a fresh confirmation per operation and keep their existing server
-permission checks. Those widgets are not implemented by this issue.
+and selected target. Command submission additionally names the station and requires fresh confirmation
+for each submission, including an intentional retry. Capture start/stop consume the checkbox
+confirmation even on failure; status inspection needs no confirmation. The common client rejects
+mutations without a matching destination key and rechecks live identity before sending credentials.
+Browser permission checks are supplementary: the service independently authenticates each grant,
+resource and operation. Release controls are not supplied by these charging grants.
 
-The reusable API client submits commands only with an explicitly supplied control credential,
-request ID, expiry and matching bridge. It does not retry POSTs, follow a returned status URL, or
-interpret HTTP 202 as charger acceptance/physical success. Command controls belong to issue #91.
-Raw server errors, payloads and credentials are not logged by the shell.
+The command panel takes a separate control or privileged credential for protected options and each
+submission; neither the read token nor a station WebSocket credential authorizes commands. It
+submits an immutable request ID, correlation ID, expiry, bridge and resource, and never automatically
+retries a POST. HTTP 202 confirms admission, not charger acceptance. If the response is unknown,
+check the request ID before any intentional retry; retry only the exact unexpired request with fresh
+confirmation and credential. A different body under that request ID is a conflict. Raw server
+errors, payloads and credentials are not logged by the shell.
 
 ## Connection and stream behavior
 
@@ -111,11 +116,20 @@ EVSE, connector and point identifiers are not indexed in retained traces, and a 
 not guaranteed. Opening Debug never starts a capture. Unsupported operations stay unadvertised.
 
 The demo transport uses a separate loopback WebSocket listener and must be enabled explicitly.
-Neither this read grant nor a charger credential grants command permission. Boot, status,
-transaction and meter observations are committed before the station response. A reported
-transaction without an authorization grant remains a pending observation; the demo returns
-`Invalid`, not an invented charging approval. This mode is **not** a production plaintext
-charging listener. See the [headless configuration guide](headless-cli.md#demo-charging-station-views).
+Read, control and privileged credentials are independent; per-station opt-ins and per-resource
+capabilities still constrain commands. Start additionally needs a provisioned, protected local
+authorization identity. The panel exposes only advertised operations and server-pinned privileged
+schemas, validates their fields, and never treats a schema as a permission grant. Its station-scoped,
+server-backed history and request detail separate admission, dispatch, native protocol response
+and later linked observed effects. Event IDs link durable station/resource observations, while a
+correlation link filters retained Debug diagnostics; missing traces do not prove an outcome.
+Start, stop and availability may produce linked transaction/availability events only when the
+station later reports them. A pending native transaction may receive a transaction-bound
+`TxProfile` charging limit, but neither that state nor an accepted charging profile proves power
+flow. Protocol acceptance is not observed charging success.
+
+This mode is **not** a production plaintext charging listener or production command exposure.
+See the [headless configuration guide](headless-cli.md#demo-charging-station-views).
 
 ## Build and verification
 
@@ -142,9 +156,13 @@ authenticated OCPP peer and run both router-fixture and real-daemon browser suit
 
 The router fixtures on ports 39189–39192 cover scoped authentication, cursor resume, inert
 rendering, navigation and layout. The API-only daemon on 39193 proves the honest 503 path.
-The separate real daemon uses private files, two authenticated OCPP editions and multi-EVSE
-traffic on 39195–39196; it verifies live read/SSE isolation, topology, value quality,
-transaction observations and disconnect/reconnect behavior without intercepting management
-responses. Set `UOB_BROWSER_EXECUTABLE` to use an installed compatible Chrome executable.
+The separate real daemon uses private SQLite/files, independently authenticated read/control/
+privileged grants, two OCPP editions and multi-EVSE traffic on 39195–39196. Its command scenario
+exercises rejected and expired requests, exact retry deduplication, start/limit/stop/availability
+protocol replies and later linked station/resource events without intercepting management responses:
+`UOB_LIVE_BROWSER=1 npm run test:browser -- live-command.browser.ts` from `frontend`.
+The broader live suite also verifies read/SSE isolation, topology, value quality, transaction
+observations and disconnect/reconnect behavior. Set `UOB_BROWSER_EXECUTABLE` to use an installed
+compatible Chrome executable.
 
 Run `./scripts/verify-workspace.sh` for the required Rust, architecture and repository checks.

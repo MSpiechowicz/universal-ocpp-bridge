@@ -31,6 +31,50 @@ impl ManagementSource {
     pub(crate) fn new(store: ManagementStore) -> Self {
         Self { store }
     }
+
+    async fn query_retained_events(
+        &self,
+        authorization: &TargetQueryAuthorization,
+        query: RetainedEventQuery,
+    ) -> Result<TargetQueryResult<Value>, TargetPortError> {
+        require_grant(authorization, &query.resource)?;
+        let resource = query.resource.clone();
+        let limit = query.limit;
+        let RetainedEventPage {
+            events,
+            resume_cursor,
+            has_more,
+        } = self
+            .store
+            .read_retained_events(query)
+            .await
+            .map_err(|error| storage_error(&error))?;
+        if events.len() > usize::from(limit.get())
+            || (has_more && events.is_empty())
+            || (!events.is_empty() && resume_cursor.is_none())
+        {
+            return Err(invalid_result());
+        }
+        if events
+            .iter()
+            .any(|event| !same_resource(&event.resource, &resource))
+        {
+            return Err(outside_scope());
+        }
+        let next_cursor = if has_more {
+            Some(resume_cursor.ok_or_else(invalid_result)?)
+        } else {
+            None
+        };
+        let items = events
+            .into_iter()
+            .map(json_event)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(TargetQueryResult::RetainedEvents(Page {
+            items,
+            next_cursor,
+        }))
+    }
 }
 
 impl CanonicalQuerySource<Value> for ManagementSource {
@@ -80,46 +124,47 @@ impl CanonicalQuerySource<Value> for ManagementSource {
                     }
                     Ok(TargetQueryResult::StationSnapshots(page))
                 }
-                TargetQuery::RetainedEvents(query) => {
-                    require_grant(authorization, &query.resource)?;
-                    let resource = query.resource.clone();
-                    let limit = query.limit;
-                    let RetainedEventPage {
-                        events,
-                        resume_cursor,
-                        has_more,
-                    } = self
+                TargetQuery::CommandResult(request_id) => {
+                    let result = self
                         .store
-                        .read_retained_events(query)
+                        .command_result_by_request_id(request_id)
                         .await
                         .map_err(|error| storage_error(&error))?;
-                    if events.len() > usize::from(limit.get())
-                        || (has_more && events.is_empty())
-                        || (!events.is_empty() && resume_cursor.is_none())
+                    if result
+                        .as_ref()
+                        .is_some_and(|result| !authorization.permits_resource(&result.resource))
                     {
-                        return Err(invalid_result());
-                    }
-                    if events.iter().any(|event| event.resource != resource) {
                         return Err(outside_scope());
                     }
-                    let next_cursor = if has_more {
-                        Some(resume_cursor.ok_or_else(invalid_result)?)
-                    } else {
-                        None
-                    };
-                    let items = events
-                        .into_iter()
-                        .map(json_event)
-                        .collect::<Result<Vec<_>, _>>()?;
-                    Ok(TargetQueryResult::RetainedEvents(Page {
-                        items,
-                        next_cursor,
-                    }))
+                    Ok(TargetQueryResult::CommandResult(result))
+                }
+                TargetQuery::CommandHistory(query) => {
+                    require_station(&query.station)?;
+                    let scope = authorization.command_history_scope(&query.station);
+                    if scope.is_empty() {
+                        return Err(outside_scope());
+                    }
+                    let page = self
+                        .store
+                        .read_command_history(query.clone(), scope.clone())
+                        .await
+                        .map_err(|error| storage_error(&error))?;
+                    if page.items.len() > usize::from(query.limit.get())
+                        || page
+                            .items
+                            .iter()
+                            .any(|item| !scope.permits(&item.resource, &query.station))
+                    {
+                        return Err(outside_scope());
+                    }
+                    Ok(TargetQueryResult::CommandHistory(page))
+                }
+                TargetQuery::RetainedEvents(query) => {
+                    self.query_retained_events(authorization, query).await
                 }
                 TargetQuery::DataPointDescriptor { .. }
                 | TargetQuery::DataPointValue { .. }
-                | TargetQuery::Capabilities(_)
-                | TargetQuery::CommandResult(_) => Err(TargetPortError::new(
+                | TargetQuery::Capabilities(_) => Err(TargetPortError::new(
                     TargetPortErrorCode::Unsupported,
                     "query.operation_not_supported",
                 )),
@@ -259,7 +304,7 @@ fn checked_item(
     }
     let cursor = page.resume_cursor;
     if let Some(event) = page.events.into_iter().next() {
-        if &event.resource != resource {
+        if !same_resource(&event.resource, resource) {
             return Err(outside_scope());
         }
         let checkpoint = cursor
@@ -333,6 +378,9 @@ fn station_ref(resource: &ResourceRef) -> bool {
 }
 fn same_station(left: &ResourceRef, right: &ResourceRef) -> bool {
     left.bridge_id == right.bridge_id && left.station_id == right.station_id
+}
+fn same_resource(left: &ResourceRef, right: &ResourceRef) -> bool {
+    same_station(left, right) && left.resource == right.resource
 }
 fn require_station(resource: &ResourceRef) -> Result<(), TargetPortError> {
     if station_ref(resource) {

@@ -3,10 +3,10 @@ import { defineConfig } from '@playwright/test';
 const live = process.env.UOB_LIVE_BROWSER === '1';
 export default defineConfig({
   testDir: './tests',
-  testMatch: live ? 'live-daemon.browser.ts' : '*.browser.ts',
-  testIgnore: live ? [] : ['live-daemon.browser.ts'],
+  testMatch: live ? ['live-daemon.browser.ts', 'live-command.browser.ts'] : '*.browser.ts',
+  testIgnore: live ? [] : ['live-daemon.browser.ts', 'live-command.browser.ts'],
   workers: 1,
-  timeout: live ? 120000 : 30000,
+  timeout: live ? 180000 : 30000,
   use: {
     baseURL: 'http://127.0.0.1:39189',
     viewport: { width: 1280, height: 900 },
