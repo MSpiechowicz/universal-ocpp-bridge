@@ -402,6 +402,9 @@ pub struct CommandResult {
     /// Explicit later read observations; never imply that a write took effect.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub configuration_observations: Vec<crate::ConfigurationObservation>,
+    /// OCPP 1.6 `TriggerMessage` native reply and separately observed compatible messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_observation: Option<crate::TriggerObservation>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

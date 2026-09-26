@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 use uob_sim::{
     OcppVersion, ProtocolClient, RemoteCommandKind, SimulatorAction, SimulatorCall,
     SimulatorClientConfig, SimulatorClientError, SimulatorProtocolClient, TraceKind,
+    TriggerObservation, TriggerResponses,
 };
 
 const TEST_BOUND: Duration = Duration::from_secs(4);
@@ -26,6 +27,8 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         trace_capacity: 16,
         connectors: vec![1],
         evse_connectors: vec![(1, 1), (2, 1)],
+        trigger_responses: TriggerResponses::default(),
+        trigger_observation: TriggerObservation::default(),
     }
 }
 

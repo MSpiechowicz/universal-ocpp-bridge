@@ -13,9 +13,66 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
 use super::{
-    Command, Ocpp16State, RemoteCommand, RemoteCommandKind, ReplyDelaySlot, SimulatorAction,
-    SimulatorCall, SimulatorClientError, TraceBuffer, TraceKind, take_reply_delay,
+    Command, EmergencyClient, Ocpp16State, OcppVersion, RemoteCommand, RemoteCommandKind,
+    ReplyDelaySlot, SimulatorAction, SimulatorCall, SimulatorClientConfig, SimulatorClientError,
+    TraceBuffer, TraceKind, take_reply_delay,
 };
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn connect_and_run_1_6(
+    config: &SimulatorClientConfig,
+    traces: &TraceBuffer,
+    remote_commands: mpsc::Sender<RemoteCommand>,
+    commands: mpsc::Receiver<Command>,
+    remote_receiver: mpsc::Receiver<RemoteCommand>,
+    state: Arc<Mutex<Ocpp16State>>,
+    reply_delay: ReplyDelaySlot,
+) -> Result<(tokio::task::AbortHandle, EmergencyClient), SimulatorClientError> {
+    let (client, barrier, trigger_receiver) = super::trigger_transport::connect(
+        &config.endpoint,
+        config.request_timeout,
+        config.reconnect,
+        config.command_capacity,
+        Arc::clone(&state),
+    )
+    .await
+    .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
+    register_1_6_handlers(
+        &client,
+        traces,
+        remote_commands,
+        config.connectors.clone(),
+        Arc::clone(&state),
+        reply_delay,
+    )
+    .await;
+    super::trigger::register(
+        &client,
+        barrier,
+        super::trigger::TriggerSettings {
+            connectors: config.connectors.clone(),
+            responses: config.trigger_responses.clone(),
+            observation: config.trigger_observation.clone(),
+        },
+        Arc::clone(&state),
+        traces.clone(),
+        trigger_receiver,
+    )
+    .await;
+    register_1_6_reconnect(&client, traces).await;
+    traces.push(TraceKind::Connected, OcppVersion::V1_6.websocket_protocol());
+    let emergency_client = EmergencyClient::V1_6(client.clone());
+    let worker = tokio::spawn(run_1_6(
+        client,
+        commands,
+        traces.clone(),
+        config.command_capacity,
+        remote_receiver,
+        state,
+    ))
+    .abort_handle();
+    Ok((worker, emergency_client))
+}
 
 pub(super) async fn register_1_6_handlers(
     client: &ocpp_client::ocpp_1_6::OCPP1_6Client,
@@ -240,6 +297,29 @@ fn update_ocpp16_state(
     response: &serde_json::Value,
 ) {
     let mut state = state.lock().expect("OCPP 1.6 state lock poisoned");
+    match call.action {
+        SimulatorAction::BootNotification => {
+            state.boot = Some(call.payload.clone());
+            state.registered =
+                response.get("status").and_then(serde_json::Value::as_str) == Some("Accepted");
+        }
+        SimulatorAction::StatusNotification | SimulatorAction::MeterValues => {
+            if let Some(id) = call
+                .payload
+                .get("connectorId")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|id| u16::try_from(id).ok())
+            {
+                let values = if call.action == SimulatorAction::MeterValues {
+                    &mut state.meters
+                } else {
+                    &mut state.status
+                };
+                values.insert(id, call.payload.clone());
+            }
+        }
+        _ => {}
+    }
     if call.action == SimulatorAction::StartTransaction
         && response
             .pointer("/idTagInfo/status")

@@ -33,8 +33,38 @@ where
     D: Send + 'static,
     R: Send + 'static,
 {
+    record_status_with_trigger(store, snapshot, observation, context, now, None).await
+}
+
+/// Persists the original availability event and optional trigger marker in one write.
+/// # Errors
+/// Rejects invalid status/topology, trusted bridge identity, sequence, oversized evidence or
+/// trigger marker, and persistence failures without changing the caller's snapshot.
+pub async fn record_status_with_trigger<C, E, D, R>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &ConnectorStatusObservation,
+    context: AvailabilityContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<E>>,
+) -> Result<(), RegistrationError>
+where
+    C: Send + 'static,
+    E: From<StationSnapshot> + Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+{
     let next = status_snapshot(snapshot, observation, now)?;
-    commit_status(store, snapshot, next, observation.source_time, context, now).await
+    commit_status(
+        store,
+        snapshot,
+        next,
+        observation.source_time,
+        context,
+        now,
+        trigger,
+    )
+    .await
 }
 
 /// Atomically records native OCPP 2.0.1 connector status and journal evidence.
@@ -61,6 +91,7 @@ where
         Some(observation.source_time),
         context,
         now,
+        None,
     )
     .await
 }
@@ -72,6 +103,7 @@ async fn commit_status<C, E, D, R>(
     source_time: Option<UtcTimestamp>,
     context: AvailabilityContext,
     now: UtcTimestamp,
+    trigger: Option<EventEnvelope<E>>,
 ) -> Result<(), RegistrationError>
 where
     C: Send + 'static,
@@ -87,6 +119,13 @@ where
         .len()
         > 256 * 1024
     {
+        return Err(RegistrationError::InvalidState);
+    }
+    if trigger.as_ref().is_some_and(|marker| {
+        marker.resource != next.station
+            || marker.sequence == context.sequence
+            || marker.event_id == context.event_id
+    }) {
         return Err(RegistrationError::InvalidState);
     }
     let event = EventEnvelope {
@@ -108,6 +147,9 @@ where
     let mut write = AtomicStoreWrite::empty();
     write.station_snapshot = Some(next.clone());
     write.journal_events.push(event);
+    if let Some(marker) = trigger {
+        write.journal_events.push(marker);
+    }
     store
         .write_atomic(write)
         .await

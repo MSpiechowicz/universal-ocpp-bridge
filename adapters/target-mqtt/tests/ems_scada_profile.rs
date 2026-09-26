@@ -33,7 +33,7 @@ const EVENT_SCHEMA: &str =
 const COMMAND_SCHEMA: &str =
     include_str!("../../../crates/contracts/schemas/v1.0/command.schema.json");
 const COMMAND_RESULT_SCHEMA: &str =
-    include_str!("../../../crates/contracts/schemas/v1.0/command-result.schema.json");
+    include_str!("../../../crates/contracts/schemas/v1.2/command-result.schema.json");
 
 const BRIDGE: &str = "site/01";
 const STATION: &str = "station-7";
@@ -324,6 +324,7 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         observed_effects: vec![],
         configuration: None,
         configuration_observations: vec![],
+        trigger_observation: None,
     };
     submission
         .respond(Ok(result.clone()))

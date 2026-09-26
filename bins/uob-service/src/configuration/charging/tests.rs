@@ -190,6 +190,14 @@ fn edition_specific_addresses_and_extraneous_fields_are_rejected() {
         )
     );
     assert!(toml::from_str::<super::super::FileConfiguration>(&unknown).is_err());
+    let unknown_station = format!(
+        "{BASE}{}",
+        CHARGING.replace(
+            "credential_file='/run/uob-demo/station-a'",
+            "credential_file='/run/uob-demo/station-a'\nunknown_action=true"
+        )
+    );
+    assert!(toml::from_str::<super::super::FileConfiguration>(&unknown_station).is_err());
 }
 
 #[test]
@@ -229,7 +237,7 @@ fn opt_in_control_grants_and_local_token_are_distinct_private_references() {
     assert!(configured.control_grant_file.is_some());
     assert!(configured.privileged_grant_file.is_some());
     assert!(configured.stations[0].start_token_file.is_some());
-    assert!(configured.stations[0].allow_charging_limit);
+    assert!(configured.stations[0].control.allow_charging_limit);
     for invalid in [
         enabled.replace("/run/uob-demo/privileged", "/run/uob-demo/control"),
         enabled.replace("/run/uob-demo/start-token", "/run/uob-demo/read-grant"),
@@ -246,6 +254,60 @@ fn opt_in_control_grants_and_local_token_are_distinct_private_references() {
         );
     }
     assert!(validate_document(&format!("{BASE}{CHARGING}")).is_ok());
+}
+
+#[test]
+fn trigger_message_requires_distinct_privileged_control_and_ocpp16() {
+    let enabled = CHARGING
+        .replace(
+            "read_grant_file='/run/uob-demo/read-grant'",
+            "read_grant_file='/run/uob-demo/read-grant'\ncontrol_grant_file='/run/uob-demo/control'\nprivileged_grant_file='/run/uob-demo/privileged'",
+        )
+        .replace(
+            "credential_file='/run/uob-demo/station-a'",
+            "credential_file='/run/uob-demo/station-a'\ntrigger_message=true",
+        );
+    let configured = validate_document(&format!("{BASE}{enabled}"))
+        .unwrap()
+        .unwrap();
+    assert!(configured.stations[0].control.trigger_message.enabled());
+    assert!(
+        !validate_document(&format!("{BASE}{CHARGING}"))
+            .unwrap()
+            .unwrap()
+            .stations[0]
+            .control
+            .trigger_message
+            .enabled()
+    );
+    let ocpp201 = enabled
+        .replace("protocol='ocpp16j'", "protocol='ocpp201'")
+        .replace(
+            "connector_id='connector-1'\nnative_connector_id=1",
+            "evse_id='evse-1'\nconnector_id='connector-1'\nnative_evse_id=1\nnative_connector_id=1",
+        );
+    assert!(
+        validate_document(&format!(
+            "{BASE}{}",
+            ocpp201.replace("trigger_message=true\n", "")
+        ))
+        .is_ok()
+    );
+
+    for invalid in [
+        ocpp201,
+        enabled.replace("control_grant_file='/run/uob-demo/control'\n", ""),
+        enabled.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
+        enabled
+            .replace("control_grant_file='/run/uob-demo/control'\n", "")
+            .replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
+        enabled.replace("/run/uob-demo/privileged", "/run/uob-demo/control"),
+    ] {
+        assert_eq!(
+            validate_document(&format!("{BASE}{invalid}")).err(),
+            Some(ConfigurationLoadError::InvalidCharging)
+        );
+    }
 }
 
 #[test]

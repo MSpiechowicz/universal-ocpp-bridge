@@ -9,7 +9,7 @@ use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 use uob_sim::{
     OcppVersion, ProtocolClient, RemoteCommandKind, SimulatorAction, SimulatorCall,
-    SimulatorClientConfig, SimulatorProtocolClient,
+    SimulatorClientConfig, SimulatorProtocolClient, TriggerObservation, TriggerResponses,
 };
 
 const TEST_BOUND: Duration = Duration::from_secs(4);
@@ -24,6 +24,8 @@ fn config(endpoint: String) -> SimulatorClientConfig {
         trace_capacity: 32,
         connectors: vec![1],
         evse_connectors: vec![(1, 1), (2, 1), (2, 2)],
+        trigger_responses: TriggerResponses::default(),
+        trigger_observation: TriggerObservation::default(),
     }
 }
 

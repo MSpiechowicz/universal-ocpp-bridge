@@ -14,6 +14,7 @@ mod retention;
 mod schema;
 mod snapshots;
 mod store;
+mod trigger;
 mod worker;
 
 pub use configuration::{MINIMUM_SQLITE_VERSION, SqliteRuntimeConfiguration};

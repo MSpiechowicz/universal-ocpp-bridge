@@ -86,6 +86,7 @@ pub(crate) fn write_result(
                 "command result identity changed",
             ));
         }
+        crate::trigger::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -99,7 +100,19 @@ pub(crate) fn write_result(
         // Only the station response advances the lifecycle; an old effect cannot roll it back.
         let previous_rank = lifecycle_rank(&previous.lifecycle);
         let incoming_rank = lifecycle_rank(&incoming.lifecycle);
-        if previous_rank > incoming_rank || (previous_rank == 2 && incoming_rank == 2) {
+        let correlated_trigger_reply = matches!(
+            previous.lifecycle,
+            CommandLifecycle::TransmissionUncertain { .. }
+        ) && matches!(
+            incoming.lifecycle,
+            CommandLifecycle::ProtocolResponse { .. }
+        ) && incoming
+            .trigger_observation
+            .as_ref()
+            .is_some_and(|observation| observation.native_response.is_some());
+        if previous_rank > incoming_rank
+            || (previous_rank == 2 && incoming_rank == 2 && !correlated_trigger_reply)
+        {
             incoming.lifecycle = previous.lifecycle;
             incoming.recorded_at = previous.recorded_at;
             incoming.schema_version = previous.schema_version;
@@ -114,6 +127,8 @@ pub(crate) fn write_result(
                 incoming.configuration_observations.push(observation);
             }
         }
+    } else if let Some(observation) = incoming.trigger_observation.as_mut() {
+        observation.refresh_status(incoming.recorded_at);
     }
 
     let unresolved = matches!(

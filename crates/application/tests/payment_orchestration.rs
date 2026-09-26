@@ -288,6 +288,7 @@ fn admitted_result(command: &ExternalCommand<()>) -> CommandResult {
         observed_effects: Vec::new(),
         configuration: None,
         configuration_observations: Vec::new(),
+        trigger_observation: None,
     }
 }
 

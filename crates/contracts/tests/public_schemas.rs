@@ -46,7 +46,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.1/command-result.schema.json"),
+        include_str!("../schemas/v1.2/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
@@ -62,11 +62,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.2/export-record.schema.json"),
+        include_str!("../schemas/v1.3/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.2/export-batch.schema.json"),
+        include_str!("../schemas/v1.3/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -84,8 +84,9 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 2,
-        "station-snapshot" | "command-result" | "configuration-change-reference" => 1,
+        "export-record" | "export-batch" => 3,
+        "command-result" => 2,
+        "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
     let mut value = serde_json::to_value(schema_for!(T)).expect("serialize generated schema");
@@ -240,6 +241,10 @@ fn canonical_examples_validate_against_their_public_schemas() {
             include_str!("../schemas/v1.1/export-batch.schema.json"),
             include_str!("../schemas/v1.1/export-record.schema.json"),
         ),
+        (
+            include_str!("../schemas/v1.2/export-batch.schema.json"),
+            include_str!("../schemas/v1.2/export-record.schema.json"),
+        ),
     ] {
         let batch_validator =
             jsonschema::draft202012::new(&serde_json::from_str(batch_schema).unwrap()).unwrap();
@@ -265,6 +270,43 @@ fn canonical_examples_validate_against_their_public_schemas() {
     {
         assert_valid("export-record", record);
     }
+}
+
+#[test]
+fn trigger_result_and_nested_exports_validate_observations() {
+    let mut results: Value = serde_json::from_str(include_str!("fixtures/command-results-v1.json"))
+        .expect("command result fixture");
+    let result = &mut results[1];
+    result["schema_version"]["revision"] = json!(2);
+    result["trigger_observation"] = json!({
+        "requested_class": "StatusNotification",
+        "native_scope": null,
+        "expected_targets": [1, 2],
+        "dispatch_started_at": "2026-09-01T14:00:01Z",
+        "deadline": "2026-09-01T14:00:31Z",
+        "native_response": "Accepted",
+        "observed": [{
+            "event_id": "event-status-1",
+            "target": 1,
+            "observed_at": "2026-09-01T14:00:04Z"
+        }],
+        "status": "partial"
+    });
+    assert_valid("command-result", result);
+    let mut batch: Value = serde_json::from_str(include_str!("fixtures/export-batch-v1.json"))
+        .expect("export batch fixture");
+    batch["records"][0]["payload"] = json!({"kind":"command_result","data":result});
+    assert_valid("export-record", &batch["records"][0]);
+    assert_valid("export-batch", &batch);
+
+    let mut invalid = result.clone();
+    invalid["trigger_observation"]["requested_class"] = json!("NotifyEvent");
+    let schema = published("command-result");
+    let validator = jsonschema::draft202012::new(&schema).expect("compile result schema");
+    assert!(!validator.is_valid(&invalid));
+    invalid = result.clone();
+    invalid["trigger_observation"]["observed"][0]["target"] = json!(-1);
+    assert!(!validator.is_valid(&invalid));
 }
 
 #[test]

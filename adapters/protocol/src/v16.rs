@@ -6,10 +6,12 @@ pub mod data_transfer;
 pub mod remote_control;
 mod transaction_input;
 mod transactions;
+mod trigger;
 pub use transactions::{TransactionServices, complete_transaction, transaction_call};
 mod registration;
 pub use registration::{
-    complete_registration, complete_registration_with_invalidation, registration_call,
+    complete_registration, complete_registration_with_invalidation,
+    complete_registration_with_trigger, registration_call,
 };
 
 pub use authorization::{Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call};
@@ -58,6 +60,8 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         "StatusNotification" => {
             ChargerObservation::ConnectorStatus(registration::status_observation(payload)?)
         }
+        "DiagnosticsStatusNotification" => trigger::diagnostics(payload)?,
+        "FirmwareStatusNotification" => trigger::firmware(payload)?,
         "MeterValues" => measurements(payload_as(payload)?)?,
         "DataTransfer" => ChargerObservation::DataTransfer16(data_transfer::observation(payload)?),
         "StartTransaction" => {

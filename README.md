@@ -146,6 +146,12 @@ OCPP 1.6 remote start, stop, reset and unlock use the authorized durable command
 separate protocol responses and observed effects. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
 for native validation, local identity resolution, deadlines and recovery.
 
+OCPP 1.6J `TriggerMessage` is an opt-in, privileged demo command for six native
+message classes. Its native reply is separate from later compatible station
+observations; neither acceptance nor a matching observation proves causation or
+physical charging. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
+for connector scope, the 60-second window and one-shot recovery.
+
 OCPP 1.6 availability commands retain scheduled intent separately from committed connector and
 station observations. See [OCPP 1.6 availability](docs/architecture/ocpp16-availability.md) for
 scoped control, transaction completion, durable evidence, and reconnect behavior.

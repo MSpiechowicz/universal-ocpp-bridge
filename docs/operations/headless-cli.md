@@ -134,6 +134,38 @@ positive native ID. Control options and privileged schemas are authenticated per
 Privileged actions require the privileged grant, the advertised protocol action, a pinned
 server schema and valid typed fields; a displayed schema alone never grants permission.
 
+OCPP 1.6J `TriggerMessage` is another privileged **demo-only** opt-in. For a
+station in the example above, provision the distinct control and privileged
+grant files first, then add these entries in their existing sections:
+
+```toml
+# Inside [charging]:
+control_grant_file = "/var/lib/uob/demo-secrets/management-control"
+privileged_grant_file = "/var/lib/uob/demo-secrets/management-privileged"
+
+# Inside the existing OCPP 1.6J [[charging.stations]] for station-a:
+trigger_message = true
+```
+
+These are section additions, not a standalone TOML document. The read grant
+remains separate for station-scoped command detail/history; the control grant
+does not authorize `TriggerMessage` by itself. A per-request privileged
+credential, advertised OCPP 1.6J action, pinned
+`urn:OCPP:1.6:2019:12:TriggerMessageRequest` schema and matching scope are
+required. OCPP 2.0.1 stations cannot opt in. The request permits six classes:
+`BootNotification` (only before Accepted registration),
+`DiagnosticsStatusNotification`, `FirmwareStatusNotification`, `Heartbeat`,
+`MeterValues` and `StatusNotification`. Explicit connector 0 requests station
+status only; positive connector IDs address that connector for status/metering;
+an omitted ID requests all applicable configured targets. A station-only class
+ignores an irrelevant connector ID. The dispatched expectation is bounded to
+64 connectors and fixed at send time. Native `Accepted` is not an observed
+action: within 60 seconds of dispatch start, compatible committed station
+messages update `pending`/`partial`/`observed`/`absent` or native denial sets
+`unsupported`. Matching messages cannot prove causation or physical charging.
+An unanswered or interrupted command is not automatically retried on restart
+or reconnect; view its durable status before issuing an explicit new request.
+
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported
 requests are rejected. An HTTP 202 records admission, not native acceptance or physical effect.

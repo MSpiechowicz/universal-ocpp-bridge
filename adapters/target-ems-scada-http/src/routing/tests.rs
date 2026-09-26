@@ -19,10 +19,10 @@ async fn the_capability_response_advertises_exactly_the_routes_this_build_serves
     let resources = body["resources"].as_array().expect("resource list");
     assert_eq!(resources.len(), IMPLEMENTED_RESOURCES.len());
     for resource in resources {
-        let schema = if resource["name"] == "schemas_v1_1" {
-            "command-result.schema.json"
-        } else {
-            "station-snapshot.schema.json"
+        let schema = match resource["name"].as_str() {
+            Some("schemas_v1_1" | "schemas_v1_2") => "command-result.schema.json",
+            Some("schemas_v1_3") => "export-record.schema.json",
+            _ => "station-snapshot.schema.json",
         };
         let path = resource["path"]
             .as_str()

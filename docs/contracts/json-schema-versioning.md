@@ -46,5 +46,14 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract serves both the earlier v1.0 and current v1.1 command-result
-schemas; command result responses reference the current version in OpenAPI.
+The EMS HTTP contract serves v1.0, v1.1 and v1.2 command-result schemas;
+command result responses reference the current v1.2 version in OpenAPI.
+
+OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
+v1.2, with immutable requested class/native scope/expected targets, dispatch
+start and 60-second deadline, optional exact native reply and bounded
+compatible-event IDs. Its `pending`, `partial`, `observed`, `absent` and
+`unsupported` states describe compatible later messages, not causal proof or
+physical effects. Nested export-record and export-batch schemas advance to
+v1.3; earlier command-result v1.0/v1.1 and export v1.0/v1.1/v1.2 snapshots
+remain unchanged. Older v1 readers may ignore the additive optional field.

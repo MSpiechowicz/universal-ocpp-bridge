@@ -20,6 +20,9 @@ use uob_contracts::{
 use uob_storage_adapter::SqliteOperationalStore;
 use uuid::Uuid;
 
+#[path = "charging_lifecycle/trigger_opt_in.rs"]
+mod trigger_opt_in;
+
 const READ_TOKEN: &str = "uob1.demo.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ALPHA: &str = "c3RhdGlvbi1hOnN0YXRpb24tYWxwaGEtc2VjcmV0LTEyMzQ1";
 

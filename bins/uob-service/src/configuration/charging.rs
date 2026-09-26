@@ -32,6 +32,40 @@ pub(crate) struct Configuration {
     stations: Vec<StationConfiguration>,
 }
 
+/// Station actions are individually opt-in; their TOML keys remain on the station table.
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct StationControlOptions {
+    pub change_availability: bool,
+    pub trigger_message: TriggerMessageOption,
+    pub allow_stop: bool,
+    pub allow_charging_limit: bool,
+}
+
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(from = "bool")]
+pub(crate) enum TriggerMessageOption {
+    #[default]
+    Disabled,
+    Enabled,
+}
+
+impl From<bool> for TriggerMessageOption {
+    fn from(enabled: bool) -> Self {
+        if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
+impl TriggerMessageOption {
+    pub fn enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StationConfiguration {
@@ -39,13 +73,9 @@ struct StationConfiguration {
     protocol: ProtocolEdition,
     credential_file: String,
     resources: Vec<ResourceConfiguration>,
-    #[serde(default)]
-    change_availability: bool,
     start_token_file: Option<String>,
-    #[serde(default)]
-    allow_stop: bool,
-    #[serde(default)]
-    allow_charging_limit: bool,
+    #[serde(flatten)]
+    control: StationControlOptions,
 }
 
 #[derive(Deserialize)]
@@ -80,10 +110,8 @@ pub(crate) struct ValidatedChargingStation {
     pub credential_file: CredentialReference,
     /// Includes the station-only address, plus exactly the declared connector/EVSE addresses.
     pub resources: Vec<ResourceRef>,
-    pub change_availability: bool,
     pub start_token_file: Option<CredentialReference>,
-    pub allow_stop: bool,
-    pub allow_charging_limit: bool,
+    pub control: StationControlOptions,
 }
 
 impl Configuration {
@@ -130,18 +158,18 @@ impl Configuration {
         if self.control_grant_file.is_none()
             && self.stations.iter().any(|station| {
                 station.start_token_file.is_some()
-                    || station.allow_stop
-                    || station.allow_charging_limit
-                    || station.change_availability
+                    || station.control.allow_stop
+                    || station.control.allow_charging_limit
+                    || station.control.change_availability
+                    || station.control.trigger_message.enabled()
             })
         {
             return Err(fail);
         }
         if self.privileged_grant_file.is_none()
-            && self
-                .stations
-                .iter()
-                .any(|station| station.change_availability)
+            && self.stations.iter().any(|station| {
+                station.control.change_availability || station.control.trigger_message.enabled()
+            })
         {
             return Err(fail);
         }
@@ -192,6 +220,10 @@ fn validate_stations(
     let mut stations = Vec::with_capacity(entries.len());
     let mut total_resources = 0;
     for station in entries {
+        if station.control.trigger_message.enabled() && station.protocol != ProtocolEdition::Ocpp16j
+        {
+            return Err(fail);
+        }
         let station_id = StationId::new(valid_station_name(station.id)?).map_err(|_| fail)?;
         if !station_ids.insert(station_id.clone()) {
             return Err(fail);
@@ -231,10 +263,8 @@ fn validate_stations(
             station_id,
             protocol: station.protocol,
             credential_file,
-            change_availability: station.change_availability,
             start_token_file,
-            allow_stop: station.allow_stop,
-            allow_charging_limit: station.allow_charging_limit,
+            control: station.control,
             resources,
         });
     }

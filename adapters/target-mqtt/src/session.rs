@@ -80,7 +80,7 @@ enum Wake<E> {
     NoProgress,
     Delivery(Option<uob_application::TargetDelivery<E>>),
     Report(Option<Result<Result<(), TargetPortError>, JoinError>>),
-    Command(Option<Result<CommandResult, JoinError>>),
+    Command,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -133,38 +133,13 @@ where
             self.flush_command_results();
             self.flush_replay();
             self.ensure_progress_deadline();
-            let can_receive = self.can_receive_delivery();
-            let has_reports = !self.reports.is_empty();
-            let has_commands = !self.commands.is_empty();
-            let watchdog_armed = self.connected
-                && !self.reset_pending
-                && self.has_protocol_work()
-                && self.progress_deadline.is_some();
-            let watchdog_deadline = self.progress_deadline.unwrap_or_else(Instant::now);
-            let wake = {
-                let deliveries = &mut self.context.deliveries;
-                let shutdown = &mut self.context.shutdown;
-                let protocol = &mut self.protocol;
-                let reports = &mut self.reports;
-                let commands = &mut self.commands;
-                tokio::select! {
-                    biased;
-                    () = poll_fn(|cx| shutdown.as_mut().poll_shutdown(cx)) => Wake::Shutdown,
-                    signal = protocol.next() => Wake::Protocol(signal),
-                    () = tokio::time::sleep_until(watchdog_deadline),
-                        if watchdog_armed => Wake::NoProgress,
-                    delivery = poll_fn(|cx| deliveries.as_mut().poll_receive(cx)),
-                        if can_receive => Wake::Delivery(delivery),
-                    report = reports.join_next(), if has_reports => Wake::Report(report),
-                    command = commands.join_next(), if has_commands => Wake::Command(command),
-                }
-            };
+            let (wake, completed_command) = self.next_wake().await;
             match wake {
                 Wake::Shutdown => return self.finish_shutdown().await,
                 Wake::Delivery(Some(delivery)) => self.accept_delivery(&delivery),
                 Wake::Delivery(None) => self.delivery_ingress = DeliveryIngress::Closed,
                 Wake::Report(result) => check_report_task(result.as_ref())?,
-                Wake::Command(result) => self.finish_command_task(result)?,
+                Wake::Command => self.finish_command_task(completed_command)?,
                 Wake::Protocol(Some(signal)) => match signal {
                     ProtocolSignal::Event(event) => {
                         self.handle_event(event)?;
@@ -225,6 +200,38 @@ where
                 }
             }
         }
+    }
+
+    async fn next_wake(&mut self) -> (Wake<E>, Option<Result<CommandResult, JoinError>>) {
+        let can_receive = self.can_receive_delivery();
+        let has_reports = !self.reports.is_empty();
+        let has_commands = !self.commands.is_empty();
+        let watchdog_armed = self.connected
+            && !self.reset_pending
+            && self.has_protocol_work()
+            && self.progress_deadline.is_some();
+        let watchdog_deadline = self.progress_deadline.unwrap_or_else(Instant::now);
+        let mut completed_command = None;
+        let deliveries = &mut self.context.deliveries;
+        let shutdown = &mut self.context.shutdown;
+        let protocol = &mut self.protocol;
+        let reports = &mut self.reports;
+        let commands = &mut self.commands;
+        let wake = tokio::select! {
+            biased;
+            () = poll_fn(|cx| shutdown.as_mut().poll_shutdown(cx)) => Wake::Shutdown,
+            signal = protocol.next() => Wake::Protocol(signal),
+            () = tokio::time::sleep_until(watchdog_deadline),
+                if watchdog_armed => Wake::NoProgress,
+            delivery = poll_fn(|cx| deliveries.as_mut().poll_receive(cx)),
+                if can_receive => Wake::Delivery(delivery),
+            report = reports.join_next(), if has_reports => Wake::Report(report),
+            command = commands.join_next(), if has_commands => {
+                completed_command = command;
+                Wake::Command
+            },
+        };
+        (wake, completed_command)
     }
 
     async fn wait_for_reconnect(

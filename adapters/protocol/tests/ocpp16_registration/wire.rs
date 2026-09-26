@@ -10,12 +10,12 @@ use uob_protocol_adapter::{
 
 #[tokio::test]
 async fn authenticated_wire_replies_follow_durable_decisions() {
-    exercise(false).await;
+    Box::pin(exercise(false)).await;
 }
 
 #[tokio::test]
 async fn capture_pressure_and_unread_subscribers_preserve_wire_and_storage_outcomes() {
-    exercise(true).await;
+    Box::pin(exercise(true)).await;
 }
 
 #[allow(clippy::too_many_lines)] // Keep wire scenario and authoritative evidence together.

@@ -62,7 +62,7 @@ async fn heartbeat_inner<
     accepted_for(snapshot, ProtocolEdition::Ocpp201)?;
     let mut next = snapshot.clone();
     activity(&mut next, now);
-    commit(store, snapshot, next, invalidation).await
+    commit(store, snapshot, next, invalidation, None).await
 }
 
 /// Persists native status without interpreting Occupied as physical charging or command success.
@@ -75,7 +75,7 @@ pub async fn status<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: 
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
     let next = status_snapshot(snapshot, observation, now)?;
-    commit(store, snapshot, next, None).await
+    commit(store, snapshot, next, None, None).await
 }
 
 pub(super) fn status_snapshot(

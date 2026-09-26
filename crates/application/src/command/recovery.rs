@@ -54,6 +54,35 @@ where
             Ok(CommandRecoveryBatch { commands })
         })
     }
+    /// Reconciles one bounded request-ID page, including committed journal markers missed
+    /// by a crash between the station write and trigger-result update. Never re-dispatches.
+    #[must_use]
+    pub fn reconcile_pending_triggers(
+        &self,
+        after: Option<RequestId>,
+        limit: PageLimit,
+    ) -> CommandAdmissionFuture<'_, (Vec<CommandResult>, Option<RequestId>)> {
+        Box::pin(async move {
+            let ids = self
+                .store
+                .trigger_reconciliation_candidates(after, limit)
+                .await
+                .map_err(|error| map_storage_error(&error))?;
+            let cursor = ids.last().cloned();
+            let mut results = Vec::with_capacity(ids.len());
+            for id in ids {
+                if let Some(result) = self
+                    .store
+                    .reconcile_trigger_observation(id, self.clock.now())
+                    .await
+                    .map_err(|error| map_storage_error(&error))?
+                {
+                    results.push(result);
+                }
+            }
+            Ok((results, cursor))
+        })
+    }
 
     /// Links later observed state evidence without changing protocol acknowledgement state.
     #[must_use]

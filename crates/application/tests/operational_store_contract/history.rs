@@ -235,6 +235,7 @@ fn write_command(
         }],
         configuration: None,
         configuration_observations: Vec::new(),
+        trigger_observation: None,
     });
     write_history_command(store, command, command_result);
 }

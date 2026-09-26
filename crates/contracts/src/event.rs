@@ -132,6 +132,18 @@ pub struct EventEnvelope<T> {
 pub enum StationEvent {
     StationSnapshot(StationSnapshot),
     Transaction(TransactionSnapshot),
+    /// Explicit OCPP 1.6 inbound message marker, in addition to canonical state events.
+    TriggerNotification {
+        /// Station whose authoritative snapshot may have changed.
+        station_snapshot_invalidated: StationId,
+        /// Exact inbound native message class.
+        class: crate::TriggerMessageClass,
+        /// Native connector, absent for station-only classes.
+        connector_id: Option<u32>,
+        /// Native status for diagnostic and firmware status notifications.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+    },
     /// Small, explicitly incomplete station change marker. Fetch the authoritative snapshot.
     Invalidation {
         /// Station whose authoritative snapshot changed.

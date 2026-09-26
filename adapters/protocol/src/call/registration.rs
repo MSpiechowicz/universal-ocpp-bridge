@@ -1,8 +1,8 @@
 //! One ordered handler joining socket metadata, actual persistence, and safe state projection.
-use super::IncomingCall;
+use super::{IncomingCall, IncomingCallResponder};
 use crate::{OcppCallError, v16, v201};
 use uob_application::{
-    DiagnosticState, DiagnosticStore, FlowEvidence, FlowStage, OperationalStore,
+    DiagnosticState, DiagnosticStore, FlowEvidence, FlowSpan, FlowStage, OperationalStore,
     registration::RegistrationDecision,
 };
 use uob_contracts::{EventEnvelope, ProtocolEdition, StationSnapshot, UtcTimestamp};
@@ -50,7 +50,36 @@ impl IncomingCall {
             decision,
             interval_seconds,
             now,
-            Some(invalidation),
+            Some((invalidation, None)),
+        )
+        .await
+    }
+
+    /// Completes an OCPP 1.6 Boot/Heartbeat with both its usual invalidation and
+    /// a correlated trigger marker in the same durable write.
+    /// # Errors
+    /// Returns unchanged lifecycle errors or a sanitized response-queue failure.
+    pub async fn complete_registration_with_trigger<
+        C: Send + 'static,
+        E: Send + 'static,
+        D: Send + 'static,
+        R: Send + 'static,
+    >(
+        self,
+        store: &dyn OperationalStore<C, E, D, R>,
+        snapshot: &mut StationSnapshot,
+        decision: RegistrationDecision,
+        interval_seconds: u32,
+        now: UtcTimestamp,
+        events: (EventEnvelope<E>, Option<EventEnvelope<E>>),
+    ) -> Result<(), OcppCallError> {
+        self.complete_registration_inner(
+            store,
+            snapshot,
+            decision,
+            interval_seconds,
+            now,
+            Some(events),
         )
         .await
     }
@@ -67,7 +96,7 @@ impl IncomingCall {
         decision: RegistrationDecision,
         interval_seconds: u32,
         now: UtcTimestamp,
-        invalidation: Option<EventEnvelope<E>>,
+        events: Option<(EventEnvelope<E>, Option<EventEnvelope<E>>)>,
     ) -> Result<(), OcppCallError> {
         let protocol = self.responder.protocol;
         let before = DiagnosticState::capture(snapshot);
@@ -83,8 +112,20 @@ impl IncomingCall {
         }
         let store = DiagnosticStore::new(store, self.trace.clone());
         let result = match protocol {
-            ProtocolEdition::Ocpp16j => match invalidation {
-                Some(event) => {
+            ProtocolEdition::Ocpp16j => match events {
+                Some(events @ (_, Some(_))) => {
+                    v16::complete_registration_with_trigger(
+                        self.call,
+                        &store,
+                        snapshot,
+                        decision,
+                        interval_seconds,
+                        now,
+                        events,
+                    )
+                    .await
+                }
+                Some((event, None)) => {
                     v16::complete_registration_with_invalidation(
                         self.call,
                         &store,
@@ -108,8 +149,14 @@ impl IncomingCall {
                     .await
                 }
             },
-            ProtocolEdition::Ocpp201 => match invalidation {
-                Some(event) => {
+            ProtocolEdition::Ocpp201 => match events {
+                Some((_, Some(_))) => Err(OcppCallError {
+                    protocol,
+                    code: crate::OcppErrorCode::NotImplemented,
+                    description: "Trigger marker requires OCPP 1.6",
+                    field_path: None,
+                }),
+                Some((event, None)) => {
                     v201::complete_registration_with_invalidation(
                         self.call,
                         &store,
@@ -134,31 +181,48 @@ impl IncomingCall {
                 }
             },
         };
+        let stale = result.is_ok() && source_time.is_some() && !store.committed();
+        Self::finish_registration(
+            &self.trace,
+            self.responder,
+            snapshot,
+            &before,
+            stale,
+            result,
+        )
+    }
+
+    fn finish_registration(
+        trace: &FlowSpan,
+        responder: IncomingCallResponder,
+        snapshot: &StationSnapshot,
+        before: &DiagnosticState,
+        stale: bool,
+        result: Result<serde_json::Value, OcppCallError>,
+    ) -> Result<(), OcppCallError> {
+        let protocol = responder.protocol;
         match result {
             Ok(response) => {
-                self.trace.emit(
+                trace.emit(
                     FlowStage::Application,
-                    if source_time.is_some() && !store.committed() {
+                    if stale {
                         FlowEvidence::Stale
                     } else {
                         FlowEvidence::Completed
                     },
                 );
-                before.emit_changes(snapshot, &self.trace);
-                self.responder
-                    .respond(&response[2])
-                    .map_err(|_| crate::OcppCallError {
-                        protocol,
-                        code: crate::OcppErrorCode::InternalError,
-                        description: "response queue unavailable",
-                        field_path: None,
-                    })
+                before.emit_changes(snapshot, trace);
+                responder.respond(&response[2]).map_err(|_| OcppCallError {
+                    protocol,
+                    code: crate::OcppErrorCode::InternalError,
+                    description: "response queue unavailable",
+                    field_path: None,
+                })
             }
             Err(error) => {
-                self.trace
-                    .emit(FlowStage::Application, FlowEvidence::Rejected);
+                trace.emit(FlowStage::Application, FlowEvidence::Rejected);
                 // Preserve the existing responder's bounded error path.
-                let _ = self.responder.reject(error);
+                let _ = responder.reject(error);
                 Err(error)
             }
         }

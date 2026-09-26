@@ -9,6 +9,7 @@ mod point;
 mod snapshot;
 mod timestamp;
 mod transaction16;
+mod trigger;
 pub use transaction16::Ocpp16TransactionEvidence;
 mod trace;
 
@@ -56,6 +57,10 @@ pub use trace::{
     RedactedTraceDetails, TargetKind, TraceDirection, TraceId, TraceIdentityError, TraceOutcome,
     TraceRecord, TraceSequence, TraceStage, TraceTarget,
 };
+pub use trigger::{
+    TriggerMessageClass, TriggerNativeResponse, TriggerObservation, TriggerObservationStatus,
+    TriggerObservedEvent,
+};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -79,6 +84,11 @@ impl ContractVersion {
     pub const V1_CONFIGURATION: Self = Self {
         major: 1,
         revision: 1,
+    };
+    /// Additive OCPP 1.6 trigger observation revision.
+    pub const V1_TRIGGER: Self = Self {
+        major: 1,
+        revision: 2,
     };
 }
 

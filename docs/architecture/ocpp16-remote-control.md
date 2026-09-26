@@ -2,9 +2,10 @@
 
 `v16::remote_control::RemoteControlSession` implements the application `StationCommandPort` for
 one authenticated OCPP 1.6 socket. Compose the existing `CommandCoordinator` and scoped access
-guard around it: ordinary `Start`/`Stop` require control permission; pinned `Reset` and
-`UnlockConnector` operations require privileged control. No new HTTP or authentication path is
-introduced. The management-only service executable is not yet a composed charging host.
+guard around it: ordinary `Start`/`Stop` require control permission; pinned `Reset`,
+`UnlockConnector`, configuration and `TriggerMessage` operations require privileged control.
+No new HTTP or authentication path is introduced. The service composes a charging host for
+explicitly opted-in, loopback-only demo ingress; production charging commands remain disabled.
 
 The station owner supplies its latest **committed** snapshot, including accepted registration,
 explicit operation capabilities, availability, and native transaction evidence. It publishes
@@ -21,6 +22,7 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | UnlockConnector | Privileged `Ocpp`, action `UnlockConnector`, schema `urn:OCPP:1.6:2019:12:UnlockConnectorRequest`, payload connector ID matching an existing positive connector | Unlocked / UnlockFailed / NotSupported |
 | GetConfiguration | Privileged `Ocpp`, action `GetConfiguration`, pinned OCA request schema; station scope, absent/empty/selected key lists and learned `GetConfigurationMaxKeys` bound | Known keys (including read-only flags), unknown keys and optional omitted lists |
 | ChangeConfiguration | Privileged `Ocpp`, action `ChangeConfiguration`, bridge reference schema `urn:uob:ocpp16:ChangeConfigurationReference:1`; station scope and locally provisioned key-bound, expiring reference | Accepted / Rejected / RebootRequired / NotSupported |
+| TriggerMessage | Privileged `Ocpp`, action `TriggerMessage`, schema `urn:OCPP:1.6:2019:12:TriggerMessageRequest`; six pinned native classes with station/connector scope | Accepted / Rejected / NotImplemented |
 
 Unknown fields, wrong schemas, OCPP 2.0.1 reset types, unsupported operations and cross-resource
 native addresses fail closed. Unlock connector IDs use real topology rather than the pinned
@@ -40,9 +42,9 @@ by `LocalConfigurationValues`. The queue contains only that reference; the authe
 socket owner rechecks station, key, expiry and revocation immediately before encoding and sending
 the native CALL. There is no inline-value fallback. Revocation after the asynchronous send starts
 cannot cancel that in-flight transmission. Construct and provision the provider in the trusted
-host; the management-only executable does not compose a charging host or expose a new
-configuration endpoint. Once a read has shown a key is read-only, a write to that key is denied
-locally for that socket session.
+host; the demo charging host opts in to its supported command actions independently, without a
+new configuration endpoint. Once a read has shown a key is read-only, a write to that key is
+denied locally for that socket session.
 
 The opt-in management command route requires a per-request bearer credential verified by the
 host's `ManagementCommandAuthenticator`; it never accepts an origin supplied by the request body.
@@ -57,6 +59,20 @@ to 24 hours of queue residence. Calls use the existing shared message/pending-re
 response timeout. Timeout, invalid response payload, lost socket, or lost session task remain
 `transmission_uncertain`. Valid native denials preserve their status; CALLERROR is a protocol
 rejection with remote free text excluded. Late replies cannot rewrite a durable result.
+
+`TriggerMessage` is admitted only for a live OCPP 1.6J station that advertises the
+action and has the privileged grant. The permitted `requestedMessage` values are
+`BootNotification`, `DiagnosticsStatusNotification`, `FirmwareStatusNotification`,
+`Heartbeat`, `MeterValues` and `StatusNotification`. A Boot trigger is allowed only
+before registration is Accepted (including Pending); after Accepted the station must
+initiate a new boot before another Boot trigger is permitted. For the four station-only
+classes, `connectorId` is irrelevant. An explicit `connectorId: 0` addresses only
+station `StatusNotification`, never `MeterValues`. Positive IDs must match the addressed
+connector for status or metering. Omitted ID requests all applicable configured targets:
+station 0 plus connectors for status, positive connectors only for metering. The native
+target set is frozen before dispatch, bounded to 64 connectors; a topology change does
+not retroactively broaden that expectation. Invalid/unsupported scope does not reach
+the wire.
 
 ## Responses and observed state
 
@@ -74,6 +90,20 @@ is safe: duplicate event IDs are idempotent. OCPP 1.6 does not echo a remote req
 notifications, so this is compatible observed evidence, not proof of unique causation. A reported
 start remains `pending`, not proof of power flow. A stop, status change, or reconnect alone cannot
 prove physical reset/unlock success and is never labeled as such.
+
+For `TriggerMessage`, the exact native `Accepted`, `Rejected` or `NotImplemented`
+reply is retained independently of later station calls. A dispatch-started 60-second
+window can link only committed, compatible class/station/target events to the fixed
+expectation. `pending` means a compatible set is not yet complete within the window;
+`partial` means some targets, but not all, were observed; `observed` means every expected
+target has compatible evidence after native `Accepted`; `absent` means the deadline
+elapsed without a compatible event; `unsupported` records native `Rejected` or
+`NotImplemented`. A missing response is never treated as Accepted. These are observation
+states, not proof that the trigger caused a call or that charging occurred: OCPP 1.6
+station calls carry no trigger request ID. A reply must precede the station's requested
+CALL on the wire; late/malformed replies or lost sockets remain uncertain, and neither
+restart nor reconnect automatically replays the command. A pending observation is
+reconciled from durable events across restart without retransmission.
 
 Uncertain and interrupted dispatches are recovered without retransmission. An identical retry
 returns the stored result; an explicit new operator request is required for another attempt.
@@ -112,6 +142,19 @@ later explicit observations and restart recovery. Pinned OCA GetConfiguration an
 ChangeConfiguration wire schemas and independent JSON examples are checked by
 `cargo run --locked -p uob-ocpp-fixtures`. This does not establish interoperability with
 physical stations or OCA certification.
+
+`cargo test --locked -p uob-protocol-adapter --test ocpp16_remote_control trigger`
+exercises real authenticated socket dispatch, all six classes, native statuses,
+scope and registration rejection, bounded all-connector targeting, delayed reply
+and disconnect uncertainty. `cargo test --locked -p uob-storage-adapter --test
+trigger_observation` covers durable compatible-event matching, deadline states
+and restart; `cargo test --locked -p uob-service --test remote_trigger -- --nocapture`
+covers opt-in grants and the running service's HTTP/WebSocket/SQLite observation
+and 60-second restart path; `cargo test --locked -p uob-sim --test
+trigger_message` covers scoped station replies, delayed/omitted observations
+and reconnect. The independent trigger wire fixtures are checked by
+`cargo run --locked --package uob-ocpp-fixtures`. None proves native
+cause-and-effect, physical charging or OCA certification.
 
 `cargo test --locked -p uob-mqtt-target-adapter --test ingress_wire --test outbound_wire`
 also verifies that both immediate and durable MQTT result publication carry configuration

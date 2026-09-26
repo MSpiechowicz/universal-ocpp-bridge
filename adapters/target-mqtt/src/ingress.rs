@@ -21,10 +21,45 @@ struct CommandPayload<P> {
     expires_at: UtcTimestamp,
 }
 
-pub(crate) enum Ingress<P> {
-    Submit(ExternalCommand<P>),
-    Reject(CommandResult),
+pub(crate) struct Ingress<P> {
+    command: Option<ExternalCommand<P>>,
+    alternate: Option<IngressAlternate>,
+}
+
+pub(crate) enum IngressAlternate {
+    Reject(Box<CommandResult>),
     Ignore(&'static str),
+}
+
+impl<P> Ingress<P> {
+    fn submit(command: ExternalCommand<P>) -> Self {
+        Self {
+            command: Some(command),
+            alternate: None,
+        }
+    }
+
+    fn reject(result: CommandResult) -> Self {
+        Self {
+            command: None,
+            alternate: Some(IngressAlternate::Reject(Box::new(result))),
+        }
+    }
+
+    fn ignore(reason: &'static str) -> Self {
+        Self {
+            command: None,
+            alternate: Some(IngressAlternate::Ignore(reason)),
+        }
+    }
+
+    pub(crate) fn into_result(self) -> Result<ExternalCommand<P>, IngressAlternate> {
+        match (self.command, self.alternate) {
+            (Some(command), None) => Ok(command),
+            (None, Some(alternate)) => Err(alternate),
+            _ => unreachable!("ingress must have exactly one outcome"),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -42,13 +77,13 @@ pub(crate) fn classify<P: DeserializeOwned>(
     retained: bool,
 ) -> Ingress<P> {
     if payload.len() > context.maximum_command_bytes {
-        return Ingress::Ignore("mqtt.command_too_large");
+        return Ingress::ignore("mqtt.command_too_large");
     }
     let Ok(payload) = serde_json::from_slice::<CommandPayload<P>>(payload) else {
-        return Ingress::Ignore("mqtt.command_invalid");
+        return Ingress::ignore("mqtt.command_invalid");
     };
     if payload.schema_version != ContractVersion::V1_INITIAL {
-        return Ingress::Ignore("mqtt.command_version_unsupported");
+        return Ingress::ignore("mqtt.command_version_unsupported");
     }
     let request = CommandRequest {
         request_id: payload.request_id,
@@ -70,7 +105,7 @@ pub(crate) fn classify<P: DeserializeOwned>(
         &external.request.resource,
         &external.request.request_id,
     ) {
-        return Ingress::Reject(rejected(
+        return Ingress::reject(rejected(
             &external,
             CommandErrorCode::Unauthorized,
             "mqtt.command_scope_mismatch",
@@ -78,7 +113,7 @@ pub(crate) fn classify<P: DeserializeOwned>(
         ));
     }
     if retained {
-        return Ingress::Reject(rejected(
+        return Ingress::reject(rejected(
             &external,
             CommandErrorCode::PolicyRejected,
             "mqtt.retained_command",
@@ -86,14 +121,14 @@ pub(crate) fn classify<P: DeserializeOwned>(
         ));
     }
     if now >= external.request.expires_at {
-        return Ingress::Reject(rejected(
+        return Ingress::reject(rejected(
             &external,
             CommandErrorCode::Expired,
             "mqtt.command_expired",
             now,
         ));
     }
-    Ingress::Submit(external)
+    Ingress::submit(external)
 }
 
 pub(crate) fn admission_rejection<P>(
@@ -156,5 +191,6 @@ fn rejected<P>(
         observed_effects: Vec::new(),
         configuration: None,
         configuration_observations: Vec::new(),
+        trigger_observation: None,
     }
 }

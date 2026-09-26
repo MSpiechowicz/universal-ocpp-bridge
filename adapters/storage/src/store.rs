@@ -21,7 +21,7 @@ use uob_application::{
 };
 use uob_contracts::{
     Command, CommandSummary, ConfigurationObservation, EventEnvelope, EventId, RequestId,
-    ResourceRef, StationSnapshot, UtcTimestamp,
+    ResourceRef, StationSnapshot, TriggerMessageClass, UtcTimestamp,
 };
 
 use crate::{
@@ -331,6 +331,37 @@ where
                 reply,
             )
         })
+    }
+
+    fn trigger_pending_for_station(
+        &self,
+        station: ResourceRef,
+        class: TriggerMessageClass,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, bool> {
+        self.request(|reply| Request::TriggerPending(station, class, now, reply))
+    }
+
+    fn trigger_reconciliation_candidates(
+        &self,
+        after: Option<RequestId>,
+        limit: uob_application::PageLimit,
+    ) -> StorageFuture<'_, Vec<RequestId>> {
+        self.request(|reply| {
+            Request::TriggerCandidates(
+                after.map(|id| id.as_str().to_owned()),
+                usize::from(limit.get()),
+                reply,
+            )
+        })
+    }
+
+    fn reconcile_trigger_observation(
+        &self,
+        request_id: RequestId,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, Option<uob_contracts::CommandResult>> {
+        self.request(|reply| Request::ReconcileTrigger(request_id.as_str().to_owned(), now, reply))
     }
 
     fn read_command_history(
