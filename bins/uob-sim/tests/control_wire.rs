@@ -110,7 +110,15 @@ async fn run_cli_and_serve_have_equivalent_logical_wire_results_for_both_edition
                 "failure_category",
                 "failure_code",
             ] {
-                assert_eq!(cli[key], api[key], "field {key}");
+                if key == "seed" {
+                    assert_eq!(
+                        cli[key].as_u64().unwrap().to_string(),
+                        api[key],
+                        "field {key}"
+                    );
+                } else {
+                    assert_eq!(cli[key], api[key], "field {key}");
+                }
             }
             assert!(api.get("detail").is_none());
         }

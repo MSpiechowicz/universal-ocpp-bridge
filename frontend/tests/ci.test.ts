@@ -71,17 +71,32 @@ test('pinned type and lint tools reject independent invalid fixtures', () => {
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('static build budget rejects oversized asset output', () => {
+test('static build budget rejects assets above the raw or gzip limit', () => {
   const directory = mkdtempSync(join(tmpdir(), 'uob-asset-gate-'));
   try {
     mkdirSync(join(directory, 'frontend/scripts'), { recursive: true });
     mkdirSync(join(directory, 'adapters/management/ui/assets'), { recursive: true });
     copyFileSync('scripts/check-budget.mjs', join(directory, 'frontend/scripts/check-budget.mjs'));
-    writeFileSync(join(directory, 'adapters/management/ui/index.html'), '<html></html>');
+    const html = '<html></html>';
+    const javascript = join(directory, 'adapters/management/ui/assets/console.js');
+    writeFileSync(join(directory, 'adapters/management/ui/index.html'), html);
     writeFileSync(join(directory, 'adapters/management/ui/assets/console.css'), '');
-    writeFileSync(join(directory, 'adapters/management/ui/assets/console.js'), 'x'.repeat(369 * 1024));
-    const build = spawnSync(process.execPath, [join(directory, 'frontend/scripts/check-budget.mjs')], { timeout: 30000 });
-    assert.equal(build.status, 1);
-    assert.match(build.stderr.toString(), /Pi console asset budget exceeded/);
+
+    const checkBudget = () => spawnSync(process.execPath, [join(directory, 'frontend/scripts/check-budget.mjs')], { timeout: 30000 });
+    writeFileSync(javascript, 'x'.repeat(384 * 1024 - Buffer.byteLength(html)));
+    assert.equal(checkBudget().status, 0);
+    writeFileSync(javascript, 'x'.repeat(384 * 1024 - Buffer.byteLength(html) + 1));
+    assert.equal(checkBudget().status, 1);
+
+    const incompressible = Buffer.alloc(120 * 1024);
+    let seed = 0x12345678;
+    for (let index = 0; index < incompressible.length; index++) {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      incompressible[index] = seed;
+    }
+    writeFileSync(javascript, incompressible);
+    assert.equal(checkBudget().status, 1);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

@@ -48,11 +48,12 @@ test('real simulator failure is read with separate credentials, exact seed and i
   await request.delete(`${simulator}/api/v1/runs/${run}`, { headers: control });
 });
 
-test('production has no simulator access and staging rejects demo evidence', async ({ page }) => {
+test('production has no simulator access and staging rejects demo read and control access', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Debug timeline', exact: true })).toBeVisible();
   await expect(page.getByLabel('Simulator Debug read credential')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Simulator scenario evidence', exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Simulator control credential')).toHaveCount(0);
   const response = await page.request.get('/');
   expect(response.headers()['content-security-policy']).toContain("connect-src 'self';");
   await page.goto('http://127.0.0.1:39190');
@@ -61,4 +62,104 @@ test('production has no simulator access and staging rejects demo evidence', asy
   await panel.getByLabel('Simulator Debug read credential').fill('a'.repeat(64));
   await panel.getByRole('button', { name: 'Read simulator evidence', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('Simulator evidence unavailable');
+  const controls = page.getByRole('region', { name: 'Simulator scenario controls' });
+  await controls.getByLabel('Simulator control credential').fill('b'.repeat(64));
+  await controls.getByRole('button', { name: 'Enter simulator controls' }).click();
+  await expect(controls.getByRole('alert')).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Start scenario on staging' })).toHaveCount(0);
+});
+
+test('browser schedules real station-owned controls and distinguishes server admission from peer observations', async ({ page, request }) => {
+  test.setTimeout(90000);
+  const simulator = 'http://127.0.0.1:39194';
+  const peer = 'http://127.0.0.1:39195';
+  const headers = { Authorization: `Bearer ${'b'.repeat(64)}` };
+  const before = (await (await request.get(`${peer}/observations`)).json()).stations
+    .find((item: { station_id: string }) => item.station_id === 'demo-alpha');
+  await page.goto('http://127.0.0.1:39193');
+  await page.getByRole('region', { name: 'Simulator scenario evidence' }).getByLabel('Simulator origin', { exact: true }).fill(simulator);
+  const panel = page.getByRole('region', { name: 'Simulator scenario controls' });
+  await panel.getByLabel('Simulator control credential').fill('a'.repeat(64));
+  await panel.getByRole('button', { name: 'Enter simulator controls' }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await panel.getByLabel('Simulator control credential').fill('b'.repeat(64));
+  await panel.getByRole('button', { name: 'Enter simulator controls' }).click();
+  await expect(panel.getByLabel('Authored scenario')).toBeVisible();
+  await panel.getByLabel('Authored scenario').selectOption('live-alpha');
+  await expect(panel).toContainText('Full station set affected when starting: demo-alpha');
+  await panel.getByLabel('Exact seed override').fill('18446744073709551615');
+  await panel.getByRole('button', { name: 'Start scenario on demo' }).click();
+  await expect(panel.getByLabel('Retained simulator run')).toHaveValue(/^[1-9][0-9]*$/);
+  const run = await panel.getByLabel('Retained simulator run').inputValue();
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  const step = panel.getByLabel('Pending station-owned step / result');
+  for (const [id, intervention] of [['disconnect-checkpoint', 'disconnect'], ['reconnect-checkpoint', 'reconnect'], ['remote-start', 'response_delay']] as const) {
+    await step.selectOption(id);
+    await panel.getByLabel('Eligible intervention').selectOption(intervention);
+    if (intervention === 'response_delay') await panel.getByLabel('Peer response delay (ms)').fill('150');
+    await panel.getByRole('button', { name: 'Schedule intervention for demo-alpha' }).click();
+    await expect(panel).toContainText('Server acknowledged scheduling');
+    await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  }
+  await step.selectOption('remote-start');
+  await expect(panel).toContainText('response delay scope peer_reply');
+  await panel.getByRole('link', { name: /Filter retained Debug traces by demo-alpha/ }).click();
+  await expect(page.getByLabel('Filter station', { exact: true })).toHaveValue('demo-alpha');
+  await panel.getByRole('link', { name: /Select demo-alpha in normal station inventory/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Station demo-alpha is not available in this connection' })).toBeVisible();
+
+  await expect.poll(async () => (await (await request.get(`${simulator}/api/v1/runs/${run}`, { headers })).json()).steps.find((item: { step_id: string }) => item.step_id === 'remote-start')?.status,
+    { timeout: 20000 }).toBe('running');
+  const triggered = await request.post(`${peer}/commands/demo-alpha/start`);
+  expect(triggered.status()).toBe(202);
+  await expect.poll(async () => (await (await request.get(`${simulator}/api/v1/runs/${run}`, { headers })).json()).status,
+    { timeout: 20000 }).toBe('passed');
+  const observations = await (await request.get(`${peer}/observations`)).json();
+  const station = observations.stations.find((item: { station_id: string }) => item.station_id === 'demo-alpha');
+  expect(station.remote_replies).toBeGreaterThan(before.remote_replies);
+  expect(station.last_remote_reply.status).toBe('Accepted');
+  expect(station.last_remote_reply.elapsed_ms).toBeGreaterThanOrEqual(150);
+  expect(station.disconnections).toBeGreaterThan(before.disconnections);
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  await expect(panel).toContainText('observed server status passed');
+  await step.selectOption('remote-start');
+  await expect(panel).toContainText('effect applied');
+  await expect(panel).toContainText('selected fault: yes');
+  await panel.getByRole('button', { name: 'Remove terminal run' }).click();
+  await panel.getByRole('button', { name: 'Recover / refresh run list' }).click();
+  await expect(panel.getByLabel('Retained simulator run').locator(`option[value="${run}"]`)).toHaveCount(0);
+  await panel.getByLabel('Authored scenario').selectOption('setup-failure');
+  await panel.getByLabel('Exact seed override').fill('');
+  await panel.getByRole('button', { name: 'Start scenario on demo' }).click();
+  await expect(panel.getByLabel('Retained simulator run')).toHaveValue(/^[1-9][0-9]*$/);
+  const failedRun = await panel.getByLabel('Retained simulator run').inputValue();
+  await expect.poll(async () => (await (await request.get(`${simulator}/api/v1/runs/${failedRun}`, { headers })).json()).status).toBe('failed');
+  const failed = await (await request.get(`${simulator}/api/v1/runs/${failedRun}`, { headers })).json();
+  expect(failed.failure).toEqual({ category: 'setup', code: 'peer_unavailable' });
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  await expect(panel.getByRole('region', { name: 'Simulator control result' })).toContainText('setup · peer_unavailable');
+  await page.route(`${simulator}/api/v1/runs/${failedRun}`, route => route.abort());
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await expect(panel.getByRole('region', { name: 'Simulator control result' })).toContainText('setup · peer_unavailable');
+  await expect(panel.getByRole('region', { name: 'Simulator control result' }).getByRole('status')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Remove terminal run' })).toBeDisabled();
+  await page.unroute(`${simulator}/api/v1/runs/${failedRun}`);
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  await expect(panel.getByRole('button', { name: 'Remove terminal run' })).toBeEnabled();
+  await panel.getByRole('button', { name: 'Remove terminal run' }).click();
+  await panel.getByLabel('Authored scenario').selectOption('live-beta');
+  await panel.getByRole('button', { name: 'Start scenario on demo' }).click();
+  await expect(panel.getByLabel('Retained simulator run')).toHaveValue(/^[1-9][0-9]*$/);
+  const stopping = await panel.getByLabel('Retained simulator run').inputValue();
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  await panel.getByRole('button', { name: 'Request stop' }).click();
+  await expect.poll(async () => (await (await request.get(`${simulator}/api/v1/runs/${stopping}`, { headers })).json()).status,
+    { timeout: 20000 }).toBe('failed');
+  await panel.getByRole('button', { name: 'Refresh selected run status' }).click();
+  await expect(panel).toContainText('observed server status failed');
+  await panel.getByRole('button', { name: 'Remove terminal run' }).click();
+  await panel.getByRole('button', { name: 'Leave controls and clear credential' }).click();
+  await expect(panel.getByLabel('Simulator control credential')).toHaveValue('');
+  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 });

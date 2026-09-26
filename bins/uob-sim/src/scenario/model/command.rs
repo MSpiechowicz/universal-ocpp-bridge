@@ -62,6 +62,24 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
     Ok(())
 }
 
+/// Server-derived controls for authored actions. Wait controls are checkpoints, not faults.
+pub(super) fn eligible_controls(step: &StepDefinition) -> &'static [&'static str] {
+    match step.action {
+        ActionKind::Wait => &["disconnect", "reconnect"],
+        ActionKind::Heartbeat => &[
+            "disconnect",
+            "response_delay",
+            "missing_response",
+            "out_of_order_response",
+        ],
+        ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop if step.request_id.is_some() => {
+            &["response_delay", "missing_response"]
+        }
+        ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop => &["response_delay"],
+        _ => &[],
+    }
+}
+
 pub(super) fn validate_fault(step: &StepDefinition) -> Result<(), RunFailure> {
     let Some(fault) = &step.fault else {
         return Ok(());
@@ -82,31 +100,12 @@ pub(super) fn validate_fault(step: &StepDefinition) -> Result<(), RunFailure> {
             "response delay and out-of-order controls require a nonzero delay_ms",
         ));
     }
-    if !matches!(
-        step.action,
-        ActionKind::Heartbeat | ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop
-    ) {
-        return Err(setup_failure(
-            "invalid_fault_action",
-            "response fault controls are unsupported for this action",
-        ));
-    }
-    if !matches!(step.action, ActionKind::Heartbeat)
-        && !matches!(fault.kind, FaultKind::MissingResponse)
+    if matches!(step.action, ActionKind::Wait)
+        || !eligible_controls(step).contains(&fault.kind.name())
     {
         return Err(setup_failure(
             "invalid_fault_action",
-            "remote command scenarios support only missing_response faults",
-        ));
-    }
-    if matches!(
-        step.action,
-        ActionKind::AwaitRemoteStart | ActionKind::AwaitRemoteStop
-    ) && step.request_id.is_none()
-    {
-        return Err(setup_failure(
-            "invalid_fault_action",
-            "remote missing_response faults require tracked command metadata",
+            "fault controls are unsupported for this action",
         ));
     }
     Ok(())

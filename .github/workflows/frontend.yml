@@ -58,6 +58,7 @@ jobs:
       - name: Build daemon, authenticated OCPP peers and real management fixture
         run: |
           cargo build --locked -p uob-sim --bin uob-sim
+          cargo build --locked -p uob-sim --example browser_wire_peer
           cargo build --locked -p uob-service --bin uob --example charging_browser_peer
           cargo build --locked -p uob-management-adapter --example browser_fixture
       - name: Install the locked Playwright Chromium browser
