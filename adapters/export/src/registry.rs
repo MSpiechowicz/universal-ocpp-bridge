@@ -57,11 +57,36 @@ pub struct ExportBacklogState {
     pub pending_batches: u64,
     /// Number of retained records awaiting a terminal result.
     pub pending_records: u64,
+    /// Source work exists beyond the locally copied checkpoint.
+    pub deferred_source: bool,
+    /// Durable loss summaries still belong to the original destination.
+    pub unconsumed_gaps: bool,
+    /// Completeness was lost, including a pre-migration baseline with unknowable history.
+    pub incomplete_history: bool,
 }
 
 impl ExportBacklogState {
     fn is_pending(&self) -> bool {
-        self.pending_batches != 0 || self.pending_records != 0
+        self.pending_batches != 0
+            || self.pending_records != 0
+            || self.deferred_source
+            || self.unconsumed_gaps
+            || self.incomplete_history
+    }
+    /// Construct backlog facts from durable spool recovery, not caller-provided guesses.
+    #[must_use]
+    pub fn from_spool(status: &uob_application::ExportSpoolStatus) -> Self {
+        Self {
+            destination: Some(status.destination.clone()),
+            pending_batches: 0,
+            pending_records: status.pending_records,
+            deferred_source: status.critical_high_water
+                > status.critical.as_ref().map_or(0, |point| point.sequence)
+                || status.telemetry_high_water
+                    > status.telemetry.as_ref().map_or(0, |point| point.sequence),
+            unconsumed_gaps: !status.gaps.is_empty(),
+            incomplete_history: status.incomplete,
+        }
     }
 }
 

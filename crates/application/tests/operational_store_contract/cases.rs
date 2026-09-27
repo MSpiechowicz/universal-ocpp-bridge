@@ -1,4 +1,7 @@
 use super::*;
+fn budget() -> RuntimeResourceBudget {
+    RuntimeResourceBudget::new(RuntimeResourceLimits::default()).expect("test budget")
+}
 
 #[test]
 fn atomic_failure_exposes_no_command_event_delivery_or_committed_record() {
@@ -39,11 +42,14 @@ fn atomic_failure_exposes_no_command_event_delivery_or_committed_record() {
         .is_empty()
     );
     assert!(
-        block_on(store.read_committed_records(CommittedRecordQuery {
-            after: None,
-            limit: PageLimit::new(10).expect("bounded page"),
-            include_best_effort_telemetry: true,
-        }))
+        block_on(store.read_committed_records(
+            CommittedRecordQuery {
+                after: None,
+                limit: PageLimit::new(10).expect("bounded page"),
+                durability: Durability::BestEffortTelemetry,
+            },
+            &budget()
+        ))
         .expect("committed record read")
         .items
         .is_empty()
@@ -78,11 +84,14 @@ fn atomic_success_and_identical_retry_are_visible_without_duplication() {
     assert_eq!(recovery.pending_deliveries.len(), 1);
     assert_eq!(recovery.authorization.len(), 1);
 
-    let critical_page = block_on(store.read_committed_records(CommittedRecordQuery {
-        after: None,
-        limit: PageLimit::new(1).expect("bounded page"),
-        include_best_effort_telemetry: false,
-    }))
+    let critical_page = block_on(store.read_committed_records(
+        CommittedRecordQuery {
+            after: None,
+            limit: PageLimit::new(1).expect("bounded page"),
+            durability: Durability::Critical,
+        },
+        &budget(),
+    ))
     .expect("bounded committed record read");
     assert_eq!(critical_page.items.len(), 1);
     assert_eq!(critical_page.items[0].durability, Durability::Critical);

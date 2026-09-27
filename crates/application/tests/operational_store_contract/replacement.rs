@@ -56,8 +56,17 @@ impl
     fn read_committed_records(
         &self,
         query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<TestCommittedPayload>, CommittedRecordCursor>> {
-        self.0.read_committed_records(query)
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordPage> {
+        self.0.read_committed_records(query, budget)
+    }
+
+    fn read_committed_record_chunk(
+        &self,
+        query: CommittedRecordChunkQuery,
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordChunkResult> {
+        self.0.read_committed_record_chunk(query, budget)
     }
 
     fn recover(

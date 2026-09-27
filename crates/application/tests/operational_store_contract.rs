@@ -9,12 +9,15 @@ use std::{
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery,
-    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordId,
-    CommittedRecordQuery, DeliveryId, Durability, OperationalStore, Page, PageLimit,
+    AuthorizationState, BudgetedRecordChunk, CommandAdmissionOutcome, CommandHistoryCursor,
+    CommandHistoryQuery, CommandHistoryScope, CommittedRecord, CommittedRecordChunkQuery,
+    CommittedRecordChunkResult, CommittedRecordCursor, CommittedRecordDescriptor,
+    CommittedRecordField, CommittedRecordId, CommittedRecordPage, CommittedRecordQuery,
+    CommittedRecordReadToken, DeliveryId, Durability, OperationalStore, Page, PageLimit,
     PendingDelivery, RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventPage,
-    RetainedEventQuery, SnapshotCursor, SnapshotQuery, StorageAdmissionState, StorageError,
-    StorageErrorCode, StorageFuture, StorageRetentionStatus,
+    RetainedEventQuery, RuntimeResourceBudget, RuntimeResourceLimits, SnapshotCursor,
+    SnapshotQuery, StorageAdmissionState, StorageError, StorageErrorCode, StorageFuture,
+    StorageRetentionStatus, WorkClass,
 };
 use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandOperation, CommandRequest,
@@ -236,7 +239,8 @@ impl
     fn read_committed_records(
         &self,
         query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<TestCommittedPayload>, CommittedRecordCursor>> {
+        _budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordPage> {
         Box::pin(async move {
             if query.after.is_some() {
                 return Err(StorageError::new(
@@ -245,19 +249,104 @@ impl
                 ));
             }
             let guard = self.state.lock().expect("memory state");
-            let items = guard
+            let records: Vec<_> = guard
                 .records
                 .iter()
-                .filter(|record| {
-                    query.include_best_effort_telemetry || record.durability == Durability::Critical
-                })
-                .take(usize::from(query.limit.get()))
-                .cloned()
+                .filter(|record| record.durability == query.durability)
                 .collect();
-            Ok(Page {
+            let high_water = records.len() as u64;
+            let items = records
+                .into_iter()
+                .enumerate()
+                .take(usize::from(query.limit.get()))
+                .map(|(index, value)| {
+                    let sequence = index as u64 + 1;
+                    let lengths = [
+                        value.record_id.as_str().len() as u64,
+                        serde_json::to_string(&value.committed_at).unwrap().len() as u64,
+                        serde_json::to_string(&value.record).unwrap().len() as u64,
+                    ];
+                    CommittedRecordDescriptor {
+                        token: CommittedRecordReadToken::new(
+                            "mock".into(),
+                            query.durability,
+                            sequence,
+                            i64::try_from(sequence).expect("memory record sequence fits i64"),
+                            lengths,
+                            0,
+                        ),
+                        durability: query.durability,
+                        sequence,
+                        cursor: CommittedRecordCursor::new(format!("mock:{sequence}")).unwrap(),
+                        record_id_len: lengths[0],
+                        committed_at_len: lengths[1],
+                        payload_len: lengths[2],
+                    }
+                })
+                .collect::<Vec<_>>();
+            Ok(CommittedRecordPage {
+                has_more: high_water > items.len() as u64,
                 items,
-                next_cursor: None,
+                source_generation: "mock".into(),
+                resume_cursor: CommittedRecordCursor::new(format!("mock:{high_water}"))?,
+                high_water,
+                expired_prefix: 0,
+                lost_records: 0,
+                legacy_baseline_incomplete: false,
+                reservation: None,
             })
+        })
+    }
+
+    fn read_committed_record_chunk(
+        &self,
+        query: CommittedRecordChunkQuery,
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordChunkResult> {
+        let reservation = budget.try_reserve(WorkClass::ExporterBatch, query.max_bytes);
+        Box::pin(async move {
+            let reservation = reservation.map_err(|_| {
+                StorageError::new(StorageErrorCode::Busy, "mock chunk admission unavailable")
+            })?;
+            let guard = self.state.lock().expect("memory state");
+            let index =
+                usize::try_from(query.token.sequence().saturating_sub(1)).map_err(|_| {
+                    StorageError::new(StorageErrorCode::InvalidRequest, "unknown record")
+                })?;
+            let value = guard
+                .records
+                .iter()
+                .filter(|value| value.durability == query.token.durability())
+                .nth(index)
+                .ok_or_else(|| {
+                    StorageError::new(StorageErrorCode::InvalidRequest, "unknown record")
+                })?;
+            let bytes = match query.field {
+                CommittedRecordField::RecordId => value.record_id.as_str().as_bytes().to_vec(),
+                CommittedRecordField::CommittedAt => {
+                    serde_json::to_vec(&value.committed_at).unwrap()
+                }
+                CommittedRecordField::Payload => serde_json::to_vec(&value.record).unwrap(),
+            };
+            let offset = usize::try_from(query.offset).map_err(|_| {
+                StorageError::new(StorageErrorCode::InvalidRequest, "invalid offset")
+            })?;
+            let part = bytes
+                .get(offset..)
+                .ok_or_else(|| {
+                    StorageError::new(StorageErrorCode::InvalidRequest, "invalid offset")
+                })?
+                .iter()
+                .take(query.max_bytes)
+                .copied()
+                .collect();
+            Ok(CommittedRecordChunkResult::Data(BudgetedRecordChunk::new(
+                query.field,
+                query.offset,
+                part,
+                bytes.len() as u64,
+                reservation,
+            )?))
         })
     }
 
@@ -381,116 +470,9 @@ fn timestamp(minute: u8) -> UtcTimestamp {
     )
 }
 
-fn resource() -> ResourceRef {
-    ResourceRef {
-        bridge_id: text(BridgeId::new, "bridge-1"),
-        station_id: text(StationId::new, "station-1"),
-        resource: None,
-        native_protocol_reference: None,
-    }
-}
-
-fn command() -> Command<TestCommandPayload> {
-    ExternalCommand::authenticated(
-        CommandRequest {
-            request_id: text(RequestId::new, "request-1"),
-            correlation_id: None,
-            resource: resource(),
-            operation: CommandOperation::Start {
-                authorization_reference: None,
-            },
-            expires_at: timestamp(9),
-        },
-        AuthenticatedCommandOrigin::Management {
-            principal_id: text(PrincipalId::new, "operator-1"),
-        },
-    )
-    .admit(timestamp(0))
-}
-
-fn snapshot() -> StationSnapshot {
-    StationSnapshot {
-        schema_version: ContractVersion::V1_INITIAL,
-        station: resource(),
-        observed_at: timestamp(0),
-        connectivity: Connectivity::Connected {
-            protocol: uob_contracts::ProtocolEdition::Ocpp16j,
-            connected_at: timestamp(0),
-            last_message_at: Some(timestamp(0)),
-        },
-        capabilities: ResourceCapabilities::default(),
-        resources: Vec::new(),
-        transactions: Vec::new(),
-        current_values: Vec::new(),
-    }
-}
-
-fn event() -> EventEnvelope<TestEventPayload> {
-    EventEnvelope {
-        event_id: text(EventId::new, "event-1"),
-        schema_version: ContractVersion::V1_INITIAL,
-        runtime: RuntimeIdentity {
-            environment: uob_contracts::Environment::Demo,
-            release_id: text(ReleaseId::new, "release-1"),
-            release_digest: text(uob_contracts::ArtifactDigest::new, "sha256:abc"),
-            process_instance_id: text(ProcessInstanceId::new, "process-1"),
-        },
-        resource: resource(),
-        source_time: None,
-        observed_at: timestamp(0),
-        event_type: text(EventType::new, "command.admitted.v1"),
-        origin: EventOrigin::Management,
-        sequence: 1,
-        correlation_id: None,
-        causation_id: None,
-        provenance: None,
-        payload: "admitted".to_owned(),
-    }
-}
-
-fn populated_write()
--> AtomicStoreWrite<TestCommandPayload, TestEventPayload, TestDeliveryPayload, TestCommittedPayload>
-{
-    AtomicStoreWrite {
-        purpose: uob_application::StorageWritePurpose::Routine,
-        station_snapshot: Some(snapshot()),
-        authorization_changes: vec![AuthorizationChange {
-            reference: text(AuthorizationReference::new, "local-auth-1"),
-            resource: resource(),
-            state: AuthorizationState::Active,
-            revision: 1,
-            changed_at: timestamp(0),
-            expires_at: None,
-        }],
-        command: Some(command()),
-        command_result: None,
-        journal_events: vec![event()],
-        required_deliveries: vec![PendingDelivery {
-            delivery_id: text(DeliveryId::new, "delivery-1"),
-            event_id: text(EventId::new, "event-1"),
-            target_instance_id: text(TargetInstanceId::new, "target-main"),
-            target_configuration_revision: 4,
-            ordering_key: resource(),
-            deadline: timestamp(8),
-            durability: Durability::Critical,
-            payload: "event delivery".to_owned(),
-        }],
-        committed_records: vec![
-            CommittedRecord {
-                record_id: text(CommittedRecordId::new, "record-1"),
-                durability: Durability::Critical,
-                committed_at: timestamp(0),
-                record: "export event".to_owned(),
-            },
-            CommittedRecord {
-                record_id: text(CommittedRecordId::new, "record-telemetry-1"),
-                durability: Durability::BestEffortTelemetry,
-                committed_at: timestamp(0),
-                record: "export telemetry".to_owned(),
-            },
-        ],
-    }
-}
+#[path = "operational_store_contract/fixtures.rs"]
+mod fixtures;
+use fixtures::{command, populated_write, resource};
 
 #[path = "operational_store_contract/cases.rs"]
 mod cases;

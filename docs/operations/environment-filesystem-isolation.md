@@ -12,7 +12,7 @@ configuration, directories, or successful startup. Staging is started explicitly
 | WAL / shared memory | Adjacent `-wal` / `-shm` files | Adjacent `-wal` / `-shm` files |
 | Durable identity / ownership lock | `/var/lib/uob/identity.json`, `service.lock` | `/var/lib/uob-staging/identity.json`, `service.lock` |
 | Runtime sockets / process lock | `/run/uob/` | `/run/uob-staging/` |
-| Reserved optional export spool | `/var/lib/uob/export-spool/` | `/var/lib/uob-staging/export-spool/` |
+| Legacy reserved export path (not an eligible spool location) | `/var/lib/uob/export-spool/` | `/var/lib/uob-staging/export-spool/` |
 | Journal namespace | `uob` | `uob-staging` |
 | Slice | `uob-production.slice` | `uob-staging.slice` |
 | Default management endpoint | `127.0.0.1:8080` | `127.0.0.1:18080` |
@@ -41,12 +41,18 @@ committed state and WAL on failure; lock files are never deleted to bypass an ac
 An existing `operational.sqlite3` without an identity marker is rejected for operator review.
 Do not delete the marker to relabel a deployment or copy production data into staging.
 
-The current executable remains management-only: it initializes its operational store but
-charging handlers and management query ports are not yet composed with that store. This
-packaging does not claim those runtime paths are complete. Export remains disabled/unavailable;
-the spool path is reserved, and no export worker is created. Future composition must use this
-same authoritative store and place optional export state beneath the environment's state root.
-Normal development invocations without `UOB_DEPLOYMENT_ENVIRONMENT` retain their existing behavior.
+The service can run enabled charging paths against its authoritative operational store.
+External export is a different, optional offline path: `uob serve` rejects
+`data_export.enabled = true` and does not create an export worker or local spool.
+The old reserved paths in the table share the operational filesystem and **cannot**
+be used for the [local export spool](../architecture/export-spool.md). Its adapter
+requires an existing private mode-0700 directory on a different device; a future
+deployment must provision and attest separate durable, physically quota-backed
+capacity for its 128 MiB main/rollback envelope, independently of either
+operational database and its WAL. The different-device check alone does not
+establish a physical quota or durable backing. Do not create a new production
+spool mount merely to enable currently unavailable export. Normal development
+invocations without `UOB_DEPLOYMENT_ENVIRONMENT` retain their existing behavior.
 
 ## Installation and layouts
 

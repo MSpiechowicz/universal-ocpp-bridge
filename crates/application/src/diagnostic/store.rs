@@ -1,10 +1,11 @@
 //! Scoped persistence observer; delegates all business decisions to the authoritative store.
 use crate::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor,
-    CommandHistoryQuery, CommandHistoryScope, CommittedRecord, CommittedRecordCursor,
-    CommittedRecordQuery, FlowEvidence, FlowSpan, FlowStage, OperationalStore, Page, PageLimit,
-    RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor,
-    SnapshotQuery, StorageFuture, StorageRetentionStatus,
+    CommandHistoryQuery, CommandHistoryScope, CommittedRecordChunkQuery,
+    CommittedRecordChunkResult, CommittedRecordPage, CommittedRecordQuery, FlowEvidence, FlowSpan,
+    FlowStage, OperationalStore, Page, PageLimit, RecoveryBatch, RecoveryQuery, RetainedEventPage,
+    RetainedEventQuery, RuntimeResourceBudget, SnapshotCursor, SnapshotQuery, StorageFuture,
+    StorageRetentionStatus,
 };
 use uob_contracts::{
     Command, CommandResult, CommandSummary, RequestId, ResourceRef, StationSnapshot,
@@ -92,8 +93,16 @@ impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
     fn read_committed_records(
         &self,
         query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<R>, CommittedRecordCursor>> {
-        self.inner.read_committed_records(query)
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordPage> {
+        self.inner.read_committed_records(query, budget)
+    }
+    fn read_committed_record_chunk(
+        &self,
+        query: CommittedRecordChunkQuery,
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordChunkResult> {
+        self.inner.read_committed_record_chunk(query, budget)
     }
     fn recover(&self, query: RecoveryQuery) -> StorageFuture<'_, RecoveryBatch<C, D>> {
         self.inner.recover(query)

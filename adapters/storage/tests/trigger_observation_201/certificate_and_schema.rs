@@ -61,7 +61,7 @@ async fn station_certificate_ignores_supplied_evse_and_rejects_immutable_expecta
 fn newer_schema_is_not_downgraded_or_rewritten() {
     let database = Database::new();
     let connection = rusqlite::Connection::open(&database.0).unwrap();
-    connection.execute_batch("PRAGMA user_version = 12; CREATE TABLE preserved(value TEXT); INSERT INTO preserved VALUES('unchanged');").unwrap();
+    connection.execute_batch("PRAGMA user_version = 13; CREATE TABLE preserved(value TEXT); INSERT INTO preserved VALUES('unchanged');").unwrap();
     drop(connection);
 
     assert!(Store::open(&database.0, 16).is_err());
@@ -72,7 +72,7 @@ fn newer_schema_is_not_downgraded_or_rewritten() {
     let preserved: String = connection
         .query_row("SELECT value FROM preserved", [], |row| row.get(0))
         .unwrap();
-    assert_eq!((version, preserved.as_str()), (12, "unchanged"));
+    assert_eq!((version, preserved.as_str()), (13, "unchanged"));
 }
 
 #[tokio::test]

@@ -106,12 +106,33 @@ impl OperationalStore<String, String, String, String> for MemoryStore {
     fn read_committed_records(
         &self,
         _query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<String>, CommittedRecordCursor>> {
+        _budget: &uob_application::RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordPage> {
         Box::pin(async {
-            Ok(Page {
+            Ok(CommittedRecordPage {
                 items: Vec::new(),
-                next_cursor: None,
+                source_generation: "mock".into(),
+                resume_cursor: CommittedRecordCursor::new("mock:0")?,
+                has_more: false,
+                high_water: 0,
+                expired_prefix: 0,
+                lost_records: 0,
+                legacy_baseline_incomplete: false,
+                reservation: None,
             })
+        })
+    }
+
+    fn read_committed_record_chunk(
+        &self,
+        _query: uob_application::CommittedRecordChunkQuery,
+        _budget: &uob_application::RuntimeResourceBudget,
+    ) -> StorageFuture<'_, uob_application::CommittedRecordChunkResult> {
+        Box::pin(async {
+            Err(uob_application::StorageError::new(
+                uob_application::StorageErrorCode::InvalidRequest,
+                "command recovery memory store has no committed records",
+            ))
         })
     }
 

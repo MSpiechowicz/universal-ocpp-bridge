@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
 use uob_application::{
     AcknowledgementScope, AtomicStoreWrite, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, CommittedRecord,
-    CommittedRecordId, DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, DeliveryOutcome,
-    PendingDelivery, RecordedDeliveryAttempt, StorageError, StorageErrorCode, StorageWritePurpose,
+    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, DeliveryAttempt,
+    DeliveryAttemptResolution, DeliveryId, DeliveryOutcome, PendingDelivery,
+    RecordedDeliveryAttempt, StorageError, StorageErrorCode, StorageWritePurpose,
 };
 use uob_contracts::{
     Command, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot, TargetInstanceId,
@@ -311,20 +311,6 @@ pub(crate) fn decode_delivery<D: DeserializeOwned>(
         deadline: from_json(&value.deadline)?,
         durability: decode_durability(value.durability)?,
         payload: from_json(&value.payload)?,
-    })
-}
-
-pub(crate) fn decode_record<R: DeserializeOwned>(
-    record_id: String,
-    durability_value: i64,
-    committed_at: &str,
-    payload: &str,
-) -> Result<CommittedRecord<R>, StorageError> {
-    Ok(CommittedRecord {
-        record_id: CommittedRecordId::new(record_id).map_err(integrity)?,
-        durability: decode_durability(durability_value)?,
-        committed_at: from_json(committed_at)?,
-        record: from_json(payload)?,
     })
 }
 

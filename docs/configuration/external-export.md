@@ -1,8 +1,11 @@
 # External export configuration
 
 External database export is optional and independent of the selected bridge target. Disabling it
-creates no provider, connection, polling task, or export queue. Enabling it selects exactly one
-stable provider instance; the first concrete provider kind will be `postgresql`.
+creates no provider, connection, polling task, or export queue. The shipped `uob serve` executable
+rejects `data_export.enabled = true` even though the offline local spool and PostgreSQL
+provisioning/qualification tools exist. The following is a **future configuration shape**, not
+a configuration that currently starts export. Enabling it will select exactly one stable
+provider instance; the first concrete provider kind is planned to be `postgresql`.
 
 The safe PostgreSQL configuration shape is:
 
@@ -42,6 +45,24 @@ described in [PostgreSQL client qualification](../testing/postgresql-client-qual
 the service still reserves PostgreSQL as unavailable and rejects enabled PostgreSQL export.
 The qualified client is not a `DatabaseProvider` or an export scheduler. Its future integration must
 reuse the same offline registry and validation boundary.
+
+The [local export spool](../architecture/export-spool.md) is an independently callable offline
+component, not a daemon scheduler or a remote PostgreSQL delivery path. It records exact source
+checkpoints, loss and original destination/revision ownership; a checkpoint proves only local
+copy or explicit local loss, never remote acknowledgement. Its 128 MiB main/rollback envelope
+requires a separate durable quota-backed physical allocation from operational SQLite, **not**
+the formerly reserved export-spool directory beneath the operational state filesystem.
+
+The offline path discovers committed-record metadata, copies admitted fields
+in 64 KiB chunks, and exposes pending records through bounded descriptors and
+chunk reads. A retained critical record exceeding usable spool capacity is
+deferred with its checkpoint unchanged; after real source expiry, only an
+exact loss gap allows progress. Neither the 128 MiB physical envelope nor
+chunking promises export of every record the operational store can accept.
+
+Operational schema v12 cannot recover records deleted before an older database's migration;
+the legacy baseline remains flagged as incomplete. No supported production export deployment
+or export-enable procedure exists yet.
 
 ## Explicit PostgreSQL schema provisioning
 

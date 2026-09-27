@@ -10,7 +10,7 @@ use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandAdmissionErrorCode, CommandAdmissionOutcome,
     CommandAdmissionPort, CommandClock, CommandCoordinator, CommandDispatchOutcome,
-    CommittedRecord, CommittedRecordCursor, CommittedRecordQuery, OperationalStore, Page,
+    CommittedRecordCursor, CommittedRecordPage, CommittedRecordQuery, OperationalStore, Page,
     PageLimit, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery, SnapshotCursor,
     SnapshotQuery, StationCommandContext, StationCommandFuture, StationCommandPort,
     StorageAdmissionState, StorageFuture, StorageRetentionStatus,

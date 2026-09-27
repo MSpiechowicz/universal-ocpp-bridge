@@ -12,11 +12,12 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandHistoryCursor, CommandHistoryQuery,
-    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordQuery,
-    DeliveryAttempt, DeliveryId, OperationalStore, Page, PendingDeliveryQuery,
+    CommandHistoryScope, CommittedRecordChunkQuery, CommittedRecordChunkResult,
+    CommittedRecordPage, CommittedRecordQuery, DeliveryAttempt, DeliveryId,
+    EXPORT_RECORD_CHUNK_BYTES, OperationalStore, Page, PendingDeliveryQuery,
     RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
-    ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode,
-    StorageFuture, StorageRetentionStatus, TargetDeliveryStore,
+    RuntimeResourceBudget, ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageError,
+    StorageErrorCode, StorageFuture, StorageRetentionStatus, TargetDeliveryStore, WorkClass,
 };
 use uob_contracts::{
     Command, CommandSummary, ConfigurationObservation, EventEnvelope, EventId, RequestId,
@@ -30,7 +31,7 @@ use crate::{
 };
 
 mod cursors;
-use cursors::{event_cursor, numeric_cursor};
+use cursors::event_cursor;
 
 /// Default maximum number of operations waiting for the dedicated `SQLite` worker.
 pub const DEFAULT_WORK_QUEUE_CAPACITY: usize = 64;
@@ -39,7 +40,7 @@ pub const DEFAULT_WORK_QUEUE_CAPACITY: usize = 64;
 type StoreTypes<C, E, D, R> = fn() -> (C, E, D, R);
 
 pub struct SqliteOperationalStore<C, E, D, R> {
-    sender: Arc<crate::lifecycle::Worker<Request<C, E, D, R>>>,
+    sender: Arc<crate::lifecycle::Worker<Request<C, E, D>>>,
     configuration: SqliteRuntimeConfiguration,
     retention_policy: SqliteRetentionPolicy,
     marker: PhantomData<StoreTypes<C, E, D, R>>,
@@ -152,7 +153,7 @@ where
 
     pub(crate) fn request<T>(
         &self,
-        build: impl FnOnce(Reply<T>) -> Request<C, E, D, R>,
+        build: impl FnOnce(Reply<T>) -> Request<C, E, D>,
     ) -> StorageFuture<'static, T>
     where
         T: Send + 'static,
@@ -268,19 +269,33 @@ where
     fn read_committed_records(
         &self,
         query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<R>, CommittedRecordCursor>> {
-        let after = match numeric_cursor(query.after.as_ref().map(CommittedRecordCursor::as_str)) {
-            Ok(after) => after,
-            Err(error) => return Box::pin(async move { Err(error) }),
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordPage> {
+        // The page contains at most 100 small locators, even when every field is enormous.
+        let Ok(reservation) = budget.try_reserve(WorkClass::ExporterBatch, 64 * 1024) else {
+            return ready_error(
+                StorageErrorCode::Busy,
+                "source metadata admission unavailable",
+            );
         };
-        self.request(|reply| {
-            Request::Records(
-                after,
-                usize::from(query.limit.get()),
-                query.include_best_effort_telemetry,
-                reply,
-            )
-        })
+        self.request(|reply| Request::Records(query, reservation, reply))
+    }
+
+    fn read_committed_record_chunk(
+        &self,
+        query: CommittedRecordChunkQuery,
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordChunkResult> {
+        if query.max_bytes == 0 || query.max_bytes > EXPORT_RECORD_CHUNK_BYTES {
+            return ready_error(
+                StorageErrorCode::InvalidRequest,
+                "invalid source chunk limit",
+            );
+        }
+        let Ok(reservation) = budget.try_reserve(WorkClass::ExporterBatch, query.max_bytes) else {
+            return ready_error(StorageErrorCode::Busy, "source chunk admission unavailable");
+        };
+        self.request(|reply| Request::RecordChunk(query, reservation, reply))
     }
 
     fn recover(&self, query: RecoveryQuery) -> StorageFuture<'_, RecoveryBatch<C, D>> {

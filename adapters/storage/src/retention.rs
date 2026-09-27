@@ -122,10 +122,11 @@ pub(crate) fn maintain(
     transaction
         .execute(
             "DELETE FROM committed_records
-             WHERE durability = 1 AND retain_until IS NOT NULL AND retain_until <= ?1",
+             WHERE retain_until IS NOT NULL AND retain_until <= ?1",
             [now],
         )
         .map_err(unavailable)?;
+    update_source_prefix(&transaction)?;
     increment_stat(&transaction, PRUNED_EVENTS, count(pruned_events)?)?;
     increment_stat(&transaction, PRUNED_ATTEMPTS, count(pruned_attempts)?)?;
     transaction.commit().map_err(unavailable)?;
@@ -162,11 +163,29 @@ fn shed_existing_best_effort(transaction: &Transaction<'_>) -> Result<(), Storag
     let telemetry = transaction
         .execute("DELETE FROM committed_records WHERE durability = 1", [])
         .map_err(unavailable)?;
+    update_source_prefix(transaction)?;
     let deliveries = transaction
         .execute("DELETE FROM target_deliveries WHERE durability = 1", [])
         .map_err(unavailable)?;
     increment_stat(transaction, DROPPED_TELEMETRY, count(telemetry)?)?;
     increment_stat(transaction, DROPPED_DELIVERIES, count(deliveries)?)
+}
+/// Persist contiguous source loss even if no payload survives at the live tail.
+fn update_source_prefix(transaction: &Transaction<'_>) -> Result<(), StorageError> {
+    transaction
+        .execute(
+            "UPDATE committed_source_streams SET expired_prefix = MAX(
+            expired_prefix,
+            COALESCE(
+                (SELECT MIN(source_sequence) - 1 FROM committed_records
+                 WHERE durability = committed_source_streams.durability),
+                high_water
+            )
+         )",
+            [],
+        )
+        .map_err(unavailable)?;
+    Ok(())
 }
 
 fn retain_fitting_deliveries(values: &mut Vec<EncodedDelivery>, remaining: &mut u64) -> u64 {

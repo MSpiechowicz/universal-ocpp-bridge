@@ -7,7 +7,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(unavailable)?;
-    if version > 11 {
+    if version > 12 {
         return Err(StorageError::new(
             StorageErrorCode::Unavailable,
             "operational database schema is newer than this release",
@@ -58,6 +58,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
             )
             .map_err(unavailable)?;
     }
+    upgrade_committed_source_streams(&transaction, version)?;
     // Snapshots are validated on every open. Journal rewrites are versioned so a
     // current database does not re-decode its entire retained history on restart.
     normalize_station_keys(&transaction, version < 8)?;
@@ -71,9 +72,47 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 11;")
+        .execute_batch("PRAGMA user_version = 12;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
+}
+fn upgrade_committed_source_streams(
+    connection: &Connection,
+    version: i64,
+) -> Result<(), StorageError> {
+    if version < 12 {
+        add_column_if_missing(
+            connection,
+            "committed_records",
+            "source_sequence",
+            "ALTER TABLE committed_records ADD COLUMN source_sequence INTEGER CHECK (source_sequence > 0)",
+        )?;
+        connection.execute_batch(
+            "WITH numbered AS (
+                 SELECT row_id, ROW_NUMBER() OVER (PARTITION BY durability ORDER BY row_id) AS position
+                 FROM committed_records
+             )
+             UPDATE committed_records SET source_sequence =
+                 (SELECT position FROM numbered WHERE numbered.row_id = committed_records.row_id);
+             UPDATE committed_source_streams SET high_water =
+                 COALESCE((SELECT MAX(source_sequence) FROM committed_records
+                           WHERE durability = committed_source_streams.durability), 0);",
+        ).map_err(unavailable)?;
+        connection
+            .execute(
+                "UPDATE committed_source_identity
+             SET legacy_baseline_incomplete =
+                 (?1 OR EXISTS(SELECT 1 FROM committed_records))",
+                [i64::from(version > 0)],
+            )
+            .map_err(unavailable)?;
+    }
+    connection
+        .execute_batch(
+            "CREATE UNIQUE INDEX IF NOT EXISTS committed_records_source_position
+         ON committed_records(durability, source_sequence);",
+        )
+        .map_err(unavailable)
 }
 
 fn normalize_station_keys(connection: &Connection, upgrade: bool) -> Result<(), StorageError> {
@@ -246,8 +285,20 @@ fn create_schema(connection: &Connection) -> Result<(), StorageError> {
              CREATE TABLE IF NOT EXISTS committed_records (\n\
                  row_id INTEGER PRIMARY KEY AUTOINCREMENT, record_id TEXT NOT NULL UNIQUE,\n\
                  durability INTEGER NOT NULL, committed_at TEXT NOT NULL, payload TEXT NOT NULL,\n\
-                 retain_until INTEGER\n\
+                 retain_until INTEGER, source_sequence INTEGER CHECK (source_sequence > 0)
              );\n\
+             CREATE TABLE IF NOT EXISTS committed_source_identity (
+                 id INTEGER PRIMARY KEY CHECK (id = 1),
+                 generation TEXT NOT NULL, legacy_baseline_incomplete INTEGER NOT NULL
+                     CHECK (legacy_baseline_incomplete IN (0, 1))
+             );\n\
+             INSERT OR IGNORE INTO committed_source_identity VALUES (1, lower(hex(randomblob(16))), 0);\n\
+             CREATE TABLE IF NOT EXISTS committed_source_streams (
+                 durability INTEGER PRIMARY KEY CHECK (durability IN (0, 1)),
+                 high_water INTEGER NOT NULL DEFAULT 0 CHECK (high_water >= 0),
+                 expired_prefix INTEGER NOT NULL DEFAULT 0 CHECK (expired_prefix >= 0)
+             );\n\
+             INSERT OR IGNORE INTO committed_source_streams(durability) VALUES (0), (1);\n\
              CREATE TABLE IF NOT EXISTS storage_retention_stats (\n\
                  category TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0\n\
                      CHECK (count >= 0)\n\

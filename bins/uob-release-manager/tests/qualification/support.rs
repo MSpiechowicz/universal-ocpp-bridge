@@ -196,7 +196,7 @@ pub fn install(f: &artifacts::Fixture, store: &std::path::Path) {
 fn configure_schema(artifact: &mut artifacts::Fixture, preflight: bool) {
     if preflight {
         // Match the operational SQLite schema created by Store::open.
-        let version = uob_release_manager::SchemaVersion::new(11);
+        let version = uob_release_manager::SchemaVersion::new(12);
         let range = uob_release_manager::SchemaRange::new(version, version).unwrap();
         artifact.manifest.compatibility.formats.operational_sqlite =
             uob_release_manager::FormatSupport {

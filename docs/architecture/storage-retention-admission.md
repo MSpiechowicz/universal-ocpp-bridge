@@ -20,6 +20,21 @@ events, target deliveries, committed operational records, and delivery audit his
 reported use. Physical disk-full handling remains a separate host/storage failure and cannot be
 made safe by logical accounting alone.
 
+Operational schema v12 adds a separate, read-only committed-record source for the
+[optional local export spool](export-spool.md). Each durability stream has a persistent
+sequence/high-water and an independent cursor. Export copies retained records
+in bounded field chunks. An expired committed record is recorded as an exact
+source-loss interval only after discovery proves the missing position; it is
+never fabricated from export capacity pressure. Historical databases cannot
+reconstruct records deleted before v12 migration, so their baseline is marked
+unknown.
+
+The 256 MiB operational logical admission budget and protected 16 MiB reserve remain
+authoritative for charging; the optional spool's 128 MiB **physical main/rollback**
+envelope is not carved from that reserve. A spool failure must not grant new charging
+admission, consume operational disk blocks, or turn a local export checkpoint into
+remote delivery confirmation. The daemon still rejects enabled external export.
+
 ## Retention and pressure order
 
 The adapter applies pressure in this order inside the same immediate transaction as the owning
