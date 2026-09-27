@@ -1,0 +1,25 @@
+[package]
+name = "uob-postgresql-export-adapter"
+description = "Private PostgreSQL client qualification (not a runnable export provider)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+futures-util.workspace = true
+libc.workspace = true
+postgres_rustls.workspace = true
+rustls.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "time", "net"] }
+tokio-postgres.workspace = true
+tokio-rustls.workspace = true
+toml.workspace = true
+uob-application = { path = "../../crates/application" }
+uob-contracts = { path = "../../crates/contracts" }
+uob-external-export-adapter = { path = "../export" }
+
+[lints]
+workspace = true

@@ -1,0 +1,8 @@
+[package]
+name = "uob-postgresql-export-adapter"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+pool_alias = { package = "bb8", path = "../../dependencies/bb8" }
+postgres_pool = { package = "deadpool-postgres", path = "../../dependencies/deadpool-postgres" }

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Qualify a private PostgreSQL client with disposable TLS/SCRAM, credential-rejection,
+  uncertainty and bounded-resource fault runs; add a live CI gate and x64 evidence.
+  The PostgreSQL export provider and scheduler remain unavailable (#103).
+
 - Add privileged, opt-in OCPP 2.0.1 `TriggerMessage` for eleven native
   classes, scoped EVSE/connector dispatch, independent native replies and
   60-second non-causal durable observations. SQLite schema v11 and additive

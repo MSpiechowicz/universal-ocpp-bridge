@@ -29,5 +29,8 @@ The reference replacement provider in
 the reusable contract. Registry coverage in
 [`provider_registry.rs`](../../adapters/export/tests/provider_registry.rs) demonstrates that a
 second provider is added through its adapter factory, credential-free schema, and composition-root
-registration without changing OCPP handlers or target adapters. The future PostgreSQL provider and
-its scheduler must reuse these host and outcome checks rather than copy a weaker happy-path test.
+registration without changing OCPP handlers or target adapters. The private PostgreSQL
+[client qualification](postgresql-client-qualification.md) exercises TLS/SCRAM, fault and
+resource behavior against a disposable database, but it does not instantiate a `DatabaseProvider`
+or scheduler. PostgreSQL remains unavailable to the service. Its future provider and scheduler
+must pass these host and outcome checks rather than copy a weaker happy-path test.

@@ -37,8 +37,11 @@ silently relabeled or sent to a newly configured database.
 
 The provider catalog may advertise a recognized but unavailable kind so configuration clients can
 distinguish “not installed in this executable” from an unknown kind. Catalog schemas never include
-credential contents. The service currently reserves PostgreSQL this way; its later driver will use
-the same offline registry and validation boundary.
+credential contents. A private PostgreSQL client has passed the disposable x64 qualification
+described in [PostgreSQL client qualification](../testing/postgresql-client-qualification.md), but
+the service still reserves PostgreSQL as unavailable and rejects enabled PostgreSQL export.
+The qualified client is not a `DatabaseProvider` or an export scheduler. Its future integration must
+reuse the same offline registry and validation boundary.
 
 ## Explicit PostgreSQL schema provisioning
 

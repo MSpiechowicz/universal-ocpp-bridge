@@ -1,0 +1,13 @@
+[package]
+name = "postgresql-dependency-violator"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+pg_alias = { package = "tokio-postgres", path = "../../dependencies/tokio-postgres" }
+
+[dev-dependencies]
+tls_alias = { package = "postgres_rustls", path = "../../dependencies/postgres-rustls" }
+
+[build-dependencies]
+pool_alias = { package = "deadpool-postgres", path = "../../dependencies/deadpool-postgres" }
