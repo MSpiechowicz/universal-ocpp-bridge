@@ -7,6 +7,12 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(unavailable)?;
+    if version > 11 {
+        return Err(StorageError::new(
+            StorageErrorCode::Unavailable,
+            "operational database schema is newer than this release",
+        ));
+    }
     let transaction = connection.unchecked_transaction().map_err(unavailable)?;
     create_schema(&transaction)?;
     upgrade_columns(&transaction)?;
@@ -35,6 +41,23 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
          WHERE json_valid(payload) AND json_type(payload,'$.payload.class') IS NOT NULL;",
         )
         .map_err(unavailable)?;
+    if version < 11 {
+        transaction
+            .execute_batch(
+                "CREATE INDEX IF NOT EXISTS trigger201_pending_results
+                 ON command_results(json_extract(payload,'$.trigger_observation_201.status'), request_id)
+                 WHERE trigger_reconcile_active = 1;
+                 CREATE INDEX IF NOT EXISTS trigger201_station_events
+                 ON journal_events(resource, json_extract(payload,'$.payload.trigger_class_201'),
+                    json_extract(payload,'$.payload.target.kind'),
+                    json_extract(payload,'$.payload.target.id'),
+                    json_extract(payload,'$.payload.target.connector_id'),
+                    julianday(json_extract(payload,'$.observed_at')))
+                 WHERE json_valid(payload)
+                   AND json_type(payload,'$.payload.trigger_class_201') IS NOT NULL;",
+            )
+            .map_err(unavailable)?;
+    }
     // Snapshots are validated on every open. Journal rewrites are versioned so a
     // current database does not re-decode its entire retained history on restart.
     normalize_station_keys(&transaction, version < 8)?;
@@ -48,7 +71,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 10;")
+        .execute_batch("PRAGMA user_version = 11;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
 }

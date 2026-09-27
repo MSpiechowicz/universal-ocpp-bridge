@@ -1,4 +1,5 @@
 //! Pinned, explicitly supported privileged commands. Protocol edition is not a capability.
+mod trigger201;
 use rust_ocpp::v1_6::messages::{
     change_availability::ChangeAvailabilityRequest, trigger_message::TriggerMessageRequest,
 };
@@ -57,11 +58,11 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
     {
         descriptors.push(descriptor);
     }
+    let trigger = Operation::ProtocolAction {
+        protocol,
+        action: "TriggerMessage".to_owned(),
+    };
     if protocol == ProtocolEdition::Ocpp16j {
-        let trigger = Operation::ProtocolAction {
-            protocol,
-            action: "TriggerMessage".to_owned(),
-        };
         if snapshot.capabilities.supports(&trigger) && station_scope(&snapshot.station) {
             descriptors.push(trigger_descriptor(snapshot.station.clone()));
         }
@@ -72,6 +73,19 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
                 && connector.resource.station_id == snapshot.station.station_id
             {
                 descriptors.push(trigger_descriptor(connector.resource.clone()));
+            }
+        }
+    } else {
+        if snapshot.capabilities.supports(&trigger) && trigger201::discoverable(&snapshot.station) {
+            descriptors.push(trigger201_descriptor(snapshot.station.clone()));
+        }
+        for entry in &snapshot.resources {
+            if entry.capabilities.supports(&trigger)
+                && trigger201::discoverable(&entry.resource)
+                && entry.resource.bridge_id == snapshot.station.bridge_id
+                && entry.resource.station_id == snapshot.station.station_id
+            {
+                descriptors.push(trigger201_descriptor(entry.resource.clone()));
             }
         }
     }
@@ -154,6 +168,62 @@ fn trigger_descriptor(resource: ResourceRef) -> CommandSchemaDescriptor {
         ],
     }
 }
+fn trigger201_descriptor(resource: ResourceRef) -> CommandSchemaDescriptor {
+    let (classes, child_scope) = match &resource.resource {
+        None => (
+            trigger201::CLASSES
+                .iter()
+                .copied()
+                .filter(|class| *class != "StatusNotification")
+                .collect(),
+            None,
+        ),
+        Some(CanonicalResource::Evse {
+            connector_id: None, ..
+        }) => (
+            vec![
+                "MeterValues",
+                "SignV2GCertificate",
+                "TransactionEvent",
+                "SignCombinedCertificate",
+            ],
+            Some(false),
+        ),
+        Some(CanonicalResource::Evse {
+            connector_id: Some(_),
+            ..
+        }) => (vec!["StatusNotification", "TransactionEvent"], Some(true)),
+        _ => unreachable!("only discoverable OCPP 2.0.1 resources have descriptors"),
+    };
+    let mut fields = vec![CommandSchemaField {
+        name: "requestedMessage",
+        value_type: ValueType::NamedEnum,
+        required: true,
+        enum_values: Some(classes),
+    }];
+    if let Some(connector_required) = child_scope {
+        fields.push(CommandSchemaField {
+            name: "evse.id",
+            value_type: ValueType::UnsignedInteger,
+            required: true,
+            enum_values: None,
+        });
+        fields.push(CommandSchemaField {
+            name: "evse.connectorId",
+            value_type: ValueType::UnsignedInteger,
+            required: connector_required,
+            enum_values: None,
+        });
+    }
+
+    CommandSchemaDescriptor {
+        resource,
+        protocol: ProtocolEdition::Ocpp201,
+        action: "TriggerMessage",
+        payload_schema: trigger201::SCHEMA,
+        fields,
+    }
+}
 
 fn station_scope(resource: &ResourceRef) -> bool {
     resource.resource.is_none()
@@ -183,7 +253,10 @@ pub fn validate_privileged_operation(
 ) -> Result<(), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     if operation.action.as_str() == "TriggerMessage" {
-        return validate_trigger(resource, operation);
+        return match operation.protocol {
+            ProtocolEdition::Ocpp16j => validate_trigger(resource, operation),
+            ProtocolEdition::Ocpp201 => trigger201::validate(resource, operation).map(|_| ()),
+        };
     }
     if operation.action.as_str() != "ChangeAvailability" {
         return Err(UnsupportedOperation);

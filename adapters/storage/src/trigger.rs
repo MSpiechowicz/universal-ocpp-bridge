@@ -121,7 +121,8 @@ pub(crate) fn candidates(
             "SELECT request_id FROM command_results
          WHERE request_id > ?1
            AND trigger_reconcile_active = 1
-           AND json_extract(payload,'$.trigger_observation.status') IN ('pending','partial')
+           AND (json_extract(payload,'$.trigger_observation.status') IN ('pending','partial')
+                OR json_extract(payload,'$.trigger_observation_201.status') IN ('pending','partial','unattributable'))
          ORDER BY request_id LIMIT ?2",
         )
         .map_err(unavailable)?;
@@ -143,6 +144,14 @@ pub(crate) fn reconcile(
     request_id: &str,
     now: UtcTimestamp,
 ) -> Result<Option<CommandResult>, StorageError> {
+    let edition = connection.query_row(
+        "SELECT json_type(payload,'$.trigger_observation_201') FROM command_results WHERE request_id = ?1",
+        [request_id],
+        |row| row.get::<_, Option<String>>(0),
+    ).optional().map_err(unavailable)?;
+    if edition.flatten().as_deref() == Some("object") {
+        return crate::trigger201::reconcile(connection, request_id, now);
+    }
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(unavailable)?;

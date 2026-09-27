@@ -76,7 +76,36 @@ pub async fn complete_registration_with_invalidation<
         decision,
         interval_seconds,
         now,
-        Some(invalidation),
+        Some((invalidation, None)),
+    )
+    .await
+}
+
+/// Commits a Boot/Heartbeat trigger marker with station invalidation before reply.
+/// # Errors
+/// Returns sanitized lifecycle or storage errors.
+pub async fn complete_registration_with_trigger<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    call: crate::DecodedCall,
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    decision: RegistrationDecision,
+    interval_seconds: u32,
+    now: UtcTimestamp,
+    events: (EventEnvelope<E>, Option<EventEnvelope<E>>),
+) -> Result<Value, OcppCallError> {
+    complete_registration_inner(
+        call,
+        store,
+        snapshot,
+        decision,
+        interval_seconds,
+        now,
+        Some(events),
     )
     .await
 }
@@ -93,19 +122,19 @@ async fn complete_registration_inner<
     decision: RegistrationDecision,
     interval_seconds: u32,
     now: UtcTimestamp,
-    invalidation: Option<EventEnvelope<E>>,
+    events: Option<(EventEnvelope<E>, Option<EventEnvelope<E>>)>,
 ) -> Result<Value, OcppCallError> {
     let response = match call.observation {
         ChargerObservation::Registration(observation) if observation.protocol == PROTOCOL => {
-            let status = if let Some(invalidation) = invalidation {
-                registration::register_with_invalidation(
+            let status = if let Some(events) = events {
+                registration::v201::register_with_invalidation_and_trigger(
                     store,
                     snapshot,
                     &observation,
                     decision,
                     interval_seconds,
                     now,
-                    invalidation,
+                    events,
                 )
                 .await
             } else {
@@ -123,9 +152,15 @@ async fn complete_registration_inner<
             json!({"status":status.as_str(),"currentTime":now,"interval":interval_seconds})
         }
         ChargerObservation::Heartbeat { protocol } if protocol == PROTOCOL => {
-            if let Some(invalidation) = invalidation {
-                registration::v201::heartbeat_with_invalidation(store, snapshot, now, invalidation)
-                    .await
+            if let Some((invalidation, trigger)) = events {
+                registration::v201::heartbeat_with_invalidation_and_trigger(
+                    store,
+                    snapshot,
+                    now,
+                    invalidation,
+                    trigger,
+                )
+                .await
             } else {
                 registration::v201::heartbeat(store, snapshot, now).await
             }
@@ -133,6 +168,15 @@ async fn complete_registration_inner<
             json!({"currentTime":now})
         }
         ChargerObservation::EvseConnectorStatus(observation) => {
+            if events
+                .as_ref()
+                .is_some_and(|(_, trigger)| trigger.is_some())
+            {
+                return Err(error(
+                    OcppErrorCode::NotImplemented,
+                    "Trigger marker requires Boot or Heartbeat",
+                ));
+            }
             registration::v201::status(store, snapshot, &observation, now)
                 .await
                 .map_err(|e| lifecycle_error(&e))?;

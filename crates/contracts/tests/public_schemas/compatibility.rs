@@ -149,6 +149,18 @@ fn trigger_result_adds_only_optional_fields_to_released_schemas() {
             "export-batch",
             include_str!("../../schemas/v1.2/export-batch.schema.json"),
         ),
+        (
+            "command-result",
+            include_str!("../../schemas/v1.2/command-result.schema.json"),
+        ),
+        (
+            "export-record",
+            include_str!("../../schemas/v1.3/export-record.schema.json"),
+        ),
+        (
+            "export-batch",
+            include_str!("../../schemas/v1.3/export-batch.schema.json"),
+        ),
     ] {
         let old: Value = serde_json::from_str(previous).unwrap();
         let new = published(name);
@@ -165,5 +177,11 @@ fn trigger_result_adds_only_optional_fields_to_released_schemas() {
         };
         assert!(result["properties"].get("trigger_observation").is_some());
         assert!(!strings(result.get("required")).contains("trigger_observation"));
+        assert!(
+            result["properties"]
+                .get("trigger_observation_201")
+                .is_some()
+        );
+        assert!(!strings(result.get("required")).contains("trigger_observation_201"));
     }
 }

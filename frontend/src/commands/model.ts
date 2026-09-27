@@ -106,21 +106,46 @@ export function composeOperation(snapshot: StationSnapshot, resource: ResourceRe
       item.operation.kind === 'protocol_action' && item.operation.protocol === schema.protocol && item.operation.action === schema.action)) {
       throw new Error('Privileged action is not advertised with a supported schema.');
     }
-    const payload: Record<string, string | number | boolean> = {};
+    const trigger201 = schema.protocol === 'ocpp201' && schema.action === 'TriggerMessage' &&
+      schema.payload_schema === 'urn:OCPP:Cp:2:2020:3:TriggerMessageRequest';
+    const payload: Record<string, string | number | boolean | { id: number; connectorId?: number }> = {};
+    let evseId: number | undefined;
+    let connectorId: number | undefined;
     for (const field of schema.fields) {
-      const input = values[field.name]?.trim() ?? '';
+      const nested = trigger201 && (field.name === 'evse.id' || field.name === 'evse.connectorId');
+      const supportedField = trigger201 ? field.name === 'requestedMessage' || nested : !field.name.includes('.');
+      if (!supportedField || ['__proto__', 'prototype', 'constructor'].includes(field.name) ||
+        nested && field.value_type !== 'unsigned_integer') {
+        throw new Error(`Unsupported schema field ${field.name}.`);
+      }
+      const input = Object.hasOwn(values, field.name) ? values[field.name]?.trim() ?? '' : '';
       if (!input) { if (field.required) throw new Error(`${field.name} is required.`); continue; }
       if (field.enum_values && !field.enum_values.includes(input)) throw new Error(`${field.name} is not allowed.`);
+      let parsed: string | number | boolean;
       if (field.value_type === 'unsigned_integer' || field.value_type === 'signed_integer') {
         if (!/^-?(?:0|[1-9]\d*)$/.test(input)) throw new Error(`${field.name} must be an integer.`);
         const number = BigInt(input);
-        if (number < (field.value_type === 'unsigned_integer' ? 0n : -(1n << 53n) + 1n) || number > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`${field.name} is out of range.`);
-        payload[field.name] = Number(number);
+        const minimum = nested ? 1n : field.value_type === 'unsigned_integer' ? 0n : -(1n << 53n) + 1n;
+        const maximum = nested ? 2147483647n : BigInt(Number.MAX_SAFE_INTEGER);
+        if (number < minimum || number > maximum) throw new Error(`${field.name} is out of range.`);
+        parsed = Number(number);
       } else if (field.value_type === 'boolean') {
         if (input !== 'true' && input !== 'false') throw new Error(`${field.name} must be boolean.`);
-        payload[field.name] = input === 'true';
-      } else if (field.value_type === 'text' || field.value_type === 'named_enum') payload[field.name] = boundedText(input, 1024);
+        parsed = input === 'true';
+      } else if (field.value_type === 'text' || field.value_type === 'named_enum') parsed = boundedText(input, 1024);
       else throw new Error(`${field.name} has an unsupported field type.`);
+
+      if (field.name === 'evse.id' && nested) evseId = parsed as number;
+      else if (field.name === 'evse.connectorId' && nested) connectorId = parsed as number;
+      else payload[field.name] = parsed;
+    }
+    if (trigger201) {
+      if (connectorId !== undefined && evseId === undefined) throw new Error('evse.id is required when evse.connectorId is set.');
+      if (payload.requestedMessage === 'StatusNotification') {
+        if (evseId === undefined) throw new Error('evse.id is required for StatusNotification.');
+        if (connectorId === undefined) throw new Error('evse.connectorId is required for StatusNotification.');
+      }
+      if (evseId !== undefined) payload.evse = { id: evseId, ...(connectorId === undefined ? {} : { connectorId }) };
     }
     return { kind, parameters: { protocol: schema.protocol, action: schema.action, payload_schema: schema.payload_schema, payload } };
   }

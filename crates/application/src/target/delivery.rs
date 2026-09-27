@@ -68,6 +68,10 @@ pub struct TargetDescriptor {
 }
 
 /// Canonical target-neutral message shared immutably by all delivery attempts.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Inline CommandResult avoids allocation on the target delivery hot path and preserves constructors"
+)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TargetMessage<E> {
     /// Current station state.

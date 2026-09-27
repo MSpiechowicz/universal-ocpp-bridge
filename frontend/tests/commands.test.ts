@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { composeOperation, compareDecimal, newDraft, parseDetail, parseHistory, parseSchemas } from '../src/commands/model';
-import type { StationSnapshot } from '../src/stations/schema';
+import type { ResourceRef, StationSnapshot } from '../src/stations/schema';
 
 const station: StationSnapshot = {
   schema_version: { major: 1, revision: 0 }, station: { bridge_id: 'b', station_id: 's' }, observed_at: '2026-09-25T12:00:00Z',
@@ -20,6 +20,79 @@ const station: StationSnapshot = {
 const schema = { resource: station.station, protocol: 'ocpp16j', action: 'ChangeAvailability', payload_schema: 'urn:OCPP:1.6:2019:12:ChangeAvailabilityRequest',
   fields: [{ name: 'connectorId', value_type: 'unsigned_integer', required: true },
     { name: 'type', value_type: 'named_enum', required: true, enum_values: ['Operative', 'Inoperative'] }] };
+const evseResource: ResourceRef = {
+  ...station.station, resource: { kind: 'evse', evse_id: 'evse-7' },
+  native_protocol_reference: { protocol: 'ocpp201', evse_id: 7 },
+};
+const connectorResource: ResourceRef = {
+  ...station.station, resource: { kind: 'evse', evse_id: 'evse-7', connector_id: 'connector-2' },
+  native_protocol_reference: { protocol: 'ocpp201', evse_id: 7, connector_id: 2 },
+};
+
+const trigger201Schema = {
+  resource: station.station, protocol: 'ocpp201', action: 'TriggerMessage', payload_schema: 'urn:OCPP:Cp:2:2020:3:TriggerMessageRequest',
+  fields: [
+    { name: 'requestedMessage', value_type: 'named_enum', required: true, enum_values: ['Heartbeat', 'MeterValues', 'StatusNotification'] },
+    { name: 'evse.id', value_type: 'unsigned_integer', required: false },
+    { name: 'evse.connectorId', value_type: 'unsigned_integer', required: false },
+  ],
+};
+const triggerStation: StationSnapshot = { ...station, capabilities: {
+  ...station.capabilities, operations: [...station.capabilities.operations,
+    { operation: { kind: 'protocol_action', protocol: 'ocpp201', action: 'TriggerMessage' }, parameters: [] },
+    { operation: { kind: 'protocol_action', protocol: 'ocpp16j', action: 'TriggerMessage' }, parameters: [] }],
+}, resources: [evseResource, connectorResource].map(resource => ({
+  resource, availability: 'available', capabilities: {
+    ...station.capabilities, operations: [{ operation: { kind: 'protocol_action', protocol: 'ocpp201', action: 'TriggerMessage' }, parameters: [] }],
+  }, data_points: [], current_values: [],
+})) };
+
+test('201 trigger composes station-only, EVSE and exact connector scope as nested wire JSON', () => {
+  const compose = (values: Record<string, string>, resource: ResourceRef = station.station) =>
+    composeOperation(triggerStation, resource, 'ocpp', values, { ...trigger201Schema, resource });
+
+  assert.deepEqual(compose({ requestedMessage: 'Heartbeat' }).parameters,
+    { protocol: 'ocpp201', action: 'TriggerMessage', payload_schema: trigger201Schema.payload_schema, payload: { requestedMessage: 'Heartbeat' } });
+  assert.deepEqual(compose({ requestedMessage: 'MeterValues', 'evse.id': ' 7 ' }, evseResource).parameters,
+    { protocol: 'ocpp201', action: 'TriggerMessage', payload_schema: trigger201Schema.payload_schema, payload: { requestedMessage: 'MeterValues', evse: { id: 7 } } });
+  assert.deepEqual(compose({ requestedMessage: 'StatusNotification', 'evse.id': '7', 'evse.connectorId': '2' }, connectorResource).parameters,
+    { protocol: 'ocpp201', action: 'TriggerMessage', payload_schema: trigger201Schema.payload_schema, payload: { requestedMessage: 'StatusNotification', evse: { id: 7, connectorId: 2 } } });
+});
+
+test('201 trigger rejects incomplete or malformed EVSE scopes before submission', () => {
+  const compose = (values: Record<string, string>) =>
+    composeOperation(triggerStation, station.station, 'ocpp', values, trigger201Schema);
+
+  assert.throws(() => compose({ requestedMessage: 'MeterValues', 'evse.connectorId': '2' }), /evse\.id is required/);
+  assert.throws(() => compose({ requestedMessage: 'StatusNotification' }), /evse\.id is required/);
+  assert.throws(() => compose({ requestedMessage: 'StatusNotification', 'evse.id': '7' }), /evse\.connectorId is required/);
+  for (const invalid of ['0', '-1', '1.5', 'abc', '2147483648']) {
+    assert.throws(() => compose({ requestedMessage: 'MeterValues', 'evse.id': invalid }), /evse\.id (must be an integer|is out of range)/);
+    assert.throws(() => compose({ requestedMessage: 'StatusNotification', 'evse.id': '7', 'evse.connectorId': invalid }), /evse\.connectorId (must be an integer|is out of range)/);
+  }
+  assert.throws(() => compose({ requestedMessage: 'MeterValues', 'evse.id': '9007199254740992' }), /evse\.id is out of range/);
+  assert.deepEqual(compose({ requestedMessage: 'MeterValues', 'evse.id': '2147483647', 'evse.connectorId': '2147483647' }).parameters,
+    { protocol: 'ocpp201', action: 'TriggerMessage', payload_schema: trigger201Schema.payload_schema,
+      payload: { requestedMessage: 'MeterValues', evse: { id: 2147483647, connectorId: 2147483647 } } });
+});
+
+test('only pinned 201 trigger paths nest, while 16 trigger fields stay flat', () => {
+  const flatSchema = { ...trigger201Schema, protocol: 'ocpp16j', payload_schema: 'urn:OCPP:1.6:2019:12:TriggerMessageRequest',
+    fields: [{ name: 'requestedMessage', value_type: 'named_enum', required: true, enum_values: ['StatusNotification'] },
+      { name: 'connectorId', value_type: 'unsigned_integer', required: false }] };
+  assert.deepEqual(composeOperation(triggerStation, station.station, 'ocpp', { requestedMessage: 'StatusNotification', connectorId: '0' }, flatSchema).parameters,
+    { protocol: 'ocpp16j', action: 'TriggerMessage', payload_schema: flatSchema.payload_schema,
+      payload: { requestedMessage: 'StatusNotification', connectorId: 0 } });
+  for (const name of ['evse.extra', 'constructor', '__proto__']) {
+    const hostileSchema = { ...trigger201Schema, fields: [...trigger201Schema.fields, { name, value_type: 'text', required: false }] };
+    assert.throws(() => composeOperation(triggerStation, station.station, 'ocpp', { requestedMessage: 'Heartbeat', [name]: 'bad' }, hostileSchema), /Unsupported schema field/);
+  }
+  assert.throws(() => composeOperation(triggerStation, station.station, 'ocpp', { requestedMessage: 'StatusNotification', 'evse.id': '7' },
+    { ...flatSchema, fields: [...flatSchema.fields, { name: 'evse.id', value_type: 'unsigned_integer', required: false }] }), /Unsupported schema field/);
+  assert.throws(() => composeOperation(triggerStation, station.station, 'ocpp', { requestedMessage: 'Heartbeat', 'evse.id': '7' },
+    { ...trigger201Schema, fields: trigger201Schema.fields.map(field => field.name === 'evse.id' ? { ...field, value_type: 'text' } : field) }),
+  /Unsupported schema field/);
+});
 
 test('exact charging decimals honor declared bounds without floating-point rounding', () => {
   assert.equal(compareDecimal('9007199254740992.000000000000000001', '9007199254740992'), 1);

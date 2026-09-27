@@ -18,6 +18,11 @@ impl ProtocolClient for SimulatorProtocolClient {
         self.ocpp16_state
             .as_ref()
             .map(|state| state.lock().expect("OCPP 1.6 state lock").registered)
+            .or_else(|| {
+                self.ocpp201_state
+                    .as_ref()
+                    .map(|state| state.lock().expect("OCPP 2.0.1 state lock").registered)
+            })
     }
 
     fn heartbeat(&self) -> ClientFuture<'_, String> {

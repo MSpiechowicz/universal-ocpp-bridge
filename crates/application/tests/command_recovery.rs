@@ -324,6 +324,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         configuration: None,
         configuration_observations: Vec::new(),
         trigger_observation: None,
+        trigger_observation_201: None,
     }
 }
 

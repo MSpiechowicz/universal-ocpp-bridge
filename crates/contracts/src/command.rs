@@ -405,6 +405,9 @@ pub struct CommandResult {
     /// OCPP 1.6 `TriggerMessage` native reply and separately observed compatible messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger_observation: Option<crate::TriggerObservation>,
+    /// OCPP 2.0.1 native reply and separately observed native EVSE/connector evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_observation_201: Option<crate::TriggerObservation201>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

@@ -192,6 +192,7 @@ pub fn result_delivery(
             configuration: None,
             configuration_observations: vec![],
             trigger_observation: None,
+            trigger_observation_201: None,
         }),
     )
 }

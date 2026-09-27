@@ -79,6 +79,26 @@ where
     D: Send + 'static,
     R: Send + 'static,
 {
+    complete_status_with_trigger(call, store, snapshot, context, now, None).await
+}
+
+/// Commits a status and independently reserved trigger marker in the same journal write.
+/// # Errors
+/// Rejects non-status actions, invalid observations and failed persistence.
+pub async fn complete_status_with_trigger<C, E, D, R>(
+    call: DecodedCall,
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    context: AvailabilityContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<E>>,
+) -> Result<Value, OcppCallError>
+where
+    C: Send + 'static,
+    E: From<StationSnapshot> + Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+{
     let uob_application::ChargerObservation::EvseConnectorStatus(observation) = call.observation
     else {
         return Err(OcppCallError {
@@ -88,9 +108,16 @@ where
             field_path: None,
         });
     };
-    availability::record_status_201(store, snapshot, &observation, context, now)
-        .await
-        .map_err(|e| super::registration::lifecycle_error(&e))?;
+    availability::record_status_201_with_trigger(
+        store,
+        snapshot,
+        &observation,
+        context,
+        now,
+        trigger,
+    )
+    .await
+    .map_err(|e| super::registration::lifecycle_error(&e))?;
     Ok(json!([3, call.message_id, {}]))
 }
 

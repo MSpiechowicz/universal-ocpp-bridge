@@ -220,10 +220,6 @@ fn validate_stations(
     let mut stations = Vec::with_capacity(entries.len());
     let mut total_resources = 0;
     for station in entries {
-        if station.control.trigger_message.enabled() && station.protocol != ProtocolEdition::Ocpp16j
-        {
-            return Err(fail);
-        }
         let station_id = StationId::new(valid_station_name(station.id)?).map_err(|_| fail)?;
         if !station_ids.insert(station_id.clone()) {
             return Err(fail);

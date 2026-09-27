@@ -219,6 +219,35 @@ fn update_state(
     call: &SimulatorCall,
     response: &serde_json::Value,
 ) {
+    let mut state = state.lock().expect("OCPP 2.0.1 state lock poisoned");
+    match call.action {
+        SimulatorAction::BootNotification => {
+            state.boot = Some(call.payload.clone());
+            state.registered =
+                response.get("status").and_then(serde_json::Value::as_str) == Some("Accepted");
+        }
+        SimulatorAction::StatusNotification => {
+            if let (Some(evse), Some(connector)) = (
+                unsigned_id(&call.payload, "/evseId"),
+                unsigned_id(&call.payload, "/connectorId"),
+            ) {
+                state.status.insert((evse, connector), call.payload.clone());
+            }
+        }
+        SimulatorAction::MeterValues
+        | SimulatorAction::StartTransaction
+        | SimulatorAction::StopTransaction => {
+            update_transaction(&mut state, call, response);
+        }
+        SimulatorAction::Authorize => {}
+    }
+}
+
+fn update_transaction(
+    state: &mut Ocpp201State,
+    call: &SimulatorCall,
+    response: &serde_json::Value,
+) {
     let Some(transaction_id) = call
         .payload
         .pointer("/transactionInfo/transactionId")
@@ -226,7 +255,6 @@ fn update_state(
     else {
         return;
     };
-    let mut state = state.lock().expect("OCPP 2.0.1 state lock poisoned");
     match call
         .payload
         .get("eventType")
@@ -245,12 +273,52 @@ fn update_state(
                 state
                     .active_transactions
                     .insert(transaction_id.to_owned(), (evse, connector));
+                state
+                    .transactions
+                    .insert(transaction_id.to_owned(), call.payload.clone());
             }
+        }
+        Some("Updated") if state.active_transactions.contains_key(transaction_id) => {
+            let previous = state
+                .transactions
+                .entry(transaction_id.to_owned())
+                .or_insert_with(|| call.payload.clone());
+            let mut current = call.payload.clone();
+            if current.get("meterValue").is_none() {
+                current["meterValue"] = previous
+                    .get("meterValue")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+            }
+            if current.get("evse").is_none() {
+                current["evse"] = previous
+                    .get("evse")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+            }
+            if current.pointer("/transactionInfo/chargingState").is_none()
+                && let Some(charging_state) = previous.pointer("/transactionInfo/chargingState")
+            {
+                current["transactionInfo"]["chargingState"] = charging_state.clone();
+            }
+            *previous = current;
         }
         Some("Ended") => {
             state.active_transactions.remove(transaction_id);
+            state.transactions.remove(transaction_id);
         }
         _ => {}
+    }
+    if state.active_transactions.contains_key(transaction_id)
+        && let Some(evse) = unsigned_id(&call.payload, "/evse/id")
+        && let Some(values) = call.payload.get("meterValue")
+    {
+        state.meters.insert(
+            evse,
+            serde_json::json!({
+                "evseId": evse, "meterValue": values
+            }),
+        );
     }
 }
 

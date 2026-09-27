@@ -8,7 +8,7 @@ use crate::{
 };
 use uob_contracts::{
     Command, CommandResult, CommandSummary, RequestId, ResourceRef, StationSnapshot,
-    TriggerMessageClass, UtcTimestamp,
+    TriggerMessageClass, TriggerMessageClass201, UtcTimestamp,
 };
 /// Borrowed store adapter tying one ordered operation to its actual commit completion.
 pub struct DiagnosticStore<'a, C, E, D, R> {
@@ -117,6 +117,15 @@ impl<C: Send + 'static, E: Send + 'static, D: Send + 'static, R: Send + 'static>
         now: UtcTimestamp,
     ) -> StorageFuture<'_, bool> {
         self.inner.trigger_pending_for_station(station, class, now)
+    }
+    fn trigger_pending_for_station_201(
+        &self,
+        station: ResourceRef,
+        class: TriggerMessageClass201,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, bool> {
+        self.inner
+            .trigger_pending_for_station_201(station, class, now)
     }
     fn trigger_reconciliation_candidates(
         &self,

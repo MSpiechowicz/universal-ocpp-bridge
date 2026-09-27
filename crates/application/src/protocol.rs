@@ -1,7 +1,7 @@
 mod persistence;
 pub use persistence::{
     ObservationCommitError, record_measurements, record_measurements_with_trigger,
-    record_transaction_event,
+    record_transaction_event, record_transaction_event_with_trigger,
 };
 
 use uob_contracts::{
@@ -37,6 +37,15 @@ pub enum ChargerObservation {
     TriggerStatus {
         class: uob_contracts::TriggerMessageClass,
         status: String,
+    },
+    /// Native OCPP 2.0.1 log, firmware or publication status.
+    TriggerStatus201 {
+        class: uob_contracts::TriggerMessageClass201,
+        status: String,
+    },
+    /// Native OCPP 2.0.1 certificate signing request; no trusted EVSE identity.
+    TriggerCertificate201 {
+        class: uob_contracts::TriggerMessageClass201,
     },
     /// A transaction start was reported by the station.
     TransactionStarted(TransactionStartObservation),

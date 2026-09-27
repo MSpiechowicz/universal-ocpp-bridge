@@ -3,6 +3,7 @@
 pub mod availability;
 pub mod data_transfer;
 pub mod remote_control;
+mod trigger;
 
 mod authorization;
 mod authorization_input;
@@ -10,7 +11,8 @@ pub use authorization::{authorize_call, complete_authorization};
 
 mod registration;
 pub use registration::{
-    complete_registration, complete_registration_with_invalidation, registration_call,
+    complete_registration, complete_registration_with_invalidation,
+    complete_registration_with_trigger, registration_call,
 };
 
 use std::fmt::Write as _;
@@ -42,6 +44,9 @@ const PROTOCOL: ProtocolEdition = ProtocolEdition::Ocpp201;
 /// Returns [`DecodeError`] when the CALL envelope is malformed, the action has no implemented
 /// mapping, or the payload fails typed or field validation.
 pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
+    if frame.len() > 256 * 1024 {
+        return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
+    }
     let (message_id, action, payload) = parse_frame(frame)?;
     let observation = match action.as_str() {
         "Authorize" => {
@@ -57,6 +62,10 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         "StatusNotification" => {
             ChargerObservation::EvseConnectorStatus(registration::status_observation(payload)?)
         }
+        "LogStatusNotification" => trigger::log(payload)?,
+        "FirmwareStatusNotification" => trigger::firmware(payload)?,
+        "PublishFirmwareStatusNotification" => trigger::publish_firmware(payload)?,
+        "SignCertificate" => trigger::certificate(payload)?,
         "DataTransfer" => ChargerObservation::DataTransfer201(data_transfer::observation(payload)?),
         "MeterValues" => {
             let request: MeterValuesRequest = payload_as(payload)?;

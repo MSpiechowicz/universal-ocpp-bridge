@@ -66,6 +66,7 @@ impl CommandAdmissionPort<Value> for CommandState {
                 configuration: None,
                 configuration_observations: Vec::new(),
                 trigger_observation: None,
+                trigger_observation_201: None,
             };
             *self.result.lock() = Some(result.clone());
             Ok(result)

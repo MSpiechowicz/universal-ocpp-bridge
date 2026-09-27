@@ -46,7 +46,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.2/command-result.schema.json"),
+        include_str!("../schemas/v1.3/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
@@ -62,11 +62,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.3/export-record.schema.json"),
+        include_str!("../schemas/v1.4/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.3/export-batch.schema.json"),
+        include_str!("../schemas/v1.4/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -84,8 +84,8 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 3,
-        "command-result" => 2,
+        "export-record" | "export-batch" => 4,
+        "command-result" => 3,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
@@ -306,6 +306,41 @@ fn trigger_result_and_nested_exports_validate_observations() {
     assert!(!validator.is_valid(&invalid));
     invalid = result.clone();
     invalid["trigger_observation"]["observed"][0]["target"] = json!(-1);
+    assert!(!validator.is_valid(&invalid));
+
+    result["schema_version"]["revision"] = json!(3);
+    result
+        .as_object_mut()
+        .unwrap()
+        .remove("trigger_observation");
+    result["trigger_observation_201"] = json!({
+        "requested_class": "TransactionEvent",
+        "native_scope": {"id": 2, "connectorId": 1},
+        "expected_targets": [{"kind": "connector", "id": 2, "connector_id": 1}],
+        "dispatch_started_at": "2026-09-01T14:00:01Z",
+        "deadline": "2026-09-01T14:01:01Z",
+        "native_response": {
+            "status": "Accepted",
+            "statusInfo": {"reasonCode": "Ready"}
+        },
+        "observed": [{
+            "event_id": "event-tx-201",
+            "target": {"kind": "connector", "id": 2, "connector_id": 1},
+            "observed_at": "2026-09-01T14:00:04Z"
+        }],
+        "status": "observed"
+    });
+    assert_valid("command-result", result);
+    batch["records"][0]["payload"] = json!({"kind":"command_result","data":result});
+    assert_valid("export-record", &batch["records"][0]);
+    assert_valid("export-batch", &batch);
+
+    let mut invalid = result.clone();
+    invalid["trigger_observation_201"]["requested_class"] = json!("DiagnosticsStatusNotification");
+    assert!(!validator.is_valid(&invalid));
+    invalid = result.clone();
+    invalid["trigger_observation_201"]["expected_targets"][0] =
+        json!({"kind": "connector", "id": 2});
     assert!(!validator.is_valid(&invalid));
 }
 

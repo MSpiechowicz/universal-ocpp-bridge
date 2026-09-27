@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add privileged, opt-in OCPP 2.0.1 `TriggerMessage` for eleven native
+  classes, scoped EVSE/connector dispatch, independent native replies and
+  60-second non-causal durable observations. SQLite schema v11 and additive
+  command-result v1.3/export v1.4 preserve no-replay restart behavior;
+  authenticated socket, storage, live-service and simulator scenarios cover
+  denial, scope and recovery (#116).
+
 - Add opt-in OCPP 1.6J `TriggerMessage` with privileged demo admission,
   scoped native replies and 60-second, non-causal observation of six station
   message classes. Durable results distinguish missing/partial observations

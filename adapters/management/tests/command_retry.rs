@@ -70,6 +70,7 @@ impl CommandAdmissionPort<Value> for State {
                 configuration: None,
                 configuration_observations: vec![],
                 trigger_observation: None,
+                trigger_observation_201: None,
             };
             *existing = Some((command, result.clone()));
             Ok(result)

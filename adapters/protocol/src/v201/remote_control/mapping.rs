@@ -1,5 +1,4 @@
-use super::RemoteStartIdentity;
-use super::charging_limit;
+use super::{RemoteStartIdentity, charging_limit, trigger};
 use rust_ocpp::v2_0_1::messages::{
     change_availability::ChangeAvailabilityResponse,
     request_start_transaction::{RequestStartTransactionRequest, RequestStartTransactionResponse},
@@ -8,7 +7,7 @@ use rust_ocpp::v2_0_1::messages::{
     unlock_connector::{UnlockConnectorRequest, UnlockConnectorResponse},
 };
 use serde_json::Value;
-use uob_application::CommandDispatchOutcome;
+use uob_application::{CommandDispatchOutcome, TriggerExpectation};
 use uob_contracts::{
     AvailabilityState, Command, CommandError, CommandErrorCode, CommandOperation, Connectivity,
     NativeProtocolReference, ProtocolEdition, ResourceCapabilities, ResourceRef, StationSnapshot,
@@ -46,7 +45,11 @@ pub(super) fn prepare(
     ) {
         return Err(CommandErrorCode::StationDisconnected);
     }
-    uob_application::registration::v201::accepted(snapshot).map_err(|_| PolicyRejected)?;
+    if !boot_trigger(command) {
+        uob_application::registration::v201::accepted(snapshot).map_err(|_| PolicyRejected)?;
+    } else if uob_application::registration::v201::accepted(snapshot).is_ok() {
+        return Err(PolicyRejected);
+    }
     let capabilities = capabilities(snapshot, &command.resource).ok_or(InvalidParameters)?;
     command
         .validate_for_dispatch(capabilities, now)
@@ -73,71 +76,137 @@ pub(super) fn prepare(
     match &command.operation {
         CommandOperation::Start {
             authorization_reference,
-        } => {
-            if !available(snapshot, &command.resource) {
-                return Err(PolicyRejected);
-            }
-            let reference = authorization_reference.as_deref().ok_or(PolicyRejected)?;
-            let token = identity
-                .authorized_token(reference, &command.resource, now)
-                .ok_or(PolicyRejected)?;
-            let evse_id = match native {
-                None => None,
-                Some(NativeProtocolReference::Ocpp201 {
-                    evse_id,
-                    connector_id: None,
-                }) if evse_id > 0 => Some(i32::try_from(evse_id).map_err(|_| InvalidParameters)?),
-                // OCPP start cannot address a connector. Never silently widen its authorization.
-                _ => return Err(InvalidParameters),
-            };
-            let request = RequestStartTransactionRequest {
-                evse_id,
-                remote_start_id: remote_start_id
-                    .filter(|id| *id > 0)
-                    .ok_or(InvalidParameters)?,
-                id_token: serde_json::from_value(token_value(&token)?)
-                    .map_err(|_| InvalidParameters)?,
-                charging_profile: None,
-                group_id_token: None,
-            };
-            Ok(("RequestStartTransaction", encode(request)?))
-        }
+        } => start(
+            command,
+            snapshot,
+            identity,
+            now,
+            remote_start_id,
+            native,
+            authorization_reference.as_deref(),
+        ),
         CommandOperation::Stop { transaction_id } => {
-            let tx = snapshot
-                .transactions
-                .iter()
-                .find(|tx| {
-                    &tx.transaction_id == transaction_id
-                        && covers(&command.resource, &tx.resource)
-                        && tx.state != TransactionState::Ended
-                })
-                .ok_or(InvalidParameters)?;
-            let state = tx
-                .protocol_state
-                .as_ref()
-                .filter(|s| s.protocol == ProtocolEdition::Ocpp201)
-                .ok_or(InvalidParameters)?;
-            let native_id = state.native_transaction_id.clone();
-            if native_id.is_empty() || native_id.chars().count() > 36 {
-                return Err(InvalidParameters);
-            }
-            Ok((
-                "RequestStopTransaction",
-                encode(RequestStopTransactionRequest {
-                    transaction_id: native_id,
-                })?,
-            ))
+            stop(command, snapshot, transaction_id.as_str())
         }
         CommandOperation::SetChargingLimit(limit) => Ok((
             "SetChargingProfile",
             charging_limit::prepare(command, snapshot, limit)?,
         )),
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp201 => {
+            if operation.action.as_str() == "TriggerMessage" {
+                return trigger::prepare(operation, &command.resource, snapshot)
+                    .map(|(payload, _)| ("TriggerMessage", payload));
+            }
             privileged(operation, &command.resource, &snapshot.station, native)
         }
         CommandOperation::Ocpp(_) => Err(UnsupportedOperation),
     }
 }
+
+fn start(
+    command: &Command<Value>,
+    snapshot: &StationSnapshot,
+    identity: &dyn RemoteStartIdentity,
+    now: UtcTimestamp,
+    remote_start_id: Option<i32>,
+    native: Option<NativeProtocolReference>,
+    authorization_reference: Option<&str>,
+) -> Result<(&'static str, Value), CommandErrorCode> {
+    use CommandErrorCode::{InvalidParameters, PolicyRejected};
+    if !available(snapshot, &command.resource) {
+        return Err(PolicyRejected);
+    }
+    let reference = authorization_reference.ok_or(PolicyRejected)?;
+    let token = identity
+        .authorized_token(reference, &command.resource, now)
+        .ok_or(PolicyRejected)?;
+    let evse_id = match native {
+        None => None,
+        Some(NativeProtocolReference::Ocpp201 {
+            evse_id,
+            connector_id: None,
+        }) if evse_id > 0 => Some(i32::try_from(evse_id).map_err(|_| InvalidParameters)?),
+        // OCPP start cannot address a connector. Never silently widen its authorization.
+        _ => return Err(InvalidParameters),
+    };
+    let request = RequestStartTransactionRequest {
+        evse_id,
+        remote_start_id: remote_start_id
+            .filter(|id| *id > 0)
+            .ok_or(InvalidParameters)?,
+        id_token: serde_json::from_value(token_value(&token)?).map_err(|_| InvalidParameters)?,
+        charging_profile: None,
+        group_id_token: None,
+    };
+    Ok(("RequestStartTransaction", encode(request)?))
+}
+
+fn stop(
+    command: &Command<Value>,
+    snapshot: &StationSnapshot,
+    transaction_id: &str,
+) -> Result<(&'static str, Value), CommandErrorCode> {
+    use CommandErrorCode::InvalidParameters;
+    let tx = snapshot
+        .transactions
+        .iter()
+        .find(|tx| {
+            tx.transaction_id.as_str() == transaction_id
+                && covers(&command.resource, &tx.resource)
+                && tx.state != TransactionState::Ended
+        })
+        .ok_or(InvalidParameters)?;
+    let state = tx
+        .protocol_state
+        .as_ref()
+        .filter(|s| s.protocol == ProtocolEdition::Ocpp201)
+        .ok_or(InvalidParameters)?;
+    let native_id = state.native_transaction_id.clone();
+    if native_id.is_empty() || native_id.chars().count() > 36 {
+        return Err(InvalidParameters);
+    }
+    Ok((
+        "RequestStopTransaction",
+        encode(RequestStopTransactionRequest {
+            transaction_id: native_id,
+        })?,
+    ))
+}
+fn boot_trigger(command: &Command<Value>) -> bool {
+    matches!(&command.operation, CommandOperation::Ocpp(operation)
+        if operation.protocol == ProtocolEdition::Ocpp201
+            && operation.action.as_str() == "TriggerMessage"
+            && operation.payload["requestedMessage"] == "BootNotification")
+}
+
+pub(super) fn trigger_expectation(
+    command: &Command<Value>,
+    snapshot: &StationSnapshot,
+    now: UtcTimestamp,
+) -> Option<TriggerExpectation> {
+    let CommandOperation::Ocpp(operation) = &command.operation else {
+        return None;
+    };
+    if operation.action.as_str() != "TriggerMessage"
+        || operation.protocol != ProtocolEdition::Ocpp201
+        || boot_trigger(command) == uob_application::registration::v201::accepted(snapshot).is_ok()
+    {
+        return None;
+    }
+    let capabilities = capabilities(snapshot, &command.resource)?;
+    command.validate_for_dispatch(capabilities, now).ok()?;
+    super::constraints::validate(
+        command,
+        capabilities
+            .require(&command.operation.required_capability())
+            .ok()?,
+    )
+    .ok()?;
+    trigger::prepare(operation, &command.resource, snapshot)
+        .ok()
+        .map(|(_, expectation)| TriggerExpectation::Ocpp201(expectation))
+}
+
 fn privileged(
     operation: &uob_contracts::PrivilegedOcppOperation<Value>,
     resource: &ResourceRef,
@@ -237,6 +306,9 @@ fn encode(value: impl serde::Serialize) -> Result<Value, CommandErrorCode> {
     serde_json::to_value(value).map_err(|_| CommandErrorCode::InvalidParameters)
 }
 pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome {
+    if action == "TriggerMessage" {
+        return trigger::response(payload);
+    }
     let allowed: &[&str] = if action == "RequestStartTransaction" {
         &["status", "statusInfo", "transactionId"]
     } else {

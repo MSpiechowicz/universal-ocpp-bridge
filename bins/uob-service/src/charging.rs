@@ -84,7 +84,7 @@ impl StationSettings {
         }
         if self.control.trigger_message.enabled() {
             operations.push(Operation::ProtocolAction {
-                protocol: ProtocolEdition::Ocpp16j,
+                protocol: self.protocol,
                 action: "TriggerMessage".to_owned(),
             });
         }
@@ -103,12 +103,15 @@ impl StationSettings {
             if self.control.trigger_message.enabled()
                 && matches!(
                     entry.resource.native_protocol_reference,
-                    Some(NativeProtocolReference::Ocpp16 { connector_id: 1.. })
+                    Some(
+                        NativeProtocolReference::Ocpp16 { connector_id: 1.. }
+                            | NativeProtocolReference::Ocpp201 { evse_id: 1.., .. }
+                    )
                 )
             {
                 entry.capabilities.operations.push(SupportedOperation {
                     operation: Operation::ProtocolAction {
-                        protocol: ProtocolEdition::Ocpp16j,
+                        protocol: self.protocol,
                         action: "TriggerMessage".to_owned(),
                     },
                     parameters: vec![],

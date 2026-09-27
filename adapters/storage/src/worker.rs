@@ -14,7 +14,7 @@ use uob_application::{
 };
 use uob_contracts::{
     Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope, ResourceRef,
-    StationSnapshot, TriggerMessageClass, UtcTimestamp,
+    StationSnapshot, TriggerMessageClass, TriggerMessageClass201, UtcTimestamp,
 };
 
 use crate::retention::SqliteRetentionPolicy;
@@ -82,6 +82,12 @@ pub(crate) enum Request<C, E, D, R> {
         Reply<Option<CommandResult>>,
     ),
     TriggerPending(ResourceRef, TriggerMessageClass, UtcTimestamp, Reply<bool>),
+    TriggerPending201(
+        ResourceRef,
+        TriggerMessageClass201,
+        UtcTimestamp,
+        Reply<bool>,
+    ),
     TriggerCandidates(Option<String>, usize, Reply<Vec<uob_contracts::RequestId>>),
     ReconcileTrigger(String, UtcTimestamp, Reply<Option<CommandResult>>),
     PruneCommands(i64, Reply<u64>),
@@ -169,6 +175,9 @@ pub(crate) fn run<C, E, D, R>(
             }
             Request::TriggerPending(station, class, now, reply) => {
                 respond(reply, crate::trigger::pending(&connection, &station, class, now));
+            }
+            Request::TriggerPending201(station, class, now, reply) => {
+                respond(reply, crate::trigger201::pending(&connection, &station, class, now));
             }
             Request::TriggerCandidates(after, limit, reply) => {
                 respond(reply, crate::trigger::candidates(&connection, after.as_deref(), limit));

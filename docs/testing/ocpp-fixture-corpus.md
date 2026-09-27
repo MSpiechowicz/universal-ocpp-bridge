@@ -114,5 +114,36 @@ outcomes and restart without replay. The row lists only outbound requests
 because the inventory labels that requirement `csms_to_charging_station`;
 the response and subsequent inbound CALL fixtures remain independently pinned
 in `fixtures.json`. This does not establish interoperability with physical
-stations, physical charging or OCA certification. `ocpp201.remote-trigger`
-remains planned.
+stations, physical charging or OCA certification.
+
+## OCPP 2.0.1 TriggerMessage fixtures
+
+The 2.0.1 wire corpus uses unchanged OCA Edition 4 / June 2026 errata
+Part 3 FINAL Draft 6 schemas from the pinned archive, SHA-256
+`192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a`.
+The independently authored `wire.ocpp201.trigger-*` entries include 20
+outbound TriggerMessage CALL fixtures for all eleven native classes, three
+native statuses plus missing-connector rejection, and distinct schema-checked
+station-originated CALLs. The `evse` object distinguishes EVSE and connector
+targeting from 1.6's connector ID. Fixtures include irrelevant EVSE for
+station-only classes, connector-specific StatusNotification, EVSE-wide
+MeterValues, omitted/all targets, transaction events and certificate signing
+requests. A schema-valid missing-connector or omitted-EVSE status trigger
+fixture does not imply bridge admission without an exact connector scope.
+Reply CALLRESULTs correlate with their request IDs; later station CALLs
+have their own IDs and are not causally linked to native acceptance. The
+certificate fixtures are wire examples, not
+simulator private-key/CSR capability or certificate-chain/ISO 15118 workflows.
+
+`ocpp201.remote-trigger` is `verified` by checked fixtures and named
+authenticated protocol-socket, persistent SQLite storage, running-service
+HTTP/WebSocket/SQLite and simulator tests in `coverage.json`. Its `fixture_ids`
+list only the outbound direction declared by the inventory; independently
+pinned native replies and resulting inbound calls remain in `fixtures.json`.
+Those tests exercise scoped admission, preaccepted Boot, response ordering,
+60-second non-causal reconciliation, denied/malformed/delayed/disconnect and
+restart without automatic replay. An EVSE-scoped certificate receipt lacks
+native EVSE identity and remains unattributable. The simulator returns
+`NotImplemented` for certificate signing triggers without a private key/CSR;
+verified here does not mean OCA certification, interoperability with physical
+stations, physical charging, or completion of planned certificate workflows.

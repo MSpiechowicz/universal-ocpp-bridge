@@ -55,7 +55,7 @@ impl IncomingCall {
         .await
     }
 
-    /// Completes an OCPP 1.6 Boot/Heartbeat with both its usual invalidation and
+    /// Completes an OCPP Boot/Heartbeat with both its usual invalidation and
     /// a correlated trigger marker in the same durable write.
     /// # Errors
     /// Returns unchanged lifecycle errors or a sanitized response-queue failure.
@@ -150,12 +150,18 @@ impl IncomingCall {
                 }
             },
             ProtocolEdition::Ocpp201 => match events {
-                Some((_, Some(_))) => Err(OcppCallError {
-                    protocol,
-                    code: crate::OcppErrorCode::NotImplemented,
-                    description: "Trigger marker requires OCPP 1.6",
-                    field_path: None,
-                }),
+                Some(events @ (_, Some(_))) => {
+                    v201::complete_registration_with_trigger(
+                        self.call,
+                        &store,
+                        snapshot,
+                        decision,
+                        interval_seconds,
+                        now,
+                        events,
+                    )
+                    .await
+                }
                 Some((event, None)) => {
                     v201::complete_registration_with_invalidation(
                         self.call,

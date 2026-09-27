@@ -141,6 +141,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             configuration: None,
             configuration_observations: vec![],
             trigger_observation: None,
+            trigger_observation_201: None,
         }),
         ..EventSource::default()
     });
