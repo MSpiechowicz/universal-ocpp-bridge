@@ -1,0 +1,3 @@
+[workspace]
+members = ["owner", "consumer"]
+resolver = "3"

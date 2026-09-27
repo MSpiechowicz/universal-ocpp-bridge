@@ -1,0 +1,6 @@
+[package]
+name = "bb8"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]

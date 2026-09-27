@@ -22,7 +22,7 @@ jobs:
   workspace:
     name: Format, lint, test, and architecture
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out reviewed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -51,6 +51,9 @@ jobs:
         run: ./scripts/test-staging-postgresql.sh
       - name: Verify PostgreSQL export provisioning in a disposable cluster
         run: ./scripts/test-postgresql-provisioning.sh
+      - name: Qualify the PostgreSQL client against disposable TLS/SCRAM and fault fixtures
+        timeout-minutes: 20
+        run: ./scripts/test-postgresql-client.sh
       - name: Verify Linux deployment isolation on the disposable runner
         run: ./scripts/test-environment-isolation.sh
 

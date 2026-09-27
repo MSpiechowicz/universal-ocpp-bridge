@@ -8,6 +8,7 @@ use std::{
 use serde::Deserialize;
 
 mod documentation;
+mod postgresql;
 mod security;
 
 const EXPECTED_PACKAGES: &[&str] = &[
@@ -21,6 +22,7 @@ const EXPECTED_PACKAGES: &[&str] = &[
     "uob-management-adapter",
     "uob-mqtt-target-adapter",
     "uob-ocpp-fixtures",
+    "uob-postgresql-export-adapter",
     "uob-protocol-adapter",
     "uob-provider-adapter",
     "uob-release-manager",
@@ -31,7 +33,6 @@ const EXPECTED_PACKAGES: &[&str] = &[
     "uob-target-adapter",
     "uob-target-conformance",
 ];
-
 const FORBIDDEN_SOURCE_TERMS: &[&str] = &[
     "rust_ocpp",
     "rustocpp",
@@ -46,7 +47,6 @@ const FORBIDDEN_SOURCE_TERMS: &[&str] = &[
     "opcua",
     "rumqttc",
     "rusqlite",
-    "postgres",
     "axum",
     "tokio::net",
     "websocket",
@@ -76,7 +76,6 @@ struct Dependency {
     name: String,
     rename: Option<String>,
 }
-
 #[derive(Deserialize)]
 struct Target {
     name: String,
@@ -146,6 +145,7 @@ fn check(root: &Path) -> Result<(), Vec<String>> {
     check_protected_dependencies(&packages, &mut errors);
     check_owned_dependencies(&packages, &mut errors);
     check_deferred_industrial_dependencies(&packages, &mut errors);
+    postgresql::check(&packages, &mut errors);
     check_protected_sources(&packages, &mut errors);
 
     if packages.contains_key("uob-service") {

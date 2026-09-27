@@ -1,0 +1,8 @@
+[package]
+name = "uob-postgresql-export-adapter"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+tokio-postgres = { path = "../../dependencies/tokio-postgres" }
+postgres_rustls = { path = "../../dependencies/postgres-rustls" }

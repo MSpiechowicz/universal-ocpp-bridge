@@ -81,6 +81,7 @@ packages=(
   uob-ems-scada-http-target-adapter
   uob-storage-adapter
   uob-external-export-adapter
+  uob-postgresql-export-adapter
   uob-provider-adapter
   uob-management-adapter
   uob-service
