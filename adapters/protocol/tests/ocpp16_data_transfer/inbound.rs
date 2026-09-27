@@ -202,6 +202,8 @@ async fn stalled_provider_times_out_without_a_success_or_commit() {
     let error = result.await.unwrap_err();
     assert_eq!(error.code, OcppErrorCode::InternalError);
     assert_eq!(persisted(&store).await, before);
+    // Storage shutdown waits on an OS thread; its deadline needs real time.
+    tokio::time::resume();
     shutdown(&store).await;
 }
 
