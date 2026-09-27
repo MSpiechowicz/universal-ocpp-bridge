@@ -1,6 +1,6 @@
 use super::{
     openapi_document,
-    schemas::{CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3},
+    schemas::{CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3, CANONICAL_V1_4},
 };
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
 use serde_json::{Value, json};
@@ -16,6 +16,7 @@ fn registry() -> jsonschema::Registry<'static> {
         ("v1.1", CANONICAL_V1_1),
         ("v1.2", CANONICAL_V1_2),
         ("v1.3", CANONICAL_V1_3),
+        ("v1.4", CANONICAL_V1_4),
     ]
     .into_iter()
     .flat_map(|(revision, schemas)| {
@@ -89,7 +90,7 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
         .unwrap()
         .validate(&document)
         .unwrap();
-    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.2/command-result.schema.json"});
+    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.3/command-result.schema.json"});
     assert_eq!(
         document["paths"]["/bridge/v1/commands/{request_id}"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"],
@@ -116,6 +117,14 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
     );
     assert_eq!(
         document["paths"]["/bridge/v1/schemas/v1.3/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
+        json!([
+            "command-result.schema.json",
+            "export-record.schema.json",
+            "export-batch.schema.json"
+        ])
+    );
+    assert_eq!(
+        document["paths"]["/bridge/v1/schemas/v1.4/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
         json!(["export-record.schema.json", "export-batch.schema.json"])
     );
     for name in document["components"]["schemas"]
@@ -175,6 +184,8 @@ async fn schema_versions_serve_exact_canonical_files() {
         "/bridge/v1/schemas/v1.1/command-result.schema.json",
         "/bridge/v1/schemas/v1.2/command-result.schema.json",
         "/bridge/v1/schemas/v1.3/export-record.schema.json",
+        "/bridge/v1/schemas/v1.3/command-result.schema.json",
+        "/bridge/v1/schemas/v1.4/export-record.schema.json",
     ] {
         assert_eq!(get(router.clone(), path, None).await.0, 401);
         assert_eq!(get(router.clone(), path, Some("wrong")).await.0, 401);
@@ -199,7 +210,11 @@ async fn schema_versions_serve_exact_canonical_files() {
         assert_eq!(status, 200);
         assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
     }
-    for (revision, schemas) in [("v1.2", CANONICAL_V1_2), ("v1.3", CANONICAL_V1_3)] {
+    for (revision, schemas) in [
+        ("v1.2", CANONICAL_V1_2),
+        ("v1.3", CANONICAL_V1_3),
+        ("v1.4", CANONICAL_V1_4),
+    ] {
         for (file, source) in schemas {
             let (status, body) = get(
                 router.clone(),

@@ -15,6 +15,7 @@ mod schema;
 mod snapshots;
 mod store;
 mod trigger;
+mod trigger201;
 mod worker;
 
 pub use configuration::{MINIMUM_SQLITE_VERSION, SqliteRuntimeConfiguration};

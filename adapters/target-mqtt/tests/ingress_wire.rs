@@ -418,6 +418,7 @@ fn admitted<P>(command: &uob_contracts::ExternalCommand<P>) -> CommandResult {
         configuration: None,
         configuration_observations: vec![],
         trigger_observation: None,
+        trigger_observation_201: None,
     }
 }
 

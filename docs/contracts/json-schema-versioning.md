@@ -57,3 +57,16 @@ compatible-event IDs. Its `pending`, `partial`, `observed`, `absent` and
 physical effects. Nested export-record and export-batch schemas advance to
 v1.3; earlier command-result v1.0/v1.1 and export v1.0/v1.1/v1.2 snapshots
 remain unchanged. Older v1 readers may ignore the additive optional field.
+
+OCPP 2.0.1 `TriggerMessage` adds a **separate**, optional
+`trigger_observation_201` to command-result v1.3; it does not reuse the 1.6
+connector-target field. The native EVSE/connector scope and frozen targets,
+60-second dispatch window, exact optional native `Accepted`/`Rejected`/
+`NotImplemented` reply with `statusInfo`, compatible event IDs and independent
+`pending`/`partial`/`observed`/`absent`/`unsupported`/`unattributable`
+observation status are additive response evidence, never causal or physical
+charging proof. Nested export-record and export-batch schemas advance to v1.4;
+previous command-result v1.0–v1.2 and export v1.0–v1.3 snapshots remain
+unchanged. Older compatible v1 readers may ignore these optional fields. This
+contract addition and SQLite schema v11 do not implement the separately
+planned certificate-chain, CSR issuance or ISO 15118 workflows.

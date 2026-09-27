@@ -1,12 +1,73 @@
 use uob_contracts::{
-    TriggerMessageClass, TriggerObservation, TriggerObservationStatus, UtcTimestamp,
+    CommandResult, ContractVersion, TriggerMessageClass, TriggerObservation,
+    TriggerObservationStatus, UtcTimestamp,
 };
 
+use super::TriggerExpectation201;
 use crate::{CommandAdmissionError, CommandAdmissionErrorCode};
+
+/// Edition-discriminated expectation; dispatch never erases the native resource model.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TriggerExpectation {
+    Ocpp16(TriggerExpectation16),
+    Ocpp201(TriggerExpectation201),
+}
+
+impl TriggerExpectation {
+    pub(super) fn start(
+        &self,
+        result: &mut CommandResult,
+        now: UtcTimestamp,
+    ) -> Result<(), CommandAdmissionError> {
+        match self {
+            Self::Ocpp16(expectation) => {
+                result.schema_version = ContractVersion::V1_TRIGGER;
+                result.trigger_observation = Some(expectation.start(now)?);
+            }
+            Self::Ocpp201(expectation) => {
+                result.schema_version = ContractVersion::V1_TRIGGER_201;
+                result.trigger_observation_201 = Some(expectation.start(now)?);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl TriggerExpectation {
+    pub(super) fn finish(
+        &self,
+        result: &mut CommandResult,
+        dispatch_started_at: UtcTimestamp,
+        now: UtcTimestamp,
+        response_16: Option<uob_contracts::TriggerNativeResponse>,
+        response_201: Option<uob_contracts::TriggerNativeResponse201>,
+    ) -> Result<(), CommandAdmissionError> {
+        self.start(result, dispatch_started_at)?;
+        match self {
+            Self::Ocpp16(_) => {
+                let observation = result
+                    .trigger_observation
+                    .as_mut()
+                    .expect("1.6 expectation");
+                observation.native_response = response_16;
+                observation.refresh_status(now);
+            }
+            Self::Ocpp201(_) => {
+                let observation = result
+                    .trigger_observation_201
+                    .as_mut()
+                    .expect("201 expectation");
+                observation.native_response = response_201;
+                observation.refresh_status(now);
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Native OCPP 1.6 target set captured before a `TriggerMessage` is sent.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TriggerExpectation {
+pub struct TriggerExpectation16 {
     pub requested_class: TriggerMessageClass,
     /// `None` requests all applicable IDs; explicit zero means station-only for `StatusNotification`.
     pub native_scope: Option<u32>,
@@ -14,7 +75,7 @@ pub struct TriggerExpectation {
     pub expected_targets: Vec<u32>,
 }
 
-impl TriggerExpectation {
+impl TriggerExpectation16 {
     /// Fixes the observation window at the actual dispatch start.
     ///
     /// # Errors
@@ -84,7 +145,7 @@ mod tests {
     fn all_status_targets_include_zero_and_sixty_four_connectors() {
         let now: UtcTimestamp = serde_json::from_str("\"2026-09-01T00:00:00Z\"").unwrap();
         let targets = (0..=64).collect::<Vec<_>>();
-        let status = TriggerExpectation {
+        let status = TriggerExpectation16 {
             requested_class: TriggerMessageClass::StatusNotification,
             native_scope: None,
             expected_targets: targets.clone(),
@@ -95,12 +156,12 @@ mod tests {
             observation.deadline.into_inner() - observation.dispatch_started_at.into_inner(),
             time::Duration::seconds(60)
         );
-        let meter = TriggerExpectation {
+        let meter = TriggerExpectation16 {
             requested_class: TriggerMessageClass::MeterValues,
             ..status
         };
         assert!(meter.start(now).is_err());
-        let meter = TriggerExpectation {
+        let meter = TriggerExpectation16 {
             expected_targets: (1..=64).collect(),
             ..meter
         };
@@ -115,7 +176,7 @@ mod tests {
             TriggerMessageClass::FirmwareStatusNotification,
             TriggerMessageClass::Heartbeat,
         ] {
-            let observation = TriggerExpectation {
+            let observation = TriggerExpectation16 {
                 requested_class,
                 native_scope: Some(42),
                 expected_targets: vec![0],

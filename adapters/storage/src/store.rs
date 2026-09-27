@@ -14,14 +14,13 @@ use uob_application::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandHistoryCursor, CommandHistoryQuery,
     CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordQuery,
     DeliveryAttempt, DeliveryId, OperationalStore, Page, PendingDeliveryQuery,
-    RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
-    RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery, SnapshotCursor,
-    SnapshotQuery, StorageError, StorageErrorCode, StorageFuture, StorageRetentionStatus,
-    TargetDeliveryStore,
+    RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery,
+    ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageError, StorageErrorCode,
+    StorageFuture, StorageRetentionStatus, TargetDeliveryStore,
 };
 use uob_contracts::{
     Command, CommandSummary, ConfigurationObservation, EventEnvelope, EventId, RequestId,
-    ResourceRef, StationSnapshot, TriggerMessageClass, UtcTimestamp,
+    ResourceRef, StationSnapshot, TriggerMessageClass, TriggerMessageClass201, UtcTimestamp,
 };
 
 use crate::{
@@ -29,6 +28,9 @@ use crate::{
     configuration::{configure, unavailable},
     worker::{self, Reply, Request},
 };
+
+mod cursors;
+use cursors::{event_cursor, numeric_cursor};
 
 /// Default maximum number of operations waiting for the dedicated `SQLite` worker.
 pub const DEFAULT_WORK_QUEUE_CAPACITY: usize = 64;
@@ -341,6 +343,14 @@ where
     ) -> StorageFuture<'_, bool> {
         self.request(|reply| Request::TriggerPending(station, class, now, reply))
     }
+    fn trigger_pending_for_station_201(
+        &self,
+        station: ResourceRef,
+        class: TriggerMessageClass201,
+        now: UtcTimestamp,
+    ) -> StorageFuture<'_, bool> {
+        self.request(|reply| Request::TriggerPending201(station, class, now, reply))
+    }
 
     fn trigger_reconciliation_candidates(
         &self,
@@ -455,37 +465,6 @@ where
             )
         })
     }
-}
-
-fn event_cursor(value: Option<&RetainedEventCursor>) -> Result<Option<i64>, StorageError> {
-    value
-        .map(|value| {
-            value
-                .as_str()
-                .strip_prefix(RETAINED_EVENT_CURSOR_PREFIX)
-                .and_then(|position| position.parse::<i64>().ok())
-                .filter(|position| *position > 0)
-                .ok_or_else(|| {
-                    StorageError::new(
-                        StorageErrorCode::CursorExpired,
-                        "durable event cursor expired; fetch a fresh snapshot",
-                    )
-                })
-        })
-        .transpose()
-}
-
-fn numeric_cursor(value: Option<&str>) -> Result<Option<i64>, StorageError> {
-    value
-        .map(|value| {
-            value.parse::<i64>().map_err(|_| {
-                StorageError::new(
-                    StorageErrorCode::CursorExpired,
-                    "storage cursor is outside retained state",
-                )
-            })
-        })
-        .transpose()
 }
 
 fn ready_error<T: Send + 'static>(

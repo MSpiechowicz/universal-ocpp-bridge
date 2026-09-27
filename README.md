@@ -152,6 +152,13 @@ observations; neither acceptance nor a matching observation proves causation or
 physical charging. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
 for connector scope, the 60-second window and one-shot recovery.
 
+OCPP 2.0.1 `TriggerMessage` is separately opt-in for eleven native message
+classes, with station, EVSE and connector targeting. Its privileged demo command
+retains the native reply independently of a 60-second window of compatible,
+non-causal observations; accepted replies do not prove later reports, certificate
+signing or physical charging. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md#opt-in-triggermessage)
+for scope, durable evidence and no-replay recovery.
+
 OCPP 1.6 availability commands retain scheduled intent separately from committed connector and
 station observations. See [OCPP 1.6 availability](docs/architecture/ocpp16-availability.md) for
 scoped control, transaction completion, durable evidence, and reconnect behavior.

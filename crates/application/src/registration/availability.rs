@@ -83,6 +83,26 @@ where
     D: Send + 'static,
     R: Send + 'static,
 {
+    record_status_201_with_trigger(store, snapshot, observation, context, now, None).await
+}
+
+/// Persists native OCPP 2.0.1 connector status and an optional matching trigger marker atomically.
+/// # Errors
+/// Rejects invalid registration, topology, identity, marker, or persistence failure.
+pub async fn record_status_201_with_trigger<C, E, D, R>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &super::v201::StatusObservation,
+    context: AvailabilityContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<E>>,
+) -> Result<(), RegistrationError>
+where
+    C: Send + 'static,
+    E: From<StationSnapshot> + Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+{
     let next = super::v201::status_snapshot(snapshot, observation, now)?;
     commit_status(
         store,
@@ -91,7 +111,7 @@ where
         Some(observation.source_time),
         context,
         now,
-        None,
+        trigger,
     )
     .await
 }

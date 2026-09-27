@@ -8,15 +8,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ocpp_client::{
-    ConnectOptions, KeepaliveBehavior, ReconnectBehavior, ReconnectPolicy, connect_2_0_1,
-};
 use tokio::sync::{mpsc, oneshot};
 
 mod client_impl;
 mod client_runtime;
 mod client_runtime_201;
 mod trigger;
+mod trigger201;
 mod trigger_transport;
 pub use trigger::{TriggerObservation, TriggerReply, TriggerResponses};
 pub mod scenario;
@@ -236,6 +234,7 @@ pub struct SimulatorProtocolClient {
     rejected_commands: Arc<AtomicU64>,
     reply_delay: ReplyDelaySlot,
     ocpp16_state: Option<Arc<Mutex<Ocpp16State>>>,
+    ocpp201_state: Option<Arc<Mutex<Ocpp201State>>>,
 }
 
 enum Command {
@@ -288,6 +287,11 @@ struct Ocpp16State {
 #[derive(Default)]
 struct Ocpp201State {
     active_transactions: HashMap<String, (u16, u16)>,
+    transactions: HashMap<String, serde_json::Value>,
+    status: HashMap<(u16, u16), serde_json::Value>,
+    meters: HashMap<u16, serde_json::Value>,
+    boot: Option<serde_json::Value>,
+    registered: bool,
 }
 
 impl TraceBuffer {
@@ -340,21 +344,11 @@ impl SimulatorProtocolClient {
         }
 
         let traces = TraceBuffer::new(config.trace_capacity);
-        let options = ConnectOptions {
-            timeout: Some(config.request_timeout),
-            reconnect: if config.reconnect {
-                ReconnectBehavior::Enabled(ReconnectPolicy::default())
-            } else {
-                ReconnectBehavior::Disabled
-            },
-            keepalive: KeepaliveBehavior::Disabled,
-            ..ConnectOptions::default()
-        };
         let (commands, receiver) = mpsc::channel(config.command_capacity);
         let (remote_commands, remote_receiver) = mpsc::channel(config.command_capacity);
         let reply_delay = Arc::new(Mutex::new(None));
         let rejected_commands = Arc::new(AtomicU64::new(0));
-        let (worker, emergency_client, ocpp16_state) = match config.version {
+        let (worker, emergency_client, ocpp16_state, ocpp201_state) = match config.version {
             OcppVersion::V1_6 => {
                 let state = Arc::new(Mutex::new(Ocpp16State::default()));
                 let (worker, emergency_client) = client_runtime::connect_and_run_1_6(
@@ -367,13 +361,32 @@ impl SimulatorProtocolClient {
                     reply_delay.clone(),
                 )
                 .await?;
-                (worker, emergency_client, Some(state))
+                (worker, emergency_client, Some(state), None)
             }
             OcppVersion::V2_0_1 => {
-                let client = connect_2_0_1(&config.endpoint, Some(options))
-                    .await
-                    .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
                 let state = Arc::new(Mutex::new(Ocpp201State::default()));
+                let (client, barrier, jobs) = trigger_transport::connect_201(
+                    &config.endpoint,
+                    config.request_timeout,
+                    config.reconnect,
+                    config.command_capacity,
+                    Arc::clone(&state),
+                )
+                .await
+                .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
+                trigger201::register(
+                    &client,
+                    barrier,
+                    trigger201::TriggerContext201 {
+                        resources: config.evse_connectors.clone(),
+                        responses: config.trigger_responses.clone(),
+                        observation: config.trigger_observation.clone(),
+                        state: Arc::clone(&state),
+                        traces: traces.clone(),
+                    },
+                    jobs,
+                )
+                .await;
                 client_runtime_201::register_handlers(
                     &client,
                     &traces,
@@ -395,10 +408,10 @@ impl SimulatorProtocolClient {
                     traces.clone(),
                     config.command_capacity,
                     remote_receiver,
-                    state,
+                    Arc::clone(&state),
                 ))
                 .abort_handle();
-                (worker, emergency_client, None)
+                (worker, emergency_client, None, Some(state))
             }
         };
 
@@ -411,6 +424,7 @@ impl SimulatorProtocolClient {
             rejected_commands,
             reply_delay,
             ocpp16_state,
+            ocpp201_state,
         })
     }
 

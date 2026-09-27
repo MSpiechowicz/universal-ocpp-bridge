@@ -70,6 +70,49 @@ Expiry is rechecked after allocation and before bounded enqueue, with the existi
 last-send deadline. Late replies cannot rewrite durable results. Identical retries return retained
 results without sending, including after process loss or reconnect.
 
+## Opt-in TriggerMessage
+
+`TriggerMessage` uses the same privileged, per-request authenticated demo command
+path and requires the station's `trigger_message = true` opt-in, the advertised
+resource capability and pinned `urn:OCPP:Cp:2:2020:3:TriggerMessageRequest`
+schema. It supports exactly eleven native `requestedMessage` values:
+`BootNotification`, `LogStatusNotification`, `FirmwareStatusNotification`,
+`Heartbeat`, `MeterValues`, `SignChargingStationCertificate`,
+`SignV2GCertificate`, `StatusNotification`, `TransactionEvent`,
+`SignCombinedCertificate` and `PublishFirmwareStatusNotification`. Unlike OCPP
+1.6, the payload uses an optional `evse` object (`id`, optional `connectorId`),
+not a flat connector ID. Station-only Boot, log, firmware, heartbeat, charging
+station certificate and publish-firmware-status classes require a station
+resource; an irrelevant supplied EVSE does not turn them into EVSE requests.
+Boot is permitted only before Accepted registration. StatusNotification needs
+an exact existing EVSE **and** connector; a missing connector is not widened to
+the EVSE. MeterValues needs station or EVSE permission, never connector-only
+permission, since its later report identifies the EVSE, not the connector.
+TransactionEvent may address an EVSE or connector; its later report must have
+`Trigger` reason. V2G/combined signing may address station or EVSE, but
+SignCertificate receipts carry no trusted EVSE identity.
+
+Omitting `evse` for applicable classes requests all configured EVSEs on the
+station and freezes that sorted, deduplicated target set before dispatch.
+Empty sets and more than 64 EVSEs fail closed. The exact native reply
+`Accepted`, `Rejected` or `NotImplemented` (and optional `statusInfo`) is
+persisted independently from subsequent committed, compatible station CALLs.
+At dispatch the coordinator fixes a 60-second observation deadline. Durable
+`pending`, `partial`, `observed`, `absent`, `unsupported` or `unattributable`
+status reflects separate observations, not causal proof of the trigger. An
+EVSE-scoped certificate's station-level receipt is `unattributable`, never
+EVSE completion. Native acceptance does not prove a later call, successful
+certificate workflow or physical charging.
+
+Schema v11 indexes pending 2.0.1 trigger results and station events for bounded
+reconciliation. It preserves the original request edition, class, scope,
+dispatch time and event IDs; terminal deadlines are finalized once. Denied or
+malformed requests send nothing; delayed replies, lost sockets and process
+restarts cannot rewrite results or replay an uncertain command. Simulator
+certificate triggers return `NotImplemented`: it has no private key/CSR
+generator and does not fabricate a signing request. Full certificate-chain,
+CSR issuance and ISO 15118 workflows remain separate planned features.
+
 ## Verification and specification provenance
 
 Requests and all native response statuses have independently authored wire fixtures validated
@@ -85,3 +128,11 @@ acceptance, EVSE targeting, denial/expiry, sanitized evidence, late/malformed re
 process-loss recovery and no replay. The storage `remote_control` test verifies concurrent
 allocation, restart, pruning, exhaustion and release-drain rejection. This is implementation
 evidence, not OCA certification or physical charging verification.
+
+`cargo test --locked -p uob-protocol-adapter --test ocpp201_trigger`,
+`-p uob-storage-adapter --test trigger_observation_201`,
+`-p uob-service --test remote_trigger_201` and
+`-p uob-sim --test trigger_message_201 --test trigger_scenario_201`
+exercise the opt-in trigger separately, including a running daemon with HTTP,
+WebSocket and SQLite, and simulator ordering. These are implementation tests,
+not OCA certification or a causal link from native acceptance to later reports.

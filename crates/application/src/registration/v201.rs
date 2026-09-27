@@ -1,10 +1,42 @@
 //! Native OCPP 2.0.1 status and keepalive transitions.
-use super::{RegistrationError, accepted_for, activity, commit, set};
+use super::{RegistrationDecision, RegistrationError, accepted_for, activity, commit, set};
 use crate::OperationalStore;
 use uob_contracts::{
     AvailabilityState, EventEnvelope, NativeProtocolReference, ProtocolEdition, StationSnapshot,
     TypedValue, UtcTimestamp,
 };
+/// Commits 2.0.1 boot registration, its normal invalidation and optional trigger evidence
+/// in one authoritative write. Pending registration is allowed only on this boot path.
+/// # Errors
+/// Rejects an incorrect edition, disconnected station, invalid interval or failed commit.
+pub async fn register_with_invalidation_and_trigger<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &crate::RegistrationObservation,
+    decision: RegistrationDecision,
+    interval_seconds: u32,
+    now: UtcTimestamp,
+    events: (EventEnvelope<E>, Option<EventEnvelope<E>>),
+) -> Result<RegistrationDecision, RegistrationError> {
+    if observation.protocol != ProtocolEdition::Ocpp201 {
+        return Err(RegistrationError::InvalidState);
+    }
+    super::register_with_trigger(
+        store,
+        snapshot,
+        observation,
+        decision,
+        interval_seconds,
+        now,
+        events,
+    )
+    .await
+}
 
 /// `StatusNotification` addresses exactly one existing EVSE connector, never station zero.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -28,7 +60,7 @@ pub async fn heartbeat<
     snapshot: &mut StationSnapshot,
     now: UtcTimestamp,
 ) -> Result<(), RegistrationError> {
-    heartbeat_inner(store, snapshot, now, None).await
+    heartbeat_inner(store, snapshot, now, None, None).await
 }
 
 /// Atomically persists accepted OCPP 2.0.1 heartbeat activity and a scoped invalidation.
@@ -45,7 +77,25 @@ pub async fn heartbeat_with_invalidation<
     now: UtcTimestamp,
     invalidation: EventEnvelope<E>,
 ) -> Result<(), RegistrationError> {
-    heartbeat_inner(store, snapshot, now, Some(invalidation)).await
+    heartbeat_inner(store, snapshot, now, Some(invalidation), None).await
+}
+
+/// Commits accepted 2.0.1 heartbeat, invalidation and optional trigger marker atomically.
+/// # Errors
+/// Rejects unregistered stations or persistence failures without changing the snapshot.
+pub async fn heartbeat_with_invalidation_and_trigger<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, D, R>,
+    snapshot: &mut StationSnapshot,
+    now: UtcTimestamp,
+    invalidation: EventEnvelope<E>,
+    trigger: Option<EventEnvelope<E>>,
+) -> Result<(), RegistrationError> {
+    heartbeat_inner(store, snapshot, now, Some(invalidation), trigger).await
 }
 
 async fn heartbeat_inner<
@@ -58,11 +108,12 @@ async fn heartbeat_inner<
     snapshot: &mut StationSnapshot,
     now: UtcTimestamp,
     invalidation: Option<EventEnvelope<E>>,
+    trigger: Option<EventEnvelope<E>>,
 ) -> Result<(), RegistrationError> {
     accepted_for(snapshot, ProtocolEdition::Ocpp201)?;
     let mut next = snapshot.clone();
     activity(&mut next, now);
-    commit(store, snapshot, next, invalidation, None).await
+    commit(store, snapshot, next, invalidation, trigger).await
 }
 
 /// Persists native status without interpreting Occupied as physical charging or command success.

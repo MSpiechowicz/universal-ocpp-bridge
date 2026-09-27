@@ -473,6 +473,7 @@ fn result_for(command: &ExternalCommand<()>) -> CommandResult {
         configuration: None,
         configuration_observations: vec![],
         trigger_observation: None,
+        trigger_observation_201: None,
     }
 }
 

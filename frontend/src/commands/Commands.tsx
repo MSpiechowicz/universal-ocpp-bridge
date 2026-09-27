@@ -6,7 +6,7 @@ import type { CommandOptions, CommandPage, CommandRow, Draft } from './model';
 
 const failure = (error: unknown): string => error instanceof ApiError ? error.message : error instanceof Error &&
   ['Operation is not advertised for this resource.', 'Resource is not in the selected station.', 'Privileged action is not advertised with a supported schema.'].includes(error.message)
-  ? error.message : error instanceof Error && /^(Enter |Charging limit |Choose |Phases |Select |Unsupported |Request expired|[\w]+ (is |must |exceeds |has ))/.test(error.message)
+  ? error.message : error instanceof Error && /^(Enter |Charging limit |Choose |Phases |Select |Unsupported |Request expired|[\w.]+ (is |must |exceeds |has ))/.test(error.message)
     ? error.message : 'Command data unavailable or invalid. No result is inferred.';
 const label = (resource: ResourceRef): string => resource.resource?.kind === 'connector' ? `Connector ${resource.resource.connector_id}`
   : resource.resource?.kind === 'evse' ? `EVSE ${resource.resource.evse_id}${resource.resource.connector_id ? ` / ${resource.resource.connector_id}` : ''}` : `Station ${resource.station_id}`;

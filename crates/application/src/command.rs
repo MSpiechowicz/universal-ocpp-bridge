@@ -4,10 +4,12 @@ mod recovery;
 mod results;
 use results::{command_result, rejected_external, validation_rejection};
 mod trigger;
+mod trigger201;
 use configuration::{valid_configuration_read, valid_protected_change};
 use errors::{integrity_error, map_station_error, map_storage_error};
 use std::{future::Future, pin::Pin, sync::Arc};
-pub use trigger::TriggerExpectation;
+pub use trigger::{TriggerExpectation, TriggerExpectation16};
+pub use trigger201::TriggerExpectation201;
 
 use uob_contracts::{
     Command, CommandError, CommandErrorCode, CommandLifecycle, CommandResult,
@@ -62,6 +64,8 @@ pub enum CommandDispatchOutcome {
     },
     /// Exact OCPP 1.6 `TriggerMessage` native reply, never subsequent-message proof.
     TriggerResponse(uob_contracts::TriggerNativeResponse),
+    /// Exact OCPP 2.0.1 reply including optional native statusInfo.
+    TriggerResponse201(uob_contracts::TriggerNativeResponse201),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -330,13 +334,13 @@ where
         let mut dispatched =
             command_result(&command, CommandLifecycle::Dispatched, dispatch_started_at);
         if let Some(expectation) = trigger.as_ref() {
-            dispatched.schema_version = ContractVersion::V1_TRIGGER;
-            dispatched.trigger_observation = Some(expectation.start(dispatch_started_at)?);
+            expectation.start(&mut dispatched, dispatch_started_at)?;
         }
         self.persist_result(dispatched).await?;
         trace.emit(FlowStage::CommandDispatch, FlowEvidence::Completed);
         let mut config_response = None;
         let mut trigger_response = None;
+        let mut trigger_response_201 = None;
         let lifecycle = match self
             .stations
             .dispatch_to_generation(command.clone(), generation)
@@ -398,14 +402,33 @@ where
                     error: None,
                 }
             }
+            CommandDispatchOutcome::TriggerResponse201(response) => {
+                let accepted = response.status == uob_contracts::TriggerNativeStatus201::Accepted;
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                trigger_response_201 = Some(response);
+                CommandLifecycle::ProtocolResponse {
+                    accepted,
+                    error: None,
+                }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
             }
         };
-        if trigger_response.is_some() && trigger.is_none() {
+        if (trigger_response.is_some() && !matches!(trigger, Some(TriggerExpectation::Ocpp16(_))))
+            || (trigger_response_201.is_some()
+                && !matches!(trigger, Some(TriggerExpectation::Ocpp201(_))))
+        {
             return Err(integrity_error(
-                "trigger response has no dispatch expectation",
+                "trigger response has no matching edition expectation",
             ));
         }
         let mut result = command_result(&command, lifecycle, self.clock.now());
@@ -416,20 +439,13 @@ where
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })
         {
-            result.schema_version = ContractVersion::V1_TRIGGER;
-            result.trigger_observation = Some(expectation.start(dispatch_started_at)?);
-            if let Some(response) = trigger_response {
-                result
-                    .trigger_observation
-                    .as_mut()
-                    .expect("trigger expectation")
-                    .native_response = Some(response);
-            }
-            result
-                .trigger_observation
-                .as_mut()
-                .expect("trigger expectation")
-                .refresh_status(self.clock.now());
+            expectation.finish(
+                &mut result,
+                dispatch_started_at,
+                self.clock.now(),
+                trigger_response,
+                trigger_response_201,
+            )?;
         }
         self.persist_result(result).await?;
         if trigger.is_some() {

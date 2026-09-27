@@ -10,6 +10,7 @@ mod snapshot;
 mod timestamp;
 mod transaction16;
 mod trigger;
+mod trigger201;
 pub use transaction16::Ocpp16TransactionEvidence;
 mod trace;
 
@@ -61,6 +62,11 @@ pub use trigger::{
     TriggerMessageClass, TriggerNativeResponse, TriggerObservation, TriggerObservationStatus,
     TriggerObservedEvent,
 };
+pub use trigger201::{
+    TriggerEvse201, TriggerMessageClass201, TriggerNativeResponse201, TriggerNativeStatus201,
+    TriggerObservation201, TriggerObservationStatus201, TriggerObservedEvent201,
+    TriggerStatusInfo201, TriggerTarget201,
+};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -89,6 +95,11 @@ impl ContractVersion {
     pub const V1_TRIGGER: Self = Self {
         major: 1,
         revision: 2,
+    };
+    /// Additive OCPP 2.0.1 trigger observation revision.
+    pub const V1_TRIGGER_201: Self = Self {
+        major: 1,
+        revision: 3,
     };
 }
 

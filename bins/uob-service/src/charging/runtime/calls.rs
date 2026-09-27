@@ -1,15 +1,16 @@
 use std::io;
 
-use super::{CallContext, Clock, CommitState, trigger, unavailable};
+use super::{CallContext, Clock, CommitState, trigger, trigger201, unavailable};
 use crate::charging::ChargingStore;
 use serde_json::json;
 use uob_application::{
     ChargerObservation, CommandClock, ObservationCommitError, OperationalStore,
-    record_transaction_event, transaction16::TransactionContext,
+    transaction16::TransactionContext,
 };
 use uob_contracts::{
-    Connectivity, EventId, NativeProtocolReference, ProtocolEdition, ServiceIdentity,
-    StationSnapshot, TargetInstanceId, TriggerMessageClass, UtcTimestamp,
+    Connectivity, EventEnvelope, EventId, NativeProtocolReference, ProtocolEdition,
+    ServiceIdentity, StationEvent, StationSnapshot, TargetInstanceId, TriggerMessageClass,
+    TriggerMessageClass201, TriggerTarget201, UtcTimestamp,
 };
 use uob_protocol_adapter::{IncomingCall, OcppCallError, OcppErrorCode};
 
@@ -29,33 +30,7 @@ pub(super) async fn apply_observation(
             ));
         }
     };
-    let marker = if services.trigger_enabled && protocol == ProtocolEdition::Ocpp16j {
-        if let ChargerObservation::Measurements(measurements) = &incoming.call.observation {
-            let NativeProtocolReference::Ocpp16 { connector_id } = measurements.native_resource
-            else {
-                return Err(call_error(protocol, OcppErrorCode::ProtocolError));
-            };
-            if connector_id == 0 {
-                None
-            } else {
-                trigger::marker(
-                    services.store,
-                    &snapshot.station,
-                    services.identity,
-                    TriggerMessageClass::MeterValues,
-                    Some(connector_id),
-                    None,
-                    now,
-                )
-                .await
-                .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let marker = observation_marker(incoming, snapshot, services, protocol, now).await?;
     let context = context(
         services.store,
         services.identity,
@@ -74,9 +49,19 @@ pub(super) async fn apply_observation(
         ChargerObservation::TransactionEvent(observation)
             if protocol == ProtocolEdition::Ocpp201 =>
         {
-            record_transaction_event(services.store, snapshot, observation, context, now)
-                .await
-                .map_err(|error| commit_error(protocol, &error))?;
+            let triggered = marker.is_some();
+            let outcome = uob_application::record_transaction_event_with_trigger(
+                services.store,
+                snapshot,
+                observation,
+                context,
+                now,
+                marker,
+            )
+            .await
+            .map_err(|error| commit_error(protocol, &error))?;
+            commits.trigger_committed =
+                triggered && outcome == uob_application::TransactionApplyOutcome::Applied;
             if observation.event == uob_application::TransactionEventKind::Started {
                 // A transaction report is not evidence of an authorization grant.
                 json!({"idTokenInfo":{"status":"Invalid"}})
@@ -102,6 +87,93 @@ pub(super) async fn apply_observation(
         _ => return Err(call_error(protocol, OcppErrorCode::NotImplemented)),
     };
     Ok(json!([3, incoming.call.message_id, reply]))
+}
+
+async fn observation_marker(
+    incoming: &IncomingCall,
+    snapshot: &StationSnapshot,
+    services: &CallContext<'_>,
+    protocol: ProtocolEdition,
+    now: UtcTimestamp,
+) -> Result<Option<EventEnvelope<StationEvent>>, OcppCallError> {
+    let marker = if services.trigger_enabled && protocol == ProtocolEdition::Ocpp16j {
+        if let ChargerObservation::Measurements(measurements) = &incoming.call.observation {
+            let NativeProtocolReference::Ocpp16 { connector_id } = measurements.native_resource
+            else {
+                return Err(call_error(protocol, OcppErrorCode::ProtocolError));
+            };
+            if connector_id == 0 {
+                None
+            } else {
+                trigger::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    TriggerMessageClass::MeterValues,
+                    Some(connector_id),
+                    None,
+                    now,
+                )
+                .await
+                .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?
+            }
+        } else {
+            None
+        }
+    } else if services.trigger_enabled && protocol == ProtocolEdition::Ocpp201 {
+        match &incoming.call.observation {
+            ChargerObservation::Measurements(measurements) => {
+                let NativeProtocolReference::Ocpp201 { evse_id, .. } = measurements.native_resource
+                else {
+                    return Err(call_error(protocol, OcppErrorCode::ProtocolError));
+                };
+                trigger201::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    TriggerMessageClass201::MeterValues,
+                    TriggerTarget201::Evse { id: evse_id },
+                    None,
+                    now,
+                )
+                .await
+                .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?
+            }
+            ChargerObservation::TransactionEvent(observation)
+                if observation.trigger_reason == "Trigger" =>
+            {
+                let NativeProtocolReference::Ocpp201 {
+                    evse_id,
+                    connector_id,
+                } = observation.native_resource
+                else {
+                    return Err(call_error(protocol, OcppErrorCode::ProtocolError));
+                };
+                let target = match connector_id {
+                    Some(connector_id) => TriggerTarget201::Connector {
+                        id: evse_id,
+                        connector_id,
+                    },
+                    None => TriggerTarget201::Evse { id: evse_id },
+                };
+                trigger201::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    TriggerMessageClass201::TransactionEvent,
+                    target,
+                    Some("Trigger"),
+                    now,
+                )
+                .await
+                .map_err(|_| call_error(protocol, OcppErrorCode::InternalError))?
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+    Ok(marker)
 }
 
 pub(super) async fn context(

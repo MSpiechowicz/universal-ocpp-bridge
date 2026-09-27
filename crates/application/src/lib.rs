@@ -40,7 +40,7 @@ pub use authorization::{
 pub use command::{
     CommandClock, CommandCoordinator, CommandDispatchOutcome, CommandRecoveryBatch,
     RecoveredCommand, StationCommandContext, StationCommandError, StationCommandFuture,
-    StationCommandPort, TriggerExpectation,
+    StationCommandPort, TriggerExpectation, TriggerExpectation16, TriggerExpectation201,
 };
 pub use database::{
     DatabaseAcknowledgementScope, DatabaseBatchReceiver, DatabaseConfiguration, DatabaseDiagnostic,
@@ -76,7 +76,7 @@ pub use protocol::{
     RegistrationObservation, TransactionApplyError, TransactionApplyOutcome, TransactionEventKind,
     TransactionEventObservation, TransactionStartObservation, apply_measurements,
     apply_transaction_event, record_measurements, record_measurements_with_trigger,
-    record_transaction_event,
+    record_transaction_event, record_transaction_event_with_trigger,
 };
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,

@@ -2,7 +2,9 @@ mod calls;
 mod effects;
 mod session;
 mod state;
+mod status;
 mod trigger;
+mod trigger201;
 
 use calls::{apply_observation, call_error, context, event_identity};
 pub(super) use state::reconcile;
@@ -11,17 +13,14 @@ use state::{invalidation, store_snapshot};
 use std::{io, sync::Arc, time::Duration};
 
 use tokio::{sync::watch, task::JoinSet};
-use uob_application::{
-    CommandClock,
-    registration::{RegistrationDecision, availability::AvailabilityContext},
-};
+use uob_application::{CommandClock, registration::RegistrationDecision};
 use uob_contracts::{
     AvailabilityState, Connectivity, EventId, ProtocolEdition, ResourceRef, ServiceIdentity,
-    StationSnapshot, TargetInstanceId, UtcTimestamp,
+    StationSnapshot, TargetInstanceId, TriggerMessageClass201, TriggerTarget201, UtcTimestamp,
 };
 use uob_protocol_adapter::{
-    CallSessionConfiguration, DecodedCall, IncomingCall, OcppCallError, OcppErrorCode,
-    StationConnection, spawn_call_session, v16, v201,
+    CallSessionConfiguration, IncomingCall, OcppCallError, OcppErrorCode, StationConnection,
+    spawn_call_session, v16, v201,
 };
 use uob_provider_adapter::{LocalAuthorizationProvider, LocalChargingIdentityProvider};
 
@@ -250,22 +249,43 @@ async fn complete_registration(
 ) -> io::Result<()> {
     let now = Clock.now();
     let event = invalidation(services.store, snapshot, services.identity, now).await?;
-    let marker = if services.trigger_enabled && protocol == ProtocolEdition::Ocpp16j {
-        let class = if incoming.call.action.as_str() == "BootNotification" {
-            uob_contracts::TriggerMessageClass::BootNotification
-        } else {
-            uob_contracts::TriggerMessageClass::Heartbeat
-        };
-        trigger::marker(
-            services.store,
-            &snapshot.station,
-            services.identity,
-            class,
-            None,
-            None,
-            now,
-        )
-        .await?
+    let marker = if services.trigger_enabled {
+        match protocol {
+            ProtocolEdition::Ocpp16j => {
+                let class = if incoming.call.action.as_str() == "BootNotification" {
+                    uob_contracts::TriggerMessageClass::BootNotification
+                } else {
+                    uob_contracts::TriggerMessageClass::Heartbeat
+                };
+                trigger::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    class,
+                    None,
+                    None,
+                    now,
+                )
+                .await?
+            }
+            ProtocolEdition::Ocpp201 => {
+                let class = if incoming.call.action.as_str() == "BootNotification" {
+                    TriggerMessageClass201::BootNotification
+                } else {
+                    TriggerMessageClass201::Heartbeat
+                };
+                trigger201::marker(
+                    services.store,
+                    &snapshot.station,
+                    services.identity,
+                    class,
+                    TriggerTarget201::Station,
+                    None,
+                    now,
+                )
+                .await?
+            }
+        }
     } else {
         None
     };
@@ -312,7 +332,8 @@ async fn dispatch_call(
     let mut commits = CommitState::default();
     let response = match (protocol, incoming.call.action.as_str()) {
         (_, "StatusNotification") => {
-            complete_status(incoming.call, snapshot, &services, protocol, &mut commits).await?
+            status::complete_status(incoming.call, snapshot, &services, protocol, &mut commits)
+                .await?
         }
         (ProtocolEdition::Ocpp16j, "StartTransaction" | "StopTransaction") => {
             let context = context(
@@ -349,7 +370,17 @@ async fn dispatch_call(
         (
             ProtocolEdition::Ocpp16j,
             "DiagnosticsStatusNotification" | "FirmwareStatusNotification",
-        ) => complete_trigger_status(&incoming, snapshot, &services, &mut commits).await?,
+        ) => status::complete_trigger_status(&incoming, snapshot, &services, &mut commits).await?,
+        (
+            ProtocolEdition::Ocpp201,
+            "LogStatusNotification"
+            | "FirmwareStatusNotification"
+            | "PublishFirmwareStatusNotification"
+            | "SignCertificate",
+        ) => {
+            status::complete_trigger_receipt_201(&incoming, snapshot, &services, &mut commits)
+                .await?
+        }
         _ => Err(call_error(protocol, OcppErrorCode::NotImplemented)),
     };
     if let (Ok(_), Some(event_id)) = (&response, commits.committed) {
@@ -361,7 +392,7 @@ async fn dispatch_call(
         )
         .await?;
     }
-    if response.is_ok() && commits.trigger_committed {
+    if commits.trigger_committed {
         trigger::sweep(services.store, services.commands, &mut None).await?;
     }
     let failed_storage = response
@@ -400,101 +431,4 @@ async fn complete_observation(
     } else {
         apply_observation(incoming, snapshot, services, Clock.now(), commits).await
     }
-}
-
-async fn complete_trigger_status(
-    incoming: &IncomingCall,
-    snapshot: &StationSnapshot,
-    services: &CallContext<'_>,
-    commits: &mut CommitState,
-) -> io::Result<Result<serde_json::Value, OcppCallError>> {
-    let protocol = ProtocolEdition::Ocpp16j;
-    if uob_application::registration::accepted(snapshot).is_err() {
-        return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError)));
-    }
-    let uob_application::ChargerObservation::TriggerStatus { class, status } =
-        &incoming.call.observation
-    else {
-        return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError)));
-    };
-    let marker = if services.trigger_enabled {
-        trigger::marker(
-            services.store,
-            &snapshot.station,
-            services.identity,
-            *class,
-            None,
-            Some(status),
-            Clock.now(),
-        )
-        .await?
-    } else {
-        None
-    };
-    if let Some(marker) = marker {
-        trigger::commit_status(services.store, marker).await?;
-        commits.trigger_committed = true;
-    }
-    Ok(Ok(serde_json::json!([3, incoming.call.message_id, {}])))
-}
-
-async fn complete_status(
-    call: DecodedCall,
-    snapshot: &mut StationSnapshot,
-    services: &CallContext<'_>,
-    protocol: ProtocolEdition,
-    commits: &mut CommitState,
-) -> io::Result<Result<serde_json::Value, OcppCallError>> {
-    let (sequence, event_id) = event_identity(services.store, services.identity).await?;
-    commits.committed = Some(event_id.clone());
-    let context = AvailabilityContext {
-        identity: services.identity.clone(),
-        event_id,
-        sequence,
-    };
-    Ok(match protocol {
-        ProtocolEdition::Ocpp16j => {
-            let marker = if services.trigger_enabled {
-                let uob_application::ChargerObservation::ConnectorStatus(status) =
-                    &call.observation
-                else {
-                    return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError)));
-                };
-                trigger::marker(
-                    services.store,
-                    &snapshot.station,
-                    services.identity,
-                    uob_contracts::TriggerMessageClass::StatusNotification,
-                    Some(status.connector_id),
-                    None,
-                    Clock.now(),
-                )
-                .await?
-            } else {
-                None
-            };
-            let trigger_committed = marker.is_some();
-            let response = v16::availability::complete_status_with_trigger(
-                call,
-                services.store,
-                snapshot,
-                context,
-                Clock.now(),
-                marker,
-            )
-            .await;
-            commits.trigger_committed = trigger_committed && response.is_ok();
-            response
-        }
-        ProtocolEdition::Ocpp201 => {
-            v201::availability::complete_status(
-                call,
-                services.store,
-                snapshot,
-                context,
-                Clock.now(),
-            )
-            .await
-        }
-    })
 }

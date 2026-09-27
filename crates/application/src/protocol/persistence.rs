@@ -32,6 +32,20 @@ pub async fn record_transaction_event<C: Send + 'static, R: Send + 'static>(
     context: TransactionContext,
     now: UtcTimestamp,
 ) -> Result<TransactionApplyOutcome, ObservationCommitError> {
+    record_transaction_event_with_trigger(store, snapshot, observation, context, now, None).await
+}
+
+/// Commits a 2.0.1 transaction and its compatible native trigger marker atomically.
+/// # Errors
+/// Rejects invalid registration, transaction, context, marker or failed persistence.
+pub async fn record_transaction_event_with_trigger<C: Send + 'static, R: Send + 'static>(
+    store: &dyn OperationalStore<C, StationEvent, TransactionSnapshot, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &TransactionEventObservation,
+    context: TransactionContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<StationEvent>>,
+) -> Result<TransactionApplyOutcome, ObservationCommitError> {
     validate_context(snapshot, &context)?;
     registration::v201::accepted(snapshot).map_err(|_| ObservationCommitError::InvalidState)?;
     let mut next = snapshot.clone();
@@ -73,6 +87,15 @@ pub async fn record_transaction_event<C: Send + 'static, R: Send + 'static>(
         payload: StationEvent::Transaction(transaction.clone()),
     };
     let invalidation = station_invalidation(&next, &context, Some(observation.occurred_at), now)?;
+    if trigger.as_ref().is_some_and(|marker| {
+        marker.resource != next.station
+            || marker.sequence == event.sequence
+            || marker.event_id == event.event_id
+            || marker.sequence == invalidation.sequence
+            || marker.event_id == invalidation.event_id
+    }) {
+        return Err(ObservationCommitError::InvalidState);
+    }
     let mut write = AtomicStoreWrite::empty();
     write.purpose = match transaction.state {
         TransactionState::Ended => StorageWritePurpose::ActiveSessionCompletion,
@@ -83,6 +106,9 @@ pub async fn record_transaction_event<C: Send + 'static, R: Send + 'static>(
     };
     write.station_snapshot = Some(next.clone());
     write.journal_events.extend([event, invalidation]);
+    if let Some(marker) = trigger {
+        write.journal_events.push(marker);
+    }
     if let Some((target, revision)) = context.target {
         write.required_deliveries.push(PendingDelivery {
             delivery_id: DeliveryId::new(format!("transaction/{}", context.event_id.as_str()))

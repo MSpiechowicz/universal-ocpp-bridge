@@ -1,12 +1,11 @@
 use std::{
     collections::VecDeque,
-    future::Future,
-    pin::{Pin, pin},
+    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
 };
 
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
@@ -25,6 +24,10 @@ use uob_contracts::{
     ResourceCapabilities, ResourceRef, RuntimeIdentity, SemanticName, StationId, StationSnapshot,
     TargetInstanceId, TypedValue, UtcTimestamp, ValueType,
 };
+
+#[path = "scoped_target_query_port/async_helpers.rs"]
+mod async_helpers;
+use async_helpers::{block_on, poll_stream};
 
 #[derive(Default)]
 struct FakeSource {
@@ -428,6 +431,7 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         configuration: None,
         configuration_observations: Vec::new(),
         trigger_observation: None,
+        trigger_observation_201: None,
     }
 }
 fn request_id() -> RequestId {
@@ -479,22 +483,4 @@ fn text<T, E: std::fmt::Debug>(
     value: impl Into<String>,
 ) -> T {
     constructor(value.into()).expect("valid identity")
-}
-
-fn block_on<T>(future: impl Future<Output = T>) -> T {
-    let mut context = Context::from_waker(Waker::noop());
-    let mut future = pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => std::thread::yield_now(),
-        }
-    }
-}
-
-fn poll_stream<E>(
-    stream: &mut TargetRetainedEventStream<E>,
-) -> Poll<Option<Result<RetainedEventItem<E>, TargetPortError>>> {
-    let mut context = Context::from_waker(Waker::noop());
-    stream.as_mut().poll_event(&mut context)
 }

@@ -257,7 +257,7 @@ fn opt_in_control_grants_and_local_token_are_distinct_private_references() {
 }
 
 #[test]
-fn trigger_message_requires_distinct_privileged_control_and_ocpp16() {
+fn trigger_message_requires_distinct_privileged_control_for_both_editions() {
     let enabled = CHARGING
         .replace(
             "read_grant_file='/run/uob-demo/read-grant'",
@@ -286,16 +286,14 @@ fn trigger_message_requires_distinct_privileged_control_and_ocpp16() {
             "connector_id='connector-1'\nnative_connector_id=1",
             "evse_id='evse-1'\nconnector_id='connector-1'\nnative_evse_id=1\nnative_connector_id=1",
         );
-    assert!(
-        validate_document(&format!(
-            "{BASE}{}",
-            ocpp201.replace("trigger_message=true\n", "")
-        ))
-        .is_ok()
-    );
+    let configured_201 = validate_document(&format!("{BASE}{ocpp201}"))
+        .unwrap()
+        .unwrap();
+    assert!(configured_201.stations[0].control.trigger_message.enabled());
 
     for invalid in [
-        ocpp201,
+        ocpp201.replace("control_grant_file='/run/uob-demo/control'\n", ""),
+        ocpp201.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
         enabled.replace("control_grant_file='/run/uob-demo/control'\n", ""),
         enabled.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
         enabled

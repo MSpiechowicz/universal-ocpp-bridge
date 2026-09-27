@@ -1,6 +1,7 @@
 use uob_contracts::{
     Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope, EventId,
-    RequestId, ResourceRef, StationSnapshot, TriggerMessageClass, UtcTimestamp,
+    RequestId, ResourceRef, StationSnapshot, TriggerMessageClass, TriggerMessageClass201,
+    UtcTimestamp,
 };
 
 use super::{
@@ -125,6 +126,15 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
         &self,
         _station: ResourceRef,
         _class: TriggerMessageClass,
+        _now: UtcTimestamp,
+    ) -> StorageFuture<'_, bool> {
+        Box::pin(async { Ok(false) })
+    }
+    /// Whether a native 2.0.1 message can match a pending 2.0.1 trigger.
+    fn trigger_pending_for_station_201(
+        &self,
+        _station: ResourceRef,
+        _class: TriggerMessageClass201,
         _now: UtcTimestamp,
     ) -> StorageFuture<'_, bool> {
         Box::pin(async { Ok(false) })

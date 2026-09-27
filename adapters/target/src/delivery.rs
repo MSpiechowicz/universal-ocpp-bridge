@@ -18,6 +18,10 @@ use crate::TargetDeliveryIngress;
 
 /// Adapter-owned serializable representation of one target-neutral message.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Boxing command results would allocate on every durable delivery"
+)]
 pub enum StoredTargetMessage<E> {
     /// Current station state.
     StationSnapshot(StationSnapshot),

@@ -21,7 +21,7 @@ async fn the_capability_response_advertises_exactly_the_routes_this_build_serves
     for resource in resources {
         let schema = match resource["name"].as_str() {
             Some("schemas_v1_1" | "schemas_v1_2") => "command-result.schema.json",
-            Some("schemas_v1_3") => "export-record.schema.json",
+            Some("schemas_v1_3" | "schemas_v1_4") => "export-record.schema.json",
             _ => "station-snapshot.schema.json",
         };
         let path = resource["path"]

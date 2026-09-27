@@ -144,6 +144,15 @@ pub enum StationEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         status: Option<String>,
     },
+    /// Native OCPP 2.0.1 notification evidence, never an OCPP 1.6 connector number.
+    TriggerNotification201 {
+        station_snapshot_invalidated: StationId,
+        /// Distinct property prevents deserializing this as a 1.6 trigger marker.
+        trigger_class_201: crate::TriggerMessageClass201,
+        target: crate::TriggerTarget201,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+    },
     /// Small, explicitly incomplete station change marker. Fetch the authoritative snapshot.
     Invalidation {
         /// Station whose authoritative snapshot changed.

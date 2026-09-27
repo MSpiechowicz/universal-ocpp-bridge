@@ -88,6 +88,7 @@ fn result(response: Option<TriggerNativeResponse>) -> CommandResult {
             observed: Vec::new(),
             status: TriggerObservationStatus::Pending,
         }),
+        trigger_observation_201: None,
     }
 }
 fn event(

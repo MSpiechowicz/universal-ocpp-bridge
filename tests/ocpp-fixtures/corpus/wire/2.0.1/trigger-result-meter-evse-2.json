@@ -1,0 +1,1 @@
+[2,"trigger-result-meter-evse-2","MeterValues",{"evseId":2,"meterValue":[{"timestamp":"2026-09-27T10:00:00Z","sampledValue":[{"value":933.1,"context":"Trigger","measurand":"Energy.Active.Import.Register","unitOfMeasure":{"unit":"Wh"}}]}]}]

@@ -134,25 +134,25 @@ positive native ID. Control options and privileged schemas are authenticated per
 Privileged actions require the privileged grant, the advertised protocol action, a pinned
 server schema and valid typed fields; a displayed schema alone never grants permission.
 
-OCPP 1.6J `TriggerMessage` is another privileged **demo-only** opt-in. For a
-station in the example above, provision the distinct control and privileged
-grant files first, then add these entries in their existing sections:
+OCPP 1.6J and 2.0.1 `TriggerMessage` each require a privileged **demo-only**
+per-station opt-in. For a station in the example above, provision the distinct
+control and privileged grant files first, then add these entries in their existing sections:
 
 ```toml
 # Inside [charging]:
 control_grant_file = "/var/lib/uob/demo-secrets/management-control"
 privileged_grant_file = "/var/lib/uob/demo-secrets/management-privileged"
 
-# Inside the existing OCPP 1.6J [[charging.stations]] for station-a:
+# Inside the existing OCPP 1.6J or OCPP 2.0.1 [[charging.stations]] for station-a:
 trigger_message = true
 ```
 
 These are section additions, not a standalone TOML document. The read grant
 remains separate for station-scoped command detail/history; the control grant
 does not authorize `TriggerMessage` by itself. A per-request privileged
-credential, advertised OCPP 1.6J action, pinned
-`urn:OCPP:1.6:2019:12:TriggerMessageRequest` schema and matching scope are
-required. OCPP 2.0.1 stations cannot opt in. The request permits six classes:
+credential, advertised edition-specific action, pinned request schema and
+matching resource scope are required. OCPP 1.6J uses
+`urn:OCPP:1.6:2019:12:TriggerMessageRequest` and permits six classes:
 `BootNotification` (only before Accepted registration),
 `DiagnosticsStatusNotification`, `FirmwareStatusNotification`, `Heartbeat`,
 `MeterValues` and `StatusNotification`. Explicit connector 0 requests station
@@ -165,6 +165,28 @@ messages update `pending`/`partial`/`observed`/`absent` or native denial sets
 `unsupported`. Matching messages cannot prove causation or physical charging.
 An unanswered or interrupted command is not automatically retried on restart
 or reconnect; view its durable status before issuing an explicit new request.
+
+OCPP 2.0.1 instead uses `urn:OCPP:Cp:2:2020:3:TriggerMessageRequest`
+and eleven native `requestedMessage` values: `BootNotification`,
+`LogStatusNotification`, `FirmwareStatusNotification`, `Heartbeat`,
+`MeterValues`, `SignChargingStationCertificate`, `SignV2GCertificate`,
+`StatusNotification`, `TransactionEvent`, `SignCombinedCertificate` and
+`PublishFirmwareStatusNotification`. The optional `evse` object has a positive
+`id` and optional positive `connectorId`; it is not the 1.6 connector ID.
+Station-only classes ignore an irrelevant `evse`; Boot requires registration
+not yet Accepted. StatusNotification requires both EVSE and connector and
+their exact connector resource. MeterValues is EVSE-wide, so a connector-only
+grant cannot authorize it even if a connector ID is supplied. Scoped V2G or
+combined signing requires an EVSE resource, but its station-level certificate
+receipt cannot be attributed to that EVSE. Omitted EVSE expands to all
+configured EVSEs (maximum 64) for applicable classes; an empty/excessive set
+fails closed. Native `Accepted`, `Rejected`, `NotImplemented` and optional
+`statusInfo` are distinct from compatible committed calls in the fixed
+60-second observation window. Durable outcomes include `unattributable` for
+EVSE-scoped certificate receipts. A reply or compatible report proves neither
+causation, certificate completion nor physical charging. The simulator has no
+certificate private key/CSR and returns `NotImplemented` for signing triggers.
+No interrupted or uncertain dispatch is replayed after disconnect/restart.
 
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported

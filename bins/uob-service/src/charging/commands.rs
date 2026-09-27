@@ -33,7 +33,7 @@ impl Session {
     ) -> Option<uob_application::TriggerExpectation> {
         match self {
             Self::V16(session) => session.trigger_expectation(command),
-            Self::V201(_) => None,
+            Self::V201(session) => session.trigger_expectation(command),
         }
     }
 

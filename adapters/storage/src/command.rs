@@ -78,6 +78,7 @@ pub(crate) fn write_result(
         .map(|payload| codec::decode_result(&payload))
         .transpose()?;
 
+    let mut retire_trigger_201 = false;
     if let Some(mut previous) = previous {
         if previous.return_route != incoming.return_route || previous.resource != incoming.resource
         {
@@ -87,6 +88,7 @@ pub(crate) fn write_result(
             ));
         }
         crate::trigger::merge(&previous, &mut incoming)?;
+        retire_trigger_201 = crate::trigger201::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -106,10 +108,14 @@ pub(crate) fn write_result(
         ) && matches!(
             incoming.lifecycle,
             CommandLifecycle::ProtocolResponse { .. }
-        ) && incoming
+        ) && (incoming
             .trigger_observation
             .as_ref()
-            .is_some_and(|observation| observation.native_response.is_some());
+            .is_some_and(|observation| observation.native_response.is_some())
+            || incoming
+                .trigger_observation_201
+                .as_ref()
+                .is_some_and(|observation| observation.native_response.is_some()));
         if previous_rank > incoming_rank
             || (previous_rank == 2 && incoming_rank == 2 && !correlated_trigger_reply)
         {
@@ -127,8 +133,13 @@ pub(crate) fn write_result(
                 incoming.configuration_observations.push(observation);
             }
         }
-    } else if let Some(observation) = incoming.trigger_observation.as_mut() {
-        observation.refresh_status(incoming.recorded_at);
+    } else {
+        if let Some(observation) = incoming.trigger_observation.as_mut() {
+            observation.refresh_status(incoming.recorded_at);
+        }
+        if let Some(observation) = incoming.trigger_observation_201.as_mut() {
+            observation.refresh_status(incoming.recorded_at);
+        }
     }
 
     let unresolved = matches!(
@@ -145,9 +156,10 @@ pub(crate) fn write_result(
     })?;
     transaction
         .execute(
-            "INSERT INTO command_results(request_id, payload) VALUES (?1, ?2)
-         ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload",
-            params![encoded.request_id, payload],
+            "INSERT INTO command_results(request_id, payload, trigger_reconcile_active) VALUES (?1, ?2, ?3)
+         ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload,
+             trigger_reconcile_active = MIN(command_results.trigger_reconcile_active, excluded.trigger_reconcile_active)",
+            params![encoded.request_id, payload, i64::from(!retire_trigger_201)],
         )
         .map_err(unavailable)?;
     transaction

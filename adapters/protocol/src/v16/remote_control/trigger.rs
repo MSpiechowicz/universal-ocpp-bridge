@@ -2,7 +2,7 @@
 use rust_ocpp::v1_6::messages::trigger_message::{TriggerMessageRequest, TriggerMessageResponse};
 use rust_ocpp::v1_6::types::MessageTrigger;
 use serde_json::Value;
-use uob_application::{CommandDispatchOutcome, TriggerExpectation};
+use uob_application::{CommandDispatchOutcome, TriggerExpectation16};
 use uob_contracts::{
     CanonicalResource, CommandErrorCode, NativeProtocolReference, PrivilegedOcppOperation,
     ResourceRef, StationSnapshot, TriggerMessageClass, TriggerNativeResponse,
@@ -14,7 +14,7 @@ pub(super) fn prepare(
     operation: &PrivilegedOcppOperation<Value>,
     resource: &ResourceRef,
     snapshot: &StationSnapshot,
-) -> Result<(Value, TriggerExpectation), CommandErrorCode> {
+) -> Result<(Value, TriggerExpectation16), CommandErrorCode> {
     use CommandErrorCode::InvalidParameters;
     crate::command_registry::validate_privileged_operation(resource, operation)?;
     let request: TriggerMessageRequest =
@@ -83,7 +83,7 @@ pub(super) fn prepare(
     };
     Ok((
         operation.payload.clone(),
-        TriggerExpectation {
+        TriggerExpectation16 {
             requested_class: class,
             native_scope,
             expected_targets,

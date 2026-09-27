@@ -80,9 +80,9 @@ pub(super) async fn reconcile(
                         ),
                     }
                 }
-                StationEvent::Invalidation { .. } | StationEvent::TriggerNotification { .. } => {
-                    None
-                }
+                StationEvent::Invalidation { .. }
+                | StationEvent::TriggerNotification { .. }
+                | StationEvent::TriggerNotification201 { .. } => None,
             };
             if let Some(effect) = effect {
                 coordinator

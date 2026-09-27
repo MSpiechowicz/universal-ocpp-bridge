@@ -172,7 +172,7 @@ pub(super) fn trigger_expectation(
     .ok()?;
     trigger::prepare(operation, &command.resource, snapshot)
         .ok()
-        .map(|(_, expectation)| expectation)
+        .map(|(_, expectation)| TriggerExpectation::Ocpp16(expectation))
 }
 
 fn privileged(

@@ -37,6 +37,12 @@ pub struct TriggerResponses {
     pub heartbeat: TriggerReply,
     pub meter_values: TriggerReply,
     pub status_notification: TriggerReply,
+    pub log_status_notification: TriggerReply,
+    pub publish_firmware_status_notification: TriggerReply,
+    pub transaction_event: TriggerReply,
+    pub sign_charging_station_certificate: TriggerReply,
+    pub sign_v2g_certificate: TriggerReply,
+    pub sign_combined_certificate: TriggerReply,
 }
 
 impl TriggerResponses {

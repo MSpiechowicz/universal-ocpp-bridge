@@ -3,6 +3,7 @@ use crate::remote_constraints as constraints;
 mod charging_limit;
 mod identity;
 mod mapping;
+mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub mod observation;
 
@@ -83,6 +84,16 @@ impl RemoteControlSession {
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn trigger_expectation(
+        &self,
+        command: &Command<Value>,
+    ) -> Option<uob_application::TriggerExpectation> {
+        if self.handle.is_closed() {
+            return None;
+        }
+        let snapshot = self.snapshot.read().ok()?;
+        mapping::trigger_expectation(command, &snapshot, self.clock.now())
+    }
     fn context(
         &self,
         resource: ResourceRef,
@@ -174,6 +185,7 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 SessionCallOutcome::Result { payload, .. } => {
                     let outcome = mapping::response(action, &payload);
                     if action != "SetChargingProfile"
+                        && action != "TriggerMessage"
                         && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })
                     {
                         let status = payload["status"]

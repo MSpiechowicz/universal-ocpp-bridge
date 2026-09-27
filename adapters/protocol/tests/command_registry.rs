@@ -6,6 +6,9 @@ use uob_contracts::{
 };
 use uob_protocol_adapter::command_registry::{command_schemas, validate_privileged_operation};
 
+#[path = "command_registry/trigger_201.rs"]
+mod trigger_201;
+
 fn snapshot(protocol: ProtocolEdition) -> StationSnapshot {
     let bytes: &[u8] = match protocol {
         ProtocolEdition::Ocpp16j => include_bytes!(

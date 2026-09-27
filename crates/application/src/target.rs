@@ -301,6 +301,10 @@ pub enum TargetQuery {
 }
 
 /// Typed result returned by a scoped canonical query port.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Inline CommandResult avoids allocation on the target query hot path and preserves constructors"
+)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TargetQueryResult<E> {
     /// One current station snapshot, when known and authorized.

@@ -196,6 +196,10 @@ pub struct ExportResourceStatusChange {
 /// It deliberately contains no arbitrary JSON, credentials, authorization tokens, payment data,
 /// or raw diagnostic payload variant. Producers must convert committed application state into one
 /// of these canonical types before constructing an [`ExportRecord`].
+#[expect(
+    clippy::large_enum_variant,
+    reason = "CommandResult stays inline to avoid a heap allocation and preserve existing ExportPayload constructors"
+)]
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(
     tag = "kind",

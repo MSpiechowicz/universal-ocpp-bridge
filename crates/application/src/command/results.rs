@@ -19,6 +19,7 @@ pub(super) fn command_result<P>(
         configuration: None,
         configuration_observations: Vec::new(),
         trigger_observation: None,
+        trigger_observation_201: None,
     }
 }
 
@@ -47,6 +48,7 @@ pub(super) fn rejected_external<P>(
         configuration: None,
         configuration_observations: Vec::new(),
         trigger_observation: None,
+        trigger_observation_201: None,
     }
 }
 
