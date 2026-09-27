@@ -21,16 +21,3 @@ pub(super) fn event_cursor(
         })
         .transpose()
 }
-
-pub(super) fn numeric_cursor(value: Option<&str>) -> Result<Option<i64>, StorageError> {
-    value
-        .map(|value| {
-            value.parse::<i64>().map_err(|_| {
-                StorageError::new(
-                    StorageErrorCode::CursorExpired,
-                    "storage cursor is outside retained state",
-                )
-            })
-        })
-        .transpose()
-}

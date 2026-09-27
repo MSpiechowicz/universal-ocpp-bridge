@@ -19,8 +19,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  workspace:
-    name: Format, lint, test, and architecture
+  workspace-checks:
+    name: Workspace checks
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -51,11 +51,47 @@ jobs:
         run: ./scripts/test-staging-postgresql.sh
       - name: Verify PostgreSQL export provisioning in a disposable cluster
         run: ./scripts/test-postgresql-provisioning.sh
+      - name: Verify Linux deployment isolation on the disposable runner
+        run: ./scripts/test-environment-isolation.sh
+
+  postgresql-client:
+    name: PostgreSQL client qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Restore Cargo dependencies and build outputs
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-rust-1.98-postgresql-client-ci-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-1.98-postgresql-client-ci-v1-
       - name: Qualify the PostgreSQL client against disposable TLS/SCRAM and fault fixtures
         timeout-minutes: 20
         run: ./scripts/test-postgresql-client.sh
-      - name: Verify Linux deployment isolation on the disposable runner
-        run: ./scripts/test-environment-isolation.sh
+
+  workspace:
+    name: Format, lint, test, and architecture
+    needs: [workspace-checks, postgresql-client]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require both verification jobs to succeed
+        env:
+          WORKSPACE_CHECKS_RESULT: ${{ needs['workspace-checks'].result }}
+          POSTGRESQL_CLIENT_RESULT: ${{ needs['postgresql-client'].result }}
+        run: |
+          printf 'Workspace checks: %s\nPostgreSQL client qualification: %s\n' "$WORKSPACE_CHECKS_RESULT" "$POSTGRESQL_CLIENT_RESULT"
+          test "$WORKSPACE_CHECKS_RESULT" = success && test "$POSTGRESQL_CLIENT_RESULT" = success
 
   release:
     name: Version and publish successful main builds

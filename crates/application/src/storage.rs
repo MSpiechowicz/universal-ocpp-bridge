@@ -7,11 +7,17 @@ use uob_contracts::{
 
 use crate::{DeliveryOutcome, DeliveryReport};
 
+mod committed;
 mod history;
 mod ports;
 mod retention;
 mod validated;
 
+pub use committed::{
+    BudgetedRecordChunk, CommittedRecordChunkQuery, CommittedRecordChunkResult,
+    CommittedRecordDescriptor, CommittedRecordField, CommittedRecordPage, CommittedRecordReadToken,
+    EXPORT_RECORD_CHUNK_BYTES,
+};
 pub use history::{
     COMMAND_HISTORY_CURSOR_PREFIX, CommandHistoryCursor, CommandHistoryQuery, CommandHistoryScope,
 };
@@ -78,7 +84,7 @@ storage_id!(
 storage_id!(SnapshotCursor, "Opaque cursor for station snapshot pages.");
 storage_id!(
     CommittedRecordCursor,
-    "Opaque cursor for incrementally committed records."
+    "Opaque generation- and durability-bound checkpoint for committed records."
 );
 
 /// Namespace required for durable business-event cursors.
@@ -337,15 +343,12 @@ pub struct RetainedEventQuery {
     pub limit: PageLimit,
 }
 
-/// Bounded incremental committed-record query.
+/// Bounded incremental committed-record query for exactly one durability stream.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommittedRecordQuery {
-    /// Continue after this opaque cursor.
     pub after: Option<CommittedRecordCursor>,
-    /// Maximum number of records returned.
     pub limit: PageLimit,
-    /// Include explicitly best-effort telemetry in addition to critical records.
-    pub include_best_effort_telemetry: bool,
+    pub durability: Durability,
 }
 
 /// Bounded authoritative state needed to resume application work after restart.

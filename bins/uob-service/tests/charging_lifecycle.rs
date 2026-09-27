@@ -23,6 +23,9 @@ use uuid::Uuid;
 #[path = "charging_lifecycle/trigger_opt_in.rs"]
 mod trigger_opt_in;
 
+#[path = "charging_lifecycle/export_spool.rs"]
+mod export_spool;
+
 const READ_TOKEN: &str = "uob1.demo.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ALPHA: &str = "c3RhdGlvbi1hOnN0YXRpb24tYWxwaGEtc2VjcmV0LTEyMzQ1";
 

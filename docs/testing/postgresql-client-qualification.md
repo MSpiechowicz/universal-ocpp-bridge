@@ -31,11 +31,22 @@ runner, not a shared production host. The test image needs to be available or pu
 loopback-published port is local to the test host, not proof of network isolation from other
 local processes.
 
-The Rust workflow runs `./scripts/test-postgresql-client.sh` after workspace, staging and
-provisioning checks on `ubuntu-24.04`, with `contents: read`, checkout credentials not persisted,
-a 20-minute step limit and a 45-minute workspace-job limit. These limits cap CI execution; the
-CI run itself has **not** been observed to pass for this change. The release job remains gated on
-the workspace job. Separately, `./scripts/verify-workspace.sh` passed locally (formatting,
+The Rust workflow runs `./scripts/test-postgresql-client.sh` unchanged, including the 1000
+failed-connection recoveries, in its own `postgresql-client` job on `ubuntu-24.04`. It starts
+independently of the `workspace-checks` job, which retains the other workspace, staging,
+provisioning, watchdog, and deployment checks. Both jobs use `contents: read`, checkout without
+persisted credentials, and separate Cargo cache key namespaces. The client step retains its
+20-minute limit; each verification job has a 45-minute limit. The required
+`Format, lint, test, and architecture` check is now a checkout-free `workspace` gate that fails
+unless both jobs succeed, including when either is skipped or cancelled. The release job still
+depends on `workspace`.
+
+A user-provided screenshot of the previous, sequential CI topology showed a green run with
+7m21s for PostgreSQL qualification and 6m33s for the workspace verifier. These are historical
+job-step observations, not new-topology CI measurements or a guarantee that an individual
+scenario runs faster. Parallel jobs may shorten the end-to-end critical path and show failures
+sooner, subject to runner scheduling and cache behavior; the new topology has not yet been
+observed on CI. Separately, `./scripts/verify-workspace.sh` passed locally (formatting,
 Clippy, workspace tests and boundaries), followed by the live client run below.
 
 ## Observed x64 Linux result
@@ -84,8 +95,8 @@ verified connection succeeded (`outcome=ok`, `elapsed_ms=33`). Invalid CA, wrong
 invalid server certificate cases remained `Permanent`. That run also completed 1000
 failed-connection recoveries, 100 cancellations and 100 pre-commit rollbacks with peak concurrent
 client sockets 1 and `driver_tasks=0`. These supplemental observations do not replace the
-earlier run's stress measurements above; neither a CI pass nor Raspberry Pi qualification has
-been observed.
+earlier run's stress measurements above or qualify Raspberry Pi hardware; they did not establish
+a CI result at the time of that run.
 
 Another separate full live run of the script classified a startup TCP reset as `Retryable`
 (`elapsed_ms=29`, `driver_tasks=0`), followed by a successful trusted, verified connection
@@ -97,8 +108,8 @@ cases remained `Permanent`. This run also completed 100 successful connections, 
 failed-connection recoveries, 100 cancellations and 100 pre-commit rollbacks, with peak concurrent
 client sockets 1, final file descriptors 9 and `driver_tasks=0`. The reset and clean close were
 scripted client-fixture faults, not observed failures of the disposable database or evidence of
-production behavior. This run does not replace the earlier stress table or extend its x64, CI
-and Raspberry Pi limitations.
+production behavior. This run does not replace the earlier stress table or extend its x64 and
+Raspberry Pi limitations; it did not establish a CI result at the time.
 
 A later, separate post-hardening full live run exercised the backend response guard over trusted
 TLS. The guard limits each backend frame (including its five-byte header) to 1 MiB and cumulative
@@ -111,7 +122,7 @@ without `ReadyForQuery` (2,129,920 bytes total). The client promptly rejected ea
 after each rejection. The same run completed 1000 failed-connection recoveries, 100 cancellations
 and 100 pre-commit rollbacks with peak concurrent client sockets 1, final file descriptors 9 and
 low RSS. These fixture observations are distinct from the earlier stress table; they do not
-establish CI, Raspberry Pi, provider integration or production workload safety.
+establish Raspberry Pi, provider integration or production workload safety.
 
 Rustls uses the workspace's existing `aws_lc_rs` provider, avoiding a workspace-wide provider
 collision with `ring`. `cargo tree --locked -e features -i rustls --depth 1` showed no Rustls

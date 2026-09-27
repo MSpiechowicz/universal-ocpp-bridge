@@ -51,6 +51,14 @@ pub use database::{
     DatabaseRetryClassification, DatabaseRuntimeLimits, DatabaseShutdown, DatabaseTask,
     DeduplicationCapability, TransactionCapability, ValidatedDatabaseConfiguration,
 };
+pub use database::{
+    EXPORT_SPOOL_ENVELOPE_BYTES, EXPORT_SPOOL_PAGE_BYTES, ExportGap, ExportGapReason,
+    ExportIngestionError, ExportIngestionOutcome, ExportIngestor, ExportPendingDescriptor,
+    ExportPendingPage, ExportPendingPosition, ExportSourceCheckpoint, ExportSpool,
+    ExportSpoolError, ExportSpoolErrorCode, ExportSpoolFuture, ExportSpoolGapCommit,
+    ExportSpoolNamespace, ExportSpoolRecordAdmission, ExportSpoolRecordBegin, ExportSpoolStatus,
+    ExportSpoolTransfer,
+};
 pub use diagnostic::flow::{FlowDiagnostics, FlowEvidence, FlowSpan, FlowStage};
 pub use diagnostic::state::DiagnosticState;
 pub use diagnostic::store::DiagnosticStore;
@@ -94,17 +102,19 @@ pub use security::{IsolatedControl, RuntimeSecurityPolicy, SecurityPolicyError};
 pub use station::{SizedStationOutput, StationEffects, StationInput, StationStateMachine};
 pub use storage::{
     AtomicStoreWrite, AtomicWriteOutcome, AuthorizationChange, AuthorizationReference,
-    AuthorizationState, COMMAND_DEDUPLICATION_RETENTION_SECONDS, COMMAND_HISTORY_CURSOR_PREFIX,
-    CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery, CommandHistoryScope,
-    CommittedRecord, CommittedRecordCursor, CommittedRecordId, CommittedRecordQuery,
-    DEFAULT_ACTIVE_SESSION_RESERVE_BYTES, DEFAULT_OPERATIONAL_STORAGE_BUDGET_BYTES,
-    DeliveryAttempt, DeliveryAttemptResolution, DeliveryId, Durability,
-    OPERATIONAL_HISTORY_RETENTION_SECONDS, OperationalStore, Page, PageLimit, PageLimitError,
-    PendingDelivery, PendingDeliveryQuery, RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt,
-    RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventPage, RetainedEventQuery,
-    ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageAdmissionState, StorageError,
-    StorageErrorCode, StorageFuture, StorageRetentionStatus, StorageWritePurpose,
-    TargetDeliveryStore,
+    AuthorizationState, BudgetedRecordChunk, COMMAND_DEDUPLICATION_RETENTION_SECONDS,
+    COMMAND_HISTORY_CURSOR_PREFIX, CommandAdmissionOutcome, CommandHistoryCursor,
+    CommandHistoryQuery, CommandHistoryScope, CommittedRecord, CommittedRecordChunkQuery,
+    CommittedRecordChunkResult, CommittedRecordCursor, CommittedRecordDescriptor,
+    CommittedRecordField, CommittedRecordId, CommittedRecordPage, CommittedRecordQuery,
+    CommittedRecordReadToken, DEFAULT_ACTIVE_SESSION_RESERVE_BYTES,
+    DEFAULT_OPERATIONAL_STORAGE_BUDGET_BYTES, DeliveryAttempt, DeliveryAttemptResolution,
+    DeliveryId, Durability, EXPORT_RECORD_CHUNK_BYTES, OPERATIONAL_HISTORY_RETENTION_SECONDS,
+    OperationalStore, Page, PageLimit, PageLimitError, PendingDelivery, PendingDeliveryQuery,
+    RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery,
+    RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery, SnapshotCursor,
+    SnapshotQuery, StorageAdmissionState, StorageError, StorageErrorCode, StorageFuture,
+    StorageRetentionStatus, StorageWritePurpose, TargetDeliveryStore,
 };
 pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,

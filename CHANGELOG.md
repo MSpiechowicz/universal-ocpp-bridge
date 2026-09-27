@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add an offline, separately bounded SQLite export spool over operational schema v12
+  committed-record streams, with durable source high-water, exact loss intervals,
+  destination/revision ownership, critical defer and best-effort telemetry shedding.
+  The 128 MiB main/rollback envelope requires independently quota-backed durable
+  storage; a disposable ext4 ENOSPC probe checks operational disk isolation.
+  Production external export and PostgreSQL delivery remain unavailable (#99).
+- Replace the 1 MiB whole-record export barrier with metadata discovery and
+  64 KiB field chunks for source copies and pending reads. Spool v2 stores
+  incremental rowid BLOB fields and migrates v1 pending rows transactionally
+  with bounded memory. Multi-MiB records that fit copy atomically; an over-budget
+  critical record retains its checkpoint, destination and high-water until
+  source expiry permits an exact loss gap. Telemetry continues independently;
+  the fixed 128 MiB physical envelope is not a payload guarantee (#99).
+
 - Qualify a private PostgreSQL client with disposable TLS/SCRAM, credential-rejection,
   uncertainty and bounded-resource fault runs; add a live CI gate and x64 evidence.
   The PostgreSQL export provider and scheduler remain unavailable (#103).

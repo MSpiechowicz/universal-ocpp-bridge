@@ -4,12 +4,15 @@ use uob_contracts::{
     UtcTimestamp,
 };
 
+use crate::RuntimeResourceBudget;
+
 use super::{
     AtomicStoreWrite, AtomicWriteOutcome, CommandHistoryCursor, CommandHistoryQuery,
-    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, CommittedRecordQuery,
-    DeliveryAttempt, DeliveryId, Page, PageLimit, PendingDeliveryQuery, RecordedDeliveryAttempt,
-    RecoveryBatch, RecoveryQuery, RetainedEventPage, RetainedEventQuery, ScheduledDelivery,
-    SnapshotCursor, SnapshotQuery, StorageFuture, StorageRetentionStatus,
+    CommandHistoryScope, CommittedRecordChunkQuery, CommittedRecordChunkResult,
+    CommittedRecordPage, CommittedRecordQuery, DeliveryAttempt, DeliveryId, Page, PageLimit,
+    PendingDeliveryQuery, RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventPage,
+    RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageFuture,
+    StorageRetentionStatus,
 };
 
 /// Application-owned authoritative persistence and committed-record read ports.
@@ -70,11 +73,19 @@ pub trait OperationalStore<C, E, D, R>: Send + Sync {
         query: RetainedEventQuery,
     ) -> StorageFuture<'_, RetainedEventPage<E>>;
 
-    /// Reads records that became visible through completed atomic writes.
+    /// Discovers bounded committed metadata without loading source fields.
     fn read_committed_records(
         &self,
         query: CommittedRecordQuery,
-    ) -> StorageFuture<'_, Page<CommittedRecord<R>, CommittedRecordCursor>>;
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordPage>;
+
+    /// Reads one admitted raw field range, or reports actual retention expiry.
+    fn read_committed_record_chunk(
+        &self,
+        query: CommittedRecordChunkQuery,
+        budget: &RuntimeResourceBudget,
+    ) -> StorageFuture<'_, CommittedRecordChunkResult>;
 
     /// Reads a bounded recovery view without granting unrestricted storage access.
     fn recover(&self, query: RecoveryQuery) -> StorageFuture<'_, RecoveryBatch<C, D>>;

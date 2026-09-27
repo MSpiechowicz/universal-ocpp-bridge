@@ -5,9 +5,14 @@ supported initial layout uses three **dedicated fixed ext4 partitions** mounted 
 `/var/lib/uob`, `/var/lib/uob-staging`, and `/var/lib/uob-releases`. Their partition capacities
 are the hard environment budgets. Provision these offline on an empty deployment disk; this
 repository does not repartition a live host or move existing databases. Size production for
-its journal/WAL and seven-day retention, staging for all test databases and export spools,
-and releases for retained artifacts and backups. Keep every staging peer's durable data
-under its staging partition. Neither service user may write to the release partition.
+its journal/WAL and seven-day retention, staging for its operational/test databases, and
+releases for retained artifacts and backups. Keep every staging peer's durable operational
+data under its staging partition. The optional export spool is **not** part of the staging
+partition budget: if a future service enables it, provision an additional separate durable
+hard-capacity-backed device or enforced independent quota on another device, with room for
+its 128 MiB physical main/rollback envelope plus filesystem overhead. Keep production and
+staging spools isolated from each other and from both operational filesystems. Neither
+service user may write to the release partition.
 
 The admission helper verifies live kernel device, mount, free-block and inode observations.
 A subdirectory or bind mount on a shared device fails. Loop images, virtual/thin devices,
@@ -34,10 +39,15 @@ service, in addition to the existing network and resource governor dependencies.
 policy paths must match the service's `RequiresMountsFor` paths if customized. Production
 boot has no dependency on this optional staging admission service.
 
-Each partition must retain at least 512 MiB available space and 16 free inodes at admission.
-The hard partition boundary means filling staging's database or export spool cannot consume
-production's reserved journal blocks after admission. Existing bounded journal namespaces
-remain required; this change does not relocate system logs or measure Pi storage performance.
+Each of these three partitions must retain at least 512 MiB available space and 16 free
+inodes at admission. Their hard boundaries protect production from staging database
+exhaustion. The admission helper does **not** check a fourth spool device or attest its
+quota; `SqliteExportSpool::open` checks a different device and private directory, but cannot
+verify durable backing or a hard independent allocation. Do not use a same-partition
+`export-spool/` subdirectory as a substitute. Export is still disabled in `uob serve`; a
+future deployment must add its own verified spool admission before enabling it.
+Existing bounded journal namespaces remain required; this change does not relocate
+system logs or measure Pi storage performance.
 
 Before writing an installation candidate, an administrator or future release supervisor must
 reserve its maximum on-disk size, space for the previous artifact, and the maximum consistent
@@ -76,3 +86,9 @@ real allocation, allocation failure, headroom changes, protected files, and inva
 staging filesystem to ENOSPC and proves production capacity and retained artifacts survive.
 That privileged CI test uses fully allocated loop images in a private mount namespace, with
 an explicitly test-only topology observer; deployed admission continues to reject loop disks.
+
+`python3 -B scripts/test-export-spool-isolation.py --disposable` separately checks real ext4
+ENOSPC on a disposable spool mount while an operational ext4 mount retains free blocks and
+accepts a durable write. This privileged mount-namespace probe uses loop images only as
+CI fixtures; it does not qualify loop-backed production storage, verify a real site quota,
+invoke Rust ingestion, or prove OCPP charging continuity.

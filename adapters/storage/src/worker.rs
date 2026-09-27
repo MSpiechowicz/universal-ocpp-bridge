@@ -1,15 +1,17 @@
+mod command_requests;
 mod configuration;
 mod reads;
 
-use std::sync::mpsc;
+use std::{collections::hash_map::RandomState, sync::mpsc};
 
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::sync::oneshot;
 use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery,
-    CommandHistoryScope, CommittedRecord, CommittedRecordCursor, Page, RecordedDeliveryAttempt,
-    RecoveryBatch, RetainedEventPage, ScheduledDelivery, SnapshotCursor, StorageError,
+    CommandHistoryScope, CommittedRecordChunkQuery, CommittedRecordChunkResult,
+    CommittedRecordPage, CommittedRecordQuery, Page, RecordedDeliveryAttempt, RecoveryBatch,
+    RetainedEventPage, RuntimeReservation, ScheduledDelivery, SnapshotCursor, StorageError,
     StorageErrorCode, StorageRetentionStatus,
 };
 use uob_contracts::{
@@ -23,14 +25,14 @@ use crate::{
         EncodedAuthorization, EncodedDelivery, EncodedDeliveryAttempt, EncodedEvent, EncodedRecord,
         EncodedWrite,
     },
-    command, command_history,
+    command,
     configuration::unavailable,
     delivery, recovery, retention, snapshots,
 };
 
-use reads::{read_events, read_records};
+use reads::{read_events, read_record_chunk, read_records};
 
-pub(crate) enum Request<C, E, D, R> {
+pub(crate) enum Request<C, E, D> {
     Drain(crate::drain::Operation, Reply<crate::drain::Outcome>),
     RemoteControl(
         crate::remote_control::Operation,
@@ -54,10 +56,14 @@ pub(crate) enum Request<C, E, D, R> {
     ),
     Events(String, Option<i64>, usize, Reply<RetainedEventPage<E>>),
     Records(
-        Option<i64>,
-        usize,
-        bool,
-        Reply<Page<CommittedRecord<R>, CommittedRecordCursor>>,
+        CommittedRecordQuery,
+        RuntimeReservation,
+        Reply<CommittedRecordPage>,
+    ),
+    RecordChunk(
+        CommittedRecordChunkQuery,
+        RuntimeReservation,
+        Reply<CommittedRecordChunkResult>,
     ),
     Recover(usize, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
@@ -100,115 +106,138 @@ pub(crate) enum Request<C, E, D, R> {
 
 pub(crate) type Reply<T> = oneshot::Sender<Result<T, StorageError>>;
 
-pub(crate) fn run<C, E, D, R>(
+pub(crate) fn run<C, E, D>(
     mut connection: Connection,
-    requests: mpsc::Receiver<Request<C, E, D, R>>,
+    requests: mpsc::Receiver<Request<C, E, D>>,
     retention_policy: SqliteRetentionPolicy,
 ) where
     C: DeserializeOwned + Serialize,
     E: DeserializeOwned,
     D: DeserializeOwned,
-    R: DeserializeOwned,
 {
     let mut drain = crate::drain::Drain::default();
+    let token_key = RandomState::new();
     for request in requests {
-        match request {
-            Request::Drain(operation, reply) => respond(reply, drain.operation(&connection, operation)),
-            Request::TransactionId(reply) => respond(reply, connection.query_row(
-                "UPDATE transaction_id_counter SET value = value + 1 WHERE id = 1 AND value < 2147483647 RETURNING value",
-                [], |row| row.get(0)).map_err(unavailable)),
-            Request::EventSequence(reply) => respond(reply, connection.query_row(
-                "UPDATE event_sequence_counter SET value = value + 1 WHERE id = 1 AND value < 9223372036854775807 RETURNING value",
-                [], |row| row.get::<_, i64>(0)).map_err(unavailable).map(i64::cast_unsigned)),
-            Request::RemoteControl(operation, reply) => respond(
-                reply,
-                apply_remote_control(&mut connection, &mut drain, &operation),
-            ),
-            Request::Probe(reply) => respond(reply, probe(&connection)),
-            Request::Write(write, reply) => respond(
-                reply,
-                checked_write(&mut connection, &mut drain, retention_policy, write),
-            ),
-            Request::Snapshots(after, limit, reply) => {
-                respond(reply, snapshots::read(&connection, after, limit));
-            }
-            Request::StationSnapshot(key, reply) => {
-                respond(reply, snapshots::exact(&connection, &key));
-            }
-            Request::ScopedSnapshots(keys, after, limit, reply) => {
-                respond(reply, snapshots::scoped(&connection, &keys, after, limit));
-            }
-            Request::Events(resource, after, limit, reply) => {
-                respond(reply, read_events(&connection, &resource, after, limit));
-            }
-            Request::Records(after, limit, telemetry, reply) => {
-                respond(reply, read_records(&connection, after, limit, telemetry));
-            }
-            Request::Recover(limit, reply) => {
-                respond(reply, recovery::recover(&connection, limit));
-            }
-            Request::Command(request_id, reply) => {
-                respond(reply, recovery::command(&connection, &request_id));
-            }
-            Request::CommandResult(request_id, reply) => {
-                respond(reply, recovery::command_result(&connection, &request_id));
-            }
-            Request::CommandCandidates(bridge, station, before, after, limit, reply) => {
-                respond(reply, command::candidates(&connection, &bridge, &station, before, after.as_deref(), limit));
-            }
-            Request::JournalEvent(id, bridge, station, reply) => {
-                respond(reply, command::journal_event(&connection, &id, &bridge, &station));
-            }
-            Request::CommandHistory(query, scope, reply) => {
-                respond(reply, command_history::read(&connection, &query, &scope));
-            }
-            Request::AppendConfigurationObservation(write_id, observation, reply) => {
-                respond(
-                    reply,
-                    append_configuration_observation(
-                        &mut connection,
-                        &mut drain,
-                        &write_id,
-                        observation,
-                    ),
-                );
-            }
-            Request::TriggerPending(station, class, now, reply) => {
-                respond(reply, crate::trigger::pending(&connection, &station, class, now));
-            }
-            Request::TriggerPending201(station, class, now, reply) => {
-                respond(reply, crate::trigger201::pending(&connection, &station, class, now));
-            }
-            Request::TriggerCandidates(after, limit, reply) => {
-                respond(reply, crate::trigger::candidates(&connection, after.as_deref(), limit));
-            }
-            Request::ReconcileTrigger(request_id, now, reply) => {
-                respond(reply, drain.check_completion_write().and_then(|()| drain.changed())
-                    .and_then(|()| crate::trigger::reconcile(&mut connection, &request_id, now)));
-            }
-            Request::PruneCommands(now, reply) => {
-                respond(reply, command::prune::<C>(&mut connection, now));
-            }
-            Request::MaintainRetention(now, reply) => respond(
-                reply,
-                retention::maintain(&mut connection, retention_policy, now).map(|status| drain.admission_status(status)),
-            ),
-            Request::RetentionStatus(reply) => {
-                respond(reply, retention::status(&connection, retention_policy).map(|status| drain.admission_status(status)));
-            }
-            Request::PendingDeliveries(target, revision, ready_at, limit, reply) => respond(
-                reply,
-                delivery::read_pending(&connection, &target, revision, &ready_at, limit),
-            ),
-            Request::RecordDeliveryAttempt(attempt, reply) => {
-                respond(reply, delivery::record_attempt(&mut connection, &attempt));
-            }
-            Request::DeliveryAttempts(delivery_id, limit, reply) => respond(
-                reply,
-                delivery::read_attempts(&connection, &delivery_id, limit),
-            ),
-        }
+        handle_request(
+            &mut connection,
+            &mut drain,
+            &token_key,
+            retention_policy,
+            request,
+        );
     }
+}
+
+fn handle_request<C, E, D>(
+    connection: &mut Connection,
+    drain: &mut crate::drain::Drain,
+    token_key: &RandomState,
+    retention_policy: SqliteRetentionPolicy,
+    request: Request<C, E, D>,
+) where
+    C: DeserializeOwned + Serialize,
+    E: DeserializeOwned,
+    D: DeserializeOwned,
+{
+    match request {
+        Request::Drain(operation, reply) => respond(reply, drain.operation(connection, operation)),
+        Request::TransactionId(reply) => respond(reply, next_transaction_id(connection)),
+        Request::EventSequence(reply) => respond(reply, next_event_sequence(connection)),
+        Request::RemoteControl(operation, reply) => {
+            respond(reply, apply_remote_control(connection, drain, &operation));
+        }
+        Request::Probe(reply) => respond(reply, probe(connection)),
+        Request::Write(write, reply) => respond(
+            reply,
+            checked_write(connection, drain, retention_policy, write),
+        ),
+        Request::Snapshots(after, limit, reply) => {
+            respond(reply, snapshots::read(connection, after, limit));
+        }
+        Request::StationSnapshot(key, reply) => {
+            respond(reply, snapshots::exact(connection, &key));
+        }
+        Request::ScopedSnapshots(keys, after, limit, reply) => {
+            respond(reply, snapshots::scoped(connection, &keys, after, limit));
+        }
+        Request::Events(resource, after, limit, reply) => {
+            respond(reply, read_events(connection, &resource, after, limit));
+        }
+        Request::Records(query, reservation, reply) => {
+            respond(
+                reply,
+                read_records(connection, &query, reservation, token_key),
+            );
+        }
+        Request::RecordChunk(query, reservation, reply) => {
+            respond(
+                reply,
+                read_record_chunk(connection, &query, reservation, token_key),
+            );
+        }
+        Request::Recover(limit, reply) => respond(reply, recovery::recover(connection, limit)),
+        Request::Command(request_id, reply) => {
+            respond(reply, recovery::command(connection, &request_id));
+        }
+        Request::CommandResult(request_id, reply) => {
+            respond(reply, recovery::command_result(connection, &request_id));
+        }
+        command_request @ (Request::CommandCandidates(..)
+        | Request::JournalEvent(..)
+        | Request::CommandHistory(..)
+        | Request::AppendConfigurationObservation(..)
+        | Request::TriggerPending(..)
+        | Request::TriggerPending201(..)
+        | Request::TriggerCandidates(..)
+        | Request::ReconcileTrigger(..)
+        | Request::PruneCommands(..)) => {
+            command_requests::handle(connection, drain, command_request);
+        }
+        Request::MaintainRetention(now, reply) => respond(
+            reply,
+            retention::maintain(connection, retention_policy, now)
+                .map(|status| drain.admission_status(status)),
+        ),
+        Request::RetentionStatus(reply) => {
+            respond(
+                reply,
+                retention::status(connection, retention_policy)
+                    .map(|status| drain.admission_status(status)),
+            );
+        }
+        Request::PendingDeliveries(target, revision, ready_at, limit, reply) => respond(
+            reply,
+            delivery::read_pending(connection, &target, revision, &ready_at, limit),
+        ),
+        Request::RecordDeliveryAttempt(attempt, reply) => {
+            respond(reply, delivery::record_attempt(connection, &attempt));
+        }
+        Request::DeliveryAttempts(delivery_id, limit, reply) => respond(
+            reply,
+            delivery::read_attempts(connection, &delivery_id, limit),
+        ),
+    }
+}
+
+fn next_transaction_id(connection: &Connection) -> Result<i32, StorageError> {
+    connection
+        .query_row(
+            "UPDATE transaction_id_counter SET value = value + 1 WHERE id = 1 AND value < 2147483647 RETURNING value",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(unavailable)
+}
+
+fn next_event_sequence(connection: &Connection) -> Result<u64, StorageError> {
+    connection
+        .query_row(
+            "UPDATE event_sequence_counter SET value = value + 1 WHERE id = 1 AND value < 9223372036854775807 RETURNING value",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(unavailable)
+        .map(i64::cast_unsigned)
 }
 
 fn probe(connection: &Connection) -> Result<(), StorageError> {
@@ -392,17 +421,27 @@ fn write_delivery(
 }
 
 fn write_record(transaction: &Transaction<'_>, value: &EncodedRecord) -> Result<(), StorageError> {
+    let sequence: i64 = transaction
+        .query_row(
+            "UPDATE committed_source_streams SET high_water = high_water + 1
+         WHERE durability = ?1 AND high_water < 9223372036854775807
+         RETURNING high_water",
+            [value.durability],
+            |row| row.get(0),
+        )
+        .map_err(unavailable)?;
     transaction
         .execute(
-            "INSERT INTO committed_records(\n\
-                 record_id, durability, committed_at, payload, retain_until\n\
-             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO committed_records(
+                 record_id, durability, committed_at, payload, retain_until, source_sequence
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 value.record_id,
                 value.durability,
                 value.committed_at,
                 value.payload,
-                value.retain_until
+                value.retain_until,
+                sequence,
             ],
         )
         .map(|_| ())

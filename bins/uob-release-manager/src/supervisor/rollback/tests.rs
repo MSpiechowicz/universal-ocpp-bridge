@@ -1,3 +1,6 @@
+mod record_preservation;
+mod rejected_fallback;
+
 use super::*;
 use crate::{
     supervisor::{
@@ -11,10 +14,7 @@ use std::{
     fs,
     os::unix::fs::{MetadataExt, PermissionsExt},
 };
-use uob_application::{
-    AtomicStoreWrite, CommittedRecord, CommittedRecordId, CommittedRecordQuery, Durability,
-    OperationalStore, PageLimit,
-};
+use uob_application::OperationalStore;
 type Store = uob_storage_adapter::SqliteOperationalStore<String, String, String, String>;
 const OLD: &[u8] = b"#!/bin/sh\n# previous\nexit 0\n";
 const NEW: &[u8] = b"#!/bin/sh\n# candidate\nexit 0\n";
@@ -140,96 +140,6 @@ async fn setup() -> (Fixture, Supervisor, preflight::Policy) {
         .unwrap();
     (f, manager, p)
 }
-#[test]
-fn fallback_preserves_post_promotion_records_export_cursor_and_audits_across_reboot() {
-    let _serial = crate::TEST_SERIAL.lock().unwrap();
-    run(async {
-        let (f, mut manager, p) = setup().await;
-        let store = Store::open(&p.operational_database, 16).unwrap();
-        let mut write = AtomicStoreWrite::empty();
-        for name in [
-            "transaction",
-            "meter",
-            "command",
-            "delivery",
-            "export-checkpoint",
-            "release-audit",
-        ] {
-            write.committed_records.push(CommittedRecord {
-                record_id: CommittedRecordId::new(name).unwrap(),
-                durability: Durability::Critical,
-                committed_at: serde_json::from_str("\"2026-09-12T12:00:00Z\"").unwrap(),
-                record: name.to_owned(),
-            });
-        }
-        store.write_atomic(write).await.unwrap();
-        let query = || CommittedRecordQuery {
-            after: None,
-            limit: PageLimit::new(10).unwrap(),
-            include_best_effort_telemetry: true,
-        };
-        let before = store.read_committed_records(query()).await.unwrap();
-        store.shutdown(DEADLINE).await.unwrap();
-        drop(store);
-        let bytes = fs::read(&p.operational_database).unwrap();
-        trigger(&mut manager);
-        let audit = serde_json::to_vec(&manager.ledger.status().last_operation).unwrap();
-        drop(manager); // persisted trigger is sufficient with API and browser unavailable
-        let mut manager = f.manager().with_preflight_policy(p.clone()).unwrap();
-        let mut process = Process::default();
-        assert_eq!(manager.rollback_automatically(&mut process).await, Code::Ok);
-        assert_eq!((process.stops, process.starts), (1, 1));
-        assert_eq!(
-            process.start.unwrap().digest,
-            f.previous.compatibility.artifact_digest.as_str()
-        );
-        assert_eq!(fs::read(&p.operational_database).unwrap(), bytes);
-        let store = Store::open(&p.operational_database, 16).unwrap();
-        let after = store.read_committed_records(query()).await.unwrap();
-        assert_eq!(before, after);
-        store.shutdown(DEADLINE).await.unwrap();
-        assert_eq!(
-            serde_json::to_vec(&manager.ledger.status().last_operation).unwrap(),
-            audit
-        );
-        assert_eq!(
-            manager.activation.state().candidate.as_ref().unwrap().phase,
-            Phase::Quarantined
-        );
-        drop(manager);
-        let mut manager = f.manager().with_preflight_policy(p).unwrap();
-        let mut process = Process::default();
-        assert_eq!(manager.rollback_automatically(&mut process).await, Code::Ok);
-        assert_eq!((process.stops, process.starts), (0, 0));
-        assert_eq!(
-            manager
-                .handle(
-                    100,
-                    Request::Stage {
-                        digest: f.artifact.digest().into()
-                    }
-                )
-                .code,
-            Code::RecoveryRequired
-        );
-        assert_eq!(
-            manager
-                .observe_failure_and_rollback(
-                    failures::Policy::default(),
-                    observation(3, failures::Signal::Watchdog),
-                    &mut Staging,
-                    &mut process
-                )
-                .await
-                .unwrap(),
-            Code::RecoveryRequired
-        );
-        assert_eq!(
-            manager.handle(100, Request::Status {}).code,
-            Code::RecoveryRequired
-        );
-    });
-}
 
 #[test]
 fn status_reports_live_journal_pointers_after_rollback() {
@@ -263,103 +173,6 @@ fn status_reports_live_journal_pointers_after_rollback() {
         let forbidden = manager.handle(102, Request::Status {});
         assert_eq!(forbidden.code, Code::Forbidden);
         assert!(forbidden.activation.is_none());
-    });
-}
-#[test]
-fn failed_or_interrupted_fallback_is_never_retried_after_reboot() {
-    let _serial = crate::TEST_SERIAL.lock().unwrap();
-    run(async {
-        for interrupted in [false, true] {
-            let (f, mut manager, p) = setup().await;
-            trigger(&mut manager);
-            let mut process = Process {
-                fail: !interrupted,
-                hang: interrupted,
-                ..Process::default()
-            };
-            if interrupted {
-                assert!(
-                    tokio::time::timeout(
-                        Duration::from_millis(500),
-                        manager.rollback_automatically(&mut process)
-                    )
-                    .await
-                    .is_err()
-                );
-            } else {
-                assert_eq!(
-                    manager.rollback_automatically(&mut process).await,
-                    Code::RecoveryRequired
-                );
-            }
-            assert_eq!(process.starts, 1);
-            drop(manager);
-            let mut manager = f.manager().with_preflight_policy(p).unwrap();
-            let mut process = Process::default();
-            assert_eq!(
-                manager.rollback_automatically(&mut process).await,
-                Code::RecoveryRequired
-            );
-            assert_eq!((process.stops, process.starts), (0, 0));
-            assert_eq!(
-                manager.activation.state().candidate.as_ref().unwrap().phase,
-                Phase::Quarantined
-            );
-        }
-    });
-}
-#[test]
-fn unsafe_eligibility_or_data_never_starts_a_fallback() {
-    let _serial = crate::TEST_SERIAL.lock().unwrap();
-    run(async {
-        for bad in [
-            "revoked", "floor", "config", "database", "corrupt", "evidence", "formats",
-        ] {
-            let (f, mut manager, p) = setup().await;
-            trigger(&mut manager);
-            match bad {
-                "revoked" => {
-                    manager
-                        .policy
-                        .security
-                        .revoked_artifacts
-                        .insert(f.previous.compatibility.artifact_digest.clone());
-                }
-                "floor" => manager.policy.security.minimum_release_sequence = u64::MAX,
-                "config" => fs::write(&p.configuration, "changed").unwrap(),
-                "database" => {
-                    fs::rename(
-                        &p.operational_database,
-                        p.operational_database.with_extension("old"),
-                    )
-                    .unwrap();
-                    fs::write(&p.operational_database, "replacement").unwrap();
-                }
-                "corrupt" => fs::write(&p.operational_database, "corrupt").unwrap(),
-                "formats" => {
-                    manager.policy.current_formats.external_database =
-                        crate::SchemaVersion::new(999);
-                }
-                "evidence" => {
-                    let q = manager.ledger.status().qualification.as_ref().unwrap();
-                    fs::write(
-                        f.state
-                            .join("evidence")
-                            .join(format!("{}.sig", q.evidence_digest)),
-                        [0; 64],
-                    )
-                    .unwrap();
-                }
-                _ => unreachable!(),
-            }
-            let mut process = Process::default();
-            assert_eq!(
-                manager.rollback_automatically(&mut process).await,
-                Code::RecoveryRequired,
-                "{bad}"
-            );
-            assert_eq!(process.starts, 0, "{bad}");
-        }
     });
 }
 #[test]

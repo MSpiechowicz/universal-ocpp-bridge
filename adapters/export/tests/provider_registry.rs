@@ -355,6 +355,31 @@ fn production_rejects_bad_tls_credentials_and_provider_settings() {
 }
 
 #[test]
+fn unknown_baseline_without_buffered_rows_still_blocks_destination_change() {
+    let registry = registry(Arc::new(FactoryCalls::default()));
+    let backlog = ExportBacklogState {
+        destination: Some(ExportDestination {
+            destination_id: destination("old-analytics"),
+            configuration_revision: 7,
+        }),
+        pending_batches: 0,
+        pending_records: 0,
+        deferred_source: false,
+        unconsumed_gaps: false,
+        incomplete_history: true,
+    };
+    assert!(matches!(
+        registry.validate(
+            Environment::Production,
+            enabled("new-analytics", 1),
+            &backlog,
+            DestinationTransition::Preserve
+        ),
+        Err(DataExportSelectionError::PendingDestinationChange)
+    ));
+}
+
+#[test]
 fn pending_destination_change_requires_matching_audited_discard() {
     let registry = registry(Arc::new(FactoryCalls::default()));
     let previous = ExportDestination {
@@ -365,6 +390,9 @@ fn pending_destination_change_requires_matching_audited_discard() {
         destination: Some(previous.clone()),
         pending_batches: 2,
         pending_records: 50,
+        deferred_source: false,
+        unconsumed_gaps: false,
+        incomplete_history: false,
     };
 
     let blocked = registry.validate(
@@ -413,6 +441,9 @@ fn disabling_with_pending_data_retains_the_discard_audit_proof() {
                 destination: Some(previous.clone()),
                 pending_batches: 1,
                 pending_records: 10,
+                deferred_source: false,
+                unconsumed_gaps: false,
+                incomplete_history: false,
             },
             DestinationTransition::AuditedDiscard {
                 audit_event_id: "audit-disable-export-42".to_owned(),

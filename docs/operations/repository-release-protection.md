@@ -23,6 +23,14 @@ The ruleset must require up-to-date branches and these checks:
 - `GitHub Actions policy`
 - `Locked source SBOM`
 
+The Rust workflow keeps `Format, lint, test, and architecture` as the exact required check name.
+It is the `workspace` aggregate job, which runs after the independent `workspace-checks` and
+`postgresql-client` jobs and passes only when both succeed. A failed, skipped, cancelled, or
+missing upstream result blocks the aggregate check. The `release` job still needs `workspace`,
+so neither verification path can be bypassed for publication. The previous sequential topology
+was observed green in a user-provided CI screenshot; this parallel topology has not yet been
+observed on CI.
+
 Grant only the dedicated release GitHub App an **Always** bypass on that ruleset. Do not grant it a
 bypass on the remaining classic structural protections. Everyone else, including administrators,
 continues to use a PR and required checks. Do not leave duplicate PR or status requirements in the
