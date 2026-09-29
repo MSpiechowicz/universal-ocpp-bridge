@@ -106,8 +106,12 @@ impl ReadExecutor {
     pub(crate) async fn station_snapshots(
         &self,
         query: uob_application::SnapshotQuery,
+        scopes: Vec<uob_application::AccessResourceScope>,
     ) -> Result<Page<StationSnapshot, SnapshotCursor>, IntegrationErrorCode> {
-        match self.read(TargetQuery::StationSnapshots(query)).await? {
+        match self
+            .read(TargetQuery::StationSnapshotsScoped { query, scopes })
+            .await?
+        {
             CanonicalRead::StationSnapshots(page) => Ok(page),
             _ => Err(IntegrationErrorCode::SourceUnavailable),
         }

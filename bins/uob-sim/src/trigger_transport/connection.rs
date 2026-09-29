@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use ocpp_client::{
     ClientConfig, ReconnectPolicy, Reconnector, TokioExecutor, TokioTimer, TransportError,
-    TransportSink, TransportStream, websocket_transport,
+    TransportSink, TransportStream,
 };
 use tokio::sync::mpsc;
 
@@ -16,6 +16,7 @@ use crate::{Ocpp16State, Ocpp201State};
 
 struct TriggerReconnector {
     endpoint: String,
+    credentials_file: Option<String>,
     barrier: TriggerBarrier,
 }
 
@@ -34,8 +35,12 @@ impl Reconnector for TriggerReconnector {
         >,
     > {
         Box::pin(async move {
-            let (sink, stream) =
-                websocket_transport(&self.endpoint, self.barrier.version, None).await?;
+            let (sink, stream) = crate::station_auth::connect(
+                &self.endpoint,
+                self.barrier.version,
+                self.credentials_file.as_deref(),
+            )
+            .await?;
             Ok(self.barrier.wrap(sink, stream))
         })
     }
@@ -43,6 +48,7 @@ impl Reconnector for TriggerReconnector {
 
 pub(crate) async fn connect(
     endpoint: &str,
+    credentials_file: Option<&str>,
     timeout: Duration,
     reconnect: bool,
     capacity: usize,
@@ -58,13 +64,15 @@ pub(crate) async fn connect(
     let (delivered, receiver) = mpsc::unbounded_channel();
     let barrier = TriggerBarrier::new(capacity, delivered, state, timeout);
     let (sink, stream) =
-        websocket_transport(endpoint, ocpp_client::OcppVersion::V1_6, None).await?;
+        crate::station_auth::connect(endpoint, ocpp_client::OcppVersion::V1_6, credentials_file)
+            .await?;
     let (sink, stream) = barrier.wrap(sink, stream);
     let mut config = ClientConfig::new(timeout);
     if reconnect {
         config = config.with_reconnect(
             Box::new(TriggerReconnector {
                 endpoint: endpoint.to_owned(),
+                credentials_file: credentials_file.map(str::to_owned),
                 barrier: barrier.clone(),
             }),
             ReconnectPolicy::default(),
@@ -82,6 +90,7 @@ pub(crate) async fn connect(
 
 pub(crate) async fn connect_201(
     endpoint: &str,
+    credentials_file: Option<&str>,
     timeout: Duration,
     reconnect: bool,
     capacity: usize,
@@ -96,13 +105,15 @@ pub(crate) async fn connect_201(
 > {
     let (delivered, receiver) = mpsc::unbounded_channel();
     let barrier = TriggerBarrier::new_201(capacity, delivered, state, timeout);
-    let (sink, stream) = websocket_transport(endpoint, barrier.version, None).await?;
+    let (sink, stream) =
+        crate::station_auth::connect(endpoint, barrier.version, credentials_file).await?;
     let (sink, stream) = barrier.wrap(sink, stream);
     let mut config = ClientConfig::new(timeout);
     if reconnect {
         config = config.with_reconnect(
             Box::new(TriggerReconnector {
                 endpoint: endpoint.to_owned(),
+                credentials_file: credentials_file.map(str::to_owned),
                 barrier: barrier.clone(),
             }),
             ReconnectPolicy::default(),

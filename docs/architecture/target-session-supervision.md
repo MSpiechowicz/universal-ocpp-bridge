@@ -25,16 +25,20 @@ futures, as required by the reusable target conformance suite.
 
 ## Restart and shutdown
 
-The session reports starting and terminal/retry-classified health without changing core readiness.
-A target outage therefore does not stop station actors, local authorization, storage, or authorized
-management access.
+The service starts one selected target from the validated registry only when the demo charging
+runtime is present. It binds the canonical SQLite charging store to scoped station reads and
+retained events, routes target commands through the same durable command coordinator and
+authorization service as management, and projects target health into the common health monitor.
+The MQTT command principal is bound to the configured target and station roster; HTTP credentials
+are resolved by the HTTP adapter's own credential parser into host command grants. Without an
+HTTP credential file, the host creates only a read-only command guard.
 
-The supervisor can reconstruct a fresh adapter from the same validated selection. Pending work
-remains host-owned and can be re-enqueued in durable recovery order; another target revision is
-rejected instead of receiving it. Durable outbox reads, outcome persistence, retry backoff, expiry,
-and reconciliation are intentionally owned by the follow-on delivery-policy worker rather than by
-an adapter-private retry queue.
+Charging transaction events are committed alongside their required outbox entries. The selected
+target's bounded delivery worker resolves each entry against its exact retained journal event and
+records adapter outcomes in the same SQLite worker. A bounded station inventory scan also sends
+replaceable snapshots to the selected target and refreshes them periodically; these state
+publications are not durable transaction-event acknowledgements.
 
-Graceful shutdown signals the target and waits only for the caller-supplied duration. A task that
-misses that bound is aborted and reported as a shutdown deadline failure. Dropping the supervisor
-also aborts the owned target task, so no detached target session survives its composition owner.
+Unexpected termination of the selected session or its delivery worker fails service supervision;
+a stop signal shuts down the session, then its delivery worker, before the charging store. The
+host enforces the lifecycle shutdown deadline even if a target ignores its own shutdown signal.

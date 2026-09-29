@@ -10,14 +10,16 @@ use std::{
 use serde_json::Value;
 use tokio::time::{self, Sleep};
 use uob_application::{
-    CanonicalQuerySource, OperationalStore, Page, PageLimit, RetainedEventCursor,
-    RetainedEventItem, RetainedEventPage, RetainedEventQuery, StationEvent, StorageError,
-    StorageErrorCode, StorageFuture, TargetPortError, TargetPortErrorCode, TargetPortFuture,
-    TargetQuery, TargetQueryAuthorization, TargetQueryResult, TargetRetainedEventStream,
-    TargetSubscription,
+    AccessResourceScope, CanonicalQuerySource, OperationalStore, Page, PageLimit,
+    RetainedEventCursor, RetainedEventItem, RetainedEventPage, RetainedEventQuery, SnapshotQuery,
+    StationEvent, StorageError, StorageErrorCode, StorageFuture, TargetPortError,
+    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryAuthorization,
+    TargetQueryResult, TargetRetainedEventStream, TargetSubscription,
 };
 use uob_contracts::{EventEnvelope, NativeProtocolReference, ResourceRef, TransactionSnapshot};
 use uob_storage_adapter::SqliteOperationalStore;
+
+mod query_history;
 
 /// The same worker handle used for charger commits; clones do not open a second database.
 pub(crate) type ManagementStore =
@@ -75,6 +77,70 @@ impl ManagementSource {
             next_cursor,
         }))
     }
+
+    async fn scoped_resource(
+        &self,
+        authorization: &TargetQueryAuthorization,
+        resource: &ResourceRef,
+    ) -> Result<Option<(uob_contracts::StationSnapshot, Option<usize>)>, TargetPortError> {
+        require_grant(authorization, resource)?;
+        let station = ResourceRef {
+            resource: None,
+            native_protocol_reference: None,
+            ..resource.clone()
+        };
+        let snapshot = self
+            .store
+            .station_snapshot(station)
+            .await
+            .map_err(|error| storage_error(&error))?;
+        let Some(snapshot) = snapshot else {
+            return Ok(None);
+        };
+        if !same_station(&snapshot.station, resource) {
+            return Err(outside_scope());
+        }
+        if resource.resource.is_none() {
+            return Ok(Some((snapshot, None)));
+        }
+        let Some(index) = snapshot.resources.iter().position(|entry| {
+            same_resource(&entry.resource, resource)
+                && authorization.permits_resource(&entry.resource)
+        }) else {
+            return Ok(None);
+        };
+        Ok(Some((snapshot, Some(index))))
+    }
+
+    async fn query_snapshots(
+        &self,
+        authorization: &TargetQueryAuthorization,
+        query: SnapshotQuery,
+        scopes: Option<&[AccessResourceScope]>,
+    ) -> Result<TargetQueryResult<Value>, TargetPortError> {
+        // Intersect credential scopes with the trusted target whitelist before SQL pagination;
+        // a hidden row cannot become a continuation cursor or consume page space.
+        let permitted = |station: &ResourceRef| {
+            scopes.is_none_or(|scopes| scopes.iter().any(|scope| scope.allows(station)))
+        };
+        let stations = authorization
+            .station_resources()
+            .filter(&permitted)
+            .collect();
+        let page = self
+            .store
+            .read_scoped_snapshots(query, stations)
+            .await
+            .map_err(|error| storage_error(&error))?;
+        if page.items.iter().any(|item| {
+            !station_ref(&item.station)
+                || !authorization.permits_resource(&item.station)
+                || !permitted(&item.station)
+        }) {
+            return Err(outside_scope());
+        }
+        Ok(TargetQueryResult::StationSnapshots(page))
+    }
 }
 
 impl CanonicalQuerySource<Value> for ManagementSource {
@@ -108,66 +174,63 @@ impl CanonicalQuerySource<Value> for ManagementSource {
                     Ok(TargetQueryResult::StationSnapshot(snapshot))
                 }
                 TargetQuery::StationSnapshots(query) => {
-                    // The trusted whitelist is applied in SQL before ORDER BY/LIMIT. Filtering a
-                    // bounded page here would hide authorized stations behind forbidden rows.
-                    let stations = authorization.station_resources().collect();
-                    let page = self
-                        .store
-                        .read_scoped_snapshots(query, stations)
+                    self.query_snapshots(authorization, query, None).await
+                }
+                TargetQuery::StationSnapshotsScoped { query, scopes } => {
+                    self.query_snapshots(authorization, query, Some(&scopes))
                         .await
-                        .map_err(|error| storage_error(&error))?;
-                    if page.items.iter().any(|item| {
-                        !station_ref(&item.station)
-                            || !authorization.permits_resource(&item.station)
-                    }) {
-                        return Err(outside_scope());
-                    }
-                    Ok(TargetQueryResult::StationSnapshots(page))
                 }
                 TargetQuery::CommandResult(request_id) => {
-                    let result = self
-                        .store
-                        .command_result_by_request_id(request_id)
-                        .await
-                        .map_err(|error| storage_error(&error))?;
-                    if result
-                        .as_ref()
-                        .is_some_and(|result| !authorization.permits_resource(&result.resource))
-                    {
-                        return Err(outside_scope());
-                    }
-                    Ok(TargetQueryResult::CommandResult(result))
+                    self.query_command_result(authorization, request_id).await
                 }
                 TargetQuery::CommandHistory(query) => {
-                    require_station(&query.station)?;
-                    let scope = authorization.command_history_scope(&query.station);
-                    if scope.is_empty() {
-                        return Err(outside_scope());
-                    }
-                    let page = self
-                        .store
-                        .read_command_history(query.clone(), scope.clone())
-                        .await
-                        .map_err(|error| storage_error(&error))?;
-                    if page.items.len() > usize::from(query.limit.get())
-                        || page
-                            .items
-                            .iter()
-                            .any(|item| !scope.permits(&item.resource, &query.station))
-                    {
-                        return Err(outside_scope());
-                    }
-                    Ok(TargetQueryResult::CommandHistory(page))
+                    self.query_command_history(authorization, query).await
                 }
                 TargetQuery::RetainedEvents(query) => {
                     self.query_retained_events(authorization, query).await
                 }
-                TargetQuery::DataPointDescriptor { .. }
-                | TargetQuery::DataPointValue { .. }
-                | TargetQuery::Capabilities(_) => Err(TargetPortError::new(
-                    TargetPortErrorCode::Unsupported,
-                    "query.operation_not_supported",
-                )),
+                TargetQuery::DataPointDescriptor { resource, point_id } => {
+                    let result = self
+                        .scoped_resource(authorization, &resource)
+                        .await?
+                        .and_then(|(snapshot, index)| {
+                            index.and_then(|index| {
+                                snapshot.resources[index]
+                                    .data_points
+                                    .iter()
+                                    .find(|point| point.point_id == point_id)
+                                    .cloned()
+                            })
+                        });
+                    Ok(TargetQueryResult::DataPointDescriptor(result))
+                }
+                TargetQuery::DataPointValue { resource, point_id } => {
+                    let result = self
+                        .scoped_resource(authorization, &resource)
+                        .await?
+                        .and_then(|(snapshot, index)| match index {
+                            Some(index) => snapshot.resources[index]
+                                .current_values
+                                .iter()
+                                .find(|point| point.point_id == point_id)
+                                .cloned(),
+                            None => snapshot
+                                .current_values
+                                .iter()
+                                .find(|point| point.point_id == point_id)
+                                .cloned(),
+                        });
+                    Ok(TargetQueryResult::DataPointValue(result))
+                }
+                TargetQuery::Capabilities(resource) => {
+                    let result = self.scoped_resource(authorization, &resource).await?.map(
+                        |(snapshot, index)| match index {
+                            Some(index) => snapshot.resources[index].capabilities.clone(),
+                            None => snapshot.capabilities,
+                        },
+                    );
+                    Ok(TargetQueryResult::Capabilities(result))
+                }
             }
         })
     }
@@ -425,7 +488,6 @@ fn storage_error(error: &StorageError) -> TargetPortError {
     };
     TargetPortError::new(code, "query.storage_unavailable")
 }
-
 #[cfg(test)]
 #[path = "management_source_tests.rs"]
 mod tests;

@@ -34,6 +34,7 @@ pub(crate) use source::CanonicalFixtures;
 
 pub(crate) const READER_TOKEN: &str = "reader-token";
 pub(crate) const STATION_SCOPED_TOKEN: &str = "station-scoped-token";
+pub(crate) const LATE_STATIONS_TOKEN: &str = "late-stations-token";
 pub(crate) const CONTROLLER_TOKEN: &str = "controller-token";
 pub(crate) const MULTI_BRIDGE_TOKEN: &str = "multi-bridge-token";
 
@@ -123,6 +124,10 @@ pub(crate) fn scoped_credentials() -> IntegrationCredentials {
         "[[principals]]\nid = 'ems-station-reader'\ntoken = 'station-scoped-token'\n",
         "permissions = ['read']\n",
         "[[principals.stations]]\nbridge_id = 'site-01'\nstation_id = 'station-a'\n",
+        "[[principals]]\nid = 'ems-late-reader'\ntoken = 'late-stations-token'\n",
+        "permissions = ['read']\n",
+        "[[principals.stations]]\nbridge_id = 'site-01'\nstation_id = 'station-b'\n",
+        "[[principals.stations]]\nbridge_id = 'site-01'\nstation_id = 'station-unscoped'\n",
         "[[principals]]\nid = 'ems-controller'\ntoken = 'controller-token'\n",
         "permissions = ['control']\nbridges = ['site-01']\n",
         "[[principals]]\nid = 'ems-multi-bridge'\ntoken = 'multi-bridge-token'\n",

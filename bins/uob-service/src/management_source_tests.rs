@@ -15,6 +15,8 @@ use uob_contracts::{
     UtcTimestamp,
 };
 use uuid::Uuid;
+#[path = "management_source_tests/scoped_inventory.rs"]
+mod scoped_inventory;
 
 struct TestDatabase(PathBuf);
 impl TestDatabase {
@@ -207,6 +209,7 @@ async fn inventory_filters_before_limit_and_exact_detail_ignores_inventory_posit
         .unwrap_err();
     assert_eq!(denied.code(), TargetPortErrorCode::Unauthorized);
 }
+
 #[tokio::test]
 async fn native_controller_metadata_preserves_authorized_station_identity() {
     let database = TestDatabase::new();

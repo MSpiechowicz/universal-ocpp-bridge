@@ -30,3 +30,14 @@ Focused real-socket tests cover both subprotocol handshakes, outbound Heartbeat,
 timeouts, reconnect notification, deliberate shutdown, and bounded project buffers. Cargo
 metadata and repository boundary checks demonstrate that simulator and service remain distinct
 packages and dependency paths.
+
+## Compose target demonstration
+
+The [isolated Compose profiles](../testing/compose-profiles.md) run `uob-sim` as its own
+non-root image, separate from the bridge daemon and the target-side verification client.
+Both 1.6J and 2.0.1 charger sockets stay in the per-run Compose network namespace,
+with per-station credentials file-mounted rather than placed on a command line.
+The target client sends real remote start/stop commands; the adapter delivers and
+acknowledges each incoming OCPP request, while the scenario independently reports
+native transaction and meter evidence. An accepted remote command by itself is
+not a simulated physical transaction or a production charging guarantee.

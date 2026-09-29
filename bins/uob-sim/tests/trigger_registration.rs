@@ -39,6 +39,7 @@ async fn recv(socket: &mut Socket) -> Value {
 fn config(listener: &TcpListener, reconnect: bool) -> SimulatorClientConfig {
     SimulatorClientConfig {
         endpoint: format!("ws://{}", listener.local_addr().unwrap()),
+        credentials_file: None,
         version: OcppVersion::V1_6,
         request_timeout: Duration::from_secs(2),
         reconnect,

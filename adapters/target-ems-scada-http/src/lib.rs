@@ -25,6 +25,6 @@ mod test_support;
 pub use configuration::{
     EMS_SCADA_HTTP_TARGET_KIND, EmsScadaHttpRuntimeOptions, EmsScadaHttpTargetFactory,
     INTEGRATION_PATH_PREFIX, IntegrationCredentials, IntegrationPrincipal,
-    ems_scada_http_configuration_schema,
+    ems_scada_http_configuration_schema, resolve_command_policy,
 };
 pub use error::IntegrationErrorCode;

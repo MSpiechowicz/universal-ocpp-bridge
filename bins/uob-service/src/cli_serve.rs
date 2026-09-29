@@ -77,11 +77,7 @@ pub(super) async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> 
         Err(error) => return failure(1, format!("export startup {}", error.kind())),
     };
 
-    eprintln!(
-        "service listening on {} (static assets: {})",
-        configuration.management_address,
-        if no_ui { "disabled" } else { "enabled" }
-    );
+    report_listener(configuration.management_address, no_ui);
     let result = crate::lifecycle::serve(
         application,
         crate::lifecycle::ServeSettings {
@@ -92,6 +88,7 @@ pub(super) async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> 
             deadline: configuration.shutdown_timeout,
             deployment,
             charging,
+            target_selection: configuration.service.target_selection,
             exporter,
         },
     )
@@ -100,4 +97,12 @@ pub(super) async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> 
         Ok(()) => success(),
         Err(error) => failure(1, format!("service runtime {}", error.kind())),
     }
+}
+
+fn report_listener(address: std::net::SocketAddr, no_ui: bool) {
+    eprintln!(
+        "service listening on {} (static assets: {})",
+        address,
+        if no_ui { "disabled" } else { "enabled" }
+    );
 }

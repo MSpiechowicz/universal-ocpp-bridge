@@ -61,6 +61,15 @@ identifiers are rejected. Scenario steps can consume these commands with
 `await_remote_start` and `await_remote_stop`, including the original request payload and the
 separate acceptance boolean.
 
+For an OCPP 2.0.1 `start_transaction` step after `await_remote_start`, setting
+`use_awaited_remote_start_id = true` injects the actual accepted request's
+`remoteStartId` into the native `TransactionEvent` Start `transactionInfo`
+correlation instead of using a hard-coded fixture ID. This is opt-in and
+requires the station to have consumed an accepted remote-start command;
+without such a command the run fails rather than inventing a successful
+correlation. The [Compose demos](../testing/compose-profiles.md) exercise
+this path with fresh per-run credentials and both OCPP editions.
+
 Remote-command resilience steps can carry `request_id`, `delivery_id`, `execute_at_ms`, and an
 optional `expires_at_ms`. A tracked command that has reached its deadline fails with
 `command_expired` before the simulator consumes a charger command. Reusing either identity yields

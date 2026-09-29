@@ -136,6 +136,22 @@ impl StationSettings {
 }
 
 impl ChargingState {
+    pub(crate) fn command_port(
+        &self,
+        application: &Application,
+    ) -> Arc<dyn CommandAdmissionPort<Value>> {
+        let clock: Arc<dyn uob_application::CommandClock> = Arc::new(runtime::Clock);
+        let coordinator: Arc<dyn CommandAdmissionPort<Value>> = Arc::new(
+            CommandCoordinator::new(Arc::new(self.store.clone()), self.commands.clone(), clock)
+                .with_diagnostics(application.diagnostics().clone()),
+        );
+        Arc::new(AuthorizationGuardedCommandPort::new(
+            coordinator,
+            self.authorization.clone(),
+            Arc::new(|| uob_contracts::UtcTimestamp::new(time::OffsetDateTime::now_utc())),
+        ))
+    }
+
     pub(crate) fn command_configuration(
         &self,
         application: &Application,
@@ -143,20 +159,9 @@ impl ChargingState {
         let Some(credentials) = &self.credentials else {
             return Ok(None);
         };
-        let clock: Arc<dyn uob_application::CommandClock> = Arc::new(runtime::Clock);
-        let coordinator: Arc<dyn CommandAdmissionPort<Value>> = Arc::new(
-            CommandCoordinator::new(Arc::new(self.store.clone()), self.commands.clone(), clock)
-                .with_diagnostics(application.diagnostics().clone()),
-        );
-        let guard: Arc<dyn CommandAdmissionPort<Value>> =
-            Arc::new(AuthorizationGuardedCommandPort::new(
-                coordinator,
-                self.authorization.clone(),
-                Arc::new(|| uob_contracts::UtcTimestamp::new(time::OffsetDateTime::now_utc())),
-            ));
         credentials
             .clone()
-            .configuration(&self.roster, guard)
+            .configuration(&self.roster, self.command_port(application))
             .map(Some)
             .map_err(io::Error::other)
     }

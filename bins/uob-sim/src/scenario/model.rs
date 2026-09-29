@@ -7,6 +7,7 @@ use crate::{OcppVersion, SimulatorClientConfig, TriggerObservation, TriggerRespo
 
 mod command;
 mod seed;
+mod step;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -73,6 +74,7 @@ impl StationDefinition {
     pub fn client_config(&self) -> SimulatorClientConfig {
         SimulatorClientConfig {
             endpoint: self.endpoint.clone(),
+            credentials_file: self.credentials_file.clone(),
             version: self.ocpp_version.into(),
             request_timeout: Duration::from_millis(self.request_timeout_ms),
             reconnect: self.reconnect,
@@ -137,6 +139,8 @@ pub struct StepDefinition {
     pub expect_event: Option<String>,
     pub expect_detail: Option<String>,
     pub payload: Option<serde_json::Value>,
+    #[serde(default)]
+    pub use_awaited_remote_start_id: bool,
     pub expect_response: Option<serde_json::Value>,
     pub fixture_id: Option<String>,
     pub expect_failure: Option<String>,
@@ -320,81 +324,8 @@ pub(super) fn validate_scenario(scenario: &ScenarioDefinition) -> Result<(), Run
                 "every step needs a station and a nonzero timeout",
             ));
         }
-        validate_step_fields(step)?;
+        step::validate_fields(step)?;
     }
-    Ok(())
-}
-
-fn validate_step_fields(step: &StepDefinition) -> Result<(), RunFailure> {
-    if step.start_delay_ms.checked_add(step.jitter_ms).is_none() {
-        return Err(setup_failure(
-            "invalid_step_bound",
-            "step delay and jitter exceed the supported duration range",
-        ));
-    }
-    if matches!(step.action, ActionKind::Wait) != step.duration_ms.is_some() {
-        return Err(setup_failure(
-            "invalid_action_fields",
-            "only wait actions require duration_ms",
-        ));
-    }
-    command::validate_fields(step)?;
-    let is_charging_call = matches!(
-        step.action,
-        ActionKind::Boot
-            | ActionKind::Authorize
-            | ActionKind::Status
-            | ActionKind::StartTransaction
-            | ActionKind::MeterValues
-            | ActionKind::StopTransaction
-    );
-    if is_charging_call != step.payload.is_some() {
-        return Err(setup_failure(
-            "invalid_action_payload",
-            "charging calls require payload and other actions do not accept it",
-        ));
-    }
-    if is_charging_call != step.fixture_id.is_some() {
-        return Err(setup_failure(
-            "missing_wire_fixture",
-            "charging calls require an independently authored fixture_id",
-        ));
-    }
-    if step.expect_response.is_some()
-        && !matches!(
-            step.action,
-            ActionKind::Boot
-                | ActionKind::Authorize
-                | ActionKind::Status
-                | ActionKind::StartTransaction
-                | ActionKind::MeterValues
-                | ActionKind::StopTransaction
-                | ActionKind::AwaitRemoteStart
-                | ActionKind::AwaitRemoteStop
-        )
-    {
-        return Err(setup_failure(
-            "invalid_expected_response",
-            "only protocol actions accept expect_response",
-        ));
-    }
-    if let Some(event) = &step.expect_event
-        && event != step.action.event()
-    {
-        return Err(setup_failure(
-            "unsupported_expected_event",
-            "expected event is not produced by the selected action",
-        ));
-    }
-    if let Some(message) = &step.expect_message
-        && !step.action.accepts_message(message)
-    {
-        return Err(setup_failure(
-            "unsupported_expected_message",
-            "expected message does not match the selected action",
-        ));
-    }
-    command::validate_fault(step)?;
     Ok(())
 }
 

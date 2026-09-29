@@ -1,0 +1,116 @@
+name: uob-compose-demo
+
+x-runtime: &runtime
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  mem_limit: 512m
+  cpus: 1.0
+  restart: "no"
+  logging:
+    driver: json-file
+    options: {max-size: "2m", max-file: "2"}
+
+x-peer: &peer
+  <<: *runtime
+  network_mode: service:daemon
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=10001,gid=10001
+
+services:
+  daemon:
+    <<: *runtime
+    build:
+      context: ../..
+      dockerfile: packaging/compose/Dockerfile
+      target: daemon
+    image: ${DEMO_PROJECT:?provision first}-daemon
+    command: [serve, --no-ui, --config, /run/demo/bridge.toml]
+    volumes:
+      - ${DEMO_ROOT}/runtime/bridge.toml:/run/demo/bridge.toml:ro
+      - ${DEMO_ROOT}/runtime/secrets:/run/demo/secrets:ro
+      - ${DEMO_ROOT}/runtime/broker:/run/demo/broker:ro
+      - ${DEMO_ROOT}/state:/var/lib/uob/demo:rw
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=10001,gid=10001
+    # Neither management nor charging/target listeners have host port mappings.
+    mem_limit: 768m
+
+  broker:
+    <<: *peer
+    profiles: [mqtt, ems-mqtt]
+    image: eclipse-mosquitto:2.0.22@sha256:212f89e1eaeb2c322d6441b64396e3346026674db8fa9c27beac293405c32b3c
+    entrypoint: [mosquitto, -c, /run/demo/broker/mosquitto.conf]
+    volumes:
+      - ${DEMO_ROOT}/runtime/broker:/run/demo/broker:ro
+    tmpfs:
+      - /mosquitto/data:rw,nosuid,nodev,noexec,size=4m,uid=10001,gid=10001
+      - /mosquitto/log:rw,nosuid,nodev,noexec,size=4m,uid=10001,gid=10001
+    mem_limit: 128m
+
+  simulator:
+    <<: *peer
+    profiles: [mqtt, ems-http, ems-mqtt]
+    build:
+      context: ../..
+      dockerfile: packaging/compose/Dockerfile
+      target: simulator
+    image: ${DEMO_PROJECT}-simulator
+    command: [run, --config, /run/demo/simulator.toml, --scenario, /run/demo/scenario.toml, --format, jsonl]
+    volumes:
+      - ${DEMO_ROOT}/runtime/simulator.toml:/run/demo/simulator.toml:ro
+      - ${DEMO_ROOT}/runtime/scenario.toml:/run/demo/scenario.toml:ro
+      - ${DEMO_ROOT}/runtime/secrets/station-a:/run/demo/secrets/station-a:ro
+      - ${DEMO_ROOT}/runtime/secrets/station-b:/run/demo/secrets/station-b:ro
+
+  client-mqtt:
+    <<: *peer
+    profiles: [mqtt]
+    build:
+      context: ../..
+      dockerfile: packaging/compose/Dockerfile
+      target: ems-client
+    image: ${DEMO_PROJECT}-client
+    command: [--mode, mqtt, --config, /run/demo/client.toml, --broker-url, "mqtts://localhost:8883", --mqtt-username, ems-operator, --mqtt-password-file, /run/demo/secrets/operator, --ca-file, /run/demo/broker/ca.crt]
+    volumes: &mqtt-client-volumes
+      - ${DEMO_ROOT}/runtime/client.toml:/run/demo/client.toml:ro
+      - ${DEMO_ROOT}/runtime/secrets/operator:/run/demo/secrets/operator:ro
+      - ${DEMO_ROOT}/runtime/broker/ca.crt:/run/demo/broker/ca.crt:ro
+
+  client-ems-mqtt:
+    <<: *peer
+    profiles: [ems-mqtt]
+    build:
+      context: ../..
+      dockerfile: packaging/compose/Dockerfile
+      target: ems-client
+    image: ${DEMO_PROJECT}-client
+    command: [--mode, ems-mqtt, --config, /run/demo/client.toml, --broker-url, "mqtts://localhost:8883", --mqtt-username, ems-operator, --mqtt-password-file, /run/demo/secrets/operator, --ca-file, /run/demo/broker/ca.crt]
+    volumes: *mqtt-client-volumes
+
+  client-http:
+    <<: *peer
+    profiles: [ems-http]
+    build:
+      context: ../..
+      dockerfile: packaging/compose/Dockerfile
+      target: ems-client
+    image: ${DEMO_PROJECT}-client
+    command: [--mode, http, --config, /run/demo/client.toml, --http-base, "http://127.0.0.1:19080", --read-token-file, /run/demo/secrets/reader, --control-token-file, /run/demo/secrets/operator]
+    volumes:
+      - ${DEMO_ROOT}/runtime/client.toml:/run/demo/client.toml:ro
+      - ${DEMO_ROOT}/runtime/secrets/reader:/run/demo/secrets/reader:ro
+      - ${DEMO_ROOT}/runtime/secrets/operator:/run/demo/secrets/operator:ro
+
+  gateway:
+    <<: *peer
+    profiles: [browser]
+    image: nginxinc/nginx-unprivileged:1.29.3@sha256:74adf8fc6c9e7290a810505e0d0384fa370b6ec1ce02547eecff77e2921ee24f
+    entrypoint: [nginx, -g, "daemon off;"]
+    volumes:
+      - ./config/gateway.conf:/etc/nginx/nginx.conf:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=10001,gid=10001
+    mem_limit: 128m

@@ -404,11 +404,15 @@ async fn authenticated_editions_commit_isolated_station_state_and_recover_after_
     let start_a = call(&mut a, serde_json::json!([2,"a-start","StartTransaction",{"connectorId":1,"idTag":"ID-A","meterStart":0,"timestamp":"2026-09-24T12:00:00Z"}])).await;
     assert_eq!(start_a[0], 3);
     assert_eq!(start_a[2]["idTagInfo"]["status"], "Invalid");
-    let start_b = call(&mut b, serde_json::json!([2,"b-start","TransactionEvent",{"eventType":"Started","timestamp":"2026-09-24T12:00:00Z","triggerReason":"CablePluggedIn","seqNo":0,"transactionInfo":{"transactionId":"tx-b"},"evse":{"id":1,"connectorId":1}}])).await;
+    let start_b = call(&mut b, serde_json::json!([2,"b-start","TransactionEvent",{"eventType":"Started","timestamp":"2026-09-24T12:00:00Z","triggerReason":"CablePluggedIn","seqNo":0,"transactionInfo":{"transactionId":"tx-b"},"evse":{"id":1,"connectorId":1},"idToken":{"idToken":"ID-B","type":"Local"}}])).await;
     assert_eq!(start_b[0], 3);
     assert_eq!(start_b[2]["idTokenInfo"]["status"], "Invalid");
     assert_eq!(call(&mut a, serde_json::json!([2,"a-meter","MeterValues",{"connectorId":1,"meterValue":[{"timestamp":"2026-09-24T12:00:01Z","sampledValue":[{"value":"12.5"}]}]}])).await[0], 3);
     assert_eq!(call(&mut b, serde_json::json!([2,"b-meter","MeterValues",{"evseId":1,"meterValue":[{"timestamp":"2026-09-24T12:00:01Z","sampledValue":[{"value":7.5}]}]}])).await[0], 3);
+    assert_eq!(call(&mut b, serde_json::json!([2,"b-end","TransactionEvent",{"eventType":"Ended","timestamp":"2026-09-24T12:00:02Z","triggerReason":"EVDeparted","seqNo":1,"transactionInfo":{"transactionId":"tx-b"},"evse":{"id":1,"connectorId":1}}])).await[0], 3);
+    let tokenless_start = call(&mut b, serde_json::json!([2,"b-tokenless","TransactionEvent",{"eventType":"Started","timestamp":"2026-09-24T12:00:03Z","triggerReason":"RemoteStart","seqNo":0,"transactionInfo":{"transactionId":"tx-b2"},"evse":{"id":1,"connectorId":1}}])).await;
+    assert_eq!(tokenless_start[0], 3);
+    assert_eq!(tokenless_start[2], serde_json::json!({}));
     drop(a);
     drop(b);
     stop(child);

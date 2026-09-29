@@ -63,6 +63,8 @@ pub struct TransactionEventObservation {
     pub remote_start_id: Option<i32>,
     pub protocol: ProtocolEdition,
     pub event: TransactionEventKind,
+    /// Whether the station requested a token decision in this transaction event.
+    pub id_token_present: bool,
     pub native_transaction_id: String,
     pub native_resource: NativeProtocolReference,
     pub sequence_number: u32,

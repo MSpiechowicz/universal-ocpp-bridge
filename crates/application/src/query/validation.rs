@@ -18,7 +18,7 @@ pub(super) fn validate_query(
                 resource,
             )
         }
-        TargetQuery::StationSnapshots(_) => {
+        TargetQuery::StationSnapshots(_) | TargetQuery::StationSnapshotsScoped { .. } => {
             require_permission(authorization, TargetQueryPermission::StationSnapshots)?;
             if authorization.resource_scopes.is_empty() {
                 return Err(unauthorized("query.no_resource_scope"));
@@ -73,6 +73,19 @@ pub(super) fn validate_result<E>(
                 {
                     return Err(unauthorized("query.snapshot_page_outside_scope"));
                 }
+            }
+        }
+        (
+            TargetQuery::StationSnapshotsScoped { query, scopes },
+            TargetQueryResult::StationSnapshots(page),
+        ) => {
+            require_page_bound(query.limit.get(), page.items.len())?;
+            if page.items.iter().any(|snapshot| {
+                snapshot.station.resource.is_some()
+                    || !authorization.permits_resource(&snapshot.station)
+                    || !scopes.iter().any(|scope| scope.allows(&snapshot.station))
+            }) {
+                return Err(unauthorized("query.snapshot_page_outside_scope"));
             }
         }
         (

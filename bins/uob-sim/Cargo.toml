@@ -11,6 +11,7 @@ rust-version.workspace = true
 uuid.workspace = true
 axum.workspace = true
 subtle.workspace = true
+libc.workspace = true
 url.workspace = true
 ocpp-client.workspace = true
 serde.workspace = true

@@ -25,11 +25,8 @@ pub(crate) struct StationPage {
     next_cursor: Option<String>,
 }
 
-/// Serves the paginated canonical station inventory.
-///
-/// The host's scoped port bounds the page and the configured target's own scope; this handler
-/// then removes every station outside the calling credential's narrower scope, so enumeration
-/// cannot reveal a station the caller could not address directly.
+/// The host intersects the authenticated caller's scopes with the target's trusted station
+/// whitelist before SQL pagination, so neither items nor continuation cursors expose hidden rows.
 pub(crate) async fn stations(
     State(state): State<IntegrationState>,
     headers: HeaderMap,
@@ -57,13 +54,12 @@ async fn station_page(
         limit: page.page_limit()?,
     };
 
-    let page = state.reads().station_snapshots(query).await?;
+    let page = state
+        .reads()
+        .station_snapshots(query, principal.resource_scopes().to_vec())
+        .await?;
     Ok(Json(StationPage {
-        items: page
-            .items
-            .into_iter()
-            .filter(|snapshot| permits_read(principal, &snapshot.station))
-            .collect(),
+        items: page.items,
         next_cursor: page.next_cursor.map(|cursor| cursor.as_str().to_owned()),
     }))
 }

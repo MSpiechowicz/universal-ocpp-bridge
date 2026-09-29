@@ -116,6 +116,11 @@ async fn readers_and_out_of_scope_operators_cannot_submit_or_enumerate_status() 
         StatusCode::FORBIDDEN
     );
     assert_eq!(harness.stations.0.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn command_status_hides_foreign_station_and_origin_existence() {
+    let harness = Harness::new();
     assert_eq!(
         post(
             harness.router(),
@@ -134,8 +139,16 @@ async fn readers_and_out_of_scope_operators_cannot_submit_or_enumerate_status() 
         Body::empty(),
     )
     .await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(body, json!({"error": "ems_scada_http.permission_denied"}));
+    let absent = send(
+        harness.router(),
+        "GET",
+        "/bridge/v1/commands/never-submitted",
+        "station-operator",
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(absent.0, StatusCode::NOT_FOUND);
+    assert_eq!((status, body), absent);
     assert_eq!(
         post(
             harness.router(),
@@ -145,6 +158,26 @@ async fn readers_and_out_of_scope_operators_cannot_submit_or_enumerate_status() 
         .await
         .0,
         StatusCode::ACCEPTED
+    );
+    let other_origin = send(
+        harness.router(),
+        "GET",
+        "/bridge/v1/commands/station-a",
+        "operator",
+        Body::empty(),
+    )
+    .await;
+    let missing = send(
+        harness.router(),
+        "GET",
+        "/bridge/v1/commands/never-submitted",
+        "operator",
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(
+        other_origin, missing,
+        "another principal's same-station result must look absent"
     );
     assert_eq!(
         send(

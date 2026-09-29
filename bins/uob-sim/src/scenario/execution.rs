@@ -74,6 +74,7 @@ async fn connect(
         })?;
     let detail = connected.version().websocket_protocol().to_owned();
     *client = Some(connected);
+    state.awaited_remote_start_id = None;
     state.connected = true;
     Ok(detail)
 }
@@ -85,6 +86,7 @@ async fn disconnect(
     let Some(connected) = client.take() else {
         return Err(failure("not_connected", "station is not connected"));
     };
+    state.awaited_remote_start_id = None;
     connected
         .shutdown()
         .await
@@ -117,13 +119,28 @@ async fn charging_call(
         crate::OcppVersion::V1_6 => validate_before_16(state, step, action)?,
         crate::OcppVersion::V2_0_1 => super::execution_201::validate_before(state, step, action)?,
     }
+    let mut payload = step.payload.clone().expect("validated charging payload");
+    if step.use_awaited_remote_start_id {
+        if state.version != crate::OcppVersion::V2_0_1 {
+            return Err(failure(
+                "invalid_remote_start_binding",
+                "remote start ID binding requires OCPP 2.0.1",
+            ));
+        }
+        let remote_start_id = state.awaited_remote_start_id.take().ok_or_else(|| {
+            failure(
+                "remote_start_id_unavailable",
+                "no accepted remote start ID is available on this connection",
+            )
+        })?;
+        payload["transactionInfo"]["remoteStartId"] = remote_start_id.into();
+    } else if matches!(step.action, ActionKind::StartTransaction) {
+        state.awaited_remote_start_id = None;
+    }
     let response = client
         .as_deref()
         .ok_or_else(|| failure("not_connected", "station is not connected"))?
-        .call(SimulatorCall {
-            action,
-            payload: step.payload.clone().expect("validated charging payload"),
-        })
+        .call(SimulatorCall { action, payload })
         .await
         .map_err(|_| failure("charging_call_failed", "OCPP charging call failed"))?;
     assert_response(step, &response)?;
@@ -176,6 +193,9 @@ async fn remote_command(
             "received a different remote command than expected",
         ));
     }
+    if matches!(step.action, ActionKind::AwaitRemoteStart) {
+        state.awaited_remote_start_id = None;
+    }
     if let Some(receipt) = delayed_reply {
         receipt.await.map_err(|_| {
             failure(
@@ -198,6 +218,29 @@ async fn remote_command(
                 "transmission_uncertain",
                 "charger may have acted but its response was lost",
             ));
+        }
+    }
+    if matches!(step.action, ActionKind::AwaitRemoteStart)
+        && command.accepted
+        && !matches!(selected_fault, Some(FaultKind::MissingResponse))
+    {
+        state.awaited_remote_start_id = command
+            .payload
+            .get("remoteStartId")
+            .and_then(serde_json::Value::as_u64)
+            .filter(|id| *id > 0);
+        if state.version == crate::OcppVersion::V1_6 {
+            let id_tag = command
+                .payload
+                .get("idTag")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    failure(
+                        "missing_id_tag",
+                        "accepted remote start did not contain an idTag",
+                    )
+                })?;
+            state.authorize(id_tag);
         }
     }
     Ok(response.to_string())

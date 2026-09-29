@@ -122,6 +122,12 @@ pub struct TargetDeliveryWorkerTask {
 }
 
 impl TargetDeliveryWorkerTask {
+    /// Whether the durable worker has stopped before host shutdown.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.join.as_ref().is_none_or(JoinHandle::is_finished)
+    }
+
     /// Requests shutdown and waits for the worker to stop.
     ///
     /// # Errors

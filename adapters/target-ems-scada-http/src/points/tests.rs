@@ -2,8 +2,8 @@ use axum::http::StatusCode;
 use serde_json::Value;
 
 use crate::test_support::{
-    CONTROLLER_TOKEN, CanonicalFixtures, READER_TOKEN, STATION_SCOPED_TOKEN, get, router_with,
-    scoped_credentials,
+    CONTROLLER_TOKEN, CanonicalFixtures, LATE_STATIONS_TOKEN, READER_TOKEN, STATION_SCOPED_TOKEN,
+    get, router_with, scoped_credentials,
 };
 
 fn router() -> axum::Router {
@@ -209,6 +209,40 @@ async fn a_point_page_never_leaves_the_callers_own_scope() {
         assert_eq!(status, StatusCode::OK, "{station_id}");
         assert_eq!(body["items"], serde_json::json!([]), "{station_id}");
     }
+}
+
+#[tokio::test]
+async fn a_point_page_scans_only_the_callers_stations_before_advancing_its_cursor() {
+    let mut seen = Vec::new();
+    let mut cursor: Option<String> = None;
+    for _ in 0..4 {
+        let path = cursor.as_ref().map_or_else(
+            || "/bridge/v1/points?limit=1".to_owned(),
+            |cursor| format!("/bridge/v1/points?limit=1&after={cursor}"),
+        );
+        let (status, body) = get(
+            router_with(
+                scoped_credentials(),
+                CanonicalFixtures::both_resource_models(),
+                1,
+            ),
+            &path,
+            Some(LATE_STATIONS_TOKEN),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        for item in body["items"].as_array().expect("point page") {
+            seen.push(item["resource"]["station_id"].as_str().unwrap().to_owned());
+        }
+        cursor = body["next_cursor"].as_str().map(str::to_owned);
+        if let Some(next) = &cursor {
+            assert!(!next.contains("station-a"), "{next}");
+        } else {
+            break;
+        }
+    }
+    assert_eq!(seen, ["station-b", "station-unscoped"]);
+    assert!(cursor.is_none(), "last page must terminate");
 }
 
 #[tokio::test]

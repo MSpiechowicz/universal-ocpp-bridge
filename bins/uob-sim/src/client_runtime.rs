@@ -30,6 +30,7 @@ pub(super) async fn connect_and_run_1_6(
 ) -> Result<(tokio::task::AbortHandle, EmergencyClient), SimulatorClientError> {
     let (client, barrier, trigger_receiver) = super::trigger_transport::connect(
         &config.endpoint,
+        config.credentials_file.as_deref(),
         config.request_timeout,
         config.reconnect,
         config.command_capacity,

@@ -24,6 +24,7 @@ fn event(id: usize, event: TransactionEventKind, day: i64) -> TransactionEventOb
         remote_start_id: None,
         protocol: ProtocolEdition::Ocpp201,
         event,
+        id_token_present: false,
         native_transaction_id: format!("station-transaction-{id}"),
         native_resource: station().resources[0]
             .resource

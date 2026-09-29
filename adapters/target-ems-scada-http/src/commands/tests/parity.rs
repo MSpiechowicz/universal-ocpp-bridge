@@ -213,7 +213,7 @@ async fn http_and_management_use_equivalent_durable_commands_and_keep_origins_se
         )
         .await
         .0,
-        StatusCode::FORBIDDEN
+        StatusCode::NOT_FOUND
     );
 
     let request = serde_json::from_value(payload("other-target", "station-a")).unwrap();
@@ -238,7 +238,7 @@ async fn http_and_management_use_equivalent_durable_commands_and_keep_origins_se
         )
         .await
         .0,
-        StatusCode::FORBIDDEN
+        StatusCode::NOT_FOUND
     );
 }
 

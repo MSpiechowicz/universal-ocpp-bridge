@@ -364,6 +364,7 @@ async fn execute_step(
         let had_client = client.is_some();
         let disconnected = cleanup_client(client, true, diagnostics).await;
         state.connected = false;
+        state.awaited_remote_start_id = None;
         if had_client && !disconnected {
             return Err(assertion_failure(
                 "disconnect_failed",

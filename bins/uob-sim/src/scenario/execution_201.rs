@@ -47,14 +47,22 @@ pub(super) fn validate_before(
     })?;
 
     if action == SimulatorAction::StartTransaction {
-        let token = payload
+        if let Some(token) = payload
             .pointer("/idToken/idToken")
             .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| failure("missing_id_token", "start requires idToken"))?;
-        if !state.is_authorized(token) {
+        {
+            if !state.is_authorized(token) {
+                return Err(failure(
+                    "not_authorized",
+                    "transaction start requires a previously accepted authorization",
+                ));
+            }
+        } else if !step.use_awaited_remote_start_id {
+            return Err(failure("missing_id_token", "start requires idToken"));
+        } else if state.awaited_remote_start_id.is_none() {
             return Err(failure(
                 "not_authorized",
-                "transaction start requires a previously accepted authorization",
+                "tokenless transaction start requires an accepted remote start",
             ));
         }
         if current.transaction_id.is_some() {
@@ -133,7 +141,7 @@ pub(super) fn apply_after(
         && response
             .pointer("/idTokenInfo/status")
             .and_then(serde_json::Value::as_str)
-            != Some("Accepted")
+            .is_some_and(|status| status != "Accepted")
     {
         return Ok(());
     }

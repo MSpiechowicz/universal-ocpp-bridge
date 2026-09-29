@@ -163,10 +163,13 @@ async fn bridge_points(
 ) -> Result<Json<PointPage>, IntegrationErrorCode> {
     let page = state
         .reads()
-        .station_snapshots(SnapshotQuery {
-            after: snapshot_cursor(cursor.after.as_ref())?,
-            limit: state.station_scan_limit(),
-        })
+        .station_snapshots(
+            SnapshotQuery {
+                after: snapshot_cursor(cursor.after.as_ref())?,
+                limit: state.station_scan_limit(),
+            },
+            principal.resource_scopes().to_vec(),
+        )
         .await?;
 
     let available: Vec<PointView> = page

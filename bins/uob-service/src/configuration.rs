@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, error::Error, fmt, fs, net::SocketAddr, path::P
 
 use reqwest::Url;
 use serde::Deserialize;
+use serde_json::Value;
 use uob_application::{
     ConfigurationValue, CredentialReference, TargetCapability, TargetConfiguration,
 };
@@ -115,7 +116,7 @@ struct DataExportSection {
 pub(crate) struct ValidatedServiceConfiguration {
     pub diagnostics: crate::diagnostics::Validated,
     pub release_read: crate::release_read::Validated,
-    pub service: ServiceComposition<(), ()>,
+    pub service: ServiceComposition<Value, Value>,
     pub management_address: SocketAddr,
     pub events: ValidatedEventClientConfiguration,
     pub deployment: Option<crate::deployment::DeploymentLayout>,
@@ -176,7 +177,7 @@ fn validate(
     )
     .in_environment(configuration.bridge.environment);
 
-    let mut targets = TargetRegistry::<(), ()>::new();
+    let mut targets = TargetRegistry::<Value, Value>::new();
     targets
         .register(
             MqttTargetFactory::new(&bridge_id, configuration.bridge.environment)

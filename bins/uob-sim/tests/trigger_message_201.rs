@@ -104,6 +104,7 @@ async fn trigger(
 fn config(endpoint: String) -> SimulatorClientConfig {
     SimulatorClientConfig {
         endpoint,
+        credentials_file: None,
         version: OcppVersion::V2_0_1,
         request_timeout: Duration::from_secs(2),
         reconnect: false,

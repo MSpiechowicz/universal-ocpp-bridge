@@ -1,0 +1,180 @@
+schema_version = 1
+seed = 94
+
+[[steps]]
+id = "connect-a"
+station = "station-a"
+action = "connect"
+timeout_ms = 10000
+expect_event = "connected"
+expect_detail = "ocpp1.6"
+
+[[steps]]
+id = "boot-a"
+station = "station-a"
+action = "boot"
+timeout_ms = 10000
+fixture_id = "compose.ocpp16.boot"
+expect_message = "BootNotification"
+expect_event = "boot_result"
+payload = { chargePointVendor = "UOB", chargePointModel = "ComposeDemo" }
+
+[[steps]]
+id = "status-a"
+station = "station-a"
+action = "status"
+timeout_ms = 10000
+fixture_id = "compose.ocpp16.status"
+expect_message = "StatusNotification"
+expect_event = "status_result"
+payload = { connectorId = 1, errorCode = "NoError", status = "Available" }
+expect_response = {}
+
+[[steps]]
+id = "remote-start-a"
+station = "station-a"
+action = "await_remote_start"
+timeout_ms = 90000
+expect_event = "remote_start_received"
+
+[[steps]]
+id = "start-a"
+station = "station-a"
+action = "start_transaction"
+timeout_ms = 10000
+fixture_id = "compose.ocpp16.start"
+expect_message = "StartTransaction"
+expect_event = "transaction_started"
+payload = { connectorId = 1, idTag = "__START_A__", meterStart = 1000, timestamp = "__START_TIME__" }
+expect_response = { idTagInfo = { status = "Accepted" }, transactionId = 1 }
+
+[[steps]]
+id = "meter-a"
+station = "station-a"
+action = "meter_values"
+timeout_ms = 10000
+fixture_id = "compose.ocpp16.meter"
+expect_message = "MeterValues"
+expect_event = "meter_values_result"
+payload = { connectorId = 1, transactionId = 1, meterValue = [{ timestamp = "__METER_TIME__", sampledValue = [{ value = "1250", measurand = "Energy.Active.Import.Register", unit = "Wh" }] }] }
+expect_response = {}
+
+[[steps]]
+id = "remote-stop-a"
+station = "station-a"
+action = "await_remote_stop"
+timeout_ms = 90000
+expect_event = "remote_stop_received"
+
+[[steps]]
+id = "stop-a"
+station = "station-a"
+action = "stop_transaction"
+timeout_ms = 10000
+fixture_id = "compose.ocpp16.stop"
+expect_message = "StopTransaction"
+expect_event = "transaction_stopped"
+payload = { transactionId = 1, idTag = "__START_A__", meterStop = 1500, timestamp = "__STOP_TIME__", reason = "Local" }
+expect_response = {}
+
+[[steps]]
+id = "disconnect-a"
+station = "station-a"
+action = "disconnect"
+timeout_ms = 10000
+expect_event = "disconnected"
+expect_detail = "stopped"
+
+[[steps]]
+id = "connect-b"
+station = "station-b"
+action = "connect"
+timeout_ms = 10000
+expect_event = "connected"
+expect_detail = "ocpp2.0.1"
+
+[[steps]]
+id = "boot-b"
+station = "station-b"
+action = "boot"
+timeout_ms = 10000
+fixture_id = "compose.ocpp201.boot"
+expect_message = "BootNotification"
+expect_event = "boot_result"
+payload = { reason = "PowerUp", chargingStation = { model = "ComposeDemo", vendorName = "UOB" } }
+
+[[steps]]
+id = "authorize-b"
+station = "station-b"
+action = "authorize"
+timeout_ms = 10000
+fixture_id = "compose.ocpp201.authorize"
+expect_message = "Authorize"
+expect_event = "authorization_result"
+payload = { idToken = { idToken = "__START_B__", type = "Local" } }
+expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "status-b"
+station = "station-b"
+action = "status"
+timeout_ms = 10000
+fixture_id = "compose.ocpp201.status"
+expect_message = "StatusNotification"
+expect_event = "status_result"
+payload = { timestamp = "__STATUS_TIME__", connectorStatus = "Available", evseId = 1, connectorId = 1 }
+expect_response = {}
+
+[[steps]]
+id = "remote-start-b"
+station = "station-b"
+action = "await_remote_start"
+timeout_ms = 90000
+expect_event = "remote_start_received"
+
+[[steps]]
+id = "start-b"
+station = "station-b"
+action = "start_transaction"
+timeout_ms = 10000
+fixture_id = "compose.ocpp201.start"
+expect_message = "TransactionEvent"
+expect_event = "transaction_started"
+use_awaited_remote_start_id = true
+payload = { eventType = "Started", timestamp = "__START_TIME__", triggerReason = "RemoteStart", seqNo = 0, transactionInfo = { transactionId = "compose-tx-b", chargingState = "Charging" }, evse = { id = 1, connectorId = 1 } }
+
+[[steps]]
+id = "meter-b"
+station = "station-b"
+action = "meter_values"
+timeout_ms = 10000
+fixture_id = "compose.ocpp201.meter"
+expect_message = "TransactionEvent"
+expect_event = "meter_values_result"
+payload = { eventType = "Updated", timestamp = "__METER_TIME__", triggerReason = "MeterValuePeriodic", seqNo = 1, transactionInfo = { transactionId = "compose-tx-b", chargingState = "Charging" }, evse = { id = 1, connectorId = 1 }, meterValue = [{ timestamp = "__METER_TIME__", sampledValue = [{ value = 2250.25, context = "Sample.Periodic", measurand = "Energy.Active.Import.Register", phase = "L1", location = "Outlet", unitOfMeasure = { unit = "Wh" } }] }] }
+
+[[steps]]
+id = "remote-stop-b"
+station = "station-b"
+action = "await_remote_stop"
+timeout_ms = 90000
+expect_event = "remote_stop_received"
+
+[[steps]]
+id = "stop-b"
+station = "station-b"
+action = "stop_transaction"
+timeout_ms = 10000
+fixture_id = "compose.ocpp201.stop"
+expect_message = "TransactionEvent"
+expect_event = "transaction_stopped"
+payload = { eventType = "Ended", timestamp = "__STOP_TIME__", triggerReason = "RemoteStop", seqNo = 2, transactionInfo = { transactionId = "compose-tx-b", chargingState = "Idle", stoppedReason = "Remote" }, evse = { id = 1, connectorId = 1 } }
+expect_response = {}
+
+[[steps]]
+id = "disconnect-b"
+station = "station-b"
+action = "disconnect"
+timeout_ms = 10000
+expect_event = "disconnected"
+expect_detail = "stopped"

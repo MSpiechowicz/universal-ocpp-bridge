@@ -201,6 +201,12 @@ pub struct TargetSessionTask {
 }
 
 impl TargetSessionTask {
+    /// Whether the selected session has stopped before the host requested shutdown.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.join.as_ref().is_none_or(JoinHandle::is_finished)
+    }
+
     /// Waits until the selected target stops without requesting shutdown.
     ///
     /// # Errors

@@ -264,7 +264,7 @@ fn update_transaction(
             if response
                 .pointer("/idTokenInfo/status")
                 .and_then(serde_json::Value::as_str)
-                == Some("Accepted") =>
+                .is_none_or(|status| status == "Accepted") =>
         {
             if let (Some(evse), Some(connector)) = (
                 unsigned_id(&call.payload, "/evse/id"),
@@ -333,5 +333,36 @@ fn record_result(traces: &TraceBuffer, response: &Result<String, SimulatorClient
     match response {
         Ok(timestamp) => traces.push(TraceKind::HeartbeatResult, timestamp),
         Err(error) => traces.push(TraceKind::Failed, error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenless_started_response_keeps_native_transaction_active_until_end() {
+        let mut state = Ocpp201State::default();
+        let mut call = SimulatorCall {
+            action: SimulatorAction::StartTransaction,
+            payload: serde_json::json!({
+                "eventType":"Started",
+                "transactionInfo":{"transactionId":"native-tx"},
+                "evse":{"id":1,"connectorId":1}
+            }),
+        };
+        update_transaction(&mut state, &call, &serde_json::json!({}));
+        assert_eq!(state.active_transactions.get("native-tx"), Some(&(1, 1)));
+        call.payload["eventType"] = serde_json::json!("Ended");
+        update_transaction(&mut state, &call, &serde_json::json!({}));
+        assert!(!state.active_transactions.contains_key("native-tx"));
+
+        call.payload["eventType"] = serde_json::json!("Started");
+        update_transaction(
+            &mut state,
+            &call,
+            &serde_json::json!({"idTokenInfo":{"status":"Invalid"}}),
+        );
+        assert!(!state.active_transactions.contains_key("native-tx"));
     }
 }

@@ -55,10 +55,12 @@ impl CanonicalQuerySource<()> for HostState {
     ) -> TargetPortFuture<'a, TargetQueryResult<()>> {
         Box::pin(async move {
             match query {
-                TargetQuery::StationSnapshots(_) => Ok(TargetQueryResult::StationSnapshots(Page {
-                    items: vec![snapshot()],
-                    next_cursor: Option::<SnapshotCursor>::None,
-                })),
+                TargetQuery::StationSnapshots(_) | TargetQuery::StationSnapshotsScoped { .. } => {
+                    Ok(TargetQueryResult::StationSnapshots(Page {
+                        items: vec![snapshot()],
+                        next_cursor: Option::<SnapshotCursor>::None,
+                    }))
+                }
                 _ => Err(TargetPortError::new(
                     TargetPortErrorCode::Unsupported,
                     "query.unsupported",

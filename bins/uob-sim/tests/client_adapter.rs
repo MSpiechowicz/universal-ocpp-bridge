@@ -20,6 +20,7 @@ const TEST_BOUND: Duration = Duration::from_secs(4);
 fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
     SimulatorClientConfig {
         endpoint,
+        credentials_file: None,
         version,
         request_timeout: Duration::from_millis(120),
         reconnect: false,
