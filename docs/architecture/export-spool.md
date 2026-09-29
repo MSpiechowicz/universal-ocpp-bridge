@@ -1,10 +1,11 @@
-# Local external-export spool (#99)
+# Local external-export spool and offline delivery scheduler (#99, #100)
 
 The optional, offline `ExportIngestor` reads **committed** records from the authoritative
-operational SQLite store and copies them into a separate `SqliteExportSpool`. This is a local
-source-to-spool boundary, not a PostgreSQL delivery worker. `uob serve` still rejects
-`data_export.enabled = true`; there is no production export scheduler, remote acknowledgement,
-or spool-drain/delete API. A spool checkpoint is **not** proof of remote delivery.
+operational SQLite store and copies them into a separate `SqliteExportSpool`. An offline
+single-worker scheduler can claim and deliver that spool through an injected `DatabaseProvider`,
+but the shipped `uob serve` still rejects `data_export.enabled = true`: no production
+PostgreSQL provider or enabled export deployment is available. A v12 source checkpoint
+is **not** proof of remote delivery.
 
 The spool's SQLite implementation and `ExportSpoolLimits` live in
 `uob-storage-adapter`; `uob-external-export-adapter` owns the external
@@ -57,8 +58,9 @@ and sticky `incomplete` status, then continue with surviving records. Leading
 positions already proven lost may advance independently before a still-retained
 blocked record. A full bounded gap summary instead backpressures; no cursor
 crosses unaccounted loss. Legacy-unknown, high-water, pending count and exact
-gaps remain durable for inspection after restart. No status field implies remote
-delivery.
+gaps remain durable for inspection after restart. Only the separate v3
+`last_confirmed_batch` and `confirmed_records` report locally persisted remote
+confirmation; source checkpoints and observed high-water never do.
 
 Operational retention can accept an individual record larger than the spool's
 usable capacity under its separate 256 MiB logical budget. Chunking removes
@@ -96,15 +98,17 @@ tmpfs, or loop image does not establish a production durable physical budget.
 Operational SQLite, including its WAL, must retain its own reserved capacity
 when the spool reaches ENOSPC.
 
-Spool schema v2 stores pending records in a rowid table with three incrementally
-written/read BLOB fields. Opening a v1 spool migrates its bounded (at most
-1 MiB per legacy envelope) pending rows one at a time in a single transaction:
-the original destination binding, checkpoints, high-water, gaps and pending
-order survive. Migration uses bounded memory and reuses pages as old rows are
-replaced, rather than staging a duplicate database. A failed or interrupted
-migration rolls back to recoverable v1; the schema switches to v2 only at
-commit. Near-full v1 layouts containing both large and many small rows have
-been exercised under the actual 60 MiB main-file ceiling. Do not discard or
+Spool schema v3 retains the v2 pending rowid table with three incrementally
+written/read BLOB fields and adds a delivery claim plus confirmed progress.
+Opening a v1 spool migrates its bounded (at most 1 MiB per legacy envelope)
+pending rows one at a time in a single transaction, then adds v3 delivery
+metadata; v2 also upgrades transactionally to v3. The original destination
+binding, checkpoints, high-water, gaps and pending order survive. Migration
+uses bounded memory and reuses pages as old rows are replaced, rather than
+staging a duplicate database. A failed or interrupted migration leaves the
+previous schema recoverable; v3 commits only with its delivery metadata.
+Near-full v1 layouts containing both large and many small rows have been
+exercised under the actual 60 MiB main-file ceiling. Do not discard or
 reset a spool to work around migration or capacity pressure.
 
 `SqliteExportSpool::open` requires absolute paths, an existing canonical mode-0700 private spool
@@ -125,3 +129,44 @@ unmounts and removes both images. The loop images test kernel allocation isolati
 not an accepted production topology. The script does not invoke Rust ingestion, demonstrate
 spool checkpoint recovery, or prove service-level OCPP isolation. Those paths require their
 separate Rust and real-service acceptance exercises.
+
+## Remote delivery boundary (offline #100)
+
+Schema v3 pins one ordered pending prefix, at most 100 records, to a durable
+batch ID scoped to the original destination, revision and source generation.
+Dropping a claim, a failed attempt or a restart does not release it: subsequent
+claims replay the same batch and ID. Claimed telemetry cannot be evicted under
+spool pressure; unclaimed telemetry retains its existing best-effort policy.
+Claim admission uses a conservative estimate (up to six bytes for each stored
+field byte plus per-record and batch overhead) against 256 KiB; the scheduler
+also measures the **exact encoded canonical batch** against 256 KiB before
+sending. These are distinct limits: a record that cannot fit the conservative
+claim ceiling remains pending under backpressure, even if its actual encoding
+would be smaller. Neither limit relaxes the independent spool capacity bound.
+
+The offline scheduler runs one serial worker, one in-flight batch and a
+single provider session per attempt. It polls an empty spool every 250 ms;
+the low-load ready-path target is at most 1 s, not a guarantee during
+outages, large backlogs or filesystem pressure. Retryable, uncertain,
+missing-ack and timed-out attempts preserve the exact durable claim and
+retry with jittered exponential backoff (capped at 30 s); after three
+failures a single-probe circuit breaker waits at least 2 s. Permanent
+provider errors stop the worker without confirming records. A matching
+`AtomicRemoteCommit` report for the **whole** claimed batch atomically
+removes pending rows, clears the claim and increments `confirmed_records`
+while recording `last_confirmed_batch`. An unconfirmed outcome does not
+advance either delivery field. This is deliberately separate from the v12
+source-copy checkpoints and exact local-loss gaps. v3 stores only this
+minimal remote delivery claim and cumulative confirmed count; it does
+not implement #101 partial-commit, poison-record or reconciliation handling.
+Partial reports are rejected rather than counted as confirmation.
+
+The host bounds an attempt to 5 s and provider-task shutdown to 2 s
+(the scheduler handle has a 2.1 s final join/abort bound). Optional
+exporter health exposes sanitized state, backlog/retries and confirmed
+progress without determining charging readiness; disabled export creates
+no provider, scheduler task or polling loop. These are **host total**
+attempt/shutdown deadlines, not enforced per-connect or per-query timeouts
+inside an opaque provider. The future production provider must enforce
+its own connect/query phase deadlines and at most two connections as
+part of #104. No shipped provider satisfies that production boundary.

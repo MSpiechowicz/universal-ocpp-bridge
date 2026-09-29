@@ -20,11 +20,11 @@ mod spool;
 
 pub use ingestion::{ExportIngestionError, ExportIngestionOutcome, ExportIngestor};
 pub use spool::{
-    EXPORT_SPOOL_ENVELOPE_BYTES, EXPORT_SPOOL_PAGE_BYTES, ExportGap, ExportGapReason,
-    ExportPendingDescriptor, ExportPendingPage, ExportPendingPosition, ExportSourceCheckpoint,
-    ExportSpool, ExportSpoolError, ExportSpoolErrorCode, ExportSpoolFuture, ExportSpoolGapCommit,
-    ExportSpoolNamespace, ExportSpoolRecordAdmission, ExportSpoolRecordBegin, ExportSpoolStatus,
-    ExportSpoolTransfer,
+    EXPORT_SPOOL_ENVELOPE_BYTES, EXPORT_SPOOL_PAGE_BYTES, ExportDeliveryClaim, ExportGap,
+    ExportGapReason, ExportPendingDescriptor, ExportPendingPage, ExportPendingPosition,
+    ExportSourceCheckpoint, ExportSpool, ExportSpoolError, ExportSpoolErrorCode, ExportSpoolFuture,
+    ExportSpoolGapCommit, ExportSpoolNamespace, ExportSpoolRecordAdmission, ExportSpoolRecordBegin,
+    ExportSpoolStatus, ExportSpoolTransfer,
 };
 
 pub use configuration::{DatabaseConfiguration, ValidatedDatabaseConfiguration};

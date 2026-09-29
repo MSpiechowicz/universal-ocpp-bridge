@@ -52,10 +52,10 @@ pub use database::{
     DeduplicationCapability, TransactionCapability, ValidatedDatabaseConfiguration,
 };
 pub use database::{
-    EXPORT_SPOOL_ENVELOPE_BYTES, EXPORT_SPOOL_PAGE_BYTES, ExportGap, ExportGapReason,
-    ExportIngestionError, ExportIngestionOutcome, ExportIngestor, ExportPendingDescriptor,
-    ExportPendingPage, ExportPendingPosition, ExportSourceCheckpoint, ExportSpool,
-    ExportSpoolError, ExportSpoolErrorCode, ExportSpoolFuture, ExportSpoolGapCommit,
+    EXPORT_SPOOL_ENVELOPE_BYTES, EXPORT_SPOOL_PAGE_BYTES, ExportDeliveryClaim, ExportGap,
+    ExportGapReason, ExportIngestionError, ExportIngestionOutcome, ExportIngestor,
+    ExportPendingDescriptor, ExportPendingPage, ExportPendingPosition, ExportSourceCheckpoint,
+    ExportSpool, ExportSpoolError, ExportSpoolErrorCode, ExportSpoolFuture, ExportSpoolGapCommit,
     ExportSpoolNamespace, ExportSpoolRecordAdmission, ExportSpoolRecordBegin, ExportSpoolStatus,
     ExportSpoolTransfer,
 };

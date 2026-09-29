@@ -406,8 +406,8 @@ impl ValidatedProviderSelection {
     /// # Errors
     ///
     /// Returns a sanitized provider construction error.
-    pub fn create(self) -> Result<Box<dyn DatabaseProvider>, ConfigurationError> {
-        self.factory.create(self.configuration)
+    pub fn create(&self) -> Result<Box<dyn DatabaseProvider>, ConfigurationError> {
+        self.factory.create(self.configuration.clone())
     }
 
     /// Returns the validated provider configuration.

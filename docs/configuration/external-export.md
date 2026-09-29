@@ -1,11 +1,12 @@
 # External export configuration
 
 External database export is optional and independent of the selected bridge target. Disabling it
-creates no provider, connection, polling task, or export queue. The shipped `uob serve` executable
-rejects `data_export.enabled = true` even though the offline local spool and PostgreSQL
-provisioning/qualification tools exist. The following is a **future configuration shape**, not
-a configuration that currently starts export. Enabling it will select exactly one stable
-provider instance; the first concrete provider kind is planned to be `postgresql`.
+creates no provider, connection, scheduler task, or polling loop. The shipped `uob serve`
+executable rejects `data_export.enabled = true` even though the offline local spool and
+single-worker scheduler, plus PostgreSQL provisioning/qualification tools, exist. The following
+is a **future configuration shape**, not a configuration that currently starts export.
+Enabling it will select exactly one stable provider instance; the first concrete provider
+kind is planned to be `postgresql` under #104.
 
 The safe PostgreSQL configuration shape is:
 
@@ -43,15 +44,27 @@ distinguish “not installed in this executable” from an unknown kind. Catalog
 credential contents. A private PostgreSQL client has passed the disposable x64 qualification
 described in [PostgreSQL client qualification](../testing/postgresql-client-qualification.md), but
 the service still reserves PostgreSQL as unavailable and rejects enabled PostgreSQL export.
-The qualified client is not a `DatabaseProvider` or an export scheduler. Its future integration must
-reuse the same offline registry and validation boundary.
+The qualified client is not a `DatabaseProvider`; the offline scheduler can run only with
+an injected conforming provider and durable spool. #104 must integrate a production provider
+through the offline registry and validation boundary, enforce its own per-connect and per-query
+phase deadlines and two-connection cap. The host can enforce only total attempt and shutdown
+deadlines around an opaque provider.
 
-The [local export spool](../architecture/export-spool.md) is an independently callable offline
-component, not a daemon scheduler or a remote PostgreSQL delivery path. It records exact source
-checkpoints, loss and original destination/revision ownership; a checkpoint proves only local
-copy or explicit local loss, never remote acknowledgement. Its 128 MiB main/rollback envelope
-requires a separate durable quota-backed physical allocation from operational SQLite, **not**
-the formerly reserved export-spool directory beneath the operational state filesystem.
+The [local export spool](../architecture/export-spool.md) records v12 source-copy
+checkpoints, exact loss and original destination/revision ownership. Its separate v3
+delivery claim replays the same batch ID after failure/restart and records only
+`last_confirmed_batch` and `confirmed_records` after exact atomic remote confirmation.
+Neither a source checkpoint nor an unconfirmed provider result proves delivery.
+The scheduler polls an empty spool every 250 ms (at most 1 s low-load ready-path
+target), sends at most one in-flight batch of 100 records, uses a conservative
+claim admission ceiling and checks exact encoded batch size against 256 KiB.
+Retry/jitter and a single-probe breaker preserve the claim after uncertain
+outcomes. Host attempts and shutdown are bounded; optional exporter health
+does not change charging readiness. Partial-commit, poison-record and
+reconciliation handling remain pending in #101, not silently implemented.
+The 128 MiB main/rollback envelope requires a separate durable quota-backed
+physical allocation from operational SQLite, **not** the formerly reserved
+export-spool directory beneath the operational state filesystem.
 
 The offline path discovers committed-record metadata, copies admitted fields
 in 64 KiB chunks, and exposes pending records through bounded descriptors and
@@ -69,8 +82,8 @@ or export-enable procedure exists yet.
 The administration command is available independently of the runtime driver:
 [`scripts/provision-postgresql.sh`](../../scripts/provision-postgresql.sh).
 It provisions the canonical destination schema; it does **not** enable the currently unavailable
-PostgreSQL provider, create an export scheduler, or implement conflict-content comparison.
-The daemon never runs migrations or receives the administrator's credentials.
+PostgreSQL provider, wire the offline scheduler into production, or implement conflict-content
+comparison. The daemon never runs migrations or receives the administrator's credentials.
 
 Use PostgreSQL 17 and its `psql` client. Create a dedicated destination database as a trusted
 administrator, outside the daemon. For example, in an administrator `psql -X` session:

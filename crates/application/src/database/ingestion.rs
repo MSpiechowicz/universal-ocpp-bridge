@@ -255,7 +255,7 @@ where
     };
     match admission {
         ExportSpoolRecordAdmission::TelemetryDropped(committed) => {
-            Ok(RecordDisposition::Committed(committed))
+            Ok(RecordDisposition::Committed(*committed))
         }
         ExportSpoolRecordAdmission::Transfer(transfer) => {
             transfer_record::<C, E, D, S>(source, context.budget, &descriptor, transfer, status)

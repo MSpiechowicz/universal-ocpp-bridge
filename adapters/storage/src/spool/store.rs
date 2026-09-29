@@ -5,6 +5,7 @@ use uob_application::{
     ExportPendingPosition, ExportSourceCheckpoint, ExportSpoolError, ExportSpoolErrorCode,
     ExportSpoolNamespace, ExportSpoolStatus, PageLimit, RuntimeResourceBudget, WorkClass,
 };
+use uob_contracts::ExportBatchId;
 
 use super::{
     fail,
@@ -60,6 +61,44 @@ pub(super) fn binding(
     Ok(true)
 }
 
+struct BindingStatusRow {
+    critical_cursor: Option<String>,
+    critical_seq: i64,
+    telemetry_cursor: Option<String>,
+    telemetry_seq: i64,
+    critical_high: i64,
+    telemetry_high: i64,
+    incomplete: bool,
+    legacy: bool,
+    last_confirmed_batch: Option<String>,
+    confirmed_records: i64,
+}
+
+fn status_binding(connection: &Connection) -> Result<BindingStatusRow, ExportSpoolError> {
+    connection
+        .query_row(
+            "SELECT critical_cursor, critical_seq, telemetry_cursor, telemetry_seq,
+            critical_high, telemetry_high, incomplete, legacy,
+            last_confirmed_batch, confirmed_records FROM binding WHERE id=1",
+            [],
+            |row| {
+                Ok(BindingStatusRow {
+                    critical_cursor: row.get(0)?,
+                    critical_seq: row.get(1)?,
+                    telemetry_cursor: row.get(2)?,
+                    telemetry_seq: row.get(3)?,
+                    critical_high: row.get(4)?,
+                    telemetry_high: row.get(5)?,
+                    incomplete: row.get(6)?,
+                    legacy: row.get(7)?,
+                    last_confirmed_batch: row.get(8)?,
+                    confirmed_records: row.get(9)?,
+                })
+            },
+        )
+        .map_err(|error| fail(&error))
+}
+
 pub(super) fn status(
     connection: &Connection,
     ns: &ExportSpoolNamespace,
@@ -76,46 +115,27 @@ pub(super) fn status(
         telemetry_high_water: 0,
         pending_records: 0,
         gaps: Vec::new(),
+        last_confirmed_batch: None,
+        confirmed_records: 0,
         incomplete: false,
         legacy_baseline_incomplete: false,
     };
     if !existing {
         return Ok(status);
     }
-    let values: (
-        Option<String>,
-        i64,
-        Option<String>,
-        i64,
-        i64,
-        i64,
-        bool,
-        bool,
-    ) = connection
-        .query_row(
-            "SELECT critical_cursor, critical_seq, telemetry_cursor, telemetry_seq,
-            critical_high, telemetry_high, incomplete, legacy FROM binding WHERE id=1",
-            [],
-            |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                    row.get(5)?,
-                    row.get(6)?,
-                    row.get(7)?,
-                ))
-            },
-        )
-        .map_err(|error| fail(&error))?;
-    status.critical = checkpoint(values.0, values.1)?;
-    status.telemetry = checkpoint(values.2, values.3)?;
-    status.critical_high_water = nonnegative(values.4)?;
-    status.telemetry_high_water = nonnegative(values.5)?;
-    status.incomplete = values.6;
-    status.legacy_baseline_incomplete = values.7;
+
+    let values = status_binding(connection)?;
+    status.critical = checkpoint(values.critical_cursor, values.critical_seq)?;
+    status.telemetry = checkpoint(values.telemetry_cursor, values.telemetry_seq)?;
+    status.critical_high_water = nonnegative(values.critical_high)?;
+    status.telemetry_high_water = nonnegative(values.telemetry_high)?;
+    status.incomplete = values.incomplete;
+    status.legacy_baseline_incomplete = values.legacy;
+    status.last_confirmed_batch = values
+        .last_confirmed_batch
+        .map(|id| ExportBatchId::new(id).map_err(|_| invalid_pending()))
+        .transpose()?;
+    status.confirmed_records = nonnegative(values.confirmed_records)?;
     status.pending_records = nonnegative(
         connection
             .query_row("SELECT count(*) FROM pending", [], |row| {
@@ -123,6 +143,12 @@ pub(super) fn status(
             })
             .map_err(|error| fail(&error))?,
     )?;
+    status.gaps = read_gaps(connection)?;
+    Ok(status)
+}
+
+fn read_gaps(connection: &Connection) -> Result<Vec<ExportGap>, ExportSpoolError> {
+    let mut gaps = Vec::new();
     let mut statement = connection
         .prepare(
             "SELECT durability, first, last, reason FROM gaps ORDER BY durability, first LIMIT 513",
@@ -130,7 +156,7 @@ pub(super) fn status(
         .map_err(|error| fail(&error))?;
     let mut rows = statement.query([]).map_err(|error| fail(&error))?;
     while let Some(row) = rows.next().map_err(|error| fail(&error))? {
-        if status.gaps.len() == super::MAX_GAPS {
+        if gaps.len() == super::MAX_GAPS {
             return Err(ExportSpoolError::new(
                 ExportSpoolErrorCode::IntegrityFailure,
                 "durable export summaries exceed their bounded capacity",
@@ -145,7 +171,7 @@ pub(super) fn status(
                 "durable export gap interval is invalid",
             ));
         }
-        status.gaps.push(ExportGap {
+        gaps.push(ExportGap {
             durability: match d {
                 0 => Durability::Critical,
                 1 => Durability::BestEffortTelemetry,
@@ -161,7 +187,7 @@ pub(super) fn status(
             reason: decode_reason(row.get(3).map_err(|error| fail(&error))?)?,
         });
     }
-    Ok(status)
+    Ok(gaps)
 }
 
 pub(super) fn nonnegative(value: i64) -> Result<u64, ExportSpoolError> {

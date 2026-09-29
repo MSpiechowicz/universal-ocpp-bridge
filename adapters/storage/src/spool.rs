@@ -9,13 +9,15 @@ use std::{
 
 use tokio::sync::oneshot;
 use uob_application::{
-    BudgetedRecordChunk, CommittedRecordField, Durability, ExportPendingDescriptor,
-    ExportPendingPage, ExportPendingPosition, ExportSpool, ExportSpoolError, ExportSpoolErrorCode,
-    ExportSpoolFuture, ExportSpoolGapCommit, ExportSpoolNamespace, ExportSpoolRecordAdmission,
-    ExportSpoolRecordBegin, ExportSpoolStatus, ExportSpoolTransfer, PageLimit,
-    RuntimeResourceBudget,
+    BudgetedRecordChunk, CommittedRecordField, Durability, ExportDeliveryClaim,
+    ExportPendingDescriptor, ExportPendingPage, ExportPendingPosition, ExportSpool,
+    ExportSpoolError, ExportSpoolErrorCode, ExportSpoolFuture, ExportSpoolGapCommit,
+    ExportSpoolNamespace, ExportSpoolRecordAdmission, ExportSpoolRecordBegin, ExportSpoolStatus,
+    ExportSpoolTransfer, PageLimit, RuntimeResourceBudget,
 };
+use uob_contracts::ExportReport;
 
+mod delivery;
 mod filesystem;
 mod pressure;
 mod schema;
@@ -92,6 +94,13 @@ enum Request {
         usize,
         Reply<BudgetedRecordChunk>,
     ),
+    Claim(
+        ExportSpoolNamespace,
+        PageLimit,
+        usize,
+        Reply<Option<ExportDeliveryClaim>>,
+    ),
+    Settle(ExportSpoolNamespace, ExportReport, Reply<ExportSpoolStatus>),
 }
 
 fn busy() -> ExportSpoolError {
@@ -302,6 +311,22 @@ impl ExportSpool for SqliteExportSpool {
         self.request(|reply| {
             Request::PendingChunk(namespace, descriptor, field, offset, max_bytes, reply)
         })
+    }
+    fn claim_delivery(
+        &self,
+        namespace: ExportSpoolNamespace,
+        limit: PageLimit,
+        max_bytes: usize,
+    ) -> ExportSpoolFuture<'_, Option<ExportDeliveryClaim>> {
+        self.request(|reply| Request::Claim(namespace, limit, max_bytes, reply))
+    }
+
+    fn settle_delivery(
+        &self,
+        namespace: ExportSpoolNamespace,
+        report: ExportReport,
+    ) -> ExportSpoolFuture<'_, ExportSpoolStatus> {
+        self.request(|reply| Request::Settle(namespace, report, reply))
     }
 }
 
