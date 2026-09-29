@@ -64,16 +64,26 @@ pub(super) async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> 
         Ok(value) => value,
         Err(error) => return failure(1, error.to_string()),
     };
+    let application = crate::diagnostics::instrument(
+        configuration.service.application,
+        diagnostics.manager.clone(),
+    );
+    let exporter = match crate::export_runtime::ExportRuntime::start(
+        configuration.service.data_export,
+        None,
+        &application,
+    ) {
+        Ok(exporter) => exporter,
+        Err(error) => return failure(1, format!("export startup {}", error.kind())),
+    };
+
     eprintln!(
         "service listening on {} (static assets: {})",
         configuration.management_address,
         if no_ui { "disabled" } else { "enabled" }
     );
     let result = crate::lifecycle::serve(
-        crate::diagnostics::instrument(
-            configuration.service.application,
-            diagnostics.manager.clone(),
-        ),
+        application,
         crate::lifecycle::ServeSettings {
             address: configuration.management_address,
             diagnostics,
@@ -82,6 +92,7 @@ pub(super) async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> 
             deadline: configuration.shutdown_timeout,
             deployment,
             charging,
+            exporter,
         },
     )
     .await;

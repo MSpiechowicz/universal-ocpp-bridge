@@ -4,11 +4,13 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 use uob_application::{
-    BudgetedRecordChunk, ExportPendingPage, ExportPendingPosition, ExportSpoolError,
-    ExportSpoolFuture, ExportSpoolGapCommit, ExportSpoolRecordAdmission, ExportSpoolRecordBegin,
-    ExportSpoolStatus, ExportSpoolTransfer,
+    BudgetedRecordChunk, ExportDeliveryClaim, ExportPendingPage, ExportPendingPosition,
+    ExportSpoolError, ExportSpoolFuture, ExportSpoolGapCommit, ExportSpoolRecordAdmission,
+    ExportSpoolRecordBegin, ExportSpoolStatus, ExportSpoolTransfer,
 };
-use uob_contracts::{DataPointValue, Freshness, PointId, Quality, QualityLevel, TypedValue};
+use uob_contracts::{
+    DataPointValue, ExportReport, Freshness, PointId, Quality, QualityLevel, TypedValue,
+};
 
 // Inject retention only after the real spool has accepted and written the first field.
 // The next real source chunk must observe expiration and force a full spool rollback.
@@ -121,6 +123,23 @@ impl ExportSpool for ExpiringSpool {
     ) -> ExportSpoolFuture<'_, BudgetedRecordChunk> {
         self.inner
             .pending_chunk(namespace, descriptor, field, offset, max_bytes)
+    }
+
+    fn claim_delivery(
+        &self,
+        namespace: ExportSpoolNamespace,
+        limit: PageLimit,
+        max_bytes: usize,
+    ) -> ExportSpoolFuture<'_, Option<ExportDeliveryClaim>> {
+        self.inner.claim_delivery(namespace, limit, max_bytes)
+    }
+
+    fn settle_delivery(
+        &self,
+        namespace: ExportSpoolNamespace,
+        report: ExportReport,
+    ) -> ExportSpoolFuture<'_, ExportSpoolStatus> {
+        self.inner.settle_delivery(namespace, report)
     }
 }
 

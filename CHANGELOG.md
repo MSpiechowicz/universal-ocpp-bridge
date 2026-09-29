@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add offline single-worker export scheduling with v3 spool claim replay and
+  atomic whole-batch remote confirmation counters, distinct from v12 source
+  checkpoints. Bound batch size, retries and host attempts/shutdown; production
+  PostgreSQL export remains unavailable until a provider is integrated (#100).
 - Add an offline, separately bounded SQLite export spool over operational schema v12
   committed-record streams, with durable source high-water, exact loss intervals,
   destination/revision ownership, critical defer and best-effort telemetry shedding.
@@ -20,7 +24,7 @@ All notable changes to this project will be documented in this file. See [conven
 
 - Qualify a private PostgreSQL client with disposable TLS/SCRAM, credential-rejection,
   uncertainty and bounded-resource fault runs; add a live CI gate and x64 evidence.
-  The PostgreSQL export provider and scheduler remain unavailable (#103).
+  The PostgreSQL export provider remains unavailable; the scheduler is offline-only (#103).
 
 - Add privileged, opt-in OCPP 2.0.1 `TriggerMessage` for eleven native
   classes, scoped EVSE/connector dispatch, independent native replies and

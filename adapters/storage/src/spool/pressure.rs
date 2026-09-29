@@ -166,7 +166,9 @@ pub(super) fn evict_oldest_telemetry(
     let row: Option<(i64, i64)> = tx
         .query_row(
             "SELECT sequence, length(record_id)+length(committed_at)+length(payload)
-             FROM pending WHERE durability=1 ORDER BY sequence LIMIT 1",
+             FROM pending WHERE durability=1 AND row_id NOT IN
+                 (SELECT row_id FROM delivery_items)
+             ORDER BY sequence LIMIT 1",
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )

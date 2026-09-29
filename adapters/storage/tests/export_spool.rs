@@ -1,4 +1,6 @@
 #![cfg(target_os = "linux")]
+#[path = "export_spool/delivery.rs"]
+mod delivery;
 #[path = "export_spool/device_isolation.rs"]
 mod device_isolation;
 #[path = "export_spool/legacy.rs"]
@@ -139,11 +141,11 @@ async fn impossible_critical_does_not_consume_chunks_or_advance_observed_high_wa
         ))
         .await
         .unwrap();
-    assert!(matches!(
-        telemetry,
-        uob_application::ExportSpoolRecordAdmission::TelemetryDropped(_)
-    ));
+    let uob_application::ExportSpoolRecordAdmission::TelemetryDropped(committed) = telemetry else {
+        panic!("telemetry record unexpectedly admitted");
+    };
     let status = reopened.status(namespace()).await.unwrap();
+    assert_eq!(*committed, status);
     assert_eq!(status.critical_high_water, 5);
     assert!(status.critical.is_none());
     assert_eq!(status.telemetry.unwrap().sequence, 1);

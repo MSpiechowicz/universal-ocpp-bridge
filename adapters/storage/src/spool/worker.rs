@@ -7,7 +7,7 @@ use std::sync::{
 use rusqlite::Connection;
 use uob_application::{ExportSpoolError, ExportSpoolRecordAdmission, RuntimeResourceBudget};
 
-use super::{Limits, Reply, Request, Transfer, busy, store, store_commit, unavailable};
+use super::{Limits, Reply, Request, Transfer, busy, delivery, store, store_commit, unavailable};
 
 type Active = (u64, store_commit::ActiveRecord, Arc<AtomicBool>);
 
@@ -110,6 +110,20 @@ impl Worker {
                     )
                 });
             }
+            Request::Claim(ns, limit, max_bytes, reply) => {
+                let _ = reply.send(if self.active.is_some() {
+                    Err(busy())
+                } else {
+                    delivery::claim(&self.connection, &ns, limit, max_bytes, &self.budget)
+                });
+            }
+            Request::Settle(ns, report, reply) => {
+                let _ = reply.send(if self.active.is_some() {
+                    Err(busy())
+                } else {
+                    delivery::settle(&self.connection, &ns, &report)
+                });
+            }
         }
     }
 
@@ -127,7 +141,9 @@ impl Worker {
         }
         match store_commit::begin(&self.connection, begin, self.limits) {
             Ok(store_commit::BeginResult::TelemetryDropped(status)) => {
-                let _ = reply.send(Ok(ExportSpoolRecordAdmission::TelemetryDropped(status)));
+                let _ = reply.send(Ok(ExportSpoolRecordAdmission::TelemetryDropped(Box::new(
+                    status,
+                ))));
             }
             Ok(store_commit::BeginResult::Transfer(record)) => {
                 self.next_id = self.next_id.wrapping_add(1);

@@ -81,16 +81,45 @@ async fn v1_upgrade_preserves_pending_fields_and_durable_facts() {
         .unwrap();
     assert_eq!(chunk.bytes, "id-é".as_bytes());
     let data = spool
-        .pending_chunk(namespace(), item, CommittedRecordField::Payload, 0, 64)
+        .pending_chunk(
+            namespace(),
+            item.clone(),
+            CommittedRecordField::Payload,
+            0,
+            64,
+        )
         .await
         .unwrap();
     assert_eq!(data.bytes, br#"{"a":"\\u2603"}"#);
+    let claimed = spool
+        .claim_delivery(namespace(), PageLimit::new(1).unwrap(), 256 * 1024)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claimed.items.len(), 1);
+    assert_eq!(claimed.items[0].row_id, item.row_id);
+    let batch_id = claimed.batch_id;
     drop(spool);
+    let reopened = fixture.open(4 * 1024 * 1024, 8);
+    assert_eq!(
+        reopened
+            .claim_delivery(namespace(), PageLimit::new(1).unwrap(), 256 * 1024)
+            .await
+            .unwrap()
+            .unwrap()
+            .batch_id,
+        batch_id
+    );
+    assert_eq!(
+        reopened.status(namespace()).await.unwrap().pending_records,
+        1
+    );
+    drop(reopened);
     let version: i64 = Connection::open(fixture.directory.join("export.sqlite3"))
         .unwrap()
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
 }
 
 #[test]

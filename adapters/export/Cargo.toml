@@ -10,11 +10,16 @@ rust-version.workspace = true
 [dependencies]
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
+futures-util.workspace = true
+parking_lot = "=0.12.5"
+serde_json.workspace = true
+time.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 
 [dev-dependencies]
 serde_json.workspace = true
 uob-storage-adapter = { path = "../storage" }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time", "test-util"] }
 time.workspace = true
 uuid.workspace = true
 

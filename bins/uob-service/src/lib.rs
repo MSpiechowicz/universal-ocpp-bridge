@@ -6,6 +6,8 @@ mod configuration;
 mod deployment;
 mod diagnostics;
 mod event_stream;
+mod export_runtime;
+mod export_runtime_drain;
 mod identity;
 mod lifecycle;
 mod management_auth;
@@ -14,6 +16,9 @@ mod release_cli;
 mod release_read;
 mod staging_network;
 mod watchdog;
+
+#[cfg(test)]
+mod export_runtime_service_tests;
 
 use std::{error::Error, fmt};
 

@@ -1,6 +1,6 @@
 use std::{error::Error, fmt, future::Future, pin::Pin};
 
-use uob_contracts::ExportDestination;
+use uob_contracts::{ExportBatchId, ExportDestination, ExportReport};
 
 use crate::{
     BudgetedRecordChunk, CommittedRecordCursor, CommittedRecordDescriptor, CommittedRecordField,
@@ -71,6 +71,14 @@ pub struct ExportPendingPage {
     pub has_more: bool,
 }
 
+/// One durably pinned, ordered delivery batch. Dropping this value does not release its claim.
+#[derive(Debug)]
+pub struct ExportDeliveryClaim {
+    pub batch_id: ExportBatchId,
+    pub items: Vec<ExportPendingDescriptor>,
+    pub reservation: Option<crate::RuntimeReservation>,
+}
+
 /// Recovered durable facts. Deferred means a known source high-water exceeds a checkpoint.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExportSpoolStatus {
@@ -82,6 +90,10 @@ pub struct ExportSpoolStatus {
     pub critical_high_water: u64,
     pub telemetry_high_water: u64,
     pub pending_records: u64,
+    /// Last batch whose entire atomic remote commit was confirmed locally.
+    pub last_confirmed_batch: Option<ExportBatchId>,
+    /// Number of pending records removed after exact atomic remote confirmation.
+    pub confirmed_records: u64,
     pub gaps: Vec<ExportGap>,
     pub incomplete: bool,
     pub legacy_baseline_incomplete: bool,
@@ -106,7 +118,7 @@ pub struct ExportSpoolRecordBegin {
 
 pub enum ExportSpoolRecordAdmission {
     Transfer(Box<dyn ExportSpoolTransfer>),
-    TelemetryDropped(ExportSpoolStatus),
+    TelemetryDropped(Box<ExportSpoolStatus>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -115,6 +127,8 @@ pub enum ExportSpoolErrorCode {
     NamespaceConflict,
     CheckpointConflict,
     Backpressure,
+    /// A durable pending record or pinned delivery cannot fit provider batch limits.
+    DeliveryLimitExceeded,
     SummaryFull,
     Busy,
     Unavailable,
@@ -158,7 +172,7 @@ pub trait ExportSpoolTransfer: Send {
     fn abort(self: Box<Self>) -> ExportSpoolFuture<'static, ()>;
 }
 
-/// Optional host-owned storage. No remote acknowledgement or delete capability.
+/// Optional host-owned storage with independent source and remote-delivery progress.
 pub trait ExportSpool: Send + Sync {
     fn status(&self, namespace: ExportSpoolNamespace) -> ExportSpoolFuture<'_, ExportSpoolStatus>;
     fn observe(
@@ -190,4 +204,18 @@ pub trait ExportSpool: Send + Sync {
         offset: u64,
         max_bytes: usize,
     ) -> ExportSpoolFuture<'_, BudgetedRecordChunk>;
+    /// Pins at most 100 records within the requested conservative encoded-byte ceiling.
+    /// Reopening or retrying returns the same durable batch until an exact atomic confirmation.
+    fn claim_delivery(
+        &self,
+        namespace: ExportSpoolNamespace,
+        limit: PageLimit,
+        max_bytes: usize,
+    ) -> ExportSpoolFuture<'_, Option<ExportDeliveryClaim>>;
+    /// An exact committed report removes the claimed records; unconfirmed outcomes retain them.
+    fn settle_delivery(
+        &self,
+        namespace: ExportSpoolNamespace,
+        report: ExportReport,
+    ) -> ExportSpoolFuture<'_, ExportSpoolStatus>;
 }

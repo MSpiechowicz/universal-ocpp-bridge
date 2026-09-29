@@ -76,7 +76,7 @@ pub(super) fn configure(
     let version: u32 = connection
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .map_err(|error| fail(&error))?;
-    if version > 2 {
+    if version > 3 {
         return Err(ExportSpoolError::new(
             ExportSpoolErrorCode::IntegrityFailure,
             "spool schema is newer than this adapter",
@@ -96,9 +96,16 @@ pub(super) fn configure(
         ));
     }
     match version {
-        0 => initialize(connection)?,
-        1 => migrate(connection, budget)?,
-        2 => {}
+        0 => {
+            initialize(connection)?;
+            add_delivery(connection)?;
+        }
+        1 => {
+            migrate(connection, budget)?;
+            add_delivery(connection)?;
+        }
+        2 => add_delivery(connection)?,
+        3 => {}
         _ => unreachable!(),
     }
     let page_count: i64 = connection
@@ -144,6 +151,32 @@ fn initialize(connection: &Connection) -> Result<(), ExportSpoolError> {
         let _ = connection.execute_batch("ROLLBACK");
     }
     result
+}
+
+fn add_delivery(connection: &Connection) -> Result<(), ExportSpoolError> {
+    connection
+        .execute_batch(
+            "BEGIN IMMEDIATE;
+            ALTER TABLE binding ADD COLUMN next_delivery_id INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE binding ADD COLUMN last_confirmed_batch TEXT;
+            ALTER TABLE binding ADD COLUMN confirmed_records INTEGER NOT NULL DEFAULT 0;
+            CREATE TABLE delivery (
+                id INTEGER PRIMARY KEY CHECK(id=1),
+                batch_id TEXT NOT NULL
+            );
+            CREATE TABLE delivery_items (
+                ordinal INTEGER PRIMARY KEY,
+                row_id INTEGER NOT NULL UNIQUE REFERENCES pending(row_id) ON DELETE RESTRICT
+            );
+            PRAGMA user_version=3;
+            COMMIT",
+        )
+        .map_err(|error| {
+            if !connection.is_autocommit() {
+                let _ = connection.execute_batch("ROLLBACK");
+            }
+            fail(&error)
+        })
 }
 
 fn migrate(

@@ -211,6 +211,23 @@ fn postgresql_is_independent_of_every_first_release_target_mode() {
 }
 
 #[test]
+fn validated_selection_can_create_again_after_a_factory_failure() {
+    let calls = Arc::new(FactoryCalls::default());
+    let registry = registry(Arc::clone(&calls));
+    let selection = validate(&registry, enabled("analytics", 7)).expect("valid selection");
+    let ValidatedDataExport::Enabled(selection) = selection else {
+        panic!("provider selected");
+    };
+
+    for _ in 0..2 {
+        assert!(selection.create().is_err());
+        assert_eq!(selection.configuration().configuration().revision, 7);
+    }
+    assert_eq!(calls.validated.load(Ordering::SeqCst), 1);
+    assert_eq!(calls.created.load(Ordering::SeqCst), 2);
+}
+
+#[test]
 fn replacement_provider_is_added_only_through_schema_and_factory_registration() {
     let calls = Arc::new(FactoryCalls::default());
     let mut registry = registry(Arc::clone(&calls));

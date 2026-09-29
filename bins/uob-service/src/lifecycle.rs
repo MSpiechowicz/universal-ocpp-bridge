@@ -12,6 +12,8 @@ use uob_management_adapter::{
 use crate::{
     charging::{ChargingRuntime, ChargingStore},
     deployment::DeploymentState,
+    export_runtime::ExportRuntime,
+    export_runtime_drain::{DrainState, drain},
     management_auth::ManagementEventAuthenticator,
     management_source::ManagementSource,
     watchdog::Notifier,
@@ -47,6 +49,7 @@ pub(crate) struct ServeSettings {
     pub deadline: Duration,
     pub deployment: Option<DeploymentState>,
     pub charging: Option<ChargingRuntime>,
+    pub exporter: Option<ExportRuntime>,
 }
 
 struct ChargingManagement {
@@ -64,6 +67,14 @@ struct ManagementListener {
 }
 
 pub(crate) async fn serve(application: Application, settings: ServeSettings) -> io::Result<()> {
+    serve_until(application, settings, stop_signal()?).await
+}
+
+pub(crate) async fn serve_until(
+    application: Application,
+    settings: ServeSettings,
+    signal: impl Future<Output = ()>,
+) -> io::Result<()> {
     let ServeSettings {
         address,
         diagnostics,
@@ -72,8 +83,8 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
         deadline,
         deployment,
         charging,
+        exporter,
     } = settings;
-    let signal = stop_signal()?;
     tokio::pin!(signal);
     let notifier = Notifier::from_environment()?;
     let charging_store = charging.as_ref().map(|runtime| runtime.state.store.clone());
@@ -82,6 +93,8 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
     probe_startup(&notifier, deployment.as_ref(), charging_store.as_ref()).await?;
     let (stop, stopped) = oneshot::channel();
     let (charge_stop, charge_stopped) = oneshot::channel();
+    let mut exporter = exporter;
+    let export_application = application.clone();
     let charging_application = application.clone();
     let charging_server = async move {
         match charging {
@@ -117,10 +130,14 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
         server.as_mut(),
         charging_server.as_mut(),
         signal.as_mut(),
-        &notifier,
-        deployment.as_ref(),
-        charging_store.as_ref(),
-        charging_enabled,
+        SupervisionInputs {
+            notifier: &notifier,
+            deployment: deployment.as_ref(),
+            charging_store: charging_store.as_ref(),
+            charging_enabled,
+            exporter: exporter.as_mut(),
+            application: &export_application,
+        },
     )
     .await;
     let _ = notifier.send("STOPPING=1\nSTATUS=Draining local service");
@@ -137,6 +154,8 @@ pub(crate) async fn serve(application: Application, settings: ServeSettings) -> 
             deadline,
             charging_store,
             deployment,
+            exporter,
+            export_application,
         },
     )
     .await
@@ -311,21 +330,36 @@ struct SupervisionResult {
     charging_finished: bool,
 }
 
+struct SupervisionInputs<'a> {
+    notifier: &'a Notifier,
+    deployment: Option<&'a DeploymentState>,
+    charging_store: Option<&'a ChargingStore>,
+    charging_enabled: bool,
+    exporter: Option<&'a mut ExportRuntime>,
+    application: &'a Application,
+}
+
 async fn supervise(
     mut server: Pin<&mut impl Future<Output = io::Result<()>>>,
     mut charging_server: Pin<&mut impl Future<Output = io::Result<()>>>,
     mut signal: Pin<&mut impl Future<Output = ()>>,
-    notifier: &Notifier,
-    deployment: Option<&DeploymentState>,
-    charging_store: Option<&ChargingStore>,
-    charging_enabled: bool,
+    inputs: SupervisionInputs<'_>,
 ) -> SupervisionResult {
+    let SupervisionInputs {
+        notifier,
+        deployment,
+        charging_store,
+        charging_enabled,
+        exporter,
+        application,
+    } = inputs;
     let mut management_finished = false;
     // Retention runs on the charging store's bounded SQLite worker, not a detached task.
     // A failed maintenance request stops supervision instead of silently filling the quota.
     let period = Duration::from_secs(60);
     let mut maintenance = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
     let mut charging_finished = false;
+    let mut exporter = exporter;
     let early_result = loop {
         let progress = watchdog_progress(notifier, deployment, charging_store);
         let maintain = async {
@@ -364,6 +398,12 @@ async fn supervise(
                     break Some(Err(error));
                 }
             },
+            () = async {
+                match exporter.as_deref_mut() {
+                    Some(runtime) => runtime.observe(application).await,
+                    None => std::future::pending().await,
+                }
+            } => {},
         }
     };
     SupervisionResult {
@@ -371,87 +411,6 @@ async fn supervise(
         management_finished,
         charging_finished,
     }
-}
-
-struct DrainState {
-    stop: oneshot::Sender<()>,
-    charge_stop: oneshot::Sender<()>,
-    early_result: Option<io::Result<()>>,
-    management_finished: bool,
-    charging_enabled: bool,
-    charging_finished: bool,
-    deadline: Duration,
-    charging_store: Option<ChargingStore>,
-    deployment: Option<DeploymentState>,
-}
-
-async fn drain(
-    mut server: Pin<&mut impl Future<Output = io::Result<()>>>,
-    mut charging_server: Pin<&mut impl Future<Output = io::Result<()>>>,
-    state: DrainState,
-) -> io::Result<()> {
-    let DrainState {
-        stop,
-        charge_stop,
-        early_result,
-        management_finished,
-        charging_enabled,
-        charging_finished,
-        deadline,
-        charging_store,
-        deployment,
-    } = state;
-    let started = std::time::Instant::now();
-    let _ = stop.send(());
-    let _ = charge_stop.send(());
-    let management_result = if management_finished {
-        Ok(())
-    } else {
-        tokio::time::timeout(deadline, &mut server)
-            .await
-            .unwrap_or_else(|_| {
-                Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "management shutdown deadline exceeded",
-                ))
-            })
-    };
-    let charging_result = if !charging_enabled || charging_finished {
-        Ok(())
-    } else {
-        tokio::time::timeout(
-            deadline.saturating_sub(started.elapsed()),
-            &mut charging_server,
-        )
-        .await
-        .unwrap_or_else(|_| {
-            Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "charging shutdown deadline exceeded",
-            ))
-        })
-    };
-    let mut result = early_result
-        .unwrap_or(Ok(()))
-        .and(management_result)
-        .and(charging_result);
-    if let Some(store) = charging_store {
-        result = result.and(
-            store
-                .shutdown(deadline.saturating_sub(started.elapsed()))
-                .await
-                .map_err(io::Error::other),
-        );
-    }
-    if let Some(deployment) = deployment {
-        result = result.and(
-            deployment
-                .shutdown(deadline.saturating_sub(started.elapsed()))
-                .await
-                .map_err(io::Error::other),
-        );
-    }
-    result
 }
 
 #[cfg(unix)]
@@ -475,26 +434,5 @@ fn stop_signal() -> io::Result<impl Future<Output = ()>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::LifecycleConfiguration;
-
-    #[test]
-    fn shutdown_deadlines_are_finite_and_validated_offline() {
-        for seconds in [0, 301, u64::MAX] {
-            assert!(
-                LifecycleConfiguration {
-                    shutdown_timeout_seconds: seconds
-                }
-                .validate()
-                .is_none()
-            );
-        }
-        assert_eq!(
-            LifecycleConfiguration::default()
-                .validate()
-                .unwrap()
-                .as_secs(),
-            20
-        );
-    }
-}
+#[path = "export_runtime_tests.rs"]
+mod tests;
