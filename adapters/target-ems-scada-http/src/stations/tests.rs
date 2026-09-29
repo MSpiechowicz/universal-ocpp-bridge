@@ -1,8 +1,8 @@
 use axum::http::StatusCode;
 
 use crate::test_support::{
-    CONTROLLER_TOKEN, CanonicalFixtures, MULTI_BRIDGE_TOKEN, READER_TOKEN, STATION_SCOPED_TOKEN,
-    get, router_with, scoped_credentials,
+    CONTROLLER_TOKEN, CanonicalFixtures, LATE_STATIONS_TOKEN, MULTI_BRIDGE_TOKEN, READER_TOKEN,
+    STATION_SCOPED_TOKEN, get, router_with, scoped_credentials,
 };
 
 fn router() -> axum::Router {
@@ -38,6 +38,34 @@ async fn enumeration_hides_every_station_outside_the_callers_own_scope() {
         .collect();
     // The configured target instance may read all three; this credential may read one.
     assert_eq!(stations, ["station-a"]);
+}
+
+#[tokio::test]
+async fn a_station_scoped_page_skips_earlier_hidden_rows_without_leaking_a_cursor() {
+    let (status, first) = get(
+        router(),
+        "/bridge/v1/stations?limit=1",
+        Some(LATE_STATIONS_TOKEN),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(first["items"][0]["station"]["station_id"], "station-b");
+    let cursor = first["next_cursor"]
+        .as_str()
+        .expect("later granted station");
+    assert!(!cursor.contains("station-a"), "{cursor}");
+    let (status, second) = get(
+        router(),
+        &format!("/bridge/v1/stations?limit=1&after={cursor}"),
+        Some(LATE_STATIONS_TOKEN),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        second["items"][0]["station"]["station_id"],
+        "station-unscoped"
+    );
+    assert!(second["next_cursor"].is_null());
 }
 
 #[tokio::test]

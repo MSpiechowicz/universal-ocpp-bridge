@@ -19,6 +19,7 @@ type Socket = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 fn config(endpoint: String) -> SimulatorClientConfig {
     SimulatorClientConfig {
         endpoint,
+        credentials_file: None,
         version: OcppVersion::V1_6,
         request_timeout: Duration::from_secs(2),
         reconnect: false,

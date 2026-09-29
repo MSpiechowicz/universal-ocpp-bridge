@@ -62,7 +62,9 @@ pub(super) async fn apply_observation(
             .map_err(|error| commit_error(protocol, &error))?;
             commits.trigger_committed =
                 triggered && outcome == uob_application::TransactionApplyOutcome::Applied;
-            if observation.event == uob_application::TransactionEventKind::Started {
+            if observation.event == uob_application::TransactionEventKind::Started
+                && observation.id_token_present
+            {
                 // A transaction report is not evidence of an authorization grant.
                 json!({"idTokenInfo":{"status":"Invalid"}})
             } else {

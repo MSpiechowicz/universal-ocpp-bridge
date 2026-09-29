@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add opt-in, nonproduction Compose demos for standard MQTT, broker-free direct
+  EMS HTTP, and EMS MQTT with private per-run state/credentials, separate
+  daemon/simulator/target-client images, host-loopback-only browser access,
+  real dual-edition charging and remote-command evidence, and a bounded
+  three-profile acceptance runner (#94). PostgreSQL export is not included.
+  The HTTP target filters station/point pages before SQL pagination, keeping
+  hidden station IDs out of cursors, binds command status to its principal,
+  and reports inaccessible command IDs as not found rather than leaking existence.
 - Add offline single-worker export scheduling with v3 spool claim replay and
   atomic whole-batch remote confirmation counters, distinct from v12 source
   checkpoints. Bound batch size, retries and host attempts/shutdown; production

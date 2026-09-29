@@ -252,6 +252,14 @@ The OCPP 2.0.1 charging example exercises the corresponding native multi-EVSE fl
 `TransactionEvent` sequencing, complete meter-quality fields, reconnect continuity, exact
 independent fixtures, and separate RequestStart/RequestStop acceptance.
 
+The opt-in [Compose target demos](docs/testing/compose-profiles.md) build separate
+daemon, simulator and target-client images and verify both OCPP editions against
+generic MQTT, direct EMS HTTP (without a broker) or EMS MQTT. Use
+`./scripts/test-compose-profiles.sh` for the bounded three-profile acceptance run;
+`./scripts/compose-demo.sh browser mqtt` additionally exposes a disposable console
+on a random **host-loopback-only** port. These are isolated nonproduction examples,
+not PostgreSQL export or production charger deployments.
+
 Core readiness, new-session admission, component degradation, and resource counters are exposed
 separately. See [health and metrics](docs/operations/health-readiness-metrics.md) for endpoint and
 failure semantics.

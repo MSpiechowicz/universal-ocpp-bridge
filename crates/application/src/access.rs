@@ -37,7 +37,9 @@ pub enum AccessResourceScope {
 }
 
 impl AccessResourceScope {
-    fn allows(&self, requested: &ResourceRef) -> bool {
+    /// Whether this credential scope includes the requested canonical resource.
+    #[must_use]
+    pub fn allows(&self, requested: &ResourceRef) -> bool {
         match self {
             Self::Bridge(bridge_id) => requested.bridge_id == *bridge_id,
             Self::Station {

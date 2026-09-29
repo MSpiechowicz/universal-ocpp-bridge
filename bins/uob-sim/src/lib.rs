@@ -13,6 +13,7 @@ use tokio::sync::{mpsc, oneshot};
 mod client_impl;
 mod client_runtime;
 mod client_runtime_201;
+mod station_auth;
 mod trigger;
 mod trigger201;
 mod trigger_transport;
@@ -85,6 +86,7 @@ impl Error for SimulatorClientError {}
 #[derive(Clone, Debug)]
 pub struct SimulatorClientConfig {
     pub endpoint: String,
+    pub credentials_file: Option<String>,
     pub version: OcppVersion,
     pub request_timeout: Duration,
     pub reconnect: bool,
@@ -367,6 +369,7 @@ impl SimulatorProtocolClient {
                 let state = Arc::new(Mutex::new(Ocpp201State::default()));
                 let (client, barrier, jobs) = trigger_transport::connect_201(
                     &config.endpoint,
+                    config.credentials_file.as_deref(),
                     config.request_timeout,
                     config.reconnect,
                     config.command_capacity,

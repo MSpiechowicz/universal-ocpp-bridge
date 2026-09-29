@@ -10,9 +10,9 @@ use std::{
 
 use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
 use uob_application::{
-    CanonicalQuerySource, Page, PageLimit, RetainedEventCursor, RetainedEventItem,
-    RetainedEventQuery, ScopedTargetQueryPort, SnapshotCursor, TargetPortError,
-    TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryAuthorization,
+    AccessResourceScope, CanonicalQuerySource, Page, PageLimit, RetainedEventCursor,
+    RetainedEventItem, RetainedEventQuery, ScopedTargetQueryPort, SnapshotCursor, SnapshotQuery,
+    TargetPortError, TargetPortErrorCode, TargetPortFuture, TargetQuery, TargetQueryAuthorization,
     TargetQueryPermission, TargetQueryPort, TargetQueryResult, TargetResourceScope,
     TargetRetainedEventStream, TargetSubscription,
 };
@@ -27,6 +27,8 @@ use uob_contracts::{
 
 #[path = "scoped_target_query_port/async_helpers.rs"]
 mod async_helpers;
+#[path = "scoped_target_query_port/query_bounds.rs"]
+mod query_bounds;
 use async_helpers::{block_on, poll_stream};
 
 #[derive(Default)]
@@ -40,6 +42,36 @@ struct FakeSource {
     command_result: Option<CommandResult>,
     oversized_page: bool,
     oversized_subscription: bool,
+}
+
+impl FakeSource {
+    fn snapshot_page(
+        &self,
+        authorization: &TargetQueryAuthorization,
+        query: &SnapshotQuery,
+        scopes: Option<&[AccessResourceScope]>,
+    ) -> TargetQueryResult<String> {
+        let items = self
+            .snapshots
+            .iter()
+            .filter(|snapshot| {
+                authorization.permits_resource(&snapshot.station)
+                    && scopes.is_none_or(|scopes| {
+                        scopes.iter().any(|scope| scope.allows(&snapshot.station))
+                    })
+            })
+            .take(if self.oversized_page {
+                usize::MAX
+            } else {
+                usize::from(query.limit.get())
+            })
+            .cloned()
+            .collect();
+        TargetQueryResult::StationSnapshots(Page {
+            items,
+            next_cursor: Some(SnapshotCursor::new("snapshot-commit-7").expect("snapshot cursor")),
+        })
+    }
 }
 
 impl CanonicalQuerySource<String> for FakeSource {
@@ -58,21 +90,10 @@ impl CanonicalQuerySource<String> for FakeSource {
                         .cloned(),
                 ),
                 TargetQuery::StationSnapshots(query) => {
-                    let mut items: Vec<_> = self
-                        .snapshots
-                        .iter()
-                        .filter(|snapshot| authorization.permits_resource(&snapshot.station))
-                        .cloned()
-                        .collect();
-                    if !self.oversized_page {
-                        items.truncate(usize::from(query.limit.get()));
-                    }
-                    TargetQueryResult::StationSnapshots(Page {
-                        items,
-                        next_cursor: Some(
-                            SnapshotCursor::new("snapshot-commit-7").expect("snapshot cursor"),
-                        ),
-                    })
+                    self.snapshot_page(authorization, &query, None)
+                }
+                TargetQuery::StationSnapshotsScoped { query, scopes } => {
+                    self.snapshot_page(authorization, &query, Some(&scopes))
                 }
                 TargetQuery::DataPointDescriptor { .. } => {
                     TargetQueryResult::DataPointDescriptor(self.descriptor.clone())
@@ -285,40 +306,6 @@ fn cross_station_queries_status_and_subscriptions_are_rejected() {
     };
     assert_eq!(error.code(), TargetPortErrorCode::Unauthorized);
     assert_eq!(poll_stream(&mut stream), Poll::Ready(None));
-}
-
-#[test]
-fn query_permissions_and_bounds_fail_closed() {
-    let station = station_resource("station-a");
-    let source = Arc::new(FakeSource {
-        snapshots: vec![snapshot(station.clone()), snapshot(station.clone())],
-        oversized_page: true,
-        oversized_subscription: true,
-        ..FakeSource::default()
-    });
-    let snapshots_only = ScopedTargetQueryPort::new(
-        source.clone(),
-        authorization(&station, vec![TargetQueryPermission::StationSnapshots]),
-    );
-
-    let error = block_on(snapshots_only.query(TargetQuery::Capabilities(station.clone())))
-        .expect_err("ungranted query class must fail");
-    assert_eq!(error.code(), TargetPortErrorCode::Unsupported);
-    assert_eq!(source.query_calls.load(Ordering::SeqCst), 0);
-    assert!(PageLimit::new(101).is_err());
-
-    let error = block_on(snapshots_only.query(TargetQuery::StationSnapshots(snapshot_query(1))))
-        .expect_err("source cannot exceed the requested page size");
-    assert_eq!(error.code(), TargetPortErrorCode::InvalidRequest);
-
-    let event_port = ScopedTargetQueryPort::new(
-        source,
-        authorization(&station, vec![TargetQueryPermission::RetainedEvents]),
-    );
-    let Err(error) = block_on(event_port.subscribe_retained_events(event_query(station, 1))) else {
-        panic!("oversized source buffer must fail");
-    };
-    assert_eq!(error.code(), TargetPortErrorCode::InvalidRequest);
 }
 
 fn authorization(

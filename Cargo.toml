@@ -3,6 +3,7 @@ members = [
     "crates/contracts",
     "crates/domain",
     "crates/application",
+    "tests/compose-client",
     "tests/target-conformance",
     "tests/database-conformance",
     "tests/ocpp-fixtures",

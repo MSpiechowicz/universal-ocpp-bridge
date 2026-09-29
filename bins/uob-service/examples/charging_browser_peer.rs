@@ -148,8 +148,8 @@ async fn seed_observations(alpha: &mut Socket, bravo: &mut Socket) -> Result<i64
         .ok_or("missing seed transaction")?;
     for (id, evse) in [("b-start", 1), ("b-start-2", 2)] {
         let started = seed_call(bravo, id, "TransactionEvent", json!({"eventType":"Started","timestamp":stamp,"triggerReason":"CablePluggedIn","seqNo":0,"transactionInfo":{"transactionId":format!("browser-bravo-tx-{evse}")},"evse":{"id":evse,"connectorId":1}})).await?;
-        if started["idTokenInfo"]["status"] != "Invalid" {
-            return Err("2.0.1 authorization unexpectedly granted");
+        if started != json!({}) {
+            return Err("2.0.1 tokenless start unexpectedly returned an authorization verdict");
         }
     }
     seed_call(

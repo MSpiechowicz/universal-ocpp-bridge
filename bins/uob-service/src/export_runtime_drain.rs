@@ -1,6 +1,6 @@
 use std::{future::Future, io, pin::Pin, time::Duration};
 
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, task::JoinHandle};
 use uob_application::Application;
 
 use crate::{charging::ChargingStore, deployment::DeploymentState, export_runtime::ExportRuntime};
@@ -8,6 +8,8 @@ use crate::{charging::ChargingStore, deployment::DeploymentState, export_runtime
 pub(crate) struct DrainState {
     pub stop: oneshot::Sender<()>,
     pub charge_stop: oneshot::Sender<()>,
+    pub target_stop: Option<oneshot::Sender<()>>,
+    pub target_task: Option<JoinHandle<io::Result<()>>>,
     pub early_result: Option<io::Result<()>>,
     pub management_finished: bool,
     pub charging_enabled: bool,
@@ -27,6 +29,8 @@ pub(crate) async fn drain(
     let DrainState {
         stop,
         charge_stop,
+        target_stop,
+        target_task,
         early_result,
         management_finished,
         charging_enabled,
@@ -44,6 +48,9 @@ pub(crate) async fn drain(
     let export_end = started + deadline / 2;
     let _ = stop.send(());
     let _ = charge_stop.send(());
+    if let Some(target_stop) = target_stop {
+        let _ = target_stop.send(());
+    }
 
     // Listeners and exporter start draining together, but only local work owns the full deadline.
     let management = async {
@@ -74,16 +81,35 @@ pub(crate) async fn drain(
                 })
         }
     };
+    let target = async {
+        match target_task {
+            Some(mut task) => {
+                if let Ok(result) = tokio::time::timeout_at(end, &mut task).await {
+                    result.map_err(io::Error::other)?
+                } else {
+                    task.abort();
+                    let _ = task.await;
+                    Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "target shutdown deadline exceeded",
+                    ))
+                }
+            }
+            None => Ok(()),
+        }
+    };
     let export = async {
         if let Some(runtime) = exporter {
             runtime.shutdown(&export_application, export_end).await;
         }
     };
-    let (management_result, charging_result, ()) = tokio::join!(management, charging, export);
+    let (management_result, charging_result, target_result, ()) =
+        tokio::join!(management, charging, target, export);
     let mut result = early_result
         .unwrap_or(Ok(()))
         .and(management_result)
-        .and(charging_result);
+        .and(charging_result)
+        .and(target_result);
 
     if let Some(store) = charging_store {
         result = result.and(

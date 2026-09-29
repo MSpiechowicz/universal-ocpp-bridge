@@ -3027,6 +3027,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "uob-compose-client"
+version = "0.31.0"
+dependencies = [
+ "reqwest",
+ "rumqttc-v4-next",
+ "rustls",
+ "serde",
+ "serde_json",
+ "time",
+ "tokio",
+ "toml",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "uob-contracts"
 version = "0.31.0"
 dependencies = [
@@ -3281,6 +3297,7 @@ version = "0.31.0"
 dependencies = [
  "axum",
  "futures",
+ "libc",
  "ocpp-client",
  "serde",
  "serde_json",

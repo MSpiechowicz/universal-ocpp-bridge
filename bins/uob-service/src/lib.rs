@@ -15,6 +15,7 @@ mod management_source;
 mod release_cli;
 mod release_read;
 mod staging_network;
+mod target_runtime;
 mod watchdog;
 
 #[cfg(test)]

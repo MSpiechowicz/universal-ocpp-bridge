@@ -138,6 +138,7 @@ fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservat
         "Ended" => TransactionEventKind::Ended,
         _ => return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload)),
     };
+    let id_token_present = request.id_token.is_some();
     let native_transaction_id = request.transaction_info.transaction_id;
     let sequence_number = request.seq_no.cast_unsigned();
     let meter_observation = request
@@ -162,6 +163,7 @@ fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservat
             remote_start_id: request.transaction_info.remote_start_id,
             protocol: PROTOCOL,
             event,
+            id_token_present,
             native_transaction_id,
             native_resource,
             sequence_number,

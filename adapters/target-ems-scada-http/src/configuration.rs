@@ -10,7 +10,7 @@ use uob_contracts::{Environment, TargetInstanceId};
 use crate::target::EmsScadaHttpTarget;
 
 pub(crate) use self::credentials::resolve_credentials;
-pub use self::credentials::{IntegrationCredentials, IntegrationPrincipal};
+pub use self::credentials::{IntegrationCredentials, IntegrationPrincipal, resolve_command_policy};
 
 pub(crate) mod bounded_file;
 mod credentials;

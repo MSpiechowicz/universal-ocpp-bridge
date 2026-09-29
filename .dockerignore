@@ -1,0 +1,23 @@
+# The Dockerfile builds Rust workspace binaries; browser assets live in adapters/management/ui.
+*
+!Cargo.toml
+!Cargo.lock
+!rust-toolchain.toml
+!bins/
+!bins/**
+!crates/
+!crates/**
+!adapters/
+!adapters/**
+!tests/
+!tests/**
+
+# The root * excludes Cargo's top-level target/; keep source directories named target.
+# Exclude generated assets and local secrets inside the allowed workspace trees.
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+**/test-results
+**/playwright-report

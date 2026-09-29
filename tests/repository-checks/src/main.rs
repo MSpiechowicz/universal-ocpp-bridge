@@ -8,8 +8,11 @@ use std::{
 use serde::Deserialize;
 
 mod documentation;
+mod ownership;
 mod postgresql;
 mod security;
+
+use ownership::check_owned_dependencies;
 
 const EXPECTED_PACKAGES: &[&str] = &[
     "uob-application",
@@ -222,39 +225,6 @@ fn check_protected_dependencies(packages: &BTreeMap<&str, &Package>, errors: &mu
     }
 }
 
-fn check_owned_dependencies(packages: &BTreeMap<&str, &Package>, errors: &mut Vec<String>) {
-    for (package_name, package) in packages {
-        for dependency in &package.dependencies {
-            if dependency.name == "rusqlite" && *package_name != "uob-storage-adapter" {
-                errors.push(format!(
-                    "{package_name} declares rusqlite, which is owned only by uob-storage-adapter"
-                ));
-            }
-            if dependency.name == "ocpp-client" && *package_name != "uob-sim" {
-                errors.push(format!(
-                    "{package_name} declares ocpp-client, which is owned only by uob-sim"
-                ));
-            }
-            if dependency.name == "rust-ocpp" && *package_name != "uob-protocol-adapter" {
-                errors.push(format!(
-                    "{package_name} declares rust-ocpp, which is owned only by uob-protocol-adapter"
-                ));
-            }
-            if is_rumqtt_dependency(dependency) && *package_name != "uob-mqtt-target-adapter" {
-                errors.push(format!(
-                    "{package_name} declares {}, which is owned only by uob-mqtt-target-adapter",
-                    dependency.name
-                ));
-            }
-        }
-    }
-}
-
-fn is_rumqtt_dependency(dependency: &Dependency) -> bool {
-    matches!(dependency.name.as_str(), "rumqttc" | "rumqttc-v4-next")
-        || dependency.rename.as_deref() == Some("rumqttc")
-}
-
 fn check_deferred_industrial_dependencies(
     packages: &BTreeMap<&str, &Package>,
     errors: &mut Vec<String>,
@@ -451,7 +421,7 @@ fn check_graph_excludes(
 #[cfg(test)]
 mod tests {
     use super::{
-        Dependency, DependencyKind, Node, ResolvedDependency, is_opcua_sdk, is_rumqtt_dependency,
+        Dependency, DependencyKind, Node, ResolvedDependency, is_opcua_sdk, ownership,
         runtime_edges,
     };
 
@@ -492,7 +462,7 @@ mod tests {
 
     #[test]
     fn mqtt_ownership_recognizes_the_v4_next_package_alias() {
-        assert!(is_rumqtt_dependency(&Dependency {
+        assert!(ownership::is_rumqtt_dependency(&Dependency {
             name: "rumqttc-v4-next".to_owned(),
             rename: Some("rumqttc".to_owned()),
         }));

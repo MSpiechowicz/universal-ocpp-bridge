@@ -276,6 +276,14 @@ pub enum TargetQuery {
     StationSnapshot(ResourceRef),
     /// Read a bounded page of current station snapshots.
     StationSnapshots(SnapshotQuery),
+    /// Read a bounded page prefiltered to the intersection of this credential's scopes and the
+    /// target's configured station authorization. The source must filter before pagination.
+    StationSnapshotsScoped {
+        /// Bounded page and continuation position.
+        query: SnapshotQuery,
+        /// Authenticated caller's resource scopes, never a substitute for target authorization.
+        scopes: Vec<crate::AccessResourceScope>,
+    },
     /// Read one canonical point descriptor.
     DataPointDescriptor {
         /// Resource owning the point.

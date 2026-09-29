@@ -76,6 +76,27 @@ impl IntegrationCredentials {
     }
 }
 
+/// Resolves exactly the adapter's authenticated principals for the host command guard.
+/// The host must not grant an origin that this credential parser cannot authenticate.
+/// # Errors
+///
+/// Returns a redacted configuration error if the credential file or its grants
+/// cannot be resolved into a valid command policy.
+pub fn resolve_command_policy(
+    reference: Option<&CredentialReference>,
+    target_instance_id: &TargetInstanceId,
+) -> Result<uob_application::AccessPolicy, &'static str> {
+    let credentials = resolve_credentials(reference, target_instance_id)?;
+    uob_application::AccessPolicy::new(
+        credentials
+            .principals
+            .into_iter()
+            .map(|principal| principal.grant)
+            .collect(),
+    )
+    .map_err(|_| "ems_scada_http.credentials_invalid")
+}
+
 /// Compares two secrets without an early return that would leak the matching prefix length.
 fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     let mut difference = u8::from(left.len() != right.len());

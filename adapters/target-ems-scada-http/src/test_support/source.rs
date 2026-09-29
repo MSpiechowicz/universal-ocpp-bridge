@@ -39,19 +39,28 @@ impl CanonicalFixtures {
         &self,
         after: Option<&SnapshotCursor>,
         limit: usize,
+        scopes: &[uob_application::AccessResourceScope],
     ) -> Page<StationSnapshot, SnapshotCursor> {
+        let authorized: Vec<_> = self
+            .stations
+            .iter()
+            .filter(|station| scopes.iter().any(|scope| scope.allows(&station.station)))
+            .collect();
         let start = match after {
             None => 0,
             Some(cursor) => cursor
                 .as_str()
                 .strip_prefix("snapshot:")
                 .and_then(|index| index.parse::<usize>().ok())
-                .unwrap_or(self.stations.len()),
+                .unwrap_or(authorized.len()),
         };
-        let end = start.saturating_add(limit).min(self.stations.len());
+        let end = start.saturating_add(limit).min(authorized.len());
         Page {
-            items: self.stations[start.min(self.stations.len())..end].to_vec(),
-            next_cursor: (end < self.stations.len())
+            items: authorized[start.min(authorized.len())..end]
+                .iter()
+                .map(|snapshot| (*snapshot).clone())
+                .collect(),
+            next_cursor: (end < authorized.len())
                 .then(|| SnapshotCursor::new(format!("snapshot:{end}")).expect("cursor")),
         }
     }
@@ -106,9 +115,13 @@ impl CanonicalQuerySource<()> for CanonicalFixtures {
     ) -> TargetPortFuture<'a, TargetQueryResult<()>> {
         Box::pin(async move {
             match &query {
-                TargetQuery::StationSnapshots(request) => Ok(TargetQueryResult::StationSnapshots(
-                    self.page(request.after.as_ref(), usize::from(request.limit.get())),
-                )),
+                TargetQuery::StationSnapshotsScoped { query, scopes } => {
+                    Ok(TargetQueryResult::StationSnapshots(self.page(
+                        query.after.as_ref(),
+                        usize::from(query.limit.get()),
+                        scopes,
+                    )))
+                }
                 TargetQuery::StationSnapshot(resource) => Ok(TargetQueryResult::StationSnapshot(
                     self.stations
                         .iter()

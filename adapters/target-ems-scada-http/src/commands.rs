@@ -15,10 +15,7 @@ use uob_application::{
     AccessGrant, AccessPermission, AccessPolicy, CommandAdmissionFuture, CommandAdmissionPort,
     ScopedCommandAdmissionPort, TargetQuery,
 };
-use uob_contracts::{
-    AuthenticatedCommandOrigin, CommandOperation, CommandRequest, CommandResult, ExternalCommand,
-    RequestId,
-};
+use uob_contracts::{CommandOperation, CommandRequest, CommandResult, ExternalCommand, RequestId};
 
 use crate::{
     configuration::IntegrationPrincipal, error::IntegrationErrorCode, reads::CanonicalRead,
@@ -199,9 +196,9 @@ pub(crate) async fn status(
                 if !principal
                     .grant()
                     .permits(AccessPermission::Control, &result.resource)
-                    || !same_target(&result.return_route.origin, principal.grant().origin())
+                    || &result.return_route.origin != principal.grant().origin()
                 {
-                    return IntegrationErrorCode::PermissionDenied.into_response();
+                    return IntegrationErrorCode::ResourceNotFound.into_response();
                 }
                 if result.return_route.request_id != request_id {
                     return IntegrationErrorCode::SourceUnavailable.into_response();
@@ -211,6 +208,9 @@ pub(crate) async fn status(
             None => IntegrationErrorCode::ResourceNotFound.into_response(),
         },
         Ok(_) => IntegrationErrorCode::SourceUnavailable.into_response(),
+        Err(IntegrationErrorCode::PermissionDenied) => {
+            IntegrationErrorCode::ResourceNotFound.into_response()
+        }
         Err(error) => error.into_response(),
     }
 }
@@ -221,13 +221,6 @@ fn require_operator(
     principal
         .filter(|principal| principal.permissions().contains(&AccessPermission::Control))
         .ok_or(IntegrationErrorCode::PermissionDenied)
-}
-
-fn same_target(left: &AuthenticatedCommandOrigin, right: &AuthenticatedCommandOrigin) -> bool {
-    matches!((left, right), (
-        AuthenticatedCommandOrigin::Target { target_instance_id: left, .. },
-        AuthenticatedCommandOrigin::Target { target_instance_id: right, .. }
-    ) if left == right)
 }
 
 fn valid_request_id(request_id: &RequestId) -> bool {

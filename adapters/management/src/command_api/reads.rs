@@ -6,7 +6,8 @@ use axum::{
 };
 use serde::Deserialize;
 use uob_application::{
-    CommandHistoryCursor, CommandHistoryQuery, PageLimit, TargetQuery, TargetQueryResult,
+    CommandHistoryCursor, CommandHistoryQuery, PageLimit, TargetPortErrorCode, TargetQuery,
+    TargetQueryResult,
 };
 use uob_contracts::{RequestId, ResourceRef, StationId};
 
@@ -51,7 +52,7 @@ pub(crate) async fn status(
                 .as_ref()
                 .is_some_and(|origin| *origin != result.return_route.origin)
             {
-                return error(StatusCode::FORBIDDEN, "command.unauthorized");
+                return error(StatusCode::NOT_FOUND, "command.not_found");
             }
             Json(result).into_response()
         }
@@ -62,6 +63,11 @@ pub(crate) async fn status(
             StatusCode::INTERNAL_SERVER_ERROR,
             "command.response_type_mismatch",
         ),
+        Err(crate::read_api::ApiError::Port(value))
+            if value.code() == TargetPortErrorCode::Unauthorized =>
+        {
+            error(StatusCode::NOT_FOUND, "command.not_found")
+        }
         Err(value) => value.into_response(),
     }
 }

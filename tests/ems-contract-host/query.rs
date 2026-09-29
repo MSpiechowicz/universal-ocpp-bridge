@@ -124,6 +124,22 @@ impl CanonicalQuerySource<StationEvent> for Source {
                         .await
                         .map_err(error)?,
                 ),
+                TargetQuery::StationSnapshotsScoped { query, scopes } => {
+                    TargetQueryResult::StationSnapshots(
+                        self.0
+                            .read_scoped_snapshots(
+                                query,
+                                authorization
+                                    .station_resources()
+                                    .filter(|station| {
+                                        scopes.iter().any(|scope| scope.allows(station))
+                                    })
+                                    .collect(),
+                            )
+                            .await
+                            .map_err(error)?,
+                    )
+                }
                 TargetQuery::CommandResult(id) => TargetQueryResult::CommandResult(
                     self.0
                         .command_result_by_request_id(id)

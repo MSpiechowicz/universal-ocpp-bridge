@@ -77,6 +77,7 @@ async fn start_service(fixture: &Fixture, hung: bool) -> RunningService {
             deadline: Duration::from_secs(2),
             deployment: None,
             charging: Some(charging),
+            target_selection: None,
             exporter,
         },
         async move {

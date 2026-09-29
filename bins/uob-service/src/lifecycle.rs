@@ -1,14 +1,5 @@
 use std::{future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 
-use serde::Deserialize;
-use tokio::sync::oneshot;
-use uob_application::{Application, OperationalStore};
-use uob_contracts::{TargetInstanceId, UtcTimestamp};
-use uob_management_adapter::{
-    ManagementCommandConfiguration, ManagementEventConfiguration, ManagementEventLimits,
-    ManagementReadLimits, ManagementRouterOptions,
-};
-
 use crate::{
     charging::{ChargingRuntime, ChargingStore},
     deployment::DeploymentState,
@@ -16,8 +7,18 @@ use crate::{
     export_runtime_drain::{DrainState, drain},
     management_auth::ManagementEventAuthenticator,
     management_source::ManagementSource,
+    target_runtime::TargetRuntime,
     watchdog::Notifier,
 };
+use serde::Deserialize;
+use tokio::{sync::oneshot, task::JoinHandle};
+use uob_application::{Application, OperationalStore};
+use uob_contracts::{TargetInstanceId, UtcTimestamp};
+use uob_management_adapter::{
+    ManagementCommandConfiguration, ManagementEventConfiguration, ManagementEventLimits,
+    ManagementReadLimits, ManagementRouterOptions,
+};
+use uob_target_adapter::ValidatedTargetSelection;
 
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -49,6 +50,7 @@ pub(crate) struct ServeSettings {
     pub deadline: Duration,
     pub deployment: Option<DeploymentState>,
     pub charging: Option<ChargingRuntime>,
+    pub target_selection: Option<ValidatedTargetSelection<serde_json::Value, serde_json::Value>>,
     pub exporter: Option<ExportRuntime>,
 }
 
@@ -83,6 +85,7 @@ pub(crate) async fn serve_until(
         deadline,
         deployment,
         charging,
+        target_selection,
         exporter,
     } = settings;
     tokio::pin!(signal);
@@ -91,6 +94,9 @@ pub(crate) async fn serve_until(
     let charging_enabled = charging.is_some();
     let management = charging_management(&application, charging.as_ref())?;
     probe_startup(&notifier, deployment.as_ref(), charging_store.as_ref()).await?;
+    let target = start_target(target_selection.as_ref(), charging.as_ref(), &application)?;
+    let (target_stop, target_stopped) = oneshot::channel();
+    let mut target_task = target.map(|runtime| tokio::spawn(runtime.run(target_stopped, deadline)));
     let (stop, stopped) = oneshot::channel();
     let (charge_stop, charge_stopped) = oneshot::channel();
     let mut exporter = exporter;
@@ -129,6 +135,7 @@ pub(crate) async fn serve_until(
     } = supervise(
         server.as_mut(),
         charging_server.as_mut(),
+        &mut target_task,
         signal.as_mut(),
         SupervisionInputs {
             notifier: &notifier,
@@ -146,6 +153,8 @@ pub(crate) async fn serve_until(
         charging_server.as_mut(),
         DrainState {
             stop,
+            target_stop: target_task.as_ref().map(|_| target_stop),
+            target_task,
             charge_stop,
             early_result,
             management_finished,
@@ -159,6 +168,22 @@ pub(crate) async fn serve_until(
         },
     )
     .await
+}
+
+fn start_target(
+    selection: Option<&ValidatedTargetSelection<serde_json::Value, serde_json::Value>>,
+    charging: Option<&ChargingRuntime>,
+    application: &Application,
+) -> io::Result<Option<TargetRuntime>> {
+    match (selection, charging) {
+        (Some(selection), Some(charging)) => Ok(Some(TargetRuntime::start(
+            selection,
+            &charging.state,
+            application,
+        )?)),
+        (None, _) => Ok(None),
+        (Some(_), None) => Err(io::Error::other("selected target requires charging")),
+    }
 }
 
 async fn serve_management(
@@ -342,6 +367,7 @@ struct SupervisionInputs<'a> {
 async fn supervise(
     mut server: Pin<&mut impl Future<Output = io::Result<()>>>,
     mut charging_server: Pin<&mut impl Future<Output = io::Result<()>>>,
+    target_task: &mut Option<JoinHandle<io::Result<()>>>,
     mut signal: Pin<&mut impl Future<Output = ()>>,
     inputs: SupervisionInputs<'_>,
 ) -> SupervisionResult {
@@ -381,6 +407,15 @@ async fn supervise(
             result = &mut charging_server, if charging_enabled => {
                 charging_finished = true;
                 break Some(result);
+            },
+            result = async {
+                match target_task.as_mut() {
+                    Some(task) => task.await.map_err(io::Error::other).and_then(|result| result),
+                    None => std::future::pending().await,
+                }
+            } => {
+                *target_task = None;
+                break Some(result.and(Err(io::Error::other("selected target stopped"))));
             },
             () = &mut signal => break None,
             result = progress => {

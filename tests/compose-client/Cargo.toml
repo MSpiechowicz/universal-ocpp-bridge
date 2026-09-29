@@ -1,0 +1,23 @@
+[package]
+name = "uob-compose-client"
+description = "Independent bounded charging evidence client for isolated Compose demos"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+reqwest.workspace = true
+rumqttc.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+toml.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
