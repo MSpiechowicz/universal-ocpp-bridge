@@ -259,9 +259,15 @@ pub struct ExportRecord {
 }
 
 impl ExportRecord {
+    /// Current envelope revision, including optional native device-model command evidence.
+    pub const SCHEMA_VERSION: ContractVersion = ContractVersion {
+        major: 1,
+        revision: 6,
+    };
     /// Creates a record only from the closed privacy-filtered payload surface.
     #[must_use]
-    pub const fn new(metadata: ExportRecordMetadata, payload: ExportPayload) -> Self {
+    pub const fn new(mut metadata: ExportRecordMetadata, payload: ExportPayload) -> Self {
+        metadata.schema_version = Self::SCHEMA_VERSION;
         Self { metadata, payload }
     }
 
@@ -320,6 +326,8 @@ impl TryFrom<UncheckedExportBatch> for ExportBatch {
 }
 
 impl ExportBatch {
+    /// Current batch schema revision; records retain their own immutable envelope versions.
+    pub const SCHEMA_VERSION: ContractVersion = ExportRecord::SCHEMA_VERSION;
     /// Creates a non-empty batch and rejects repeated root/subrecord identities.
     ///
     /// # Errors

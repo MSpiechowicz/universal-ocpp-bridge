@@ -28,13 +28,41 @@ unavailable error. The station port must not retain failed work for a future con
 
 ## Restart and observed-state reconciliation
 
-SQLite recovery returns only commands whose latest lifecycle remains unresolved. A persisted
-`dispatched` command found after restart is conservatively changed to `transmission_uncertain`,
-because the new process cannot know whether the charger acted before the response was persisted.
-Recovery never submits these commands to the live station port.
+SQLite command-lifecycle recovery returns commands whose latest lifecycle remains unresolved.
+A persisted `dispatched` command found after restart is conservatively changed to
+`transmission_uncertain`, because the new process cannot know whether the charger acted before
+the response was persisted. Pending device-model report recovery is separately indexed and also
+covers commands whose native lifecycle already ended. Neither recovery path submits commands
+to the live station port.
 
 Later station or transaction observations are linked through `ObservedCommandEffect` records.
 Adding evidence preserves the existing lifecycle: in particular, an uncertain transmission does
 not become a manufactured charger acknowledgement or protocol success. Event IDs make repeated
 reconciliation idempotent, while the command remains retained until an explicit future workflow
 resolves its outcome.
+
+## Read-only device-model report recovery
+
+OCPP 2.0.1 GetBaseReport/GetReport persist the immutable query, connection/generation
+and pending report expectation with `dispatched` before send. Native acknowledgement
+and multipart completion are separate facts. An Accepted native response can end the
+command lifecycle while the report remains `pending`; retention must still protect
+that result. Fragments arriving before ACK remain in bounded private staging, not a
+public inventory. Atomic monotone merging promotes complete staged evidence only
+after Accepted, preserves exact negative acknowledgements and prevents stale writers
+or late notifications from replacing a terminal report.
+
+Collection belongs to the connection rather than an HTTP request. Client timeout or
+abandonment does not stop the nonrenewing deadline from actual socket dispatch.
+Disconnect terminalizes collection with accepted counts where available and no partial
+payload. At startup, bounded indexed recovery changes remaining pending reports to
+`incomplete` with reason `interrupted`, discards private staging and leaves unavailable
+progress unknown (`null`), not zero. Missing native acknowledgement stays independent
+of fragments and cannot produce successful inventory. Native ID retirement and learned
+request limits clear only with connection teardown; reconnect never replays a query.
+
+SQLite v13 supports migration from v12, adding the `report_pending` marker/index and
+private staging. The marker remains set until report terminalization, including when
+the native lifecycle is already terminal. An old v12 binary rejects a v13 database.
+This feature does not establish automatic old-to-new-to-old rollback compatibility;
+release qualification still requires the separate fail-closed compatibility evidence.

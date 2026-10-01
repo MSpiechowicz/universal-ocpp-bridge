@@ -203,7 +203,15 @@ pub(crate) async fn status(
                 if result.return_route.request_id != request_id {
                     return IntegrationErrorCode::SourceUnavailable.into_response();
                 }
-                Json(result).into_response()
+                match crate::events::payload::encode_json(&result, state.maximum_message_bytes()) {
+                    Ok(body) => ([("content-type", "application/json")], body).into_response(),
+                    Err(crate::events::payload::PayloadEncodingError::TooLarge) => {
+                        IntegrationErrorCode::PayloadTooLarge.into_response()
+                    }
+                    Err(crate::events::payload::PayloadEncodingError::Serialization) => {
+                        IntegrationErrorCode::SourceUnavailable.into_response()
+                    }
+                }
             }
             None => IntegrationErrorCode::ResourceNotFound.into_response(),
         },

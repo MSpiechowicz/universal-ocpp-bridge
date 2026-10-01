@@ -1,3 +1,4 @@
+mod pending;
 mod task;
 
 use std::{error::Error, fmt, time::Duration};
@@ -173,18 +174,7 @@ pub enum SessionSubmitError {
 pub struct PendingCall {
     receiver: oneshot::Receiver<SessionCallOutcome>,
     correlation_id: CorrelationId,
-}
-
-impl PendingCall {
-    /// Waits for correlation, timeout, or conservative transport classification.
-    pub async fn receive(self) -> SessionCallOutcome {
-        self.receiver
-            .await
-            .unwrap_or(SessionCallOutcome::TransmissionUncertain {
-                reason: TransmissionUncertainReason::SessionStopped,
-                correlation_id: self.correlation_id,
-            })
-    }
+    response_reservation: Option<oneshot::Receiver<RuntimeReservation>>,
 }
 
 pub(super) enum QueuedWire {
@@ -198,6 +188,8 @@ pub(super) struct QueuedOutbound {
     pub result: oneshot::Sender<SessionCallOutcome>,
     pub reservation: RuntimeReservation,
     pub send_before: Option<Instant>,
+    pub dispatched: Option<oneshot::Sender<Instant>>,
+    pub response_reservation: Option<oneshot::Sender<RuntimeReservation>>,
 }
 
 /// Nonblocking producer for bridge-originated calls.
@@ -207,6 +199,9 @@ pub struct CallSessionHandle {
     pub(super) budget: uob_application::RuntimeResourceBudget,
     pub(super) station_id: uob_contracts::StationId,
     pub(super) protocol: ProtocolEdition,
+    pub(super) reports: super::reports::SharedReports,
+    pub(super) connection_id: CorrelationId,
+    pub(super) diagnostics: uob_application::FlowDiagnostics,
 }
 
 impl CallSessionHandle {
@@ -263,7 +258,22 @@ impl CallSessionHandle {
         send_before: Option<Instant>,
         deferred: Option<DeferredConfigurationCall>,
     ) -> Result<PendingCall, SessionSubmitError> {
-        if request.message_id.trim().is_empty() || !request.payload.is_object() {
+        self.enqueue_observed(request, send_before, deferred, None)
+    }
+
+    pub(super) fn enqueue_observed(
+        &self,
+        request: OutboundCall,
+        send_before: Option<Instant>,
+        deferred: Option<DeferredConfigurationCall>,
+        dispatched: Option<oneshot::Sender<Instant>>,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        let native_query = self.protocol == ProtocolEdition::Ocpp201
+            && ["GetVariables", "GetBaseReport", "GetReport"].contains(&request.action.as_str());
+        if request.message_id.trim().is_empty()
+            || !request.payload.is_object()
+            || (native_query && request.message_id.len() > 256)
+        {
             return Err(SessionSubmitError::InvalidRequest);
         }
         let (wire, bytes) = if let Some(deferred) = deferred {
@@ -287,6 +297,12 @@ impl CallSessionHandle {
             .map_err(SessionSubmitError::Resource)?;
         let correlation_id = request.correlation_id.clone();
         let (result, receiver) = oneshot::channel();
+        let (response_reservation, retained) = if native_query {
+            let (sender, receiver) = oneshot::channel();
+            (Some(sender), Some(receiver))
+        } else {
+            (None, None)
+        };
         self.sender
             .try_send(QueuedOutbound {
                 request,
@@ -294,6 +310,8 @@ impl CallSessionHandle {
                 result,
                 reservation,
                 send_before,
+                dispatched,
+                response_reservation,
             })
             .map_err(|error| match error {
                 mpsc::error::TrySendError::Full(_) => SessionSubmitError::Full,
@@ -302,6 +320,7 @@ impl CallSessionHandle {
         Ok(PendingCall {
             receiver,
             correlation_id,
+            response_reservation: retained,
         })
     }
 }
@@ -457,4 +476,5 @@ pub(super) struct PendingEntry {
     pub correlation_id: CorrelationId,
     pub deadline: Instant,
     pub _reservation: RuntimeReservation,
+    pub response_reservation: Option<oneshot::Sender<RuntimeReservation>>,
 }

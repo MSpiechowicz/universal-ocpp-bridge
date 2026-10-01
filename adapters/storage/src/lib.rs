@@ -6,6 +6,7 @@ mod command;
 mod command_history;
 mod configuration;
 mod delivery;
+mod device_model201;
 mod drain;
 mod lifecycle;
 mod recovery;

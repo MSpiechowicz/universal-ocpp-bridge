@@ -23,8 +23,9 @@ async fn missing_final_fragment_times_out_and_drops_source_and_all_reservations(
     let guard = SourceGuard(dropped.clone());
     let mut first = Some(fragment(0, true, &[b"prefix"]));
     let failed = collect_report(
-        key(),
+        reserve_report(key(), limits(), &budget.clone()),
         limits(),
+        tokio::time::Instant::now(),
         budget.clone(),
         move || -> Next {
             let _keep_source_registered = &guard;
@@ -57,11 +58,19 @@ async fn fragments_never_extend_absolute_deadline() {
     let budget = budget();
     let mut sequence = 0;
     let failed = collect_report(
-        key(),
+        reserve_report(
+            key(),
+            ReportLimits {
+                timeout: Duration::from_secs(10),
+                ..limits()
+            },
+            &budget.clone(),
+        ),
         ReportLimits {
             timeout: Duration::from_secs(10),
             ..limits()
         },
+        tokio::time::Instant::now(),
         budget.clone(),
         move || {
             let current = sequence;
@@ -85,8 +94,9 @@ async fn fragments_never_extend_absolute_deadline() {
 async fn explicit_cancellation_and_dropping_collection_release_source_without_background_work() {
     let budget = budget();
     let failed = collect_report(
-        key(),
+        reserve_report(key(), limits(), &budget.clone()),
         limits(),
+        tokio::time::Instant::now(),
         budget.clone(),
         future::pending,
         tokio::time::sleep(Duration::from_millis(1)),
@@ -101,8 +111,9 @@ async fn explicit_cancellation_and_dropping_collection_release_source_without_ba
     let guard = SourceGuard(dropped.clone());
     let mut first = Some(fragment(0, true, &[b"prefix"]));
     let mut collection = Box::pin(collect_report(
-        key(),
+        reserve_report(key(), limits(), &budget.clone()),
         limits(),
+        tokio::time::Instant::now(),
         budget.clone(),
         move || -> Next {
             let _keep_source_registered = &guard;
@@ -126,8 +137,9 @@ async fn disconnect_and_decoder_errors_return_partial_counts_not_success() {
         let budget = budget();
         let mut first = Some(fragment(0, true, &[b"prefix"]));
         let failed = collect_report(
-            key(),
+            reserve_report(key(), limits(), &budget.clone()),
             limits(),
+            tokio::time::Instant::now(),
             budget.clone(),
             move || {
                 future::ready(match first.take() {
@@ -161,11 +173,19 @@ async fn ready_report_flood_yields_to_other_runtime_work() {
     let observer = progressed.clone();
     let mut sequence = 0;
     let collector = collect_report(
-        key(),
+        reserve_report(
+            key(),
+            ReportLimits {
+                maximum_fragments: 1000,
+                ..limits()
+            },
+            &budget.clone(),
+        ),
         ReportLimits {
             maximum_fragments: 1000,
             ..limits()
         },
+        tokio::time::Instant::now(),
         budget.clone(),
         move || {
             if sequence == 999 {
@@ -192,8 +212,9 @@ async fn growing_report_releases_existing_prefix_when_other_work_exhausts_budget
     let mut occupying_work = None;
     let mut sequence = 0;
     let failed = collect_report(
-        key(),
+        reserve_report(key(), limits(), &budget.clone()),
         limits(),
+        tokio::time::Instant::now(),
         budget.clone(),
         move || {
             if sequence == 1 {
@@ -218,5 +239,26 @@ async fn growing_report_releases_existing_prefix_when_other_work_exhausts_budget
     .unwrap();
     assert!(matches!(failed.reason, ReportFailure::Capacity(_)));
     assert_eq!(failed.progress.fragments, 1);
+    empty(&budget);
+}
+
+#[tokio::test(start_paused = true)]
+async fn delayed_collection_keeps_the_actual_send_deadline_even_when_the_final_fragment_is_ready() {
+    let budget = budget();
+    let dispatched = tokio::time::Instant::now();
+    tokio::time::advance(Duration::from_secs(2)).await;
+    let failed = collect_report(
+        reserve_report(key(), limits(), &budget),
+        limits(),
+        dispatched,
+        budget.clone(),
+        || future::ready(Ok(Some(fragment(0, false, &[b"late"])))),
+        future::pending(),
+    )
+    .await
+    .err()
+    .unwrap();
+    assert_eq!(failed.reason, ReportFailure::TimedOut);
+    assert_eq!(failed.progress.fragments, 0);
     empty(&budget);
 }

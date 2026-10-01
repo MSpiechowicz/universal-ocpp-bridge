@@ -67,6 +67,10 @@ pub(super) const CANONICAL_V1_4: &[(&str, &str)] = &[
 
 pub(super) const CANONICAL_V1_5: &[(&str, &str)] = &[
     (
+        "command-result.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.5/command-result.schema.json"),
+    ),
+    (
         "export-record.schema.json",
         include_str!("../../../../crates/contracts/schemas/v1.5/export-record.schema.json"),
     ),
@@ -76,10 +80,21 @@ pub(super) const CANONICAL_V1_5: &[(&str, &str)] = &[
     ),
 ];
 
+pub(super) const CANONICAL_V1_6: &[(&str, &str)] = &[
+    (
+        "export-record.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.6/export-record.schema.json"),
+    ),
+    (
+        "export-batch.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.6/export-batch.schema.json"),
+    ),
+];
+
 pub(super) fn reference(name: &str) -> Value {
     let revision = match name {
-        "command-result" => "v1.4",
-        "export-record" | "export-batch" => "v1.5",
+        "command-result" => "v1.5",
+        "export-record" | "export-batch" => "v1.6",
         _ => "v1.0",
     };
     json!({"$ref": format!("/bridge/v1/schemas/{revision}/{name}.schema.json")})
@@ -93,6 +108,7 @@ pub(super) fn canonical(revision: &str) -> &'static [(&'static str, &'static str
         "v1.3" => CANONICAL_V1_3,
         "v1.4" => CANONICAL_V1_4,
         "v1.5" => CANONICAL_V1_5,
+        "v1.6" => CANONICAL_V1_6,
         _ => &[],
     }
 }
@@ -135,6 +151,7 @@ pub(super) fn add<T: JsonSchema>(components: &mut Map<String, Value>, name: &str
         ("v1.3", CANONICAL_V1_3),
         ("v1.4", CANONICAL_V1_4),
         ("v1.5", CANONICAL_V1_5),
+        ("v1.6", CANONICAL_V1_6),
     ] {
         for (file, source) in schemas {
             let schema: Value = serde_json::from_str(source).expect("canonical schema");

@@ -46,8 +46,9 @@ async fn collect(
 ) -> Result<CollectedReport, Box<PartialReport>> {
     let mut fragments = VecDeque::from(fragments);
     collect_report(
-        key(),
+        reserve_report(key(), limits, &budget.clone()),
         limits,
+        tokio::time::Instant::now(),
         budget.clone(),
         move || future::ready(Ok(fragments.pop_front())),
         future::pending(),
@@ -274,8 +275,9 @@ async fn invalid_limits_do_not_allocate_or_poll_source() {
     ] {
         let budget = budget();
         let failed = collect_report(
-            key(),
+            reserve_report(key(), bad, &budget.clone()),
             bad,
+            tokio::time::Instant::now(),
             budget.clone(),
             || {
                 panic!("invalid collection must not poll ingress");

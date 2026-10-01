@@ -91,6 +91,10 @@ impl IntegrationState {
         &self.inner.reads
     }
 
+    pub(crate) fn maximum_message_bytes(&self) -> usize {
+        self.inner.descriptor.limits.maximum_message_bytes
+    }
+
     /// Returns how many station snapshots one point page may inspect.
     pub(crate) fn station_scan_limit(&self) -> PageLimit {
         self.inner.limits.station_scan_limit
@@ -148,6 +152,10 @@ pub(crate) fn integration_router(state: IntegrationState) -> Router {
         .route(
             "/bridge/v1/schemas/v1.5/{schema}",
             get(crate::openapi::schema_v1_5),
+        )
+        .route(
+            "/bridge/v1/schemas/v1.6/{schema}",
+            get(crate::openapi::schema_v1_6),
         )
         .route("/bridge/v1/events", get(crate::events::events))
         .route("/bridge/v1/stations", get(stations::stations))

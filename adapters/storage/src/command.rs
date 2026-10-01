@@ -66,11 +66,19 @@ pub(crate) fn write_result(
     transaction: &Transaction<'_>,
     encoded: &EncodedCommandResult,
 ) -> Result<(), StorageError> {
-    let mut incoming = codec::decode_result(&encoded.payload)?;
+    let incoming = codec::decode_result(&encoded.payload)?;
+    write_result_value(transaction, incoming, &encoded.request_id)
+}
+
+pub(crate) fn write_result_value(
+    transaction: &Transaction<'_>,
+    mut incoming: uob_contracts::CommandResult,
+    request: &str,
+) -> Result<(), StorageError> {
     let previous = transaction
         .query_row(
             "SELECT payload FROM command_results WHERE request_id = ?1",
-            [&encoded.request_id],
+            [request],
             |row| row.get::<_, String>(0),
         )
         .optional()
@@ -89,6 +97,7 @@ pub(crate) fn write_result(
         }
         crate::trigger::merge(&previous, &mut incoming)?;
         retire_trigger_201 = crate::trigger201::merge(&previous, &mut incoming)?;
+        crate::device_model201::merge(&mut previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -142,14 +151,24 @@ pub(crate) fn write_result(
             observation.refresh_status(incoming.recorded_at);
         }
     }
+    crate::device_model201::finalize_lifecycle(&mut incoming);
+    crate::device_model201::bound_output(&mut incoming)?;
+    persist_result(transaction, &incoming, request, retire_trigger_201)
+}
 
+fn persist_result(
+    transaction: &Transaction<'_>,
+    incoming: &uob_contracts::CommandResult,
+    request: &str,
+    retire_trigger_201: bool,
+) -> Result<(), StorageError> {
     let unresolved = matches!(
         incoming.lifecycle,
         CommandLifecycle::Admitted
             | CommandLifecycle::Dispatched
             | CommandLifecycle::TransmissionUncertain { .. }
     );
-    let payload = serde_json::to_string(&incoming).map_err(|_| {
+    let payload = serde_json::to_string(incoming).map_err(|_| {
         StorageError::new(
             StorageErrorCode::InvalidRequest,
             "command result encoding failed",
@@ -157,16 +176,18 @@ pub(crate) fn write_result(
     })?;
     transaction
         .execute(
-            "INSERT INTO command_results(request_id, payload, trigger_reconcile_active) VALUES (?1, ?2, ?3)
+            "INSERT INTO command_results(request_id, payload, trigger_reconcile_active, report_pending) VALUES (?1, ?2, ?3, ?4)
          ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload,
+             report_pending = excluded.report_pending,
              trigger_reconcile_active = MIN(command_results.trigger_reconcile_active, excluded.trigger_reconcile_active)",
-            params![encoded.request_id, payload, i64::from(!retire_trigger_201)],
+            params![request, payload, i64::from(!retire_trigger_201),
+                i64::from(incoming.device_model_201.as_ref().is_some_and(|e| e.report.pending()))],
         )
         .map_err(unavailable)?;
     transaction
         .execute(
             "UPDATE commands SET unresolved = ?2 WHERE request_id = ?1",
-            params![encoded.request_id, i64::from(unresolved)],
+            params![request, i64::from(unresolved)],
         )
         .map_err(unavailable)?;
     Ok(())
@@ -252,7 +273,8 @@ pub(crate) fn prune<C: DeserializeOwned + Serialize>(
     let mut statement = transaction
         .prepare(
             "SELECT request_id FROM commands\n\
-             WHERE unresolved = 0 AND retain_until IS NOT NULL AND retain_until <= ?1",
+             WHERE unresolved = 0 AND retain_until IS NOT NULL AND retain_until <= ?1
+             AND NOT EXISTS (SELECT 1 FROM command_results WHERE command_results.request_id = commands.request_id AND report_pending = 1)",
         )
         .map_err(unavailable)?;
     let request_ids = statement

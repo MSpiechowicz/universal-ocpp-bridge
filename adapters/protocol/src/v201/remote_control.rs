@@ -1,13 +1,17 @@
 //! OCPP 2.0.1 remote operations behind the ordinary durable application command path.
 use crate::remote_constraints as constraints;
 mod charging_limit;
+pub mod device_model;
+mod device_model_collection;
+mod device_model_response;
+pub mod device_model_values;
 mod identity;
 mod mapping;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub mod observation;
 
-use crate::{CallSessionHandle, OutboundCall, SessionCallOutcome, SessionSubmitError};
+use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
@@ -16,8 +20,8 @@ use uob_application::{
     StationCommandFuture, StationCommandPort,
 };
 use uob_contracts::{
-    Command, CommandErrorCode, Connectivity, ProtocolEdition, ResourceRef, StationSnapshot,
-    UtcTimestamp,
+    Command, CommandErrorCode, Connectivity, ProtocolEdition, RequestId, ResourceRef,
+    StationSnapshot, UtcTimestamp,
 };
 
 /// Narrow trusted provider for a remote start's opaque authorization reference.
@@ -43,6 +47,7 @@ pub struct RemoteControlSession {
     identity: Arc<dyn RemoteStartIdentity>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
+    device_model: Option<device_model::DeviceRuntime>,
 }
 
 impl RemoteControlSession {
@@ -63,6 +68,7 @@ impl RemoteControlSession {
             identity,
             clock,
             evidence,
+            device_model: None,
         })
     }
 
@@ -81,9 +87,62 @@ impl RemoteControlSession {
         *current = snapshot;
         Ok(())
     }
+
+    async fn receive_remote_response(
+        &self,
+        request: &RequestId,
+        action: &str,
+        pending: PendingCall,
+    ) -> CommandDispatchOutcome {
+        match pending.receive().await {
+            SessionCallOutcome::Result { payload, .. } => {
+                let outcome = mapping::response(action, &payload);
+                if action != "SetChargingProfile"
+                    && action != "TriggerMessage"
+                    && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })
+                {
+                    let status = payload["status"]
+                        .as_str()
+                        .expect("validated status")
+                        .to_owned();
+                    let native = payload
+                        .get("transactionId")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned);
+                    if self
+                        .evidence
+                        .record_remote_response(request.clone(), status, native)
+                        .await
+                        .is_err()
+                    {
+                        return mapping::uncertain();
+                    }
+                }
+                outcome
+            }
+            SessionCallOutcome::Error { .. } => mapping::rejected_response(),
+            SessionCallOutcome::NotTransmitted { reason, .. } => {
+                mapping::not_sent(if reason == "command expired before socket send" {
+                    CommandErrorCode::Expired
+                } else {
+                    CommandErrorCode::PolicyRejected
+                })
+            }
+            SessionCallOutcome::TimedOut { .. }
+            | SessionCallOutcome::TransmissionUncertain { .. } => mapping::uncertain(),
+        }
+    }
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn device_model_expectation(
+        &self,
+        command: &Command<Value>,
+        _generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_contracts::DeviceModelResult201>, CommandErrorCode> {
+        self.device_expectation(command, now)
+    }
     fn trigger_expectation(
         &self,
         command: &Command<Value>,
@@ -120,6 +179,11 @@ impl StationCommandPort<Value> for RemoteControlSession {
         command: Command<Value>,
     ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
         Box::pin(async move {
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::device_model201::ACTIONS.contains(&operation.action.as_str()))
+            {
+                return Ok(self.dispatch_device(command).await);
+            }
             let remote_start_id = if matches!(
                 command.operation,
                 uob_contracts::CommandOperation::Start { .. }
@@ -181,43 +245,9 @@ impl StationCommandPort<Value> for RemoteControlSession {
                     }));
                 }
             };
-            Ok(match pending.receive().await {
-                SessionCallOutcome::Result { payload, .. } => {
-                    let outcome = mapping::response(action, &payload);
-                    if action != "SetChargingProfile"
-                        && action != "TriggerMessage"
-                        && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })
-                    {
-                        let status = payload["status"]
-                            .as_str()
-                            .expect("validated status")
-                            .to_owned();
-                        let native = payload
-                            .get("transactionId")
-                            .and_then(Value::as_str)
-                            .map(str::to_owned);
-                        if self
-                            .evidence
-                            .record_remote_response(command.request_id.clone(), status, native)
-                            .await
-                            .is_err()
-                        {
-                            return Ok(mapping::uncertain());
-                        }
-                    }
-                    outcome
-                }
-                SessionCallOutcome::Error { .. } => mapping::rejected_response(),
-                SessionCallOutcome::NotTransmitted { reason, .. } => {
-                    mapping::not_sent(if reason == "command expired before socket send" {
-                        CommandErrorCode::Expired
-                    } else {
-                        CommandErrorCode::PolicyRejected
-                    })
-                }
-                SessionCallOutcome::TimedOut { .. }
-                | SessionCallOutcome::TransmissionUncertain { .. } => mapping::uncertain(),
-            })
+            Ok(self
+                .receive_remote_response(&command.request_id, action, pending)
+                .await)
         })
     }
 }

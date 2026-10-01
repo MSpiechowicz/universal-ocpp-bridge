@@ -46,6 +46,35 @@ an incoming call awaits its application response and for the recent-history wind
 outgoing IDs also remain reserved across timeout and late-response handling. This prevents a stale
 reply from completing a newer command.
 
+### Native device-model report routing
+
+Opt-in OCPP 2.0.1 GetBaseReport/GetReport register a bounded NotifyReport route
+with this same socket owner before enqueueing the outbound CALL. No second
+reader is opened. CALL unique IDs correlate native acknowledgements; native
+signed 32-bit `requestId` values independently identify the shared NotifyReport
+namespace across both actions. Station and actual connection generation come
+from authenticated ownership, not the notification payload. IDs are unchanged,
+retired in a budgeted set capped at 4,096 per connection and reusable only after
+teardown. Reuse/exhaustion is rejected before wire.
+
+The owner signals the actual dispatch-start instant used by the nonrenewing
+30-second report deadline. Native reply timing and fragment arrival do not
+restart it. NotifyReport validates the whole native frame and authorized scope,
+reserves bounded ingress before sanitization/copying and hands fragments to the
+registered collector. Queue/byte/capacity failure terminalizes that collection
+without blocking heartbeat, status or charging handling. Default composition
+shares four report slots and a 16 MiB queue budget, protects critical reserve and
+enforces the 256 KiB complete-frame cap.
+
+A schema-valid NotifyReport may receive its empty native CALLRESULT even when
+late, unsolicited or unable to enter a full collection queue. That response is
+wire acknowledgement, not durable inventory completion or permission to mutate
+finalized evidence. Reports received before an Accepted native acknowledgement
+remain private/pending; negative or missing acknowledgement never becomes success
+because fragments arrived. Connection-owned collection survives an initiating
+HTTP timeout or abandoned client; disconnect ends the route, never queues it
+for a replacement socket. See [device-model semantics](ocpp201-remote-control.md#opt-in-read-only-device-model-queries).
+
 ## Application response boundary
 
 A validated charger call is delivered with a single-use responder. Application work may complete in

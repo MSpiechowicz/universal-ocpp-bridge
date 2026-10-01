@@ -15,7 +15,7 @@ use uob_application::{
     OperationalStore, PageLimit, RuntimeResourceBudget, RuntimeResourceLimits, StorageWritePurpose,
 };
 use uob_contracts::{
-    ArtifactDigest, AvailabilityState, BridgeId, ContractVersion, Environment, ExportDestination,
+    ArtifactDigest, AvailabilityState, BridgeId, Environment, ExportDestination,
     ExportDestinationId, ExportPayload, ExportRecord, ExportRecordId, ExportRecordIdentity,
     ExportRecordMetadata, ExportResourceStatusChange, ProcessInstanceId, ReleaseId, ResourceRef,
     RuntimeIdentity, StationId, UtcTimestamp,
@@ -91,7 +91,7 @@ fn record(id: &str, durability: Durability) -> CommittedRecord<ExportRecord> {
         record: ExportRecord::new(
             ExportRecordMetadata {
                 identity: ExportRecordIdentity::root(ExportRecordId::new(id).unwrap()),
-                schema_version: ContractVersion::V1_INITIAL,
+                schema_version: ExportRecord::SCHEMA_VERSION,
                 runtime: RuntimeIdentity {
                     environment: Environment::Demo,
                     release_id: ReleaseId::new("test-release").unwrap(),

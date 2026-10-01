@@ -139,6 +139,10 @@ impl Fixture {
     }
 
     pub async fn station(&self, name: &str) -> Socket {
+        self.station_protocol(name, "ocpp1.6").await
+    }
+
+    pub async fn station_protocol(&self, name: &str, protocol: &str) -> Socket {
         let token = if name == "station-a" {
             "c3RhdGlvbi1hOnN0YXRpb24tYWxwaGEtc2VjcmV0LTEyMzQ1"
         } else {
@@ -149,7 +153,7 @@ impl Fixture {
             .unwrap();
         request
             .headers_mut()
-            .insert("Sec-WebSocket-Protocol", "ocpp1.6".parse().unwrap());
+            .insert("Sec-WebSocket-Protocol", protocol.parse().unwrap());
         request
             .headers_mut()
             .insert("Authorization", format!("Basic {token}").parse().unwrap());

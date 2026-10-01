@@ -90,6 +90,7 @@ fn result(response: Option<TriggerNativeResponse>) -> CommandResult {
         }),
         trigger_observation_201: None,
         composite_schedule_16: None,
+        device_model_201: None,
     }
 }
 fn event(

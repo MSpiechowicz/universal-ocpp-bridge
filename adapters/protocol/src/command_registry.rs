@@ -1,5 +1,6 @@
 //! Pinned, explicitly supported privileged commands. Protocol edition is not a capability.
 pub(crate) mod composite_schedule16;
+pub(crate) mod device_model201;
 mod trigger201;
 use rust_ocpp::v1_6::messages::{
     change_availability::ChangeAvailabilityRequest, trigger_message::TriggerMessageRequest,
@@ -95,6 +96,28 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
             }
         }
     } else {
+        for (index, action) in device_model201::ACTIONS.iter().enumerate() {
+            let operation = Operation::ProtocolAction {
+                protocol,
+                action: (*action).to_owned(),
+            };
+            if snapshot.capabilities.supports(&operation)
+                && snapshot.station.native_protocol_reference.is_none()
+            {
+                descriptors.push(device_model201::descriptor(snapshot.station.clone(), index));
+            }
+            if index != 1 {
+                for entry in &snapshot.resources {
+                    if entry.capabilities.supports(&operation)
+                        && entry.resource.bridge_id == snapshot.station.bridge_id
+                        && entry.resource.station_id == snapshot.station.station_id
+                    {
+                        descriptors
+                            .push(device_model201::descriptor(entry.resource.clone(), index));
+                    }
+                }
+            }
+        }
         if snapshot.capabilities.supports(&trigger) && trigger201::discoverable(&snapshot.station) {
             descriptors.push(trigger201_descriptor(snapshot.station.clone()));
         }
@@ -271,6 +294,9 @@ pub fn validate_privileged_operation(
     operation: &PrivilegedOcppOperation<Value>,
 ) -> Result<(), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
+    if device_model201::ACTIONS.contains(&operation.action.as_str()) {
+        return device_model201::validate(resource, operation).map(|_| ());
+    }
     if operation.action.as_str() == "GetCompositeSchedule" {
         return composite_schedule16::validate(resource, operation).map(|_| ());
     }

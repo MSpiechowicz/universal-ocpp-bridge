@@ -17,6 +17,9 @@ pub(crate) async fn reconcile(
     settings: &BTreeMap<StationId, StationSettings>,
     identity: &ServiceIdentity,
 ) -> io::Result<()> {
+    uob_application::DeviceModelStore201::interrupt_device_reports(store)
+        .await
+        .map_err(|_| unavailable())?;
     for expected in resources.values() {
         let Some(mut snapshot) = store
             .station_snapshot(expected[0].clone())

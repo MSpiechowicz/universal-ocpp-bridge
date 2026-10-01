@@ -6,10 +6,10 @@ use uob_application::{
     RuntimeResourceLimits, StorageAdmissionState,
 };
 use uob_contracts::{
-    ArtifactDigest, ContractVersion, DataPointValue, Environment, ExportDestination,
-    ExportDestinationId, ExportPayload, ExportRecord, ExportRecordId, ExportRecordIdentity,
-    ExportRecordMetadata, Freshness, PointId, ProcessInstanceId, Quality, QualityLevel, ReleaseId,
-    RuntimeIdentity, TransactionState, TypedValue,
+    ArtifactDigest, DataPointValue, Environment, ExportDestination, ExportDestinationId,
+    ExportPayload, ExportRecord, ExportRecordId, ExportRecordIdentity, ExportRecordMetadata,
+    Freshness, PointId, ProcessInstanceId, Quality, QualityLevel, ReleaseId, RuntimeIdentity,
+    TransactionState, TypedValue,
 };
 use uob_storage_adapter::{ExportSpoolLimits, SqliteExportSpool};
 
@@ -75,7 +75,7 @@ fn pressure_record(id: &str, bytes: usize) -> CommittedRecord<ExportRecord> {
         record: ExportRecord::new(
             ExportRecordMetadata {
                 identity: ExportRecordIdentity::root(ExportRecordId::new(id).unwrap()),
-                schema_version: ContractVersion::V1_INITIAL,
+                schema_version: ExportRecord::SCHEMA_VERSION,
                 runtime: RuntimeIdentity {
                     environment: Environment::Demo,
                     release_id: ReleaseId::new("acceptance-test").unwrap(),

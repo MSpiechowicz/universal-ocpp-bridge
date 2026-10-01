@@ -182,8 +182,9 @@ pub fn result_delivery(
             resource,
             return_route: CommandReturnRoute {
                 request_id: RequestId::new(request_id).expect("request identity"),
-                origin: AuthenticatedCommandOrigin::Management {
-                    principal_id: PrincipalId::new("operator-a").expect("principal identity"),
+                origin: AuthenticatedCommandOrigin::Target {
+                    target_instance_id: target_id(),
+                    principal_id: PrincipalId::new("mqtt-target:main").expect("principal identity"),
                 },
             },
             lifecycle: CommandLifecycle::Admitted,
@@ -194,6 +195,7 @@ pub fn result_delivery(
             trigger_observation: None,
             trigger_observation_201: None,
             composite_schedule_16: None,
+            device_model_201: None,
         }),
     )
 }

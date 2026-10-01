@@ -217,6 +217,89 @@ pub async fn setup(
     Arc<RemoteControlSession>,
     Arc<Coordinator>,
 ) {
+    setup_enabled(store, handle, false).await
+}
+#[allow(dead_code)] // Independently compiled roots share this opt-in socket harness.
+pub async fn setup_device(
+    store: &Store,
+    handle: CallSessionHandle,
+) -> (
+    StationSnapshot,
+    Arc<Auth>,
+    Arc<RemoteControlSession>,
+    Arc<Coordinator>,
+) {
+    setup_enabled(store, handle, true).await
+}
+async fn setup_enabled(
+    store: &Store,
+    handle: CallSessionHandle,
+    device: bool,
+) -> (
+    StationSnapshot,
+    Arc<Auth>,
+    Arc<RemoteControlSession>,
+    Arc<Coordinator>,
+) {
+    let mut snapshot = prepared_snapshot(device);
+    v201::registration_call(
+        include_bytes!("../../../../tests/ocpp-fixtures/corpus/wire/2.0.1/boot-notification.json"),
+        store,
+        &mut snapshot,
+        registration::RegistrationDecision::Accepted,
+        60,
+        Clock.now(),
+    )
+    .await
+    .unwrap();
+    let (auth, identity) = authorize_snapshot(store, &snapshot).await;
+    if device {
+        for capabilities in std::iter::once(&mut snapshot.capabilities).chain(
+            snapshot
+                .resources
+                .iter_mut()
+                .map(|entry| &mut entry.capabilities),
+        ) {
+            for action in ["GetVariables", "GetReport"] {
+                capabilities.operations.push(SupportedOperation {
+                    operation: Operation::ProtocolAction {
+                        protocol: ProtocolEdition::Ocpp201,
+                        action: action.to_owned(),
+                    },
+                    parameters: vec![],
+                });
+            }
+        }
+        snapshot.capabilities.operations.push(SupportedOperation {
+            operation: Operation::ProtocolAction {
+                protocol: ProtocolEdition::Ocpp201,
+                action: "GetBaseReport".to_owned(),
+            },
+            parameters: vec![],
+        });
+    }
+    let port = RemoteControlSession::new(
+        handle,
+        snapshot.clone(),
+        identity,
+        Arc::new(Clock),
+        Arc::new(store.clone()),
+    )
+    .unwrap();
+    let port = Arc::new(if device {
+        port.with_device_model(Arc::new(store.clone()), 1)
+    } else {
+        port
+    });
+    let coordinator = Arc::new(Coordinator::new(
+        Arc::new(store.clone()),
+        port.clone(),
+        Arc::new(Clock),
+    ));
+    (snapshot, auth, port, coordinator)
+}
+
+fn prepared_snapshot(device: bool) -> StationSnapshot {
     let mut snapshot: StationSnapshot = serde_json::from_slice(include_bytes!(
         "../../../../crates/contracts/tests/fixtures/station-snapshot-ocpp201-v1.json"
     ))
@@ -243,6 +326,15 @@ pub async fn setup(
     }
     snapshot.transactions.clear();
     snapshot.observed_at = Clock.now();
+    if device {
+        // The schema fixture's connection epoch is later than this harness's clock.
+        // Bind native commands to the actual authenticated test session epoch.
+        snapshot.connectivity = Connectivity::Connected {
+            protocol: ProtocolEdition::Ocpp201,
+            connected_at: Clock.now(),
+            last_message_at: Some(Clock.now()),
+        };
+    }
     snapshot.resources[0].availability = AvailabilityState::Available;
     snapshot.capabilities.operations.push(SupportedOperation {
         operation: Operation::ProtocolAction {
@@ -261,16 +353,13 @@ pub async fn setup(
             },
             parameters: vec![],
         });
-    v201::registration_call(
-        include_bytes!("../../../../tests/ocpp-fixtures/corpus/wire/2.0.1/boot-notification.json"),
-        store,
-        &mut snapshot,
-        registration::RegistrationDecision::Accepted,
-        60,
-        Clock.now(),
-    )
-    .await
-    .unwrap();
+    snapshot
+}
+
+async fn authorize_snapshot(
+    store: &Store,
+    snapshot: &StationSnapshot,
+) -> (Arc<Auth>, Arc<dyn RemoteStartIdentity>) {
     let auth = Arc::new(
         Auth::recover(Arc::new(store.clone()), PageLimit::new(100).unwrap())
             .await
@@ -291,22 +380,7 @@ pub async fn setup(
             .await
             .unwrap(),
     );
-    let port = Arc::new(
-        RemoteControlSession::new(
-            handle,
-            snapshot.clone(),
-            identity,
-            Arc::new(Clock),
-            Arc::new(store.clone()),
-        )
-        .unwrap(),
-    );
-    let coordinator = Arc::new(Coordinator::new(
-        Arc::new(store.clone()),
-        port.clone(),
-        Arc::new(Clock),
-    ));
-    (snapshot, auth, port, coordinator)
+    (auth, identity)
 }
 pub fn fixture(name: &str) -> Value {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

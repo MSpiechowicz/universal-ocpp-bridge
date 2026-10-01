@@ -1,4 +1,5 @@
 mod configuration;
+pub mod device_model201;
 mod errors;
 mod finalization;
 mod recovery;
@@ -69,6 +70,8 @@ pub enum CommandDispatchOutcome {
     TriggerResponse201(uob_contracts::TriggerNativeResponse201),
     /// Validated native OCPP 1.6 composite schedule and immutable query context.
     CompositeScheduleResponse16(uob_contracts::CompositeScheduleResult16),
+    /// Validated native read evidence; collection has its own durable lifecycle.
+    DeviceModelResponse201(uob_contracts::DeviceModelResult201),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -109,6 +112,20 @@ pub trait StationCommandPort<P>: Send + Sync {
     /// Explicit opt-in expectation captured before sending a `TriggerMessage`.
     fn trigger_expectation(&self, _command: &Command<P>) -> Option<TriggerExpectation> {
         None
+    }
+    /// Validate and capture native read context before durable admission.
+    ///
+    /// # Errors
+    /// Returns `InvalidParameters` for an invalid or out-of-scope native query,
+    /// `UnsupportedOperation` when native reads are not enabled, or
+    /// `StationDisconnected` when the captured session is absent or no longer active.
+    fn device_model_expectation(
+        &self,
+        _command: &Command<P>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<uob_contracts::DeviceModelResult201>, CommandErrorCode> {
+        Ok(None)
     }
 
     /// Dispatches only to the socket observed before durable admission.
@@ -294,6 +311,24 @@ where
             trace.emit(FlowStage::Validation, FlowEvidence::Rejected);
             return Ok(validation_rejection(&command, &error, now));
         }
+        let mut device_model = match self
+            .stations
+            .device_model_expectation(&command, generation, now)
+        {
+            Ok(evidence) => evidence,
+            Err(code) => {
+                return Ok(command_result(
+                    &command,
+                    CommandLifecycle::Rejected {
+                        error: CommandError {
+                            code,
+                            detail: Some("invalid native device-model query".to_owned()),
+                        },
+                    },
+                    now,
+                ));
+            }
+        };
         trace.emit(FlowStage::Validation, FlowEvidence::Completed);
         let admitted = command_result(&command, CommandLifecycle::Admitted, now);
         let mut write = AtomicStoreWrite::empty();
@@ -336,6 +371,11 @@ where
         let dispatch_started_at = self.clock.now();
         let mut dispatched =
             command_result(&command, CommandLifecycle::Dispatched, dispatch_started_at);
+        if let Some(mut evidence) = device_model.take() {
+            evidence.dispatch_recorded_at = dispatch_started_at;
+            dispatched.schema_version = uob_contracts::ContractVersion::V1_DEVICE_MODEL_201;
+            dispatched.device_model_201 = Some(evidence);
+        }
         if let Some(expectation) = trigger.as_ref() {
             expectation.start(&mut dispatched, dispatch_started_at)?;
         }

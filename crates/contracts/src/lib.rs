@@ -3,6 +3,8 @@
 mod command;
 mod composite_schedule16;
 mod configuration;
+mod device_model201;
+pub use device_model201::*;
 mod event;
 mod export;
 mod identity;
@@ -110,6 +112,11 @@ impl ContractVersion {
     pub const V1_COMPOSITE_SCHEDULE_16: Self = Self {
         major: 1,
         revision: 4,
+    };
+    /// Additive read-only OCPP 2.0.1 device-model evidence revision.
+    pub const V1_DEVICE_MODEL_201: Self = Self {
+        major: 1,
+        revision: 5,
     };
 }
 

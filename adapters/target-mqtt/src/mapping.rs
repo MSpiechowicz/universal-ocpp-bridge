@@ -16,6 +16,7 @@ fn supported_result_version(version: ContractVersion) -> bool {
     version == ContractVersion::V1_INITIAL
         || version == ContractVersion::V1_CONFIGURATION
         || version == ContractVersion::V1_COMPOSITE_SCHEDULE_16
+        || version == ContractVersion::V1_DEVICE_MODEL_201
 }
 
 /// Trusted, versioned MQTT namespace shared by every outbound mapping.
@@ -216,6 +217,8 @@ impl TopicNamespace {
             TargetMessage::CommandResult(result) => {
                 if !supported_result_version(result.schema_version)
                     || result.resource != delivery.station_ordering_key
+                    || !matches!(&result.return_route.origin,
+                        uob_contracts::AuthenticatedCommandOrigin::Target { target_instance_id, .. } if target_instance_id == target)
                 {
                     return Err(MappingError::IdentityMismatch);
                 }

@@ -143,6 +143,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             trigger_observation: None,
             trigger_observation_201: None,
             composite_schedule_16: None,
+            device_model_201: None,
         }),
         ..EventSource::default()
     });

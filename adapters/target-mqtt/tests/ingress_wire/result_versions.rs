@@ -20,7 +20,7 @@ async fn publishes_configuration_and_composite_schedule_results_and_rejects_unsu
         (20, "configuration-write", 1),
         (21, "composite-schedule", 4),
         (22, "unsupported-2", 2),
-        (24, "unsupported-5", 5),
+        (24, "unsupported-future", u16::MAX),
     ] {
         let payload = command("bridge-a", "station-a", request_id, future());
         peer.publish_command(

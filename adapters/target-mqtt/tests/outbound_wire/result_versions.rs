@@ -127,7 +127,7 @@ async fn assert_unsupported_results(
     target: &mut RunningTarget,
     peer: &mut support::BrokerConnection,
 ) {
-    for revision in [2, 5] {
+    for revision in [2, u16::MAX] {
         let mut unsupported = result_delivery(
             "bridge-a",
             "station-a",

@@ -22,8 +22,9 @@ use uob_application::{RuntimeResourceBudget, WorkClass};
 /// errors, limits, timeout, cancellation or disconnect. All partial buffers and shared
 /// reservations are released before returning; only complete content retains a guard.
 pub async fn collect_report<N, F, C>(
-    key: ReportKey,
+    admission: Result<CollectedReport, Box<PartialReport>>,
     limits: ReportLimits,
+    dispatch_started: Instant,
     budget: RuntimeResourceBudget,
     mut next: N,
     cancel: C,
@@ -33,8 +34,15 @@ where
     F: Future<Output = Result<Option<ReportFragment>, ReportFailure>>,
     C: Future<Output = ()>,
 {
-    let mut report = begin(key, limits, &budget)?;
-    let deadline = Instant::now() + limits.timeout;
+    let mut report = admission?;
+    if report.limits != limits {
+        return Err(Box::new(PartialReport {
+            key: report.key.clone(),
+            progress: report.progress,
+            reason: ReportFailure::InvalidConfiguration,
+        }));
+    }
+    let deadline = dispatch_started + limits.timeout;
     let timer = sleep_until(deadline);
     tokio::pin!(timer, cancel);
     loop {
@@ -65,7 +73,10 @@ where
     }
 }
 
-fn begin(
+/// Reserve shared assembly capacity before registering and sending a native report CALL.
+/// # Errors
+/// Rejects invalid limits/keys or exhausted shared capacity without allocating report buffers.
+pub fn reserve_report(
     key: ReportKey,
     limits: ReportLimits,
     budget: &RuntimeResourceBudget,
@@ -91,6 +102,7 @@ fn begin(
         key,
         progress: ReportProgress::default(),
         items: Vec::with_capacity(limits.maximum_items),
+        limits,
         reservation,
     })
 }

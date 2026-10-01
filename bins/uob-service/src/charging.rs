@@ -1,6 +1,7 @@
 //! Opt-in demo station runtime; one private store and one bounded authenticated socket owner.
 mod commands;
 mod control_auth;
+mod device_model;
 mod files;
 mod provision;
 mod runtime;
@@ -156,6 +157,7 @@ impl StationSettings {
                 });
             }
         }
+        device_model::apply(snapshot, self.protocol, self.control);
     }
 }
 

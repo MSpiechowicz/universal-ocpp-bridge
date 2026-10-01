@@ -8,6 +8,11 @@ pub(super) enum Frame {
         message_id: String,
         bytes: Vec<u8>,
     },
+    NotifyReport {
+        message_id: String,
+        payload: Value,
+        bytes: usize,
+    },
     Result {
         message_id: String,
         payload: Value,
@@ -26,12 +31,14 @@ pub(super) struct FrameError {
 }
 
 pub(super) fn decode(bytes: &[u8]) -> Result<Frame, FrameError> {
-    let value: Value = serde_json::from_slice(bytes).map_err(|_| invalid(None, "/"))?;
+    let mut value: Value = serde_json::from_slice(bytes).map_err(|_| invalid(None, "/"))?;
     let items = value.as_array().ok_or_else(|| invalid(None, "/"))?;
+    let report = items.first().and_then(Value::as_u64) == Some(2)
+        && items.get(2).and_then(Value::as_str) == Some("NotifyReport");
     let message_id = items
         .get(1)
         .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
+        .filter(|value| !value.trim().is_empty() && (!report || value.len() <= 128))
         .map(str::to_owned);
     match items.first().and_then(Value::as_u64) {
         Some(2) if items.len() == 4 => {
@@ -45,6 +52,13 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Frame, FrameError> {
             if !items[3].is_object() {
                 return Err(invalid(Some(id), "/3"));
             }
+            if items[2].as_str() == Some("NotifyReport") {
+                return Ok(Frame::NotifyReport {
+                    message_id: id,
+                    payload: value[3].take(),
+                    bytes: bytes.len(),
+                });
+            }
             Ok(Frame::Call {
                 message_id: id,
                 bytes: bytes.to_vec(),
@@ -57,7 +71,7 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Frame, FrameError> {
             }
             Ok(Frame::Result {
                 message_id: id,
-                payload: items[2].clone(),
+                payload: value[2].take(),
             })
         }
         Some(4) if items.len() == 5 => {
@@ -84,12 +98,12 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Frame, FrameError> {
 }
 
 pub(super) fn call(message_id: &str, action: &str, payload: &Value) -> String {
-    serde_json::to_string(&json!([2, message_id, action, payload]))
+    serde_json::to_string(&(2, message_id, action, payload))
         .expect("OCPP CALL values are serializable")
 }
 
 pub(super) fn result(message_id: &str, payload: &Value) -> String {
-    serde_json::to_string(&json!([3, message_id, payload]))
+    serde_json::to_string(&(3, message_id, payload))
         .expect("OCPP CALLRESULT values are serializable")
 }
 

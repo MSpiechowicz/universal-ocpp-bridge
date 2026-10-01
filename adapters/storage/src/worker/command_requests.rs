@@ -69,6 +69,20 @@ pub(super) fn handle<C, E, D>(
                     .and_then(|()| crate::trigger::reconcile(connection, &request_id, now)),
             );
         }
+        Request::InterruptDeviceReports(reply) => {
+            respond(reply, crate::device_model201::interrupt(connection));
+        }
+        Request::DeviceReport(id, evidence, lifecycle, now, reply) => {
+            respond(
+                reply,
+                drain
+                    .check_completion_write()
+                    .and_then(|()| drain.changed())
+                    .and_then(|()| {
+                        crate::device_model201::finish(connection, &id, evidence, lifecycle, now)
+                    }),
+            );
+        }
         Request::PruneCommands(now, reply) => {
             respond(reply, command::prune::<C>(connection, now));
         }

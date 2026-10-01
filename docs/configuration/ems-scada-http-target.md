@@ -137,9 +137,11 @@ resource exists, so neither route can be used to discover another scope's statio
 
 Both command routes require `control`. A reader cannot submit a command or inspect command status,
 even when it knows the request ID. The credential's bridge/station scope applies to both routes;
-status additionally belongs to this configured target instance. Operators can inspect commands
-from other operators of the same target within their resource scope. Management and other target
-origins remain inaccessible here. The host must grant `CommandStatus` on its scoped query port.
+status additionally belongs to the exact authenticated command origin, including
+this configured target instance and principal. Another principal on the same target,
+management-origin commands and other target origins are reported as `404` not found,
+without disclosing existence. The host must separately grant `CommandStatus` on its
+scoped query port; credential `control` alone cannot supply that host capability.
 
 POST accepts the canonical `CommandRequest` fields, using the same ordinary `start`, `stop`, and
 `set_charging_limit` operations as management and MQTT ingress. The shared application checks
@@ -159,8 +161,10 @@ credential; supplying them in JSON is an invalid request.
 Choose a future expiration and an available resource with the advertised operation. Request IDs
 must be nonblank, at most 256 UTF-8 bytes, and cannot be `.` or `..`. The returned `status_url`
 percent-encodes the ID as one path segment; clients should follow that URL rather than concatenate
-unescaped IDs. Request and result shapes are the canonical contracts published under
-`crates/contracts/schemas/v1.0`.
+unescaped IDs. Request shapes use the canonical v1.0 ingress contract. Current
+CommandResult uses v1.5; current nested export-record/export-batch use v1.6.
+The canonical snapshots live under `crates/contracts/schemas`; historical routes
+and released versions remain available.
 
 A successful POST returns `202` with `request_id`, `status_url`, and the canonical `result`, only
 after the application confirms durable admission. The result may already contain a protocol
@@ -168,6 +172,14 @@ response. Neither HTTP admission nor charger acceptance proves charging has star
 GET returns the latest `CommandResult`; `observed_effects` links later evidence independently and
 is omitted when empty. Identical retries reuse the durable result; conflicting reuse of an ID
 returns `409` and never dispatches another command.
+
+Optional `device_model_201` evidence distinguishes native acknowledgement from
+report collection: Accepted may still be pending, and incomplete reports expose
+precise reasons/counts without partial inventory. It does not enable privileged
+GetVariables/GetBaseReport/GetReport submission on this integration listener;
+target `kind=ocpp` ingress still returns `403`. Status reads still require exact
+origin/principal, control authority, resource containment and the host query grant.
+There is no same-target cross-principal exception for query results.
 
 Command bodies and concurrent requests use the advertised listener bounds. Commands also hold
 an independent `maximum_in_flight_commands` permit. The composition root's `query_deadline`
@@ -179,7 +191,7 @@ with the original request ID, and retain that ID for any retry so application de
 | Stable error | HTTP status | Meaning |
 |---|---|---|
 | `ems_scada_http.unauthenticated`, `ems_scada_http.invalid_credential` | 401 | Missing or invalid integration bearer credential. |
-| `ems_scada_http.permission_denied` | 403 | Missing control authority, forbidden resource, privileged operation, or another command origin. |
+| `ems_scada_http.permission_denied` | 403 | Missing control authority, forbidden resource, or privileged operation. |
 | `ems_scada_http.invalid_request` | 400 | Malformed JSON, canonical request, or request ID. |
 | `ems_scada_http.payload_too_large` | 413 | Body exceeds the advertised byte limit. |
 | `ems_scada_http.command_busy` | 429 | All command admission slots are occupied or the host is busy. |
@@ -189,7 +201,7 @@ with the original request ID, and retain that ID for any retry so application de
 | `ems_scada_http.expired` | 410 | The request expired. |
 | `ems_scada_http.source_unavailable` | 503 | Admission or authoritative storage is unavailable, including exhausted storage capacity. |
 | `ems_scada_http.deadline_exceeded` | 504 | Request deadline elapsed; consult durable status. |
-| `ems_scada_http.resource_not_found` | 404 | No retained command result exists for this ID. |
+| `ems_scada_http.resource_not_found` | 404 | No retained command result is visible to this exact origin/principal for this ID. |
 
 Application lifecycle rejections return the canonical `CommandResult` instead of the transport
 error envelope: unauthorized is `403`, expired is `410`, unsupported is `422`, disconnected station
@@ -211,6 +223,13 @@ query port, which owns consistency and persistence. Concurrent clients, request 
 and the number of station snapshots one point page may inspect are all bounded, and every canonical
 read carries a deadline, so a slow authoritative source releases a client slot instead of holding
 it. The applicable values are advertised under `limits` in the capability response.
+
+Device-model evidence does not raise response, command or delivery caps. A
+serialized result that exceeds the existing response limit fails explicitly;
+the listener does not truncate it, remove inventory fields or return a fabricated
+successful result. A host without the required scoped query capability remains
+unsupported (`501`), distinct from a hidden/nonexistent command ID (`404`) or a
+credential/resource permission denial (`403`).
 
 ## Current limits
 

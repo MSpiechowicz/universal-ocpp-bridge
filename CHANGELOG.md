@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add individually default-off, privileged demo OCPP 2.0.1 `GetVariables`,
+  `GetBaseReport` and `GetReport` queries with exact native identities/statuses,
+  unchanged selectors and signed report IDs, generation-scoped learned limits,
+  fail-closed value disclosure and bounded NotifyReport collection (#109).
+  Keep native ACK separate from completion, use a nonrenewing actual-send deadline,
+  preserve precise failure counts without partial inventory and terminalize
+  restart/disconnect without replay. Command-result v1.5 and nested export v1.6
+  retain released snapshots and existing EMS/MQTT payload/authorization boundaries.
+  SQLite v13 migrates v12; old v12 binaries reject v13, so this is not automatic
+  rollback qualification. Device writes/monitoring, certification and full release
+  coverage remain separate.
 - Add default-off, privileged demo OCPP 1.6J `GetCompositeSchedule` queries for
   grid aggregation or exact connectors, with strict request/reply validation,
   exact typed rates and optional native metadata, zero distinct from rejection,

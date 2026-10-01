@@ -13,7 +13,9 @@ base64.workspace = true
 rust-ocpp.workspace = true
 rustls.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+jsonschema = { version = "=0.52.1", default-features = false }
+caseless = "=0.2.2"
+serde_json = { workspace = true, features = ["raw_value"] }
 sha2.workspace = true
 subtle.workspace = true
 tokio = { workspace = true, features = ["macros", "net", "rt", "sync", "time"] }

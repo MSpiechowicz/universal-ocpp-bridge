@@ -238,6 +238,7 @@ fn write_command(
         trigger_observation: None,
         trigger_observation_201: None,
         composite_schedule_16: None,
+        device_model_201: None,
     });
     write_history_command(store, command, command_result);
 }

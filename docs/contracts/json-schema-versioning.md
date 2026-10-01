@@ -46,9 +46,9 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains command-result schema routes v1.0–v1.3 and serves
-the current v1.4 command-result; OpenAPI command result responses reference v1.4.
-Current nested export-record and export-batch references use v1.5, while historical
+The EMS HTTP contract retains command-result schema routes v1.0–v1.4 and serves
+the current v1.5 command-result; OpenAPI command result responses reference v1.5.
+Current nested export-record and export-batch references use v1.6, while historical
 schema routes and released snapshots remain available.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
@@ -87,20 +87,44 @@ Released command-result v1.0–v1.3 and export v1.0–v1.4 snapshots are retaine
 These additive response versions do not relax strict privileged command ingress, implement
 OCPP 2.0.1 schedules, or establish local profile installation/enforcement or physical effects.
 
+OCPP 2.0.1 read-only GetVariables/GetBaseReport/GetReport add optional typed
+`device_model_201` evidence to command-result v1.5. It freezes query identities,
+selectors/criteria, native signed 32-bit report request ID and connection/generation.
+GetVariables keeps independently matched native statuses, original casing and
+absent/empty/redacted value facts. Reports keep native ACK separately from
+`pending`, `complete`, `incomplete` or `not_expected`; only complete evidence
+contains ordered sanitized inventory and fragment metadata. Incomplete evidence
+contains a precise reason and optional accepted counts; unavailable recovered
+counts remain unknown, not zero. Fragments without Accepted ACK cannot establish
+completion, and wire NotifyReport acknowledgement is not durable completion.
+
+Nested export-record and export-batch advance to v1.6 because they embed that
+result. Released command-result v1.0–v1.4 and export v1.0–v1.5 snapshots remain
+unchanged; older compatible readers may ignore the optional field. Disclosure is
+fail-closed before persistence, capture and export: only validated numeric
+DeviceDataCtrlr request-limit identities initially disclose values. Unknown/vendor
+and WriteOnly values are redacted, while statusInfo/customData/valuesList are omitted.
+This additive result contract does not widen privileged ingress, change topology
+or grants, implement writes/monitoring, or certify full device-model coverage.
+
 The EMS schema endpoints follow the listener's existing authentication policy: when
 credentials are configured, unauthenticated access is denied; the documented no-credentials
 loopback policy is unchanged. Current paths are
-`/bridge/v1/schemas/v1.4/command-result.schema.json`,
-`/bridge/v1/schemas/v1.5/export-record.schema.json` and
-`/bridge/v1/schemas/v1.5/export-batch.schema.json`. Historical routes, including v1.4
-exports, remain served; canonical OpenAPI references use each contract's current revision.
+`/bridge/v1/schemas/v1.5/command-result.schema.json`,
+`/bridge/v1/schemas/v1.6/export-record.schema.json` and
+`/bridge/v1/schemas/v1.6/export-batch.schema.json`. Historical routes, including v1.4
+command-result and v1.5 exports, remain served; canonical OpenAPI references use
+each contract's current revision.
 `cargo test --locked -p uob-contracts` covers serialized payload validation, optional/additive
 compatibility and old-result readability. EMS integration verification uses the independent
 probe executable as configured by `scripts/verify-workspace.sh`.
 
-MQTT's existing immediate and durable result publishers accept additive v1.4 on existing
-topics, alongside their supported v1.0/v1.1 results. The v1.2/v1.3 policy is unchanged:
-this repair does not promise every v1 minor revision or add a MQTT command family.
-`cargo test --locked -p uob-mqtt-target-adapter --test ingress_wire --test outbound_wire`
-exercises actual broker peers, exact schedule evidence and version boundaries. Broker
-PUBACK remains delivery acknowledgement, never native acceptance or physical charging success.
+MQTT's existing immediate and durable result publishers accept additive v1.5 on
+existing topics alongside supported v1.0/v1.1/v1.4 results. The v1.2/v1.3 policy is
+unchanged: this addition does not promise every v1 minor revision or add a MQTT
+command family. The EMS integration listener retains exact-origin/principal status
+ownership and does not grant privileged query submission through target ingress.
+Existing target payload caps remain unchanged: an oversized serialized result
+produces an explicit delivery/response error, not truncation, dropped evidence or
+a success-shaped fallback. MQTT broker PUBACK remains delivery acknowledgement,
+never native acceptance, complete inventory or physical charging success.

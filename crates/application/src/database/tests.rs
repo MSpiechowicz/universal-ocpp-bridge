@@ -34,7 +34,7 @@ fn batch_fixture() -> ExportBatch {
                         ExportRecordId::new("event-status-42").expect("record id"),
                         ordinal,
                     ),
-                    schema_version: ContractVersion::V1_INITIAL,
+                    schema_version: ExportRecord::SCHEMA_VERSION,
                     runtime: RuntimeIdentity {
                         environment: Environment::Demo,
                         release_id: ReleaseId::new("test-release").expect("release id"),
@@ -79,7 +79,7 @@ fn descriptor(transactions: TransactionCapability) -> DatabaseProviderDescriptor
     DatabaseProviderDescriptor {
         kind: DatabaseProviderKind::new("test.memory").expect("provider kind"),
         instance_id: destination("analytics"),
-        record_schema_versions: vec![ContractVersion::V1_INITIAL],
+        record_schema_versions: vec![ContractVersion::V1_INITIAL, ExportRecord::SCHEMA_VERSION],
         supported_record_classes: vec![ExportRecordKind::ResourceStatusChange],
         limits: DatabaseProviderLimits {
             maximum_records_per_batch: 10,
