@@ -6,6 +6,8 @@ use uob_contracts::{
 };
 use uob_protocol_adapter::command_registry::{command_schemas, validate_privileged_operation};
 
+#[path = "command_registry/composite_schedule16.rs"]
+mod composite_schedule16;
 #[path = "command_registry/trigger_201.rs"]
 mod trigger_201;
 

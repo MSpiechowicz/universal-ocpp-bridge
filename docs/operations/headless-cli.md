@@ -188,6 +188,53 @@ causation, certificate completion nor physical charging. The simulator has no
 certificate private key/CSR and returns `NotImplemented` for signing triggers.
 No interrupted or uncertain dispatch is replayed after disconnect/restart.
 
+OCPP 1.6J `GetCompositeSchedule` is independently **default off**. For station-a in the
+demo example, add the following only to the existing sections after provisioning protected
+credential files (the paths are placeholders, not secrets):
+
+```toml
+# Inside the existing [charging]:
+control_grant_file = "/var/lib/uob/demo-secrets/management-control"
+privileged_grant_file = "/var/lib/uob/demo-secrets/management-privileged"
+
+# Inside the existing OCPP 1.6J [[charging.stations]] for station-a:
+get_composite_schedule = true
+```
+
+These are additions, **not a standalone TOML document**. Keep read, control, privileged and
+station credentials separate; reuse already configured grant entries rather than duplicating
+TOML keys. The option requires both control and privileged grant files, but only a per-request
+privileged credential authorizes the query. An OCPP 2.0.1 opt-in is rejected, as is an opt-in
+station with any configured native connector ID above `i32::MAX` (2147483647). Default-off
+legacy topology behavior and Demo/loopback restrictions remain unchanged.
+
+After Accepted registration, the live station advertises `GetCompositeSchedule` for station
+scope and exact configured positive connectors. Submit the existing privileged OCPP command
+with protocol `ocpp16j`, action `GetCompositeSchedule` and payload schema
+`urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest`. Its payload has required integer
+`connectorId` and `duration`, plus optional `chargingRateUnit` (`A` or `W`).
+Station scope requires connector 0 for grid aggregation; a connector-scoped command must
+name its exact positive native ID. Duration is 1–2147483647 seconds. Omit an optional unit
+rather than sending null. Missing required fields, nulls, unknown fields, fractional/overflow
+integers, wrong schema/edition/unit, missing capability, unaccepted registration, disconnected
+session and out-of-scope authority fail before a CALL.
+
+Read the durable command detail with the separate station-scoped read grant. Optional typed
+`composite_schedule_16` records the request context, exact native Accepted/Rejected status
+and supplied schedule/identity/phase metadata. Accepted requires meaningful nonempty periods;
+exact nonnegative native rates have at most one meaningful fractional digit and are returned
+as canonical decimal strings, not rounded floats. Zero remains zero even with a positive
+minimum rate. Valid Rejected is `protocol_rejected` with typed Rejected evidence; malformed or
+semantically invalid CALLRESULT is `transmission_uncertain` without fabricated schedule
+evidence. Valid CALLERROR remains a sanitized rejection without an invented CALLRESULT.
+The schedule is the charger's indicative calculation, not a changed snapshot, local calculation,
+installed profile or evidence of charging enforcement/physical success.
+
+Duplicates return the original durable result without another send. Restart and reconnect
+never replay the query, and an old connection's response cannot resolve a new request.
+Inspect the original status before issuing a new explicit request after reconnect.
+This opt-in does not implement OCPP 2.0.1 schedules, simulator smart charging or certification.
+
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported
 requests are rejected. An HTTP 202 records admission, not native acceptance or physical effect.

@@ -78,6 +78,7 @@ pub(super) fn result(
         configuration: None,
         configuration_observations: Vec::new(),
         trigger_observation: None,
+        composite_schedule_16: None,
         trigger_observation_201: Some(TriggerObservation201 {
             requested_class: class,
             native_scope: scope,

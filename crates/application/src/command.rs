@@ -1,5 +1,6 @@
 mod configuration;
 mod errors;
+mod finalization;
 mod recovery;
 mod results;
 use results::{command_result, rejected_external, validation_rejection};
@@ -13,8 +14,8 @@ pub use trigger201::TriggerExpectation201;
 
 use uob_contracts::{
     Command, CommandError, CommandErrorCode, CommandLifecycle, CommandResult,
-    CommandValidationError, Connectivity, ContractVersion, ExternalCommand, ResourceCapabilities,
-    ResourceRef, UtcTimestamp,
+    CommandValidationError, Connectivity, ExternalCommand, ResourceCapabilities, ResourceRef,
+    UtcTimestamp,
 };
 
 use crate::{
@@ -66,6 +67,8 @@ pub enum CommandDispatchOutcome {
     TriggerResponse(uob_contracts::TriggerNativeResponse),
     /// Exact OCPP 2.0.1 reply including optional native statusInfo.
     TriggerResponse201(uob_contracts::TriggerNativeResponse201),
+    /// Validated native OCPP 1.6 composite schedule and immutable query context.
+    CompositeScheduleResponse16(uob_contracts::CompositeScheduleResult16),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -338,129 +341,8 @@ where
         }
         self.persist_result(dispatched).await?;
         trace.emit(FlowStage::CommandDispatch, FlowEvidence::Completed);
-        let mut config_response = None;
-        let mut trigger_response = None;
-        let mut trigger_response_201 = None;
-        let lifecycle = match self
-            .stations
-            .dispatch_to_generation(command.clone(), generation)
+        self.finalize_dispatch(command, generation, trigger, dispatch_started_at, trace)
             .await
-            .map_err(|error| map_station_error(&error))?
-        {
-            CommandDispatchOutcome::NotTransmitted { error } => {
-                trace.emit_fields(
-                    FlowStage::ProtocolResponse,
-                    FlowEvidence::NotTransmitted,
-                    vec![crate::SafeDiagnosticField::CommandReason(error.code)],
-                );
-                CommandLifecycle::Rejected { error }
-            }
-            CommandDispatchOutcome::ProtocolResponse { accepted, error } => {
-                trace.emit_fields(
-                    FlowStage::ProtocolResponse,
-                    if accepted {
-                        FlowEvidence::Accepted
-                    } else {
-                        FlowEvidence::Rejected
-                    },
-                    error
-                        .as_ref()
-                        .map(|error| crate::SafeDiagnosticField::CommandReason(error.code))
-                        .into_iter()
-                        .collect(),
-                );
-                CommandLifecycle::ProtocolResponse { accepted, error }
-            }
-            CommandDispatchOutcome::ConfigurationResponse {
-                accepted,
-                error,
-                configuration,
-            } => {
-                trace.emit(
-                    FlowStage::ProtocolResponse,
-                    if accepted {
-                        FlowEvidence::Accepted
-                    } else {
-                        FlowEvidence::Rejected
-                    },
-                );
-                config_response = Some(configuration);
-                CommandLifecycle::ProtocolResponse { accepted, error }
-            }
-            CommandDispatchOutcome::TriggerResponse(response) => {
-                trace.emit(
-                    FlowStage::ProtocolResponse,
-                    if response == uob_contracts::TriggerNativeResponse::Accepted {
-                        FlowEvidence::Accepted
-                    } else {
-                        FlowEvidence::Rejected
-                    },
-                );
-                trigger_response = Some(response);
-                CommandLifecycle::ProtocolResponse {
-                    accepted: response == uob_contracts::TriggerNativeResponse::Accepted,
-                    error: None,
-                }
-            }
-            CommandDispatchOutcome::TriggerResponse201(response) => {
-                let accepted = response.status == uob_contracts::TriggerNativeStatus201::Accepted;
-                trace.emit(
-                    FlowStage::ProtocolResponse,
-                    if accepted {
-                        FlowEvidence::Accepted
-                    } else {
-                        FlowEvidence::Rejected
-                    },
-                );
-                trigger_response_201 = Some(response);
-                CommandLifecycle::ProtocolResponse {
-                    accepted,
-                    error: None,
-                }
-            }
-            CommandDispatchOutcome::TransmissionUncertain { detail } => {
-                trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
-                CommandLifecycle::TransmissionUncertain { detail }
-            }
-        };
-        if (trigger_response.is_some() && !matches!(trigger, Some(TriggerExpectation::Ocpp16(_))))
-            || (trigger_response_201.is_some()
-                && !matches!(trigger, Some(TriggerExpectation::Ocpp201(_))))
-        {
-            return Err(integrity_error(
-                "trigger response has no matching edition expectation",
-            ));
-        }
-        let mut result = command_result(&command, lifecycle, self.clock.now());
-        if let Some(configuration) = config_response {
-            result.schema_version = ContractVersion::V1_CONFIGURATION;
-            result.configuration = Some(configuration);
-        }
-        if let Some(expectation) = trigger.as_ref()
-            && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })
-        {
-            expectation.finish(
-                &mut result,
-                dispatch_started_at,
-                self.clock.now(),
-                trigger_response,
-                trigger_response_201,
-            )?;
-        }
-        self.persist_result(result).await?;
-        if trigger.is_some() {
-            return self
-                .store
-                .reconcile_trigger_observation(command.request_id.clone(), self.clock.now())
-                .await
-                .map_err(|error| map_storage_error(&error))?
-                .ok_or_else(|| integrity_error("completed trigger has no durable result"));
-        }
-        self.store
-            .command_result_by_request_id(command.request_id.clone())
-            .await
-            .map_err(|error| map_storage_error(&error))?
-            .ok_or_else(|| integrity_error("completed command has no durable result"))
     }
 
     async fn persist_result(&self, result: CommandResult) -> Result<(), CommandAdmissionError> {

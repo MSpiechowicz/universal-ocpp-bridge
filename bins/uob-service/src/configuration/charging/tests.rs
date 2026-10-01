@@ -324,3 +324,44 @@ fn evse_identity_cannot_be_reassigned_to_a_second_native_evse() {
         Some(ConfigurationLoadError::InvalidCharging)
     );
 }
+
+#[test]
+fn composite_schedule_requires_privileged_grants_and_representable_ocpp16_topology() {
+    let enabled = CHARGING
+        .replace(
+            "read_grant_file='/run/uob-demo/read-grant'",
+            "read_grant_file='/run/uob-demo/read-grant'\ncontrol_grant_file='/run/uob-demo/control'\nprivileged_grant_file='/run/uob-demo/privileged'",
+        )
+        .replace(
+            "credential_file='/run/uob-demo/station-a'",
+            "credential_file='/run/uob-demo/station-a'\nget_composite_schedule=true",
+        );
+    let ocpp201 = enabled
+        .replace("protocol='ocpp16j'", "protocol='ocpp201'")
+        .replace(
+            "connector_id='connector-1'\nnative_connector_id=1",
+            "evse_id='evse-1'\nconnector_id='connector-1'\nnative_evse_id=1\nnative_connector_id=1",
+        );
+    for invalid in [
+        enabled.replace("control_grant_file='/run/uob-demo/control'\n", ""),
+        enabled.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
+        enabled.replace("/run/uob-demo/privileged", "/run/uob-demo/control"),
+        enabled.replace("native_connector_id=1", "native_connector_id=2147483648"),
+        ocpp201,
+    ] {
+        assert_eq!(
+            validate_document(&format!("{BASE}{invalid}")).err(),
+            Some(ConfigurationLoadError::InvalidCharging),
+        );
+    }
+    let boundary = enabled.replace("native_connector_id=1", "native_connector_id=2147483647");
+    let configured = validate_document(&format!("{BASE}{boundary}"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        configured.stations[0].resources[1].native_protocol_reference,
+        Some(NativeProtocolReference::Ocpp16 {
+            connector_id: i32::MAX as u32,
+        }),
+    );
+}

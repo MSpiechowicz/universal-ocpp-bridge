@@ -20,6 +20,7 @@ pub(super) fn command_result<P>(
         configuration_observations: Vec::new(),
         trigger_observation: None,
         trigger_observation_201: None,
+        composite_schedule_16: None,
     }
 }
 
@@ -49,6 +50,7 @@ pub(super) fn rejected_external<P>(
         configuration_observations: Vec::new(),
         trigger_observation: None,
         trigger_observation_201: None,
+        composite_schedule_16: None,
     }
 }
 

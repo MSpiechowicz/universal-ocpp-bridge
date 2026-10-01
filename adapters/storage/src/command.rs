@@ -123,6 +123,7 @@ pub(crate) fn write_result(
             incoming.recorded_at = previous.recorded_at;
             incoming.schema_version = previous.schema_version;
             incoming.configuration = previous.configuration;
+            incoming.composite_schedule_16 = previous.composite_schedule_16;
         }
         for observation in previous.configuration_observations {
             if !incoming

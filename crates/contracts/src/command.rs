@@ -408,6 +408,9 @@ pub struct CommandResult {
     /// OCPP 2.0.1 native reply and separately observed native EVSE/connector evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger_observation_201: Option<crate::TriggerObservation201>,
+    /// Indicative OCPP 1.6 schedule reply, never a charging effect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composite_schedule_16: Option<crate::CompositeScheduleResult16>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

@@ -37,20 +37,21 @@ pub(crate) struct Configuration {
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct StationControlOptions {
     pub change_availability: bool,
-    pub trigger_message: TriggerMessageOption,
+    pub trigger_message: StationActionOption,
+    pub get_composite_schedule: StationActionOption,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
 }
 
 #[derive(Clone, Copy, Default, Deserialize)]
 #[serde(from = "bool")]
-pub(crate) enum TriggerMessageOption {
+pub(crate) enum StationActionOption {
     #[default]
     Disabled,
     Enabled,
 }
 
-impl From<bool> for TriggerMessageOption {
+impl From<bool> for StationActionOption {
     fn from(enabled: bool) -> Self {
         if enabled {
             Self::Enabled
@@ -60,7 +61,7 @@ impl From<bool> for TriggerMessageOption {
     }
 }
 
-impl TriggerMessageOption {
+impl StationActionOption {
     pub fn enabled(self) -> bool {
         matches!(self, Self::Enabled)
     }
@@ -162,13 +163,16 @@ impl Configuration {
                     || station.control.allow_charging_limit
                     || station.control.change_availability
                     || station.control.trigger_message.enabled()
+                    || station.control.get_composite_schedule.enabled()
             })
         {
             return Err(fail);
         }
         if self.privileged_grant_file.is_none()
             && self.stations.iter().any(|station| {
-                station.control.change_availability || station.control.trigger_message.enabled()
+                station.control.change_availability
+                    || station.control.trigger_message.enabled()
+                    || station.control.get_composite_schedule.enabled()
             })
         {
             return Err(fail);
@@ -220,6 +224,16 @@ fn validate_stations(
     let mut stations = Vec::with_capacity(entries.len());
     let mut total_resources = 0;
     for station in entries {
+        if station.control.get_composite_schedule.enabled()
+            && (station.protocol != ProtocolEdition::Ocpp16j
+                || station.resources.iter().any(|resource| {
+                    resource
+                        .native_connector
+                        .is_some_and(|id| i32::try_from(id).is_err())
+                }))
+        {
+            return Err(fail);
+        }
         let station_id = StationId::new(valid_station_name(station.id)?).map_err(|_| fail)?;
         if !station_ids.insert(station_id.clone()) {
             return Err(fail);

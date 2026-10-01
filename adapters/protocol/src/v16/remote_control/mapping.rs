@@ -186,6 +186,10 @@ fn privileged(
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     match operation.action.as_str() {
+        "GetCompositeSchedule" => {
+            crate::command_registry::composite_schedule16::validate(resource, operation)?;
+            Ok(("GetCompositeSchedule", operation.payload.clone()))
+        }
         "GetConfiguration" if operation.payload_schema.as_str() == configuration::GET_SCHEMA => {
             if resource != station || native != 0 {
                 return Err(InvalidParameters);

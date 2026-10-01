@@ -1,4 +1,5 @@
 //! Pinned, explicitly supported privileged commands. Protocol edition is not a capability.
+pub(crate) mod composite_schedule16;
 mod trigger201;
 use rust_ocpp::v1_6::messages::{
     change_availability::ChangeAvailabilityRequest, trigger_message::TriggerMessageRequest,
@@ -73,6 +74,24 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
                 && connector.resource.station_id == snapshot.station.station_id
             {
                 descriptors.push(trigger_descriptor(connector.resource.clone()));
+            }
+        }
+        let schedule = Operation::ProtocolAction {
+            protocol,
+            action: "GetCompositeSchedule".to_owned(),
+        };
+        if snapshot.capabilities.supports(&schedule)
+            && composite_schedule16::connector(&snapshot.station).is_some()
+        {
+            descriptors.push(composite_schedule16::descriptor(snapshot.station.clone()));
+        }
+        for entry in &snapshot.resources {
+            if entry.capabilities.supports(&schedule)
+                && composite_schedule16::connector(&entry.resource).is_some()
+                && entry.resource.bridge_id == snapshot.station.bridge_id
+                && entry.resource.station_id == snapshot.station.station_id
+            {
+                descriptors.push(composite_schedule16::descriptor(entry.resource.clone()));
             }
         }
     } else {
@@ -252,6 +271,9 @@ pub fn validate_privileged_operation(
     operation: &PrivilegedOcppOperation<Value>,
 ) -> Result<(), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
+    if operation.action.as_str() == "GetCompositeSchedule" {
+        return composite_schedule16::validate(resource, operation).map(|_| ());
+    }
     if operation.action.as_str() == "TriggerMessage" {
         return match operation.protocol {
             ProtocolEdition::Ocpp16j => validate_trigger(resource, operation),

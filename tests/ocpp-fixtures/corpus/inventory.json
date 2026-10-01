@@ -15,6 +15,7 @@
     {"id":"ocpp16.firmware-diagnostics","feature":"firmware_diagnostics","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.monitoring-security","feature":"monitoring_security","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.smart-charging","feature":"smart_charging","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
+    {"id":"ocpp16.smart-charging.composite-schedule","feature":"smart_charging.composite_schedule","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.certificates-iso15118","feature":"certificates_iso15118","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.tariff-display","feature":"tariff_display","protocol_version":"1.6","direction":"bidirectional","required":false,"applicable":false},
     {"id":"ocpp16.data-transfer","feature":"data_transfer","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
