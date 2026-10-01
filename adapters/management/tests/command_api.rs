@@ -70,6 +70,7 @@ impl CommandAdmissionPort<Value> for CommandState {
                 trigger_observation: None,
                 trigger_observation_201: None,
                 composite_schedule_16: None,
+                device_model_201: None,
             };
             *self.result.lock() = Some(result.clone());
             Ok(result)

@@ -92,6 +92,7 @@ pub(super) fn result(
             observed: Vec::new(),
             status: TriggerObservationStatus201::Pending,
         }),
+        device_model_201: None,
     }
 }
 

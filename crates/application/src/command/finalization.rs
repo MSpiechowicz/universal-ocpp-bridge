@@ -29,6 +29,7 @@ where
         let mut trigger_response = None;
         let mut trigger_response_201 = None;
         let mut composite_schedule = None;
+        let mut device_model = None;
         let lifecycle = match self
             .stations
             .dispatch_to_generation(command.clone(), generation)
@@ -129,6 +130,17 @@ where
                 composite_schedule = Some(response);
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
+            CommandDispatchOutcome::DeviceModelResponse201(evidence) => {
+                // Mixed explicit variable statuses are a valid native response.
+                let accepted = evidence
+                    .native_ack
+                    .is_none_or(|ack| ack == uob_contracts::DeviceReportAck201::Accepted);
+                device_model = Some(evidence);
+                CommandLifecycle::ProtocolResponse {
+                    accepted,
+                    error: None,
+                }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -150,6 +162,10 @@ where
         if let Some(schedule) = composite_schedule {
             result.schema_version = ContractVersion::V1_COMPOSITE_SCHEDULE_16;
             result.composite_schedule_16 = Some(schedule);
+        }
+        if let Some(evidence) = device_model {
+            result.schema_version = ContractVersion::V1_DEVICE_MODEL_201;
+            result.device_model_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

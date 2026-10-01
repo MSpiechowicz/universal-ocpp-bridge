@@ -1,0 +1,1 @@
+[2,"get-report-selectors","GetReport",{"requestId":-2147483648,"componentVariable":[{"component":{"name":"EVSE","evse":{"id":1,"connectorId":2}},"variable":{"name":"AvailabilityState"}},{"component":{"name":"ChargingStation"}}],"componentCriteria":["Active","Problem"]}]

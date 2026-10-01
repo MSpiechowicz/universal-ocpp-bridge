@@ -167,6 +167,19 @@ non-causal observations; accepted replies do not prove later reports, certificat
 signing or physical charging. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md#opt-in-triggermessage)
 for scope, durable evidence and no-replay recovery.
 
+OCPP 2.0.1 read-only `GetVariables`, `GetBaseReport` and `GetReport` are
+individually default-off, privileged demo queries. They preserve native identities,
+per-item statuses, selectors and safe metadata without changing topology or grants.
+Report acceptance is separate from bounded multipart completion; fragments cannot
+renew the actual-send deadline or substitute for a missing native acknowledgement.
+Durable sanitized evidence survives restart without automatic replay. See
+[device-model queries](docs/architecture/ocpp201-remote-control.md#opt-in-read-only-device-model-queries)
+for opt-ins, native limits, redaction, correlation and recovery. Command-result v1.5
+and nested export v1.6 retain historical snapshots and existing target payload caps.
+SQLite v12 migrates to v13, but an old v12 binary rejects v13: this feature does not
+qualify automatic old-to-new-to-old rollback. Broader device writes/monitoring,
+certification and the complete-release gate remain outside this narrow capability.
+
 OCPP 1.6 availability commands retain scheduled intent separately from committed connector and
 station observations. See [OCPP 1.6 availability](docs/architecture/ocpp16-availability.md) for
 scoped control, transaction completion, durable evidence, and reconnect behavior.

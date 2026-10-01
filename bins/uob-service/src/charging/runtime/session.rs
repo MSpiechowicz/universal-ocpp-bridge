@@ -56,17 +56,17 @@ pub(super) async fn attach(
                     .map_err(|_| unavailable())?,
                 ),
             };
-            let session = Arc::new(
-                uob_protocol_adapter::v201::remote_control::RemoteControlSession::new(
-                    handle.clone(),
-                    snapshot.clone(),
-                    start,
-                    Arc::new(Clock),
-                    Arc::new(context.store.clone()),
-                )
-                .map_err(|_| unavailable())?,
-            );
-            context.commands.attach_201(station.clone(), session)
+            let session = uob_protocol_adapter::v201::remote_control::RemoteControlSession::new(
+                handle.clone(),
+                snapshot.clone(),
+                start,
+                Arc::new(Clock),
+                Arc::new(context.store.clone()),
+            )
+            .map_err(|_| unavailable())?;
+            context
+                .commands
+                .attach_201(station.clone(), session, context.store.clone())
         }
     };
     Ok(Some(generation))

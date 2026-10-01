@@ -74,6 +74,9 @@ impl ControlCredentials {
                         (
                             Some(CanonicalResource::Connector { .. }),
                             Some(NativeProtocolReference::Ocpp16 { connector_id: 1.. })
+                        ) | (
+                            Some(CanonicalResource::Evse { .. }),
+                            Some(NativeProtocolReference::Ocpp201 { evse_id: 1.., .. })
                         )
                     )
                 })

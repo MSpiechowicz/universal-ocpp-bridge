@@ -113,6 +113,127 @@ certificate triggers return `NotImplemented`: it has no private key/CSR
 generator and does not fabricate a signing request. Full certificate-chain,
 CSR issuance and ISO 15118 workflows remain separate planned features.
 
+## Opt-in read-only device-model queries
+
+`GetVariables`, `GetBaseReport` and `GetReport` use the existing authenticated,
+privileged one-shot command path. Each OCPP 2.0.1 station table has a separate
+`get_variables`, `get_base_report` and `get_report` boolean, all defaulting to
+`false`. Enabling one does not enable the others. The advertised resource
+capability, current privileged grant and exact native request schema are still
+required. The demo-only charging composition restriction remains: these flags
+do not expose production charging or grant integration credentials privileged
+access. Invalid, unauthorized, unadvertised or out-of-scope requests send no CALL.
+
+| Action | Native payload schema | Query behavior |
+|---|---|---|
+| GetVariables | `urn:OCPP:Cp:2:2020:3:GetVariablesRequest` | Exact `getVariableData` component/variable identities and optional attribute type |
+| GetBaseReport | `urn:OCPP:Cp:2:2020:3:GetBaseReportRequest` | Station-wide `ConfigurationInventory`, `FullInventory` or `SummaryInventory` with native `requestId` |
+| GetReport | `urn:OCPP:Cp:2:2020:3:GetReportRequest` | Unchanged native `componentVariable` selectors and `componentCriteria` with native `requestId` |
+
+Unknown request fields and opaque `customData` are rejected, not interpreted as
+queries. GetVariables preserves original native names, component/variable
+instances, EVSE/connector IDs and attribute types; omitted attribute type means
+`Actual`. Full identities match with Unicode case folding without rewriting
+preserved fields. Duplicate request identities fail before dispatch. Permuted
+results are valid, but missing, extra, duplicate or mismatched result identities
+make the native response uncertain; the bridge does not invent `UnknownVariable`
+or partial success. Valid partial success consists of independent native
+`Accepted`, `Rejected`, `UnknownComponent`, `UnknownVariable` and
+`NotSupportedAttributeType` statuses. `Accepted` requires a supplied value,
+including a legal explicitly empty string; nonaccepted results have no value.
+Presence, emptiness and redaction are separate facts.
+
+GetReport preserves native wildcards for omitted variables/instances and the
+OR semantics of component criteria. It does not filter the completed inventory
+against the selectors on the host or rewrite the request from configured
+topology. Station-wide inventory/wildcards require station-wide authority.
+Narrower queries must prove containment using the canonical resource and exact
+native EVSE/connector reference; a narrower GetReport requires explicit contained
+selectors and no component criteria. Report identities outside the authorized
+resource fail collection rather than widen access. Inventory never updates
+configured topology or grants.
+
+### Learned request limits and disclosure
+
+Only four specification-backed identities initially disclose values:
+component `DeviceDataCtrlr` with no component instance or EVSE; variable
+`ItemsPerMessage` or `BytesPerMessage`; variable instance `GetVariables` or
+`GetReport`; attribute `Actual`. Disclosure requires a validated positive
+ASCII-digit value within signed 32-bit range. Limits are learned only from
+explicit authorized queries or accepted completed reports, in a bounded
+connection-generation cache that is cleared on reconnect.
+
+Unknown station limits remain unknown. A conservative single-entry GetVariables
+request can bootstrap them; requests with more than one entry/selector require
+both validated item and byte limits for that action. A station-wide GetReport
+without selectors remains a native inventory request; GetBaseReport has no
+component-variable request list. Known native limits and the local 4,096-entry
+and 256 KiB complete-frame bounds are enforced before send. There is no automatic
+interrogation, splitting, retry or truncation.
+
+All other values, including unknown/vendor values and WriteOnly attributes,
+are redacted before persistence, capture or export. Typed evidence retains
+`present`, `empty` and `redacted` flags, supported attribute metadata and safe
+characteristics, but omits `statusInfo`, `customData` and
+`variableCharacteristics.valuesList`. Validation errors contain no raw payload.
+Read-only here means query operations, not permission to disclose every value.
+
+### Native acknowledgement, report completion and recovery
+
+The exact native `Accepted`, `Rejected`, `NotSupported` or `EmptyResultSet`
+acknowledgement is independent of collection. `Accepted` alone is not a complete
+inventory. `Rejected`/`NotSupported` cannot complete and retain a native-rejection
+reason; `EmptyResultSet` means no report is expected. GetVariables also has no
+multipart report expectation. Missing acknowledgement cannot become success
+merely because all fragments arrived.
+
+Both report actions share the `NotifyReport` namespace. Correlation binds the
+authenticated station, actual connection/generation, native signed 32-bit
+`requestId` and bridge correlation. Native `requestId` is preserved unchanged,
+including negative IDs, and is distinct from the OCPP CALL unique ID.
+A budgeted set retires at most 4,096 IDs per connection across both actions;
+reuse or exhaustion fails before wire, and only teardown clears the set.
+
+The existing socket owner reserves/registers the route before send.
+[Multipart collection](multipart-reports.md) starts its nonrenewing 30-second
+deadline at the actual dispatch-start instant, not admission, native ACK or
+first fragment. Default bounds are 1 MiB retained item bytes, 4,096 items and
+256 fragments, sharing four assembly slots and a 16 MiB queue budget with
+protected critical capacity; the complete frame cap is 256 KiB. Ordered items,
+attributes, characteristics and each accepted fragment's native `generatedAt`,
+`seqNo` and `tbc` are preserved in disclosure-safe evidence. Escaped serialized
+device-model output is separately bounded to 1 MiB.
+
+Public report state is `pending`, `complete`, `incomplete` or `not_expected`.
+Failure retains accepted fragment/item/byte counts where known and a precise
+timeout, limit, capacity, order, correlation, invalid-fragment, disconnect,
+interruption, missing-acknowledgement or output reason, never partial inventory.
+A valid NotifyReport CALLRESULT acknowledges the wire notification, not durable
+inventory completion. Late/unsolicited valid notifications cannot reopen or
+replace finalized evidence.
+
+The pending expectation commits with `dispatched` before send. Completed
+fragments received before native ACK remain in bounded private staging while
+public state stays pending; an Accepted ACK promotes them atomically. ACK-first,
+report-first and stale writers merge monotonically without losing the native
+reply or replacing terminal report evidence. Collection belongs to the live
+connection, not the initiating HTTP request: client timeout or abandonment
+does not cancel it. Disconnect/restart terminalizes pending reports without
+replay, even if the native command lifecycle already ended. Unavailable recovered
+progress stays unknown, not fabricated zero.
+
+SQLite v13 migrates v12 and adds indexed `report_pending` recovery/retention
+tracking and private staging. Pending results are protected from pruning until
+terminalized. An old v12 binary rejects v13; this migration is not automatic
+old-to-new-to-old rollback qualification. Optional `device_model_201` evidence
+uses command-result v1.5 and nested export-record/export-batch v1.6, retaining
+all released snapshots. Current management/EMS schemas and existing MQTT result
+topics carry the additive evidence without widening target ingress privileges
+or payload limits.
+
+This implements the narrow read-only #109 capability, not device-model writes,
+monitoring, OCA certification or the complete-release gate.
+
 ## Verification and specification provenance
 
 Requests and all native response statuses have independently authored wire fixtures validated

@@ -1,60 +1,71 @@
 use axum::http::StatusCode;
 
 use crate::{
-    capabilities::IMPLEMENTED_RESOURCES,
     configuration::IntegrationCredentials,
     test_support::{READER_TOKEN, authenticated_router, descriptor, get, router, send},
 };
 
 #[tokio::test]
 async fn the_capability_response_advertises_exactly_the_routes_this_build_serves() {
-    let (status, body) = get(
-        router(IntegrationCredentials::default()),
-        "/bridge/v1/capabilities",
-        None,
-    )
-    .await;
+    let router = router(IntegrationCredentials::default());
+    let (status, body) = get(router.clone(), "/bridge/v1/capabilities", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, document) = get(router.clone(), "/bridge/v1/openapi.json", None).await;
     assert_eq!(status, StatusCode::OK);
 
-    let resources = body["resources"].as_array().expect("resource list");
-    assert_eq!(resources.len(), IMPLEMENTED_RESOURCES.len());
-    for resource in resources {
-        let schema = match resource["name"].as_str() {
-            Some("schemas_v1_1" | "schemas_v1_2") => "command-result.schema.json",
-            Some("schemas_v1_3" | "schemas_v1_4" | "schemas_v1_5") => "export-record.schema.json",
-            _ => "station-snapshot.schema.json",
-        };
-        let path = resource["path"]
-            .as_str()
-            .expect("resource path")
-            .replace("{schema}", schema)
-            .replace("{request_id}", "request-a")
-            .replace("{station_id}", "station-a")
-            .replace("{point_id}", "energy.active.import.register");
-        // An advertised resource must be mounted. Whether this caller may read it is a
-        // separate question answered by its credential, not by the resource table.
-        let method = if resource["operations"][0] == "control" && resource["name"] == "commands" {
-            "POST"
+    for resource in body["resources"].as_array().expect("resource list") {
+        let template = resource["path"].as_str().expect("resource path");
+        if template.contains("{schema}") {
+            let parameter = document["paths"][template]["get"]["parameters"]
+                .as_array()
+                .expect("advertised schema path parameters")
+                .iter()
+                .find(|parameter| parameter["in"] == "path" && parameter["name"] == "schema")
+                .expect("advertised schema path parameter");
+            for schema in parameter["schema"]["enum"]
+                .as_array()
+                .expect("advertised schema filenames")
+            {
+                assert_advertised_resource_is_mounted(
+                    router.clone(),
+                    resource,
+                    Some(schema.as_str().expect("schema filename")),
+                )
+                .await;
+            }
         } else {
-            "GET"
-        };
-        let (status, _) = send(
-            router(IntegrationCredentials::default()),
-            method,
-            &path,
-            None,
-        )
-        .await;
-        assert!(
-            !matches!(
-                status,
-                StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
-            ),
-            "advertised resource {path} is not served"
-        );
+            assert_advertised_resource_is_mounted(router.clone(), resource, None).await;
+        }
     }
-    assert_eq!(resources[0]["path"], "/bridge/v1/capabilities");
-    assert_eq!(resources[0]["operations"], serde_json::json!(["read"]));
+}
+
+async fn assert_advertised_resource_is_mounted(
+    router: axum::Router,
+    resource: &serde_json::Value,
+    schema: Option<&str>,
+) {
+    let path = resource["path"]
+        .as_str()
+        .expect("resource path")
+        .replace("{schema}", schema.unwrap_or_default())
+        .replace("{request_id}", "request-a")
+        .replace("{station_id}", "station-a")
+        .replace("{point_id}", "energy.active.import.register");
+    // An advertised resource must be mounted. Credential-based permission to read it
+    // remains a separate question from the public resource contract.
+    let method = if resource["operations"][0] == "control" && resource["name"] == "commands" {
+        "POST"
+    } else {
+        "GET"
+    };
+    let (status, _) = send(router, method, &path, None).await;
+    assert!(
+        !matches!(
+            status,
+            StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+        ),
+        "advertised resource {path} is not served"
+    );
 }
 
 #[tokio::test]

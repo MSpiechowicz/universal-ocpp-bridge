@@ -327,6 +327,7 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         trigger_observation: None,
         trigger_observation_201: None,
         composite_schedule_16: None,
+        device_model_201: None,
     };
     submission
         .respond(Ok(result.clone()))

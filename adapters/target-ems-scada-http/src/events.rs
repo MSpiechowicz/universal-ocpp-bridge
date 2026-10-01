@@ -1,4 +1,4 @@
-mod payload;
+pub(crate) mod payload;
 mod recovery;
 pub(crate) mod request;
 use recovery::recovery;

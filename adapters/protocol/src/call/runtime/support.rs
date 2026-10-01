@@ -32,12 +32,16 @@ pub(super) fn finish_response(
     message_id: String,
     state: &mut SessionState,
     diagnostics: &mpsc::Sender<CallSessionDiagnostic>,
+    reservation: uob_application::RuntimeReservation,
     outcome: impl FnOnce(CorrelationId) -> SessionCallOutcome,
 ) {
     if let Some(entry) = state.pending.remove(&message_id) {
         entry
             .trace
             .emit(FlowStage::OcppReceive, FlowEvidence::Completed);
+        if let Some(sender) = entry.response_reservation {
+            let _ = sender.send(reservation);
+        }
         let result = outcome(entry.correlation_id);
         let _ = entry.result.send(result);
         retain_recent(

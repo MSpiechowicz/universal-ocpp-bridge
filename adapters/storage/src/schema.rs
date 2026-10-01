@@ -7,7 +7,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(unavailable)?;
-    if version > 12 {
+    if version > 13 {
         return Err(StorageError::new(
             StorageErrorCode::Unavailable,
             "operational database schema is newer than this release",
@@ -16,6 +16,22 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let transaction = connection.unchecked_transaction().map_err(unavailable)?;
     create_schema(&transaction)?;
     upgrade_columns(&transaction)?;
+    add_column_if_missing(
+        &transaction,
+        "command_results",
+        "report_pending",
+        "ALTER TABLE command_results ADD COLUMN report_pending INTEGER NOT NULL DEFAULT 0 CHECK(report_pending IN (0,1))",
+    )?;
+    transaction.execute_batch(
+        "CREATE INDEX IF NOT EXISTS device_report_pending ON command_results(request_id) WHERE report_pending = 1;
+         CREATE TABLE IF NOT EXISTS device_report_staging(
+             request_id TEXT PRIMARY KEY REFERENCES command_results(request_id) ON DELETE CASCADE,
+             payload TEXT NOT NULL CHECK(length(CAST(payload AS BLOB)) <= 1048576),
+             accepted_fragments INTEGER NOT NULL CHECK(accepted_fragments BETWEEN 0 AND 256),
+             accepted_items INTEGER NOT NULL CHECK(accepted_items BETWEEN 0 AND 4096),
+             accepted_bytes INTEGER NOT NULL CHECK(accepted_bytes BETWEEN 0 AND 1048576)
+         );",
+    ).map_err(unavailable)?;
     transaction
         .execute_batch(
             "CREATE INDEX IF NOT EXISTS commands_station_history
@@ -72,7 +88,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 12;")
+        .execute_batch("PRAGMA user_version = 13;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
 }

@@ -411,6 +411,9 @@ pub struct CommandResult {
     /// Indicative OCPP 1.6 schedule reply, never a charging effect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub composite_schedule_16: Option<crate::CompositeScheduleResult16>,
+    /// Read-only native OCPP 2.0.1 query and independent report evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_model_201: Option<crate::DeviceModelResult201>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

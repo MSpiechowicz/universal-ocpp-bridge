@@ -3,12 +3,12 @@ use std::io::{self, Write};
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum PayloadEncodingError {
+pub(crate) enum PayloadEncodingError {
     TooLarge,
     Serialization,
 }
 
-pub(super) fn encode_json(
+pub(crate) fn encode_json(
     value: &impl Serialize,
     maximum_bytes: usize,
 ) -> Result<String, PayloadEncodingError> {

@@ -178,7 +178,7 @@ impl DatabaseProvider for FixtureProvider {
         DatabaseProviderDescriptor {
             kind: DatabaseProviderKind::new("test.export").unwrap(),
             instance_id: ExportDestinationId::new("analytics").unwrap(),
-            record_schema_versions: vec![ContractVersion::V1_INITIAL],
+            record_schema_versions: vec![ContractVersion::V1_INITIAL, ExportRecord::SCHEMA_VERSION],
             supported_record_classes: vec![ExportRecordKind::ResourceStatusChange],
             limits: DatabaseProviderLimits {
                 maximum_records_per_batch: 100,
@@ -244,7 +244,7 @@ async fn pending_export(
     let record = ExportRecord::new(
         ExportRecordMetadata {
             identity: ExportRecordIdentity::root(ExportRecordId::new("service-export-1").unwrap()),
-            schema_version: ContractVersion::V1_INITIAL,
+            schema_version: ExportRecord::SCHEMA_VERSION,
             runtime: application.runtime_identity().clone(),
             resource: ResourceRef {
                 bridge_id: application.identity().bridge_id.clone(),

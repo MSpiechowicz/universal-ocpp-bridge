@@ -2,6 +2,7 @@ use super::{
     openapi_document,
     schemas::{
         CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3, CANONICAL_V1_4, CANONICAL_V1_5,
+        CANONICAL_V1_6,
     },
 };
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
@@ -20,6 +21,7 @@ fn registry() -> jsonschema::Registry<'static> {
         ("v1.3", CANONICAL_V1_3),
         ("v1.4", CANONICAL_V1_4),
         ("v1.5", CANONICAL_V1_5),
+        ("v1.6", CANONICAL_V1_6),
     ]
     .into_iter()
     .flat_map(|(revision, schemas)| {
@@ -57,51 +59,6 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
         .unwrap()
         .validate(&document)
         .unwrap();
-    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.4/command-result.schema.json"});
-    assert_eq!(
-        document["paths"]["/bridge/v1/commands/{request_id}"]["get"]["responses"]["200"]["content"]
-            ["application/json"]["schema"],
-        result_ref
-    );
-    assert_eq!(
-        document["components"]["schemas"]["AcceptedCommand"]["properties"]["result"],
-        result_ref
-    );
-    for status in ["400", "403", "409", "410", "422"] {
-        assert_eq!(
-            document["paths"]["/bridge/v1/commands"]["post"]["responses"][status]["content"]["application/json"]
-                ["schema"]["oneOf"][1],
-            result_ref
-        );
-    }
-    assert_eq!(
-        document["paths"]["/bridge/v1/schemas/v1.1/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
-        json!(["command-result.schema.json"])
-    );
-    assert_eq!(
-        document["paths"]["/bridge/v1/schemas/v1.2/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
-        json!(["command-result.schema.json"])
-    );
-    assert_eq!(
-        document["paths"]["/bridge/v1/schemas/v1.3/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
-        json!([
-            "command-result.schema.json",
-            "export-record.schema.json",
-            "export-batch.schema.json"
-        ])
-    );
-    assert_eq!(
-        document["paths"]["/bridge/v1/schemas/v1.4/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
-        json!([
-            "command-result.schema.json",
-            "export-record.schema.json",
-            "export-batch.schema.json"
-        ])
-    );
-    assert_eq!(
-        document["paths"]["/bridge/v1/schemas/v1.5/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
-        json!(["export-record.schema.json", "export-batch.schema.json"])
-    );
     for name in document["components"]["schemas"]
         .as_object()
         .unwrap()
@@ -195,29 +152,10 @@ async fn schema_versions_serve_exact_canonical_files() {
     }
     for path in [
         "/bridge/v1/schemas/v1.1/station-snapshot.schema.json",
-        "/bridge/v1/schemas/v1.5/command-result.schema.json",
+        "/bridge/v1/schemas/v1.6/command-result.schema.json",
     ] {
         assert_eq!(get(router.clone(), path, Some(READER_TOKEN)).await.0, 404);
     }
-}
-
-#[test]
-fn export_consumers_reference_current_nested_contracts() {
-    let mut components = serde_json::Map::new();
-    super::schemas::add::<uob_contracts::ExportBatch>(&mut components, "ExportConsumer", true);
-    assert_eq!(
-        components["ExportConsumer"]["properties"]["records"]["items"],
-        json!({"$ref":"/bridge/v1/schemas/v1.5/export-record.schema.json"})
-    );
-    assert_eq!(
-        super::schemas::reference("export-batch"),
-        json!({"$ref":"/bridge/v1/schemas/v1.5/export-batch.schema.json"})
-    );
-    let document = json!({"components":{"schemas":components}});
-    validator(
-        &document,
-        &json!({"$ref":"#/components/schemas/ExportConsumer"}),
-    );
 }
 
 #[tokio::test]

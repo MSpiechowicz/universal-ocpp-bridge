@@ -203,3 +203,48 @@ historical EMS schemas, identical results after restart, no reconnect replay and
 explicit query. This narrow evidence does not establish all smart charging, profile
 installation/removal, local schedule calculation/enforcement, OCPP 2.0.1 schedules,
 simulator smart charging, physical hardware interoperability or OCA certification.
+
+## OCPP 2.0.1 read-only device-model fixtures
+
+The narrow bidirectional `ocpp201.device-model.queries` row covers
+GetVariables, GetBaseReport, GetReport and their correlated NotifyReport exchange.
+It is separate from the broad `ocpp201.device-model` row, which remains `planned`:
+read-only queries do not complete variable writes, monitoring or every device-model
+requirement. The complete-release gate remains fail-closed; narrow implementation
+evidence is not OCA certification, physical-station interoperability or release
+qualification.
+
+Eight unchanged OCA request/response schemas for these four actions come from the
+pinned Edition 4 / June 2026 errata Part 3 FINAL Draft 6 archive, SHA-256
+`192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a`.
+They retain OCA copyright and CC BY-ND 4.0 attribution. The registry pins schema
+and independently authored wire-file digests; neither bridge encoders nor tests
+generate the expected wire payloads.
+
+The `wire.ocpp201.get-variables-*` fixtures cover the safe DeviceDataCtrlr
+request-limit identity, all five native per-item statuses and Accepted empty
+values. The three `get-base-report-*inventory` requests cover native report bases;
+`get-report-all` and `get-report-selectors` preserve omitted scope, selectors and
+criteria rather than host-invented filtering. Separate `ack-getbasereport-*` and
+`ack-getreport-*` fixtures retain Accepted, Rejected, NotSupported and EmptyResultSet.
+`notify-report-prefix`, `notify-report-final` and `notify-report-empty-ack` retain
+native requestId/seqNo/tbc/generatedAt, ordered metadata and the empty wire reply.
+CALL unique IDs and native report request IDs are distinct.
+
+Schema-valid fixtures prove wire shape, not authorization, secret disclosure,
+ACK/report ordering or durable completion. Behavioral proof additionally needs
+authenticated socket, storage and running-service evidence for no-wire denial,
+exact/case-folded identities and result permutation, native partial statuses,
+absent/empty/redacted values, unchanged signed IDs and shared cross-action reuse,
+unknown/learned limits, report-before-ACK/ACK-before-report, nonrenewing actual-send
+deadlines, ordering/count failures, bounded overflow and heartbeat progress,
+client abandonment, restart/disconnect interruption and no replay. Malformed
+native replies are behavioral inputs, not schema-valid corpus fixtures.
+
+An independent authenticated peer against the actual daemon has observed the
+narrow query/report behavior through management HTTP and private SQLite, including
+privacy, failure counts, abandoned-client collection, actual-send timeout and
+restart without replay. Current/historical EMS schema reads and existing MQTT
+result publication exercise consumer boundaries separately. These observations
+do not assert that the full workspace checks or final correctness/security reviews
+are complete; `coverage.json` remains the machine-readable evidence status.

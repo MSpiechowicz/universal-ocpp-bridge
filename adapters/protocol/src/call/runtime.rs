@@ -1,3 +1,4 @@
+mod incoming;
 mod support;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -34,12 +35,19 @@ use crate::{OcppCallError, OcppErrorCode, StationConnection, v16, v201};
 /// # Errors
 ///
 /// Rejects invalid queue or deadline configuration before spawning.
+///
+/// # Panics
+///
+/// Panics when called outside a Tokio runtime. Connection identity construction
+/// asserts the `CorrelationId` invariant; the fixed `:report:` component makes the
+/// identity non-whitespace, so it cannot fail under the current validation rules.
 pub fn spawn_call_session(
     connection: StationConnection,
     application: &Application,
     configuration: CallSessionConfiguration,
 ) -> Result<(CallSessionHandle, CallSessionOutputs, CallSessionTask), CallSessionConfigurationError>
 {
+    static CONNECTION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let configuration = configuration.validate(application)?;
     let station_id = connection.station().station_id.clone();
     let protocol = connection.station().protocol;
@@ -50,6 +58,14 @@ pub fn spawn_call_session(
     let (diagnostic_sender, diagnostic_receiver) = mpsc::channel(configuration.diagnostic_capacity);
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let actor_budget = budget.clone();
+    let reports = super::reports::registry(&budget);
+    let actor_reports = reports.clone();
+    let connection_id = CorrelationId::new(format!(
+        "{}:report:{}",
+        application.runtime_identity().process_instance_id.as_str(),
+        CONNECTION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ))
+    .expect("connection identity");
     let join = tokio::spawn(run_session(
         connection,
         configuration,
@@ -66,6 +82,7 @@ pub fn spawn_call_session(
         reply_receiver,
         diagnostic_sender,
         shutdown_receiver,
+        actor_reports,
     ));
     Ok((
         CallSessionHandle {
@@ -73,6 +90,9 @@ pub fn spawn_call_session(
             station_id,
             protocol,
             budget,
+            reports,
+            connection_id,
+            diagnostics: application.diagnostics().clone(),
         },
         CallSessionOutputs {
             incoming: IncomingCallReceiver {
@@ -98,6 +118,7 @@ struct SessionState {
     timed_out: VecDeque<(String, CorrelationId)>,
     retired_outbound: VecDeque<String>,
     history_capacity: usize,
+    reports: super::reports::SharedReports,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -113,6 +134,7 @@ async fn run_session(
     mut reply_receiver: mpsc::Receiver<QueuedReply>,
     diagnostics: mpsc::Sender<CallSessionDiagnostic>,
     mut shutdown: oneshot::Receiver<()>,
+    reports: super::reports::SharedReports,
 ) {
     static SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let session = SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -127,7 +149,9 @@ async fn run_session(
         timed_out: VecDeque::new(),
         retired_outbound: VecDeque::new(),
         history_capacity: configuration.diagnostic_capacity,
+        reports,
     };
+    let _disconnect = ReportDisconnect(state.reports.clone());
     loop {
         let deadline = state
             .pending
@@ -136,7 +160,6 @@ async fn run_session(
             .min()
             .unwrap_or_else(|| Instant::now() + Duration::from_hours(24));
         tokio::select! {
-            biased;
             _ = &mut shutdown => {
                 uncertain_all(&mut state.pending, TransmissionUncertainReason::SessionStopped);
                 let _ = connection.send(Message::Close(None)).await;
@@ -243,6 +266,9 @@ async fn send_outbound(
         QueuedWire::Ready(encoded) => encoded,
         QueuedWire::Configuration(_) => deferred_encoded.expect("checked above"),
     };
+    if let Some(dispatched) = queued.dispatched {
+        let _ = dispatched.send(Instant::now());
+    }
     if connection
         .send(Message::Text(encoded.into()))
         .await
@@ -270,6 +296,7 @@ async fn send_outbound(
             correlation_id,
             deadline: Instant::now() + configuration.response_timeout,
             _reservation: queued.reservation,
+            response_reservation: queued.response_reservation,
         },
     );
 }
@@ -283,33 +310,54 @@ async fn process_frame(
     replies: &mpsc::Sender<QueuedReply>,
     diagnostics: &mpsc::Sender<CallSessionDiagnostic>,
 ) {
+    if let Err(error) = budget.validate_ocpp_message(bytes.len()) {
+        super::reports::capacity_failure(&state.reports, error);
+        return;
+    }
+    let header = super::header::parse(bytes);
+    let reporting = header.as_ref().is_some_and(|header| {
+        header.report
+            || header.response_id.as_ref().is_some_and(|id| {
+                state
+                    .pending
+                    .get(id.as_ref())
+                    .is_some_and(|entry| entry.response_reservation.is_some())
+            })
+    });
+    if reporting && bytes.len() > 256 * 1024 {
+        super::reports::capacity_failure(
+            &state.reports,
+            uob_application::AdmissionError {
+                limit: uob_application::AdmissionLimit::OcppMessageBytes,
+                maximum: 256 * 1024,
+                requested: bytes.len(),
+            },
+        );
+        return;
+    }
+    let work = if reporting {
+        WorkClass::PendingRequest
+    } else {
+        WorkClass::ChargerRequest
+    };
+    let decode = match budget.try_reserve(work, bytes.len().saturating_mul(8).saturating_add(4096))
+    {
+        Ok(reservation) => reservation,
+        Err(error) => {
+            super::reports::capacity_failure(&state.reports, error);
+            return;
+        }
+    };
     let parsed = match frame::decode(bytes) {
         Ok(frame) => frame,
         Err(error) => {
-            state
-                .span(None)
-                .emit(FlowStage::Validation, FlowEvidence::Rejected);
-            emit(
-                diagnostics,
-                CallSessionDiagnostic::MalformedFrame {
-                    message_id: error.message_id.clone(),
-                    field_path: error.field_path,
-                },
-            );
-            if let Some(message_id) = error.message_id {
-                let error = frame::protocol_error(
-                    state.protocol,
-                    "OCPP frame violates protocol shape",
-                    Some(error.field_path),
-                );
-                send_error(connection, &message_id, error).await;
-            }
+            reject_malformed_frame(error, state, connection, diagnostics).await;
             return;
         }
     };
     match parsed {
         Frame::Call { message_id, bytes } => {
-            process_incoming_call(
+            incoming::process(
                 message_id,
                 bytes,
                 state,
@@ -321,10 +369,17 @@ async fn process_frame(
             )
             .await;
         }
+        Frame::NotifyReport {
+            message_id,
+            payload,
+            bytes,
+        } => {
+            incoming::report(message_id, payload, bytes, state, connection, budget).await;
+        }
         Frame::Result {
             message_id,
             payload,
-        } => finish_response(message_id, state, diagnostics, |correlation_id| {
+        } => finish_response(message_id, state, diagnostics, decode, |correlation_id| {
             SessionCallOutcome::Result {
                 payload,
                 correlation_id,
@@ -338,7 +393,7 @@ async fn process_frame(
         } => {
             let code = frame::safe_remote_code(&code).to_owned();
             let field_path = frame::safe_field_path(&details);
-            finish_response(message_id, state, diagnostics, |correlation_id| {
+            finish_response(message_id, state, diagnostics, decode, |correlation_id| {
                 SessionCallOutcome::Error {
                     error: RemoteCallError { code, field_path },
                     correlation_id,
@@ -348,87 +403,29 @@ async fn process_frame(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn process_incoming_call(
-    message_id: String,
-    bytes: Vec<u8>,
-    state: &mut SessionState,
+async fn reject_malformed_frame(
+    error: frame::FrameError,
+    state: &SessionState,
     connection: &mut StationConnection,
-    budget: &RuntimeResourceBudget,
-    incoming: &mpsc::Sender<IncomingCall>,
-    replies: &mpsc::Sender<QueuedReply>,
     diagnostics: &mpsc::Sender<CallSessionDiagnostic>,
 ) {
-    let correlation_id =
-        CorrelationId::new(format!("ocpp:{}:{message_id}", state.correlation_prefix))
-            .expect("correlation ID");
-    let trace = state.span(Some(correlation_id.clone()));
-    trace.emit(FlowStage::OcppReceive, FlowEvidence::Completed);
-    if state.incoming_ids.contains(&message_id) || state.recent_incoming.contains(&message_id) {
-        trace.emit(FlowStage::Deduplication, FlowEvidence::Duplicate);
-        emit(
-            diagnostics,
-            CallSessionDiagnostic::DuplicateIncomingCall {
-                message_id: message_id.clone(),
-            },
-        );
-        send_error(
-            connection,
-            &message_id,
-            OcppCallError {
-                protocol: state.protocol,
-                code: OcppErrorCode::OccurrenceConstraintViolation,
-                description: "duplicate OCPP CALL message ID",
-                field_path: Some("/1"),
-            },
-        )
-        .await;
-        return;
-    }
-    let decoded = match state.protocol {
-        ProtocolEdition::Ocpp16j => v16::decode_call(&bytes),
-        ProtocolEdition::Ocpp201 => v201::decode_call(&bytes),
-    };
-    let decoded = match decoded {
-        Ok(decoded) => decoded,
-        Err(error) => {
-            trace.emit(FlowStage::Validation, FlowEvidence::Rejected);
-            send_error(connection, &message_id, error.call_error()).await;
-            return;
-        }
-    };
-    let Ok(reservation) = budget.try_reserve(WorkClass::ChargerRequest, bytes.len()) else {
-        send_capacity_error(connection, &message_id, state.protocol).await;
-        return;
-    };
-    trace.emit(FlowStage::Validation, FlowEvidence::Completed);
-    let call = IncomingCall {
-        trace: trace.clone(),
-        call: decoded,
-        correlation_id,
-        responder: IncomingCallResponder {
-            trace,
-            message_id: message_id.clone(),
-            protocol: state.protocol,
-            sender: Some(replies.clone()),
-            budget: budget.clone(),
+    state
+        .span(None)
+        .emit(FlowStage::Validation, FlowEvidence::Rejected);
+    emit(
+        diagnostics,
+        CallSessionDiagnostic::MalformedFrame {
+            message_id: error.message_id.clone(),
+            field_path: error.field_path,
         },
-        _reservation: reservation,
-    };
-    match incoming.try_send(call) {
-        Ok(()) => {
-            state.incoming_ids.insert(message_id.clone());
-            retain_recent(
-                &mut state.recent_incoming,
-                message_id,
-                state.history_capacity,
-            );
-        }
-        Err(error) => {
-            let mut rejected = error.into_inner();
-            rejected.responder.sender = None;
-            send_capacity_error(connection, &message_id, state.protocol).await;
-        }
+    );
+    if let Some(message_id) = error.message_id {
+        let error = frame::protocol_error(
+            state.protocol,
+            "OCPP frame violates protocol shape",
+            Some(error.field_path),
+        );
+        send_error(connection, &message_id, error).await;
     }
 }
 
@@ -463,5 +460,12 @@ impl SessionState {
             Some(uob_contracts::StationId::new(self.station_id.clone()).expect("station")),
             Some(self.protocol),
         )
+    }
+}
+
+struct ReportDisconnect(super::reports::SharedReports);
+impl Drop for ReportDisconnect {
+    fn drop(&mut self) {
+        super::reports::disconnect(&self.0);
     }
 }

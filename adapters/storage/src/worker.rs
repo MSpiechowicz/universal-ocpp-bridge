@@ -96,6 +96,14 @@ pub(crate) enum Request<C, E, D> {
     ),
     TriggerCandidates(Option<String>, usize, Reply<Vec<uob_contracts::RequestId>>),
     ReconcileTrigger(String, UtcTimestamp, Reply<Option<CommandResult>>),
+    DeviceReport(
+        String,
+        uob_contracts::DeviceModelResult201,
+        Option<uob_contracts::CommandLifecycle>,
+        UtcTimestamp,
+        Reply<Option<CommandResult>>,
+    ),
+    InterruptDeviceReports(Reply<()>),
     PruneCommands(i64, Reply<u64>),
     MaintainRetention(i64, Reply<StorageRetentionStatus>),
     RetentionStatus(Reply<StorageRetentionStatus>),
@@ -190,6 +198,8 @@ fn handle_request<C, E, D>(
         | Request::TriggerPending201(..)
         | Request::TriggerCandidates(..)
         | Request::ReconcileTrigger(..)
+        | Request::DeviceReport(..)
+        | Request::InterruptDeviceReports(..)
         | Request::PruneCommands(..)) => {
             command_requests::handle(connection, drain, command_request);
         }

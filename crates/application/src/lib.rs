@@ -6,6 +6,7 @@ mod authorization;
 pub mod capture;
 pub mod charging_identity;
 mod command;
+pub use command::device_model201::DeviceModelStore201;
 pub mod data_transfer;
 pub mod data_transfer201;
 mod database;

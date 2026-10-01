@@ -27,6 +27,7 @@ fn snapshot(protocol: ProtocolEdition) -> StationSnapshot {
         last_message_at: None,
     };
     snapshot.station.native_protocol_reference = None;
+    snapshot.capabilities.operations.clear();
     snapshot
 }
 

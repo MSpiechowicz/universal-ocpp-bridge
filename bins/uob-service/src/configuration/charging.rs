@@ -39,6 +39,9 @@ pub(crate) struct StationControlOptions {
     pub change_availability: bool,
     pub trigger_message: StationActionOption,
     pub get_composite_schedule: StationActionOption,
+    pub get_variables: StationActionOption,
+    pub get_base_report: StationActionOption,
+    pub get_report: StationActionOption,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
 }
@@ -64,6 +67,12 @@ impl From<bool> for StationActionOption {
 impl StationActionOption {
     pub fn enabled(self) -> bool {
         matches!(self, Self::Enabled)
+    }
+}
+
+impl StationControlOptions {
+    pub fn device_model_enabled(self) -> bool {
+        self.get_variables.enabled() || self.get_base_report.enabled() || self.get_report.enabled()
     }
 }
 
@@ -164,6 +173,7 @@ impl Configuration {
                     || station.control.change_availability
                     || station.control.trigger_message.enabled()
                     || station.control.get_composite_schedule.enabled()
+                    || station.control.device_model_enabled()
             })
         {
             return Err(fail);
@@ -173,6 +183,7 @@ impl Configuration {
                 station.control.change_availability
                     || station.control.trigger_message.enabled()
                     || station.control.get_composite_schedule.enabled()
+                    || station.control.device_model_enabled()
             })
         {
             return Err(fail);
@@ -224,6 +235,9 @@ fn validate_stations(
     let mut stations = Vec::with_capacity(entries.len());
     let mut total_resources = 0;
     for station in entries {
+        if station.control.device_model_enabled() && station.protocol != ProtocolEdition::Ocpp201 {
+            return Err(fail);
+        }
         if station.control.get_composite_schedule.enabled()
             && (station.protocol != ProtocolEdition::Ocpp16j
                 || station.resources.iter().any(|resource| {

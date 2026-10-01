@@ -3,33 +3,32 @@ use uob_application::{AdmissionError, RuntimeReservation};
 use uob_contracts::{CorrelationId, ProtocolActionName, ProtocolEdition, StationId};
 
 /// Correlation assigned by the authenticated connection and requesting workflow.
-/// Request IDs must not be reused for this report kind within one connection.
+/// Signed native IDs must not be reused across the shared `NotifyReport` namespace.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReportKey {
     pub station: StationId,
     pub connection: CorrelationId,
     pub protocol: ProtocolEdition,
     pub action: ProtocolActionName,
-    pub request_id: u32,
+    pub request_id: i32,
     pub correlation: CorrelationId,
 }
 
 impl ReportKey {
     pub(super) fn valid(&self) -> bool {
-        i32::try_from(self.request_id).is_ok()
-            && [
-                self.station.as_str(),
-                self.connection.as_str(),
-                self.action.as_str(),
-                self.correlation.as_str(),
-            ]
-            .iter()
-            .all(|value| value.len() <= 128)
+        [
+            self.station.as_str(),
+            self.connection.as_str(),
+            self.action.as_str(),
+            self.correlation.as_str(),
+        ]
+        .iter()
+        .all(|value| value.len() <= 128)
     }
 }
 
 /// Per-report bounds, subordinate to the shared process budget.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReportLimits {
     pub maximum_bytes: usize,
     pub maximum_items: usize,
@@ -84,6 +83,7 @@ pub enum ReportFailure {
     TimedOut,
     Cancelled,
     Disconnected,
+    NotTransmitted,
     InvalidFragment,
 }
 
@@ -110,6 +110,7 @@ pub struct CollectedReport {
     pub(super) progress: ReportProgress,
     pub(super) items: Vec<Box<[u8]>>,
     pub(super) reservation: RuntimeReservation,
+    pub(super) limits: ReportLimits,
 }
 
 impl CollectedReport {

@@ -20,6 +20,11 @@ enum Session {
 }
 
 impl Session {
+    fn detach_device_model(&self) {
+        if let Self::V201(session) = self {
+            session.detach_device_model();
+        }
+    }
     fn update(&self, snapshot: StationSnapshot) -> Result<(), StationCommandError> {
         match self {
             Self::V16(session) => session.update_committed(snapshot),
@@ -83,17 +88,32 @@ impl LiveCommands {
     pub(super) fn attach_201(
         &self,
         station: StationId,
-        session: Arc<v201::remote_control::RemoteControlSession>,
+        session: v201::remote_control::RemoteControlSession,
+        store: super::ChargingStore,
     ) -> u64 {
-        self.attach(station, Arc::new(Session::V201(session)))
+        let generation = self.next.fetch_add(1, Ordering::Relaxed);
+        let session = Arc::new(session.with_device_model(Arc::new(store), generation));
+        if let Some((_, old)) = self
+            .sessions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(station, (generation, Arc::new(Session::V201(session))))
+        {
+            old.detach_device_model();
+        }
+        generation
     }
 
     fn attach(&self, station: StationId, session: Arc<Session>) -> u64 {
         let generation = self.next.fetch_add(1, Ordering::Relaxed);
-        self.sessions
+        if let Some((_, old)) = self
+            .sessions
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(station, (generation, session));
+            .insert(station, (generation, session))
+        {
+            old.detach_device_model();
+        }
         generation
     }
 
@@ -123,8 +143,9 @@ impl LiveCommands {
         if sessions
             .get(station)
             .is_some_and(|(current, _)| *current == generation)
+            && let Some((_, session)) = sessions.remove(station)
         {
-            sessions.remove(station);
+            session.detach_device_model();
         }
     }
 
@@ -158,6 +179,27 @@ impl StationCommandPort<Value> for LiveCommands {
         self.session(&command.resource.station_id)?
             .trigger_expectation(command)
     }
+    fn device_model_expectation(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: uob_contracts::UtcTimestamp,
+    ) -> Result<Option<uob_contracts::DeviceModelResult201>, uob_contracts::CommandErrorCode> {
+        let sessions = self
+            .sessions
+            .read()
+            .map_err(|_| uob_contracts::CommandErrorCode::PolicyRejected)?;
+        let Some((current, session)) = sessions.get(&command.resource.station_id) else {
+            return Ok(None);
+        };
+        if Some(*current) != generation {
+            return Err(uob_contracts::CommandErrorCode::StationDisconnected);
+        }
+        match session.as_ref() {
+            Session::V201(session) => session.device_model_expectation(command, generation, now),
+            Session::V16(_) => Ok(None),
+        }
+    }
 
     fn session_generation(&self, resource: &ResourceRef) -> Option<u64> {
         self.sessions
@@ -179,6 +221,18 @@ impl StationCommandPort<Value> for LiveCommands {
             .get(&command.resource.station_id)
             .filter(|(generation, _)| Some(*generation) == expected)
             .map(|(_, session)| Arc::clone(session));
+        if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+            if operation.protocol == uob_contracts::ProtocolEdition::Ocpp201
+                && ["GetVariables", "GetBaseReport", "GetReport"].contains(&operation.action.as_str()))
+            && let Some(session) = selected.clone()
+        {
+            let dispatched = tokio::spawn(async move { session.dispatch(command).await });
+            return Box::pin(async move {
+                dispatched.await.map_err(|_| {
+                    StationCommandError::new("device-model dispatch supervisor stopped")
+                })?
+            });
+        }
         Box::pin(async move {
             let Some(session) = selected else {
                 return Ok(disconnected());
