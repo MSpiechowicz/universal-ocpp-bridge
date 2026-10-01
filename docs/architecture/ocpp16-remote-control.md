@@ -3,7 +3,8 @@
 `v16::remote_control::RemoteControlSession` implements the application `StationCommandPort` for
 one authenticated OCPP 1.6 socket. Compose the existing `CommandCoordinator` and scoped access
 guard around it: ordinary `Start`/`Stop` require control permission; pinned `Reset`,
-`UnlockConnector`, configuration and `TriggerMessage` operations require privileged control.
+`UnlockConnector`, configuration, `TriggerMessage` and `GetCompositeSchedule` operations require
+privileged control.
 No new HTTP or authentication path is introduced. The service composes a charging host for
 explicitly opted-in, loopback-only demo ingress; production charging commands remain disabled.
 
@@ -23,6 +24,7 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | GetConfiguration | Privileged `Ocpp`, action `GetConfiguration`, pinned OCA request schema; station scope, absent/empty/selected key lists and learned `GetConfigurationMaxKeys` bound | Known keys (including read-only flags), unknown keys and optional omitted lists |
 | ChangeConfiguration | Privileged `Ocpp`, action `ChangeConfiguration`, bridge reference schema `urn:uob:ocpp16:ChangeConfigurationReference:1`; station scope and locally provisioned key-bound, expiring reference | Accepted / Rejected / RebootRequired / NotSupported |
 | TriggerMessage | Privileged `Ocpp`, action `TriggerMessage`, schema `urn:OCPP:1.6:2019:12:TriggerMessageRequest`; six pinned native classes with station/connector scope | Accepted / Rejected / NotImplemented |
+| GetCompositeSchedule | Privileged `Ocpp`, action `GetCompositeSchedule`, schema `urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest`; station connector 0 or exact positive connector, positive i32 duration and optional A/W unit | Accepted with meaningful typed schedule / Rejected |
 
 Unknown fields, wrong schemas, OCPP 2.0.1 reset types, unsupported operations and cross-resource
 native addresses fail closed. Unlock connector IDs use real topology rather than the pinned
@@ -118,6 +120,56 @@ changed. A later explicit GetConfiguration may be linked with
 `CommandCoordinator::reconcile_configuration_observation`; the read and write remain separate
 requests and no reboot or retry is initiated automatically.
 
+## Opt-in GetCompositeSchedule
+
+`get_composite_schedule = true` is a default-off, OCPP 1.6J-only station option. The demo host
+requires separate control and privileged grant files; the submitting request must use the
+privileged credential. Demo-only, loopback-only ingress restrictions are unchanged. Opt-in
+configuration rejects any configured native connector ID above `i32::MAX` (2147483647);
+leaving the option off preserves legacy topology behavior.
+
+Admission and dispatch require Accepted registration, the advertised action for the exact
+resource, a live authenticated socket and the existing scoped authorization/expiry checks.
+Station scope requires `connectorId: 0`, meaning the charger-calculated grid aggregate, not
+an arbitrary connector. Connector scope requires its exact configured positive native ID.
+The pinned request requires integer `connectorId` and `duration`; duration is 1–2147483647
+seconds. Optional `chargingRateUnit` is exactly `A` or `W`; omission remains omission.
+Wrong edition/schema/resource, unknown fields, present nulls, missing required fields,
+fractional/overflow integers and invalid units fail before a native CALL.
+
+The optional `CommandResult.composite_schedule_16` retains immutable request context and exact
+native `Accepted`/`Rejected` status. It preserves supplied connector identity, `scheduleStart`,
+schedule duration, independent `startSchedule`, unit, periods, `numberPhases` and
+`minChargingRate` as typed snake_case fields; omitted metadata stays absent. Timestamp
+instants normalize to UTC without inventing a start time. Native numeric rates become exact
+canonical decimal **strings**, including `900719925474099.1`; no binary floating-point
+rounding or implicit A/W conversion occurs.
+
+Accepted requires `scheduleStart` and a complete, meaningful schedule with nonempty periods,
+first `startPeriod = 0`, strictly increasing nonnegative starts within the applicable horizon,
+and a valid A/W unit matching any forced request unit. Supplied duration is positive and
+cannot exceed the request; an omitted duration uses the request horizon only for validation,
+not as fabricated response metadata. Supplied connector identity must match the request.
+Limits and optional minimum rate must be nonnegative and have at most one meaningful
+fractional decimal digit; trailing zeros and exponent notation normalize only when exact.
+Supplied phases must be positive native integers; omission remains absent, with no invented
+upper bound of three. A genuine zero/off period is retained even when `minChargingRate` is
+positive. A Rejected reply may omit the schedule, but any supplied metadata must still be valid.
+
+Valid native Rejected maps to `protocol_rejected` with typed Rejected evidence, not an empty
+Accepted schedule. Malformed or semantically invalid CALLRESULTs, including null/unknown
+nested fields, map to `transmission_uncertain` without fabricated schedule evidence.
+A valid CALLERROR uses existing sanitized protocol rejection and does not manufacture a
+Rejected CALLRESULT. Timeout/disconnect and interrupted dispatch remain uncertain.
+
+The query is indicative charger evidence only. It neither alters station snapshots nor
+creates physical effects, computes a local schedule, installs/removes profiles or enforces
+charging. Results persist across restart; exact duplicates return the original result without
+another CALL. Restart/reconnect never automatically replays a query. A new explicit request
+is required for another query after reconnect, and replies from an old socket generation
+cannot attach to it or resolve a terminal uncertain result. No OCPP 2.0.1 schedule command,
+simulator smart-charging engine or OCA certification is established by this feature.
+
 ## Verification and provenance
 
 The independent fixture corpus includes all four requests (both reset modes) and every native
@@ -156,6 +208,25 @@ and reconnect. The independent trigger wire fixtures are checked by
 `cargo run --locked --package uob-ocpp-fixtures`. None proves native
 cause-and-effect, physical charging or OCA certification.
 
+`cargo test --locked -p uob-protocol-adapter --test ocpp16_composite_schedule --test
+command_registry` exercises independent authenticated socket replies, exact decimal boundaries,
+scope/authority denial before wire, malformed-response uncertainty, zero versus Rejected,
+delayed replies with heartbeat progress and one-shot recovery. `cargo test --locked -p
+uob-storage-adapter --test composite_schedule` checks terminal evidence against stale/conflicting
+writers, close/reopen and older result JSON.
+
+`cargo test --locked -p uob-service --test composite_schedule` passed the four actual-process
+scenarios `native::normalizes_and_persists_native_schedule`,
+`admission::denies_invalid_scope_and_authority_before_wire`,
+`recovery::delayed_reply_keeps_heartbeat_progress` and
+`recovery::disconnect_restart_never_replays_schedule_query`. A separate actual-daemon smoke
+also observed exact HTTP/SQLite evidence, authenticated current/historical EMS schemas,
+heartbeat progress, zero versus Rejected, identical results after restart, quiet reconnect
+and a new explicit query. These are software implementation evidence, not hardware validation
+or a full smart-charging/certification claim.
+
 `cargo test --locked -p uob-mqtt-target-adapter --test ingress_wire --test outbound_wire`
-also verifies that both immediate and durable MQTT result publication carry configuration
-command-result v1.1 JSON, preserve v1.0, and reject unsupported future result revisions.
+verifies immediate and durable result publication on existing topics for command-result
+v1.0/v1.1 and additive v1.4 composite schedule evidence. The existing v1.2/v1.3 policy is
+unchanged; this is not support for every minor revision or a new MQTT command family.
+Broker PUBACK acknowledges broker receipt, not native acceptance or physical success.

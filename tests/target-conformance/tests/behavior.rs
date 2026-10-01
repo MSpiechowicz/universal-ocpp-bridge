@@ -474,6 +474,7 @@ fn result_for(command: &ExternalCommand<()>) -> CommandResult {
         configuration_observations: vec![],
         trigger_observation: None,
         trigger_observation_201: None,
+        composite_schedule_16: None,
     }
 }
 

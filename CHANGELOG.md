@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add default-off, privileged demo OCPP 1.6J `GetCompositeSchedule` queries for
+  grid aggregation or exact connectors, with strict request/reply validation,
+  exact typed rates and optional native metadata, zero distinct from rejection,
+  durable results and no automatic replay across restart/reconnect (#119).
+  Command-result v1.4 and nested export v1.5 retain released schemas; authenticated
+  EMS routes and existing MQTT result topics carry the additive evidence.
+  Independent wire fixtures, socket/storage and actual-service scenarios cover
+  scope, malformed replies, delayed heartbeat progress and recovery. This does
+  not add OCPP 2.0.1 schedules, profile installation or charging enforcement.
 - Add opt-in, nonproduction Compose demos for standard MQTT, broker-free direct
   EMS HTTP, and EMS MQTT with private per-run state/credentials, separate
   daemon/simulator/target-client images, host-loopback-only browser access,

@@ -46,7 +46,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.3/command-result.schema.json"),
+        include_str!("../schemas/v1.4/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
@@ -62,11 +62,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.4/export-record.schema.json"),
+        include_str!("../schemas/v1.5/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.4/export-batch.schema.json"),
+        include_str!("../schemas/v1.5/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -84,8 +84,8 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 4,
-        "command-result" => 3,
+        "export-record" | "export-batch" => 5,
+        "command-result" => 4,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
@@ -244,6 +244,14 @@ fn canonical_examples_validate_against_their_public_schemas() {
         (
             include_str!("../schemas/v1.2/export-batch.schema.json"),
             include_str!("../schemas/v1.2/export-record.schema.json"),
+        ),
+        (
+            include_str!("../schemas/v1.3/export-batch.schema.json"),
+            include_str!("../schemas/v1.3/export-record.schema.json"),
+        ),
+        (
+            include_str!("../schemas/v1.4/export-batch.schema.json"),
+            include_str!("../schemas/v1.4/export-record.schema.json"),
         ),
     ] {
         let batch_validator =

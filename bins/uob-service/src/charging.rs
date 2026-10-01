@@ -88,6 +88,14 @@ impl StationSettings {
                 action: "TriggerMessage".to_owned(),
             });
         }
+        if self.control.get_composite_schedule.enabled()
+            && self.protocol == ProtocolEdition::Ocpp16j
+        {
+            operations.push(Operation::ProtocolAction {
+                protocol: self.protocol,
+                action: "GetCompositeSchedule".to_owned(),
+            });
+        }
         snapshot.capabilities = ResourceCapabilities {
             operations: operations
                 .into_iter()
@@ -113,6 +121,22 @@ impl StationSettings {
                     operation: Operation::ProtocolAction {
                         protocol: self.protocol,
                         action: "TriggerMessage".to_owned(),
+                    },
+                    parameters: vec![],
+                });
+            }
+            if self.control.get_composite_schedule.enabled()
+                && self.protocol == ProtocolEdition::Ocpp16j
+                && matches!(
+                    entry.resource.native_protocol_reference,
+                    Some(NativeProtocolReference::Ocpp16 { connector_id })
+                        if connector_id > 0 && i32::try_from(connector_id).is_ok()
+                )
+            {
+                entry.capabilities.operations.push(SupportedOperation {
+                    operation: Operation::ProtocolAction {
+                        protocol: self.protocol,
+                        action: "GetCompositeSchedule".to_owned(),
                     },
                     parameters: vec![],
                 });

@@ -40,8 +40,9 @@ The authoritative sources are the Open Charge Alliance downloads recorded in `pr
 
 The source archive SHA-256 values pin acquisition; the fixture registry separately pins every
 vendored schema and hand-authored wire file. CI never downloads a moving schema. The selected OCA
-schema files retain their content; repository line endings are normalized as a technical format
-change. OCA specification material is copyright Open Charge Alliance and distributed under
+schema files retain their content; earlier additions normalize line endings as a technical
+format change, while the GetCompositeSchedule pair retains original CRLF bytes as noted below.
+OCA specification material is copyright Open Charge Alliance and distributed under
 Creative Commons Attribution-NoDerivatives 4.0. Before adding more source material, acquire it
 from the recorded OCA download page, verify its archive digest, retain attribution, and confirm
 that redistribution and any technical transformation comply with that license. Do not copy paid
@@ -147,3 +148,58 @@ native EVSE identity and remains unattributable. The simulator returns
 `NotImplemented` for certificate signing triggers without a private key/CSR;
 verified here does not mean OCA certification, interoperability with physical
 stations, physical charging, or completion of planned certificate workflows.
+
+## OCPP 1.6 GetCompositeSchedule fixtures
+
+The narrow `ocpp16.smart-charging.composite-schedule` row is `verified` and
+`bidirectional`; the broad `ocpp16.smart-charging` profile requirement stays `planned`.
+Its seven independently authored fixtures are `wire.ocpp16.composite-schedule-grid`,
+`wire.ocpp16.composite-schedule-connector-a`, `wire.ocpp16.composite-schedule-connector-w`,
+`wire.ocpp16.composite-schedule-accepted-a`, `wire.ocpp16.composite-schedule-accepted-w`,
+`wire.ocpp16.composite-schedule-accepted-zero` and `wire.ocpp16.composite-schedule-rejected`.
+They cover connector 0 grid aggregation, exact positive connector requests, omitted/forced
+A/W units, meaningful periods and optional native metadata, genuine zero and native Rejected.
+
+The official `schemas/1.6/GetCompositeSchedule.json` and
+`schemas/1.6/GetCompositeScheduleResponse.json` are byte-for-byte copies from the pinned
+OCA Edition 2 archive above, including their original **CRLF** line endings, under OCA
+copyright and CC BY-ND 4.0. Unlike earlier LF-normalized additions, neither is transformed.
+Verified source-member SHA-256 values are respectively
+`e48c40527d9222d2c76ef83d6c6b9d2c1dcf34a98d722f2392353950d84e296a` and
+`19e44ab05ce67421fa4f0017f97f7e5bc926f530c7af169131531a78fd1d12c3`;
+the manifest also pins each independently authored wire file's digest.
+The canonical request URI is `urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest`.
+Pinned semantics follow Edition 2 §§5.7, 6.21, 6.22, 7.13 and 7.14 and published
+errata 3.24, 3.51 and 4.17.
+
+`coverage.json` uses existing `fixture:` and `test:` evidence strings. `scenario_ids`
+remains empty because no checked scenario registry exists. Malformed replies and CALLERROR
+are **behavioral test inputs**, not schema-valid corpus fixtures: the checker admits only
+valid CALL/CALLRESULT fixtures. Passed protocol scenarios include
+`native_schedule_preserves_exact_rates_metadata_scope_and_zero_after_reopen`,
+`validation::invalid_schedule_requests_and_insufficient_authority_send_no_call`,
+`validation::malformed_native_schedule_is_uncertain_without_fabricated_evidence`,
+`precision::exact_exponent_and_model_boundaries_never_round_native_rates`,
+`lifecycle::delayed_schedule_reply_keeps_inbound_heartbeat_progress_and_duplicate_is_one_shot`,
+`lifecycle::timeout_disconnect_callerror_and_late_reply_never_replay_after_restart` and
+`lifecycle::interrupted_dispatch_recovers_uncertain_without_resending_schedule` in
+`cargo test --locked -p uob-protocol-adapter --test ocpp16_composite_schedule`.
+
+`cargo test --locked -p uob-service --test composite_schedule` passed
+`native::normalizes_and_persists_native_schedule`,
+`admission::denies_invalid_scope_and_authority_before_wire`,
+`recovery::delayed_reply_keeps_heartbeat_progress` and
+`recovery::disconnect_restart_never_replays_schedule_query` with an actual child daemon,
+authenticated independent WebSocket peer, management HTTP, SQLite and process restart.
+`cargo test --locked -p uob-storage-adapter --test composite_schedule` passed
+`winning_schedule_survives_stale_conflicting_writers_effect_merging_and_reopen` and
+`late_schedule_cannot_resolve_terminal_uncertainty_and_old_json_stays_readable`.
+The row links these concrete tests for denied admission, delayed replies, invalid evidence,
+duplicates, restart and reconnect rather than inventing a scenario registry.
+
+A separate actual-daemon smoke observed exact high-tenth HTTP/SQLite evidence,
+zero versus Rejected, heartbeat progress before a delayed reply, authenticated current and
+historical EMS schemas, identical results after restart, no reconnect replay and a new
+explicit query. This narrow evidence does not establish all smart charging, profile
+installation/removal, local schedule calculation/enforcement, OCPP 2.0.1 schedules,
+simulator smart charging, physical hardware interoperability or OCA certification.

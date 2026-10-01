@@ -419,6 +419,7 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         configuration_observations: Vec::new(),
         trigger_observation: None,
         trigger_observation_201: None,
+        composite_schedule_16: None,
     }
 }
 fn request_id() -> RequestId {

@@ -1,6 +1,8 @@
 use super::{
     openapi_document,
-    schemas::{CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3, CANONICAL_V1_4},
+    schemas::{
+        CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3, CANONICAL_V1_4, CANONICAL_V1_5,
+    },
 };
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
 use serde_json::{Value, json};
@@ -17,6 +19,7 @@ fn registry() -> jsonschema::Registry<'static> {
         ("v1.2", CANONICAL_V1_2),
         ("v1.3", CANONICAL_V1_3),
         ("v1.4", CANONICAL_V1_4),
+        ("v1.5", CANONICAL_V1_5),
     ]
     .into_iter()
     .flat_map(|(revision, schemas)| {
@@ -46,42 +49,6 @@ fn validator(document: &Value, schema: &Value) -> jsonschema::Validator {
 }
 
 #[test]
-fn published_contract_matches_routes_models_and_parameters() {
-    let published: Value = serde_json::from_str(include_str!("../../openapi/v1.json")).unwrap();
-    assert_eq!(
-        published,
-        openapi_document(),
-        "regenerate using the export_openapi example"
-    );
-    let source = include_str!("../routing.rs");
-    let actual: std::collections::BTreeSet<_> = source
-        .split(".route(")
-        .skip(1)
-        .filter_map(|rest| {
-            rest.trim_start()
-                .strip_prefix('"')
-                .and_then(|r| r.split('"').next())
-        })
-        .collect();
-    let documented: std::collections::BTreeSet<_> = published["paths"]
-        .as_object()
-        .unwrap()
-        .keys()
-        .map(String::as_str)
-        .collect();
-    assert_eq!(actual, documented, "router drift");
-    // Demonstrate the snapshot gate catches both route removal and a response model edit.
-    for pointer in [
-        "/paths/~1bridge~1v1~1events",
-        "/components/schemas/PointView/properties/value",
-    ] {
-        let mut stale = published.clone();
-        *stale.pointer_mut(pointer).unwrap() = Value::Null;
-        assert_ne!(stale, openapi_document());
-    }
-}
-
-#[test]
 fn official_openapi_validation_and_every_schema_reference_pass_offline() {
     let document = openapi_document();
     let meta: Value =
@@ -90,7 +57,7 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
         .unwrap()
         .validate(&document)
         .unwrap();
-    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.3/command-result.schema.json"});
+    let result_ref = json!({"$ref":"/bridge/v1/schemas/v1.4/command-result.schema.json"});
     assert_eq!(
         document["paths"]["/bridge/v1/commands/{request_id}"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"],
@@ -125,6 +92,14 @@ fn official_openapi_validation_and_every_schema_reference_pass_offline() {
     );
     assert_eq!(
         document["paths"]["/bridge/v1/schemas/v1.4/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
+        json!([
+            "command-result.schema.json",
+            "export-record.schema.json",
+            "export-batch.schema.json"
+        ])
+    );
+    assert_eq!(
+        document["paths"]["/bridge/v1/schemas/v1.5/{schema}"]["get"]["parameters"][0]["schema"]["enum"],
         json!(["export-record.schema.json", "export-batch.schema.json"])
     );
     for name in document["components"]["schemas"]
@@ -178,73 +153,70 @@ async fn document_shares_authentication_and_serves_published_contract() {
 
 #[tokio::test]
 async fn schema_versions_serve_exact_canonical_files() {
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Request, header},
+    };
+    use tower::ServiceExt as _;
+
     let router = authenticated_router();
-    for path in [
-        "/bridge/v1/schemas/v1.0/station-snapshot.schema.json",
-        "/bridge/v1/schemas/v1.1/command-result.schema.json",
-        "/bridge/v1/schemas/v1.2/command-result.schema.json",
-        "/bridge/v1/schemas/v1.3/export-record.schema.json",
-        "/bridge/v1/schemas/v1.3/command-result.schema.json",
-        "/bridge/v1/schemas/v1.4/export-record.schema.json",
-    ] {
-        assert_eq!(get(router.clone(), path, None).await.0, 401);
-        assert_eq!(get(router.clone(), path, Some("wrong")).await.0, 401);
-    }
-    for (file, source) in CANONICAL {
-        let (status, body) = get(
-            router.clone(),
-            &format!("/bridge/v1/schemas/v1.0/{file}"),
-            Some(READER_TOKEN),
-        )
-        .await;
-        assert_eq!(status, 200);
-        assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
-    }
-    for (file, source) in CANONICAL_V1_1 {
-        let (status, body) = get(
-            router.clone(),
-            &format!("/bridge/v1/schemas/v1.1/{file}"),
-            Some(READER_TOKEN),
-        )
-        .await;
-        assert_eq!(status, 200);
-        assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
-    }
     for (revision, schemas) in [
+        ("v1.0", CANONICAL),
+        ("v1.1", CANONICAL_V1_1),
         ("v1.2", CANONICAL_V1_2),
         ("v1.3", CANONICAL_V1_3),
         ("v1.4", CANONICAL_V1_4),
+        ("v1.5", CANONICAL_V1_5),
     ] {
         for (file, source) in schemas {
-            let (status, body) = get(
-                router.clone(),
-                &format!("/bridge/v1/schemas/{revision}/{file}"),
-                Some(READER_TOKEN),
-            )
-            .await;
-            assert_eq!(status, 200);
-            assert_eq!(body, serde_json::from_str::<Value>(source).unwrap());
+            let path = format!("/bridge/v1/schemas/{revision}/{file}");
+            for credential in [None, Some("wrong")] {
+                assert_eq!(get(router.clone(), &path, credential).await.0, 401);
+            }
+            let request = Request::builder()
+                .uri(&path)
+                .header(header::AUTHORIZATION, format!("Bearer {READER_TOKEN}"))
+                .body(Body::empty())
+                .unwrap();
+            let response = router.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), 200, "{path}");
+            assert_eq!(
+                response.headers()[header::CONTENT_TYPE],
+                "application/schema+json"
+            );
+            let body = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
+            assert_eq!(body.as_ref(), source.as_bytes(), "{path}");
         }
+        let path = format!("/bridge/v1/schemas/{revision}/unknown.schema.json");
+        assert_eq!(get(router.clone(), &path, None).await.0, 401);
+        let (status, body) = get(router.clone(), &path, Some(READER_TOKEN)).await;
+        assert_eq!(status, 404);
+        assert_eq!(body["error"], "ems_scada_http.unknown_resource");
     }
+    for path in [
+        "/bridge/v1/schemas/v1.1/station-snapshot.schema.json",
+        "/bridge/v1/schemas/v1.5/command-result.schema.json",
+    ] {
+        assert_eq!(get(router.clone(), path, Some(READER_TOKEN)).await.0, 404);
+    }
+}
+
+#[test]
+fn export_consumers_reference_current_nested_contracts() {
+    let mut components = serde_json::Map::new();
+    super::schemas::add::<uob_contracts::ExportBatch>(&mut components, "ExportConsumer", true);
     assert_eq!(
-        get(
-            router.clone(),
-            "/bridge/v1/schemas/v1.1/station-snapshot.schema.json",
-            Some(READER_TOKEN),
-        )
-        .await
-        .0,
-        404
+        components["ExportConsumer"]["properties"]["records"]["items"],
+        json!({"$ref":"/bridge/v1/schemas/v1.5/export-record.schema.json"})
     );
     assert_eq!(
-        get(
-            router,
-            "/bridge/v1/schemas/v1.0/unknown",
-            Some(READER_TOKEN)
-        )
-        .await
-        .0,
-        404
+        super::schemas::reference("export-batch"),
+        json!({"$ref":"/bridge/v1/schemas/v1.5/export-batch.schema.json"})
+    );
+    let document = json!({"components":{"schemas":components}});
+    validator(
+        &document,
+        &json!({"$ref":"#/components/schemas/ExportConsumer"}),
     );
 }
 

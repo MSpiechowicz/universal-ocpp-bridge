@@ -152,6 +152,14 @@ observations; neither acceptance nor a matching observation proves causation or
 physical charging. See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md)
 for connector scope, the 60-second window and one-shot recovery.
 
+OCPP 1.6J `GetCompositeSchedule` is a default-off, privileged demo query for grid
+aggregation or an exact configured connector. Its durable typed result preserves
+exact rates, optional native metadata and genuine zero separately from Rejected;
+restart/reconnect never automatically replays the query. It does not calculate
+or enforce a local schedule, install profiles or implement OCPP 2.0.1 schedules.
+See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md#opt-in-getcompositeschedule)
+for opt-in, strict native validation and independently observed evidence.
+
 OCPP 2.0.1 `TriggerMessage` is separately opt-in for eleven native message
 classes, with station, EVSE and connector targeting. Its privileged demo command
 retains the native reply independently of a 60-second window of compatible,

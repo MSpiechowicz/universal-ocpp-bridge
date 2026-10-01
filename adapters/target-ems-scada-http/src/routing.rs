@@ -145,6 +145,10 @@ pub(crate) fn integration_router(state: IntegrationState) -> Router {
             "/bridge/v1/schemas/v1.4/{schema}",
             get(crate::openapi::schema_v1_4),
         )
+        .route(
+            "/bridge/v1/schemas/v1.5/{schema}",
+            get(crate::openapi::schema_v1_5),
+        )
         .route("/bridge/v1/events", get(crate::events::events))
         .route("/bridge/v1/stations", get(stations::stations))
         .route("/bridge/v1/stations/{station_id}", get(stations::station))

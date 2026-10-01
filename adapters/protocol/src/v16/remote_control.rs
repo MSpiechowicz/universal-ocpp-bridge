@@ -1,6 +1,7 @@
 //! OCPP 1.6 remote operations behind the ordinary durable application command path.
 use crate::remote_constraints as constraints;
 mod charging_limit;
+mod composite_schedule;
 mod configuration;
 mod configuration_values;
 mod identity;
@@ -236,6 +237,10 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 Err(code) => return Ok(mapping::not_sent(code)),
             };
             let now = self.clock.now();
+            let schedule_request = match composite_schedule::request_context(&command, action) {
+                Ok(request) => request,
+                Err(code) => return Ok(mapping::not_sent(code)),
+            };
             if now >= command.expires_at {
                 return Ok(mapping::not_sent(CommandErrorCode::Expired));
             }
@@ -268,6 +273,9 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 SessionCallOutcome::Result { payload, .. } => {
                     if action == "GetConfiguration" || action == "ChangeConfiguration" {
                         return self.configuration_response(action, &payload, &command);
+                    }
+                    if let Some(request) = schedule_request {
+                        return Ok(composite_schedule::response(request, &payload));
                     }
                     let outcome = mapping::response(action, &payload);
                     if action == "ChangeAvailability"

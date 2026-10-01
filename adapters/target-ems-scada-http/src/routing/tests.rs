@@ -21,7 +21,7 @@ async fn the_capability_response_advertises_exactly_the_routes_this_build_serves
     for resource in resources {
         let schema = match resource["name"].as_str() {
             Some("schemas_v1_1" | "schemas_v1_2") => "command-result.schema.json",
-            Some("schemas_v1_3" | "schemas_v1_4") => "export-record.schema.json",
+            Some("schemas_v1_3" | "schemas_v1_4" | "schemas_v1_5") => "export-record.schema.json",
             _ => "station-snapshot.schema.json",
         };
         let path = resource["path"]
@@ -70,6 +70,27 @@ async fn an_uncredentialed_listener_still_reads_no_canonical_state() {
         let (status, body) = get(router(IntegrationCredentials::default()), path, None).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{path}");
         assert_eq!(body["error"], "ems_scada_http.permission_denied", "{path}");
+    }
+}
+
+#[tokio::test]
+async fn uncredentialed_loopback_exposes_current_and_historical_schemas() {
+    for path in [
+        "/bridge/v1/schemas/v1.0/command-result.schema.json",
+        "/bridge/v1/schemas/v1.3/command-result.schema.json",
+        "/bridge/v1/schemas/v1.4/command-result.schema.json",
+        "/bridge/v1/schemas/v1.4/export-record.schema.json",
+        "/bridge/v1/schemas/v1.5/export-record.schema.json",
+        "/bridge/v1/schemas/v1.5/export-batch.schema.json",
+    ] {
+        let (status, body) = get(router(IntegrationCredentials::default()), path, None).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        let file = path.rsplit('/').next().unwrap();
+        let revision = path.split('/').nth(4).unwrap();
+        assert_eq!(
+            body["$id"],
+            format!("https://schemas.universal-ocpp-bridge.dev/contracts/{revision}/{file}")
+        );
     }
 }
 

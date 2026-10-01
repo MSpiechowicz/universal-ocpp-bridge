@@ -1,6 +1,7 @@
 #![doc = "Dependency-light shared contracts for Universal OCPP Bridge."]
 
 mod command;
+mod composite_schedule16;
 mod configuration;
 mod event;
 mod export;
@@ -20,6 +21,10 @@ pub use command::{
     CommandResult, CommandReturnRoute, CommandSummary, CommandValidationError, ExternalCommand,
     ObservedCommandEffect, PayloadSchemaId, PrincipalId, PrivilegedOcppOperation,
     ProtocolActionName, RequestId, TargetInstanceId,
+};
+pub use composite_schedule16::{
+    CompositeSchedule16, CompositeSchedulePeriod16, CompositeScheduleRateUnit16,
+    CompositeScheduleRequest16, CompositeScheduleResult16, CompositeScheduleStatus16,
 };
 pub use configuration::{
     CONFIGURATION_CHANGE_REFERENCE_SCHEMA, ConfigurationChangeReference, ConfigurationKey,
@@ -100,6 +105,11 @@ impl ContractVersion {
     pub const V1_TRIGGER_201: Self = Self {
         major: 1,
         revision: 3,
+    };
+    /// Additive OCPP 1.6 composite-schedule evidence revision.
+    pub const V1_COMPOSITE_SCHEDULE_16: Self = Self {
+        major: 1,
+        revision: 4,
     };
 }
 

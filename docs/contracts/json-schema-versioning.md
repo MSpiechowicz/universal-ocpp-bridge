@@ -46,8 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract serves v1.0, v1.1 and v1.2 command-result schemas;
-command result responses reference the current v1.2 version in OpenAPI.
+The EMS HTTP contract retains command-result schema routes v1.0–v1.3 and serves
+the current v1.4 command-result; OpenAPI command result responses reference v1.4.
+Current nested export-record and export-batch references use v1.5, while historical
+schema routes and released snapshots remain available.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -70,3 +72,35 @@ previous command-result v1.0–v1.2 and export v1.0–v1.3 snapshots remain
 unchanged. Older compatible v1 readers may ignore these optional fields. This
 contract addition and SQLite schema v11 do not implement the separately
 planned certificate-chain, CSR issuance or ISO 15118 workflows.
+
+OCPP 1.6J `GetCompositeSchedule` adds optional `composite_schedule_16` to
+command-result v1.4. Typed evidence contains immutable connector/duration/optional-unit
+request context, exact native `Accepted`/`Rejected`, supplied timestamps and connector
+identity, and optional native schedule metadata. Rates/minimum rates are exact canonical
+decimal strings; genuine zero is not absent or Rejected. Accepted evidence requires a
+meaningful complete schedule. Malformed or semantically invalid native CALLRESULT stays
+`transmission_uncertain` without that evidence; a valid CALLERROR uses existing sanitized
+rejection. Older result JSON decodes with the optional field absent.
+
+Nested export-record and export-batch advance to v1.5 because they embed CommandResult.
+Released command-result v1.0–v1.3 and export v1.0–v1.4 snapshots are retained unchanged.
+These additive response versions do not relax strict privileged command ingress, implement
+OCPP 2.0.1 schedules, or establish local profile installation/enforcement or physical effects.
+
+The EMS schema endpoints follow the listener's existing authentication policy: when
+credentials are configured, unauthenticated access is denied; the documented no-credentials
+loopback policy is unchanged. Current paths are
+`/bridge/v1/schemas/v1.4/command-result.schema.json`,
+`/bridge/v1/schemas/v1.5/export-record.schema.json` and
+`/bridge/v1/schemas/v1.5/export-batch.schema.json`. Historical routes, including v1.4
+exports, remain served; canonical OpenAPI references use each contract's current revision.
+`cargo test --locked -p uob-contracts` covers serialized payload validation, optional/additive
+compatibility and old-result readability. EMS integration verification uses the independent
+probe executable as configured by `scripts/verify-workspace.sh`.
+
+MQTT's existing immediate and durable result publishers accept additive v1.4 on existing
+topics, alongside their supported v1.0/v1.1 results. The v1.2/v1.3 policy is unchanged:
+this repair does not promise every v1 minor revision or add a MQTT command family.
+`cargo test --locked -p uob-mqtt-target-adapter --test ingress_wire --test outbound_wire`
+exercises actual broker peers, exact schedule evidence and version boundaries. Broker
+PUBACK remains delivery acknowledgement, never native acceptance or physical charging success.
