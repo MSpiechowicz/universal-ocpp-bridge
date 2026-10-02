@@ -1,6 +1,8 @@
 #![doc = "Dependency-light shared contracts for Universal OCPP Bridge."]
 
+mod charging_profile16;
 mod command;
+pub use charging_profile16::*;
 mod composite_schedule16;
 mod configuration;
 mod device_model201;
@@ -117,6 +119,11 @@ impl ContractVersion {
     pub const V1_DEVICE_MODEL_201: Self = Self {
         major: 1,
         revision: 5,
+    };
+    /// Additive full native OCPP 1.6 profile acknowledgement evidence.
+    pub const V1_CHARGING_PROFILE_16: Self = Self {
+        major: 1,
+        revision: 6,
     };
 }
 

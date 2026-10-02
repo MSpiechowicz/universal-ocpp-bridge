@@ -131,6 +131,13 @@ station later reports them. A pending native transaction may receive a transacti
 `TxProfile` charging limit, but neither that state nor an accepted charging profile proves power
 flow. Protocol acceptance is not observed charging success.
 
+Durable command history, request detail and pagination remain readable during a same-station
+snapshot refresh or hidden-tab transition. These reads keep their own lifecycle; snapshot
+staleness still clears protected options, the control credential and confirmation, and disables
+mutations. Outstanding work keeps its busy owner until completion. Destination/station changes,
+identity loss and page departure invalidate late reads; none of these transitions retries a
+command.
+
 This mode is **not** a production plaintext charging listener or production command exposure.
 See the [headless configuration guide](headless-cli.md#demo-charging-station-views).
 

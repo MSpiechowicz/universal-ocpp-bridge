@@ -93,6 +93,7 @@ pub(super) fn result(
             status: TriggerObservationStatus201::Pending,
         }),
         device_model_201: None,
+        charging_profile_16: None,
     }
 }
 

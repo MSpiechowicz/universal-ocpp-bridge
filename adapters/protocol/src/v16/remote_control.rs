@@ -1,9 +1,11 @@
 //! OCPP 1.6 remote operations behind the ordinary durable application command path.
 use crate::remote_constraints as constraints;
 mod charging_limit;
+mod charging_profile;
 mod composite_schedule;
 mod configuration;
 mod configuration_values;
+pub(crate) mod exact_rate;
 mod identity;
 mod mapping;
 mod trigger;
@@ -177,6 +179,38 @@ impl RemoteControlSession {
             self.handle.try_call_before(call, deadline)
         }
     }
+
+    fn enqueue_prepared(
+        &self,
+        command: &Command<Value>,
+        action: &str,
+        payload: Value,
+        now: uob_contracts::UtcTimestamp,
+    ) -> Result<PendingCall, CommandErrorCode> {
+        if now >= command.expires_at {
+            return Err(CommandErrorCode::Expired);
+        }
+        let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
+        // Bound monotonic arithmetic even for an extreme externally supplied UTC expiry.
+        let deadline = Instant::now() + remaining.min(std::time::Duration::from_hours(24));
+        let call = OutboundCall {
+            message_id: command.request_id.as_str().to_owned(),
+            action: uob_contracts::ProtocolActionName::new(action).expect("static action"),
+            payload,
+            correlation_id: command.correlation_id.clone().unwrap_or_else(|| {
+                uob_contracts::CorrelationId::new(command.request_id.as_str())
+                    .expect("request identity")
+            }),
+        };
+        self.enqueue_call(action, call, deadline, &command.resource)
+            .map_err(|error| match error {
+                SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,
+                SessionSubmitError::InvalidRequest => CommandErrorCode::InvalidParameters,
+                SessionSubmitError::Resource(_) | SessionSubmitError::Full => {
+                    CommandErrorCode::PolicyRejected
+                }
+            })
+    }
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
@@ -216,58 +250,61 @@ impl StationCommandPort<Value> for RemoteControlSession {
         command: Command<Value>,
     ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
         Box::pin(async move {
-            // No await between checking committed state, resolving local policy, and bounded enqueue.
-            let prepared = {
+            let (action, unqueued_payload, profile_request, ready_pending) = {
                 let snapshot = self.snapshot.read().map_err(|_| state_error())?;
+                let mut profile_request = None;
                 if self.handle.is_closed() {
                     return Ok(mapping::not_sent(CommandErrorCode::StationDisconnected));
                 }
                 let facts = self.configuration_facts.read().map_err(|_| state_error())?;
-                mapping::prepare(
+                let (action, payload) = match mapping::prepare(
                     &command,
                     &snapshot,
                     self.identity.as_ref(),
                     self.configuration_values.as_deref(),
                     &facts,
                     self.clock.now(),
-                )
+                    &mut profile_request,
+                ) {
+                    Ok(prepared) => prepared,
+                    Err(code) => return Ok(mapping::not_sent(code)),
+                };
+
+                // Full native profiles retain the same snapshot guard through bounded
+                // enqueue, so an ending transaction or revoked capability cannot commit
+                // between validation and queue admission. Never retain guards for reply wait.
+                let (unqueued_payload, ready_pending) = if profile_request.is_some() {
+                    let pending =
+                        match self.enqueue_prepared(&command, action, payload, self.clock.now()) {
+                            Ok(pending) => pending,
+                            Err(code) => return Ok(mapping::not_sent(code)),
+                        };
+                    (None, Some(pending))
+                } else {
+                    (Some(payload), None)
+                };
+                (action, unqueued_payload, profile_request, ready_pending)
             };
-            let (action, payload) = match prepared {
-                Ok(value) => value,
-                Err(code) => return Ok(mapping::not_sent(code)),
-            };
-            let now = self.clock.now();
-            let schedule_request = match composite_schedule::request_context(&command, action) {
-                Ok(request) => request,
-                Err(code) => return Ok(mapping::not_sent(code)),
-            };
-            if now >= command.expires_at {
-                return Ok(mapping::not_sent(CommandErrorCode::Expired));
-            }
-            let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
-            // Bound monotonic arithmetic even if an external command uses an extreme UTC expiry.
-            let deadline = Instant::now() + remaining.min(std::time::Duration::from_hours(24));
-            let call = OutboundCall {
-                message_id: command.request_id.as_str().to_owned(),
-                action: uob_contracts::ProtocolActionName::new(action).expect("static action"),
-                payload,
-                correlation_id: command.correlation_id.clone().unwrap_or_else(|| {
-                    uob_contracts::CorrelationId::new(command.request_id.as_str())
-                        .expect("request identity")
-                }),
-            };
-            let pending = self.enqueue_call(action, call, deadline, &command.resource);
-            let pending = match pending {
-                Ok(pending) => pending,
-                Err(error) => {
-                    return Ok(mapping::not_sent(match error {
-                        SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,
-                        SessionSubmitError::InvalidRequest => CommandErrorCode::InvalidParameters,
-                        SessionSubmitError::Resource(_) | SessionSubmitError::Full => {
-                            CommandErrorCode::PolicyRejected
-                        }
-                    }));
-                }
+
+            let (pending, schedule_request) = if let Some(pending) = ready_pending {
+                (pending, None)
+            } else {
+                // Preserve the existing canonical/configuration/composite preparation order.
+                let now = self.clock.now();
+                let schedule_request = match composite_schedule::request_context(&command, action) {
+                    Ok(request) => request,
+                    Err(code) => return Ok(mapping::not_sent(code)),
+                };
+                let pending = match self.enqueue_prepared(
+                    &command,
+                    action,
+                    unqueued_payload.expect("unqueued ordinary request"),
+                    now,
+                ) {
+                    Ok(pending) => pending,
+                    Err(code) => return Ok(mapping::not_sent(code)),
+                };
+                (pending, schedule_request)
             };
             Ok(match pending.receive().await {
                 SessionCallOutcome::Result { payload, .. } => {
@@ -276,6 +313,9 @@ impl StationCommandPort<Value> for RemoteControlSession {
                     }
                     if let Some(request) = schedule_request {
                         return Ok(composite_schedule::response(request, &payload));
+                    }
+                    if let Some(request) = profile_request {
+                        return Ok(charging_profile::response(request, &payload));
                     }
                     let outcome = mapping::response(action, &payload);
                     if action == "ChangeAvailability"

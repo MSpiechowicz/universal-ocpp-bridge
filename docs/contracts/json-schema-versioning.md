@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains command-result schema routes v1.0–v1.4 and serves
-the current v1.5 command-result; OpenAPI command result responses reference v1.5.
-Current nested export-record and export-batch references use v1.6, while historical
-schema routes and released snapshots remain available.
+The EMS HTTP contract retains command-result schema routes v1.0–v1.5 and serves
+the current v1.6 command-result; OpenAPI command result responses reference v1.6.
+Current nested export-record and export-batch references use v1.7, while historical
+schema routes and snapshots remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -107,24 +107,58 @@ and WriteOnly values are redacted, while statusInfo/customData/valuesList are om
 This additive result contract does not widen privileged ingress, change topology
 or grants, implement writes/monitoring, or certify full device-model coverage.
 
+OCPP 1.6J full privileged `SetChargingProfile`/`ClearChargingProfile` add optional
+`charging_profile_16` to command-result v1.6. This action-tagged evidence contains the
+immutable typed Set request or Clear selectors and a valid native CALLRESULT:
+Set `Accepted`/`Rejected`/`NotSupported`, or Clear `Accepted`/`Unknown`. Native casing is
+retained for action/status; typed request fields use snake_case. Profile identity/purpose,
+signed native IDs, stack/kind/optional recurrence, supplied validity/anchors/duration,
+ordered periods, optional native phases and exact A/W decimal-string rates remain distinct
+from canonical `SetChargingLimit`; zero is preserved. No removed-profile list or hardware
+capacity is inferred. Older result JSON decodes with the optional field absent.
+
+Valid native denials retain typed status with `protocol_rejected`. Sanitized CALLERROR
+rejection has no invented CALLRESULT; malformed/timeout/disconnected replies remain
+`transmission_uncertain` without fabricated `charging_profile_16`. Terminal evidence survives
+conflicting writers and restart, and cannot resolve uncertainty through a late reply.
+Native command recovery does not replay dispatch.
+
+Nested export-record and export-batch advance to v1.7 because they embed CommandResult.
+Historical command-result v1.0–v1.5 and export v1.0–v1.6 snapshots/routes remain unchanged.
+The optional/additive compatibility rule does not weaken strict privileged command ingress
+or grant ordinary control permission to native profile actions. SQLite stays at schema v13:
+the optional JSON result field needs no SQL migration. HTTP/MQTT support here is the existing
+scoped result-reader/publisher contract, not a new ingress family or automatic native-command
+external-export producer. An available export schema is not evidence of global export delivery.
+
 The EMS schema endpoints follow the listener's existing authentication policy: when
 credentials are configured, unauthenticated access is denied; the documented no-credentials
 loopback policy is unchanged. Current paths are
-`/bridge/v1/schemas/v1.5/command-result.schema.json`,
-`/bridge/v1/schemas/v1.6/export-record.schema.json` and
-`/bridge/v1/schemas/v1.6/export-batch.schema.json`. Historical routes, including v1.4
-command-result and v1.5 exports, remain served; canonical OpenAPI references use
+`/bridge/v1/schemas/v1.6/command-result.schema.json`,
+`/bridge/v1/schemas/v1.7/export-record.schema.json` and
+`/bridge/v1/schemas/v1.7/export-batch.schema.json`. Historical routes, including v1.5
+command-result and v1.6 exports, remain served; canonical OpenAPI references use
 each contract's current revision.
 `cargo test --locked -p uob-contracts` covers serialized payload validation, optional/additive
 compatibility and old-result readability. EMS integration verification uses the independent
 probe executable as configured by `scripts/verify-workspace.sh`.
 
-MQTT's existing immediate and durable result publishers accept additive v1.5 on
-existing topics alongside supported v1.0/v1.1/v1.4 results. The v1.2/v1.3 policy is
-unchanged: this addition does not promise every v1 minor revision or add a MQTT
-command family. The EMS integration listener retains exact-origin/principal status
-ownership and does not grant privileged query submission through target ingress.
-Existing target payload caps remain unchanged: an oversized serialized result
-produces an explicit delivery/response error, not truncation, dropped evidence or
-a success-shaped fallback. MQTT broker PUBACK remains delivery acknowledgement,
-never native acceptance, complete inventory or physical charging success.
+MQTT's existing immediate and durable result publishers accept additive v1.6 (revision 6)
+on existing topics alongside supported v1.0/v1.1/v1.4/v1.5 results. The v1.2/v1.3 policy is
+unchanged: this addition does not promise every v1 minor revision or add a MQTT command
+family. The EMS integration listener retains exact-origin/principal status ownership and
+does not grant privileged native profile submission through target ingress. Existing target
+payload caps remain unchanged: an oversized serialized result produces an explicit
+delivery/response error, not truncation, dropped evidence or a success-shaped fallback.
+MQTT broker PUBACK remains delivery acknowledgement, never native acceptance, complete
+inventory, profile enforcement or physical charging success.
+
+Scoped verification passed `cargo test --locked -p uob-contracts --test public_schemas`
+(nine tests), `cargo test --locked -p uob-ems-scada-http-target-adapter --test
+charging_profile_results` (three tests) and `cargo test --locked -p
+uob-mqtt-target-adapter --test charging_profile_wire --test outbound_wire` (seven tests).
+They cover current profile/nested schema validation, historical readability, scoped reads,
+existing response/publication caps, exact evidence and correlated broker acknowledgement.
+These scoped results do not claim whole-workspace verification, fresh reviews or release
+qualification. Separate real-daemon browser evidence confirms existing controls load with
+the new bounded native-profile descriptors, not support for a complex Set editor.

@@ -23,7 +23,7 @@ pub(super) fn path(name: &str) -> Value {
             "Read the versioned OpenAPI document.",
         ),
         "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3" | "schemas_v1_4"
-        | "schemas_v1_5" | "schemas_v1_6" => (
+        | "schemas_v1_5" | "schemas_v1_6" | "schemas_v1_7" => (
             "get",
             "200",
             json!({"type":"object"}),
@@ -77,7 +77,7 @@ pub(super) fn path(name: &str) -> Value {
     let media = match name {
         "events" => "text/event-stream",
         "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3" | "schemas_v1_4"
-        | "schemas_v1_5" | "schemas_v1_6" => "application/schema+json",
+        | "schemas_v1_5" | "schemas_v1_6" | "schemas_v1_7" => "application/schema+json",
         _ => "application/json",
     };
     responses.insert(
@@ -97,6 +97,7 @@ pub(super) fn path(name: &str) -> Value {
             | "schemas_v1_4"
             | "schemas_v1_5"
             | "schemas_v1_6"
+            | "schemas_v1_7"
     ) {
         operation["description"] = json!(
             "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required."
@@ -160,6 +161,7 @@ fn errors(name: &str) -> Map<String, Value> {
                 | "schemas_v1_4"
                 | "schemas_v1_5"
                 | "schemas_v1_6"
+                | "schemas_v1_7"
         );
         let command_only = matches!(
             error,
@@ -181,6 +183,7 @@ fn errors(name: &str) -> Map<String, Value> {
                     | "schemas_v1_4"
                     | "schemas_v1_5"
                     | "schemas_v1_6"
+                    | "schemas_v1_7"
             ) && matches!(error, Error::UnknownResource | Error::InvalidRequest))
         {
             grouped
@@ -212,7 +215,7 @@ fn parameters(name: &str) -> Vec<Value> {
         "point" => Some("point_id"),
         "command_status" => Some("request_id"),
         "schemas" | "schemas_v1_1" | "schemas_v1_2" | "schemas_v1_3" | "schemas_v1_4"
-        | "schemas_v1_5" | "schemas_v1_6" => Some("schema"),
+        | "schemas_v1_5" | "schemas_v1_6" | "schemas_v1_7" => Some("schema"),
         _ => None,
     };
     if let Some(path) = path {
@@ -224,6 +227,7 @@ fn parameters(name: &str) -> Vec<Value> {
                 "schemas_v1_4" => "v1.4",
                 "schemas_v1_5" => "v1.5",
                 "schemas_v1_6" => "v1.6",
+                "schemas_v1_7" => "v1.7",
                 _ => "v1.0",
             };
             json!({"type":"string","enum":super::schemas::canonical(revision)

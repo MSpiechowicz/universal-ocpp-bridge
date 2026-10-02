@@ -3,6 +3,7 @@ mod commands;
 mod control_auth;
 mod device_model;
 mod files;
+mod profiles;
 mod provision;
 mod runtime;
 
@@ -158,6 +159,7 @@ impl StationSettings {
             }
         }
         device_model::apply(snapshot, self.protocol, self.control);
+        profiles::apply(snapshot, self.protocol, self.control);
     }
 }
 

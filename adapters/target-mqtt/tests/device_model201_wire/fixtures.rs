@@ -57,6 +57,7 @@ pub(super) fn device_delivery(delivery_id: &str, request_id: &str) -> TargetDeli
                 }),
             },
         }),
+        charging_profile_16: None,
     };
     TargetDelivery {
         delivery_id: DeliveryId::new(delivery_id).expect("delivery identity"),

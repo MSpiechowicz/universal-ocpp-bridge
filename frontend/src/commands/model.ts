@@ -62,20 +62,24 @@ export function parseDetail(value: unknown, requestId: string, station: Resource
   if (route.request_id !== requestId) throw new Error('Command request mismatch');
   return row(result, station, requestId);
 }
+// The daemon allows 64 children plus the station and at most 5 native actions
+// per resource (325 descriptors). Keep finite headroom without dropping options.
+const MAX_COMMAND_SCHEMAS = 512;
+
 export function parseSchemas(value: unknown, station: ResourceRef): CommandOptions {
   const response = object(value);
   const start = response.start == null ? undefined : object(response.start);
   const startResource = start ? parseResourceRef(start.resource) : undefined;
   if (startResource && (startResource.bridge_id !== station.bridge_id || startResource.station_id !== station.station_id)) throw new Error('Start scope mismatch');
   return { start: startResource ? { resource: startResource, authorization_reference: boundedText(start!.authorization_reference, 1024) } : undefined,
-    items: list(response.items, 50).map(entry => {
+    items: list(response.items, MAX_COMMAND_SCHEMAS).map(entry => {
       const item = object(entry), resource = parseResourceRef(item.resource);
       if (resource.bridge_id !== station.bridge_id || resource.station_id !== station.station_id) throw new Error('Schema scope mismatch');
       return { resource, protocol: boundedText(item.protocol, 32), action: boundedText(item.action, 64),
         payload_schema: boundedText(item.payload_schema, 256), fields: list(item.fields, 24).map(raw => {
           const field = object(raw);
           if (typeof field.required !== 'boolean') throw new Error('Invalid schema field');
-          return { name: boundedText(field.name, 64), value_type: boundedText(field.value_type, 32), required: field.required,
+          return { name: boundedText(field.name, 128), value_type: boundedText(field.value_type, 32), required: field.required,
             ...(field.enum_values == null ? {} : { enum_values: list(field.enum_values, 30).map(choice => boundedText(choice, 128)) }) };
         }) };
     }) };

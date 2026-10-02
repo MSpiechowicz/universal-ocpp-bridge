@@ -30,6 +30,7 @@ where
         let mut trigger_response_201 = None;
         let mut composite_schedule = None;
         let mut device_model = None;
+        let mut charging_profile = None;
         let lifecycle = match self
             .stations
             .dispatch_to_generation(command.clone(), generation)
@@ -141,6 +142,23 @@ where
                     error: None,
                 }
             }
+            CommandDispatchOutcome::ChargingProfileResponse16(response) => {
+                let accepted = response.accepted();
+                let error = (!accepted).then_some(CommandError {
+                    code: CommandErrorCode::ProtocolRejected,
+                    detail: None,
+                });
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                charging_profile = Some(response);
+                CommandLifecycle::ProtocolResponse { accepted, error }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -166,6 +184,10 @@ where
         if let Some(evidence) = device_model {
             result.schema_version = ContractVersion::V1_DEVICE_MODEL_201;
             result.device_model_201 = Some(evidence);
+        }
+        if let Some(evidence) = charging_profile {
+            result.schema_version = ContractVersion::V1_CHARGING_PROFILE_16;
+            result.charging_profile_16 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

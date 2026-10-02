@@ -41,8 +41,9 @@ The authoritative sources are the Open Charge Alliance downloads recorded in `pr
 The source archive SHA-256 values pin acquisition; the fixture registry separately pins every
 vendored schema and hand-authored wire file. CI never downloads a moving schema. The selected OCA
 schema files retain their content; earlier additions normalize line endings as a technical
-format change, while the GetCompositeSchedule pair retains original CRLF bytes as noted below.
-OCA specification material is copyright Open Charge Alliance and distributed under
+format change, while the GetCompositeSchedule pair and four native Set/Clear profile schemas
+retain original CRLF bytes as noted below. OCA specification material is copyright Open
+Charge Alliance and distributed under
 Creative Commons Attribution-NoDerivatives 4.0. Before adding more source material, acquire it
 from the recorded OCA download page, verify its archive digest, retain attribution, and confirm
 that redistribution and any technical transformation comply with that license. Do not copy paid
@@ -203,6 +204,78 @@ historical EMS schemas, identical results after restart, no reconnect replay and
 explicit query. This narrow evidence does not establish all smart charging, profile
 installation/removal, local schedule calculation/enforcement, OCPP 2.0.1 schedules,
 simulator smart charging, physical hardware interoperability or OCA certification.
+
+## OCPP 1.6 native Set/Clear charging-profile fixtures
+
+The narrow bidirectional `ocpp16.smart-charging.profiles` row is `verified` after scoped
+executable regressions and actual-daemon smoke proof. The broad `ocpp16.smart-charging`
+requirement remains `planned`; this does not qualify all smart charging or enforcement.
+`scenario_ids` remains empty because there is no checked scenario registry. The row uses
+existing `fixture:` and exact executable `test:` evidence symbols, not invented scenarios.
+
+Four schema files are original-byte copies from the same pinned OCA OCPP 1.6 Edition 2
+and published JSON errata bundle dated 2025-04-29, archive SHA-256
+`2a1d80284ca60449e85951fc55bc0538b5d45bd6f97c6d9228745acacb52c11b`.
+They retain original **CRLF** bytes, OCA copyright and Creative Commons
+Attribution-NoDerivatives 4.0 attribution; no schema content or line endings are transformed.
+The corpus paths and source-byte SHA-256 digests are:
+
+| Schema under `schemas/1.6/` | SHA-256 |
+|---|---|
+| `SetChargingProfileRequest.json` | `fdd29c5d36a8118e462e7cf984c83ac7da8fb2b10ff285d923c016c47845df16` |
+| `SetChargingProfileResponse.json` | `92c93950e87fa3a97684989656f9523c42805d3929c37dd033233dc0c0ba18c5` |
+| `ClearChargingProfileRequest.json` | `22a84d99ab47e242c817a1cc3f34c07396a91d63b0987455a2202cd446b9485d` |
+| `ClearChargingProfileResponse.json` | `4a576de2a37614998624984a86dcd9a42a6e6ecc51849b017e3a203dc1cce945` |
+
+The eleven independently hand-authored fixture IDs (all prefixed `wire.ocpp16.`) are:
+
+- Set CALLs: `profile-station-max`, `profile-recurring-default`, `profile-transaction-zero`.
+- Set CALLRESULTs: `profile-set-accepted`, `profile-set-rejected`, `profile-set-notsupported`.
+- Clear CALLs: `profile-clear-id-overrides`, `profile-clear-filter`, `profile-clear-all`.
+- Clear CALLRESULTs: `profile-clear-accepted`, `profile-clear-unknown`.
+
+`fixtures.json` pins each schema and wire-file digest. Expected wire JSON is not generated
+by bridge/model encoders. Malformed replies and CALLERROR remain behavioral test inputs,
+not valid corpus entries: the checker accepts only schema-valid CALL/CALLRESULT envelopes.
+Native profiles preserve exact A/W tenths, genuine zero, signed IDs, optional native phases,
+recurrence/validity/anchors and charger-truncated periods. ID overrides other Clear filters,
+requiring station authority; child filter clear cannot use ID. Native Accepted alone proves
+neither an installed-profile inventory nor charging enforcement.
+
+`cargo test --locked -p uob-protocol-adapter --test ocpp16_charging_profiles` passed
+eleven regressions, including:
+
+- `exact_native_profiles_and_action_specific_statuses_survive_reopen`
+- `independent_profile_fixtures_reach_native_status_boundary_without_station_widening`
+- `precision::exactly_1024_periods_and_signed_identity_boundaries_are_preserved`
+- `precision::native_optional_recurrence_and_expired_validity_remain_charger_decisions`
+- `transactions::native_tx_profile_requires_unique_established_ongoing_identity_at_dispatch`
+- `transactions::canonical_limit_never_acquires_full_profile_evidence_or_zero_semantics`
+- `validation::profile_shape_precision_period_and_scope_fail_closed_before_wire`
+- `validation::optins_and_privileged_permission_remain_independent_from_canonical_limit`
+- `lifecycle::fully_encoded_profile_call_has_a_hard_bound_before_enqueue`
+- `lifecycle::captured_request_is_immutable_during_snapshot_updates_and_duplicate_admission`
+- `lifecycle::malformed_replies_errors_timeout_and_disconnect_remain_one_shot_after_reopen`
+
+The passing storage tests are `terminal_profile_identity_status_and_effects_survive_conflicting_writers_and_reopen`
+and `late_native_profile_reply_cannot_resolve_terminal_uncertainty` in
+`cargo test --locked -p uob-storage-adapter --test charging_profile`.
+`cargo test --locked -p uob-service --test charging_profiles` passed eight actual-process
+tests. The selected coverage row links all eight exact symbols: native A/W/zero/status and
+validity/scope preservation, independent opt-in/grants, no-CALL privilege/registration/
+precision/ID-clear denial, malformed/CALLERROR/30-second timeout, delayed heartbeat progress,
+and peer-apply disconnect/restart uncertainty without replay.
+
+A separate rebuilt-daemon smoke with an independent RFC 6455 software peer observed A 8.1,
+A 0, W 7200.1, Set Accepted/Rejected/NotSupported and Clear Accepted/Unknown in revision-6
+typed results. It observed denied ID-clear/invalid precision/ordinary-control submissions
+without a CALL, heartbeat progress before profile reply, retained uncertainty/no resend after
+reconnect and daemon restart, eight retained terminal results, and reloaded peer profile state.
+The peer's bounded persistence/replacement/filter behavior is software-only evidence, not
+hardware enforcement, a full simulator, OCA certification or full release qualification.
+Whole-workspace verification and fresh reviews are not claims of this narrow corpus row.
+Separate real-daemon live browser proof covers existing-control compatibility with the new
+profile descriptors, not nested profile editing or hardware behavior.
 
 ## OCPP 2.0.1 read-only device-model fixtures
 

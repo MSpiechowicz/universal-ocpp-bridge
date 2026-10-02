@@ -1,0 +1,31 @@
+[
+  2,
+  "independent-117-profile-station-max",
+  "SetChargingProfile",
+  {
+    "connectorId": 0,
+    "csChargingProfiles": {
+      "chargingProfileId": -2147483648,
+      "stackLevel": 3,
+      "chargingProfilePurpose": "ChargePointMaxProfile",
+      "chargingProfileKind": "Absolute",
+      "validFrom": "2026-01-01T00:00:00Z",
+      "validTo": "2027-01-01T00:00:00Z",
+      "chargingSchedule": {
+        "startSchedule": "2026-01-01T00:00:00Z",
+        "duration": 120,
+        "chargingRateUnit": "W",
+        "chargingSchedulePeriod": [
+          {
+            "startPeriod": 0,
+            "limit": 7200
+          },
+          {
+            "startPeriod": 180,
+            "limit": 0
+          }
+        ]
+      }
+    }
+  }
+]

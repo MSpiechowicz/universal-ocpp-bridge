@@ -104,7 +104,7 @@ pub fn export_record(command_result: &Value) -> Value {
     json!({
         "metadata":{
             "identity":{"record_id":"device-query-record-109"},
-            "schema_version":{"major":1,"revision":6},
+            "schema_version":{"major":1,"revision":7},
             "runtime":{
                 "environment":"demo", "release_id":"device-consumer-fixture",
                 "release_digest":"sha256:109", "process_instance_id":"device-consumer-process"

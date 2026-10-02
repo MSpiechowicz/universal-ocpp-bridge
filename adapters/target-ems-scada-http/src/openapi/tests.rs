@@ -2,7 +2,7 @@ use super::{
     openapi_document,
     schemas::{
         CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3, CANONICAL_V1_4, CANONICAL_V1_5,
-        CANONICAL_V1_6,
+        CANONICAL_V1_6, CANONICAL_V1_7,
     },
 };
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
@@ -22,6 +22,7 @@ fn registry() -> jsonschema::Registry<'static> {
         ("v1.4", CANONICAL_V1_4),
         ("v1.5", CANONICAL_V1_5),
         ("v1.6", CANONICAL_V1_6),
+        ("v1.7", CANONICAL_V1_7),
     ]
     .into_iter()
     .flat_map(|(revision, schemas)| {
@@ -124,6 +125,8 @@ async fn schema_versions_serve_exact_canonical_files() {
         ("v1.3", CANONICAL_V1_3),
         ("v1.4", CANONICAL_V1_4),
         ("v1.5", CANONICAL_V1_5),
+        ("v1.6", CANONICAL_V1_6),
+        ("v1.7", CANONICAL_V1_7),
     ] {
         for (file, source) in schemas {
             let path = format!("/bridge/v1/schemas/{revision}/{file}");
@@ -152,7 +155,7 @@ async fn schema_versions_serve_exact_canonical_files() {
     }
     for path in [
         "/bridge/v1/schemas/v1.1/station-snapshot.schema.json",
-        "/bridge/v1/schemas/v1.6/command-result.schema.json",
+        "/bridge/v1/schemas/v1.7/command-result.schema.json",
     ] {
         assert_eq!(get(router.clone(), path, Some(READER_TOKEN)).await.0, 404);
     }

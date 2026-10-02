@@ -1,0 +1,24 @@
+[
+  2,
+  "independent-117-profile-transaction-zero",
+  "SetChargingProfile",
+  {
+    "connectorId": 1,
+    "csChargingProfiles": {
+      "chargingProfileId": -117,
+      "transactionId": -81,
+      "stackLevel": 2,
+      "chargingProfilePurpose": "TxProfile",
+      "chargingProfileKind": "Relative",
+      "chargingSchedule": {
+        "chargingRateUnit": "W",
+        "chargingSchedulePeriod": [
+          {
+            "startPeriod": 0,
+            "limit": 0
+          }
+        ]
+      }
+    }
+  }
+]

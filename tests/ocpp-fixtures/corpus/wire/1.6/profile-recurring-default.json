@@ -1,0 +1,32 @@
+[
+  2,
+  "independent-117-profile-recurring-default",
+  "SetChargingProfile",
+  {
+    "connectorId": 2,
+    "csChargingProfiles": {
+      "chargingProfileId": 2147483647,
+      "stackLevel": 1,
+      "chargingProfilePurpose": "TxDefaultProfile",
+      "chargingProfileKind": "Recurring",
+      "recurrencyKind": "Weekly",
+      "chargingSchedule": {
+        "startSchedule": "2026-01-01T00:00:00Z",
+        "duration": 60,
+        "chargingRateUnit": "A",
+        "chargingSchedulePeriod": [
+          {
+            "startPeriod": 0,
+            "limit": 8.1,
+            "numberPhases": 4
+          },
+          {
+            "startPeriod": 604801,
+            "limit": 0
+          }
+        ],
+        "minChargingRate": 6.1
+      }
+    }
+  }
+]

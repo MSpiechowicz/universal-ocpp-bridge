@@ -43,11 +43,16 @@ export function Commands({ client, snapshot, hidden }: { client: ApiClient; snap
   const [values, setValues] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState(false);
   const [draft, setDraft] = useState<Draft>();
-  const [busy, setBusy] = useState(false);
+  const [protectedBusy, setProtectedBusy] = useState<number>();
+  const [readBusy, setReadBusy] = useState<number>();
+  const busy = protectedBusy !== undefined || readBusy !== undefined;
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const credential = useRef<HTMLInputElement>(null);
-  const generation = useRef(0);
+  // Snapshot staleness fences control work, not durable history/status reads.
+  const protectedGeneration = useRef(0);
+  const readGeneration = useRef(0);
+  const [departed, setDeparted] = useState(false);
   const sending = useRef(false);
   const [identityLost, setIdentityLost] = useState(false);
   const refs = [station, ...snapshot.resources.map(item => item.resource)];
@@ -60,9 +65,14 @@ export function Commands({ client, snapshot, hidden }: { client: ApiClient; snap
   const selectedSchema = offered.find(schema => `ocpp:${schema.protocol}:${schema.action}` === choice);
   const selectedOperation = operations.find(item => item.operation.kind === choice);
   const supported = !!selectedOperation || !!selectedSchema;
-  const stopped = hidden || busy || loading || identityLost;
+  const stopped = hidden || busy || loading || identityLost || departed;
+  const readStopped = busy || identityLost || departed;
   function reportError(error: unknown) {
-    if (error instanceof ApiError && error.kind === 'identity') setIdentityLost(true);
+    if (error instanceof ApiError && error.kind === 'identity') {
+      protectedGeneration.current++; readGeneration.current++;
+      setIdentityLost(true); setOptions(undefined); setConfirmed(false);
+      if (credential.current) credential.current.value = '';
+    }
     setNotice(failure(error));
   }
 
@@ -72,41 +82,48 @@ export function Commands({ client, snapshot, hidden }: { client: ApiClient; snap
   }
 
   useEffect(() => {
-    let live = true;
+    const sequence = ++readGeneration.current;
     const leave = () => {
-      generation.current++;
+      protectedGeneration.current++; readGeneration.current++;
+      setDeparted(true);
       if (credential.current) credential.current.value = '';
       setOptions(undefined); setDraft(undefined); setConfirmed(false);
     };
     window.addEventListener('pagehide', leave);
-    setLoading(true);
+    setLoading(true); setReadBusy(sequence);
     void client.commandHistory(station).then(rows => {
-      if (live) setHistory(rows);
+      if (sequence === readGeneration.current) setHistory(rows);
     }).catch(error => {
-      if (live) reportError(error);
-    })
-      .finally(() => { if (live) setLoading(false); });
-    return () => { live = false; window.removeEventListener('pagehide', leave); generation.current++; if (credential.current) credential.current.value = ''; };
-  }, [client, station.bridge_id, station.station_id]);
+      if (sequence === readGeneration.current) reportError(error);
+    }).finally(() => {
+      if (sequence === readGeneration.current) setLoading(false);
+      setReadBusy(current => current === sequence ? undefined : current);
+    });
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      protectedGeneration.current++; readGeneration.current++;
+      if (credential.current) credential.current.value = '';
+    };
+  }, [client, client.destinationKey, station.bridge_id, station.station_id]);
 
   async function loadOptions() {
     if (stopped || !credential.current?.value) return;
-    const sequence = ++generation.current;
-    setBusy(true); setConfirmed(false); setOptions(undefined); setChoice('');
+    const sequence = ++protectedGeneration.current;
+    setProtectedBusy(sequence); setConfirmed(false); setOptions(undefined); setChoice('');
     try {
       const available = await client.commandSchemas(station, credential.current.value);
-      if (sequence === generation.current) { setOptions(available); setNotice('Protected control options loaded for this credential and station.'); }
+      if (sequence === protectedGeneration.current) { setOptions(available); setNotice('Protected control options loaded for this credential and station.'); }
     } catch (error) {
-      if (sequence === generation.current) {
+      if (sequence === protectedGeneration.current) {
         if (credential.current) credential.current.value = '';
         reportError(error);
       }
-    } finally { if (sequence === generation.current) setBusy(false); }
+    } finally { setProtectedBusy(current => current === sequence ? undefined : current); }
   }
   useEffect(() => {
     if (!hidden) return;
-    generation.current++;
-    setConfirmed(false); setOptions(undefined); setChoice(''); setBusy(false);
+    protectedGeneration.current++;
+    setConfirmed(false); setOptions(undefined); setChoice('');
     if (credential.current) credential.current.value = '';
   }, [hidden]);
 
@@ -115,17 +132,17 @@ export function Commands({ client, snapshot, hidden }: { client: ApiClient; snap
       onChange={event => changeValue(name, event.target.value)} disabled={stopped || !!draft} maxLength={1024} autoComplete="off"/></label>;
   }
   async function refresh(id?: string) {
-    if (busy) return;
-    const sequence = ++generation.current;
-    setBusy(true); setNotice('');
+    if (readStopped) return;
+    const sequence = ++readGeneration.current;
+    setReadBusy(sequence); setNotice('');
     try {
       const result = id ? await client.commandStatus(id, station) : await client.commandHistory(station);
-      if (sequence !== generation.current) return;
+      if (sequence !== readGeneration.current) return;
       if (id) setDetail(result as CommandRow);
       else setHistory(result as CommandPage);
     } catch (error) {
-      if (sequence === generation.current) reportError(error);
-    } finally { if (sequence === generation.current) setBusy(false); }
+      if (sequence === readGeneration.current) reportError(error);
+    } finally { setReadBusy(current => current === sequence ? undefined : current); }
   }
   async function submit(event: { preventDefault(): void }, retry = false) {
     event.preventDefault();
@@ -146,21 +163,21 @@ export function Commands({ client, snapshot, hidden }: { client: ApiClient; snap
       }
     } catch (error) { setNotice(failure(error)); return; }
     sending.current = true;
-    const sequence = ++generation.current;
-    setDraft(request); setOptions(undefined); setBusy(true); setNotice('Submitting once; an unknown response is not permission to create a new request.');
+    const sequence = ++protectedGeneration.current;
+    setDraft(request); setOptions(undefined); setProtectedBusy(sequence); setNotice('Submitting once; an unknown response is not permission to create a new request.');
     try {
       await client.submitCommand(request, control, client.destinationKey);
-      if (sequence !== generation.current) return;
+      if (sequence !== protectedGeneration.current) return;
       setNotice('Submission returned. Read status to distinguish admission, protocol response and observed effects.');
     } catch (error) {
-      if (sequence !== generation.current) return;
-      if (error instanceof ApiError && error.kind === 'identity') setIdentityLost(true);
+      if (sequence !== protectedGeneration.current) return;
+      if (error instanceof ApiError && error.kind === 'identity') reportError(error);
       setNotice(error instanceof ApiError && error.kind.startsWith('command.') ? `${failure(error)} Check this request ID for its durable status before another action.` :
         `${failure(error)} Submission outcome may be unknown. Check this request ID before intentional retry.`);
-    } finally { sending.current = false; if (sequence === generation.current) setBusy(false); }
+    } finally { sending.current = false; setProtectedBusy(current => current === sequence ? undefined : current); }
   }
   function reset() {
-    generation.current++;
+    protectedGeneration.current++;
     setDraft(undefined); setDetail(undefined); setOptions(undefined); setValues({}); setChoice('');
     setNotice('New request will receive a new identity; inspect earlier request status first. Reload protected options before another start or privileged action.');
   }
@@ -205,22 +222,22 @@ export function Commands({ client, snapshot, hidden }: { client: ApiClient; snap
         Confirm this submission only: {client.identity.runtime.environment.toUpperCase()} · bridge {client.identity.bridge_id} · release {client.identity.runtime.release_id} · target {client.identity.selected_target_id ?? 'none'} · station {station.station_id} · {client.origin}
       </label>
       {draft ? <><p>Immutable request <code>{draft.request_id}</code> · correlation <code>{draft.correlation_id}</code> · expires {draft.expires_at}</p>
-        <div className="command-actions"><button type="button" className="secondary" disabled={busy} onClick={() => void refresh(draft.request_id)}>Check request status</button>
+        <div className="command-actions"><button type="button" className="secondary" disabled={readStopped} onClick={() => void refresh(draft.request_id)}>Check request status</button>
           <button type="button" disabled={stopped || !confirmed || Date.parse(draft.expires_at) <= Date.now()} onClick={event => void submit(event, true)}>Intentionally retry exact request</button>
-          <button type="button" className="secondary" disabled={busy} onClick={reset}>Prepare new request</button></div></>
+          <button type="button" className="secondary" disabled={readStopped} onClick={reset}>Prepare new request</button></div></>
         : <button type="submit" disabled={stopped || !supported || !confirmed}>Submit once</button>}
     </form>
     {detail && <section aria-label="Command detail"><h3>Server-backed request detail</h3><Evidence item={detail}/></section>}
-    <div className="command-actions"><h3>Server-backed sanitized history</h3><button type="button" className="secondary" disabled={busy} onClick={() => void refresh()}>Refresh history</button></div>
+    <div className="command-actions"><h3>Server-backed sanitized history</h3><button type="button" className="secondary" disabled={readStopped} onClick={() => void refresh()}>Refresh history</button></div>
     {history ? <><ul className="command-history">{history.items.map(item => <li key={item.request_id}><Evidence item={item}/>
-      <button type="button" className="secondary" disabled={busy} onClick={() => void refresh(item.request_id)}>Inspect detail</button></li>)}</ul>
+      <button type="button" className="secondary" disabled={readStopped} onClick={() => void refresh(item.request_id)}>Inspect detail</button></li>)}</ul>
       {!history.items.length && <p>No commands in this authorized station page.</p>}
-      {history.next_cursor && <button type="button" className="secondary" disabled={busy} onClick={() => {
-        const sequence = ++generation.current; setBusy(true);
+      {history.next_cursor && <button type="button" className="secondary" disabled={readStopped} onClick={() => {
+        const sequence = ++readGeneration.current; setReadBusy(sequence);
         void client.commandHistory(station, history.next_cursor).then(next => {
-          if (sequence === generation.current) setHistory({ items: [...history.items, ...next.items], next_cursor: next.next_cursor });
-        }).catch(error => { if (sequence === generation.current) setNotice(failure(error)); })
-          .finally(() => { if (sequence === generation.current) setBusy(false); });
+          if (sequence === readGeneration.current) setHistory({ items: [...history.items, ...next.items], next_cursor: next.next_cursor });
+        }).catch(error => { if (sequence === readGeneration.current) reportError(error); })
+          .finally(() => { setReadBusy(current => current === sequence ? undefined : current); });
       }}>Load next history page</button>}</> : <p>History unavailable or loading; status remains queryable by request ID after submission.</p>}
   </section>;
 }

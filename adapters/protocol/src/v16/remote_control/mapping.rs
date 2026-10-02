@@ -37,6 +37,7 @@ pub(super) fn prepare(
     configuration_values: Option<&LocalConfigurationValues>,
     facts: &configuration::SessionFacts,
     now: UtcTimestamp,
+    profile_request: &mut Option<crate::command_registry::charging_profile16::Request>,
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, PolicyRejected, UnsupportedOperation};
     if !matches!(
@@ -74,48 +75,38 @@ pub(super) fn prepare(
     match &command.operation {
         CommandOperation::Start {
             authorization_reference,
-        } => {
-            if !available(snapshot, &command.resource) {
-                return Err(PolicyRejected);
-            }
-            let reference = authorization_reference.as_deref().ok_or(PolicyRejected)?;
-            let token = identity
-                .authorized_token(reference, &command.resource, now)
-                .ok_or(PolicyRejected)?;
-            let id_tag = std::str::from_utf8(token.expose_to_provider())
-                .map_err(|_| InvalidParameters)?
-                .to_owned();
-            let request = RemoteStartTransactionRequest {
-                connector_id: (native != 0).then_some(native),
-                id_tag,
-                charging_profile: None,
-            };
-            request.validate().map_err(|_| InvalidParameters)?;
-            Ok(("RemoteStartTransaction", encode(request)?))
-        }
+        } => prepare_start(
+            command,
+            snapshot,
+            identity,
+            authorization_reference.as_deref(),
+            native,
+            now,
+        ),
         CommandOperation::Stop { transaction_id } => {
-            let tx = snapshot
-                .transactions
-                .iter()
-                .find(|tx| {
-                    &tx.transaction_id == transaction_id
-                        && (command.resource == snapshot.station || tx.resource == command.resource)
-                        && tx.state != TransactionState::Ended
-                })
-                .ok_or(InvalidParameters)?;
-            let native_id = tx.ocpp16.as_ref().ok_or(InvalidParameters)?.transaction_id;
-            Ok((
-                "RemoteStopTransaction",
-                encode(RemoteStopTransactionRequest {
-                    transaction_id: native_id,
-                })?,
-            ))
+            prepare_stop(command, snapshot, transaction_id)
         }
         CommandOperation::SetChargingLimit(limit) => Ok((
             "SetChargingProfile",
             charging_limit::prepare(command, snapshot, limit)?,
         )),
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp16j => {
+            if crate::command_registry::charging_profile16::ACTIONS
+                .contains(&operation.action.as_str())
+            {
+                let request =
+                    super::charging_profile::prepare(&command.resource, operation, snapshot)?;
+                let action = match &request {
+                    crate::command_registry::charging_profile16::Request::Set(_) => {
+                        "SetChargingProfile"
+                    }
+                    crate::command_registry::charging_profile16::Request::Clear(_) => {
+                        "ClearChargingProfile"
+                    }
+                };
+                *profile_request = Some(request);
+                return Ok((action, operation.payload.clone()));
+            }
             if operation.action.as_str() == "TriggerMessage" {
                 if operation.payload_schema.as_str() != trigger::SCHEMA {
                     return Err(InvalidParameters);
@@ -136,6 +127,59 @@ pub(super) fn prepare(
         CommandOperation::Ocpp(_) => Err(UnsupportedOperation),
     }
 }
+
+fn prepare_start(
+    command: &Command<Value>,
+    snapshot: &StationSnapshot,
+    identity: &dyn RemoteStartIdentity,
+    authorization_reference: Option<&str>,
+    native: u32,
+    now: UtcTimestamp,
+) -> Result<(&'static str, Value), CommandErrorCode> {
+    use CommandErrorCode::{InvalidParameters, PolicyRejected};
+    if !available(snapshot, &command.resource) {
+        return Err(PolicyRejected);
+    }
+    let reference = authorization_reference.ok_or(PolicyRejected)?;
+    let token = identity
+        .authorized_token(reference, &command.resource, now)
+        .ok_or(PolicyRejected)?;
+    let id_tag = std::str::from_utf8(token.expose_to_provider())
+        .map_err(|_| InvalidParameters)?
+        .to_owned();
+    let request = RemoteStartTransactionRequest {
+        connector_id: (native != 0).then_some(native),
+        id_tag,
+        charging_profile: None,
+    };
+    request.validate().map_err(|_| InvalidParameters)?;
+    Ok(("RemoteStartTransaction", encode(request)?))
+}
+
+fn prepare_stop(
+    command: &Command<Value>,
+    snapshot: &StationSnapshot,
+    transaction_id: &uob_contracts::TransactionId,
+) -> Result<(&'static str, Value), CommandErrorCode> {
+    use CommandErrorCode::InvalidParameters;
+    let tx = snapshot
+        .transactions
+        .iter()
+        .find(|tx| {
+            &tx.transaction_id == transaction_id
+                && (command.resource == snapshot.station || tx.resource == command.resource)
+                && tx.state != TransactionState::Ended
+        })
+        .ok_or(InvalidParameters)?;
+    let native_id = tx.ocpp16.as_ref().ok_or(InvalidParameters)?.transaction_id;
+    Ok((
+        "RemoteStopTransaction",
+        encode(RemoteStopTransactionRequest {
+            transaction_id: native_id,
+        })?,
+    ))
+}
+
 fn boot_trigger(command: &Command<Value>) -> bool {
     matches!(
         &command.operation,

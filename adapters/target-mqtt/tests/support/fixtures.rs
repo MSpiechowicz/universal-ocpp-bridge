@@ -196,6 +196,7 @@ pub fn result_delivery(
             trigger_observation_201: None,
             composite_schedule_16: None,
             device_model_201: None,
+            charging_profile_16: None,
         }),
     )
 }

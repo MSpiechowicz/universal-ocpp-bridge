@@ -1,5 +1,5 @@
 //! Private-file authenticated OCPP peers for the real-daemon browser acceptance test.
-//! Usage: `charging_browser_peer` <charging-port> <alpha-secret-path> <bravo-secret-path>
+//! Usage: `charging_browser_peer` <charging-port> <alpha-secret-path> <bravo-secret-path> <alpha-connectors:1..64>
 //! Stdin phases: disconnect, reconnect, prepare-controls, counts, start-a/b, stop-a/b,
 //! availability-a/b, stop. Only fixed phase labels and bounded counters go to stdout.
 use std::{env, fs, path::Path, time::Duration};
@@ -187,17 +187,24 @@ fn timestamp() -> Result<String> {
 async fn main() {
     let args: Vec<_> = env::args_os().collect();
     let result = async {
-        if args.len() != 4 {
-            return Err("expected port and two secret file paths");
+        if args.len() != 5 {
+            return Err("expected port, two secret file paths and Alpha connector count");
         }
         let port = args[1]
             .to_str()
             .ok_or("invalid port")?
             .parse()
             .map_err(|_| "invalid port")?;
+        let alpha_connectors = args[4]
+            .to_str()
+            .ok_or("invalid Alpha connector count")?
+            .parse::<u8>()
+            .ok()
+            .filter(|count| (1..=64).contains(count))
+            .ok_or("invalid Alpha connector count")?;
         let a = fs::read(Path::new(&args[2])).map_err(|_| "cannot read station credential")?;
         let b = fs::read(Path::new(&args[3])).map_err(|_| "cannot read station credential")?;
-        run(port, &a, &b).await
+        run(port, &a, &b, alpha_connectors).await
     }
     .await;
     if let Err(category) = result {

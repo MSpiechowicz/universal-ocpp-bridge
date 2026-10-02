@@ -36,6 +36,7 @@ pub(super) struct Availability201 {
 
 #[derive(Default)]
 pub(super) struct State {
+    pub(super) alpha_connectors: u8,
     pub(super) counts: Counts,
     pub(super) prepared: bool,
     pub(super) seed_transaction: Option<i64>,
