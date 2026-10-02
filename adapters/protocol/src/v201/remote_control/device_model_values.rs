@@ -80,15 +80,17 @@ fn disclose(
 ) -> DeviceValue201 {
     let safe = !write_only
         && attribute == DeviceAttributeType201::Actual
-        && limit_identity(component, variable).is_some()
-        && value.is_some_and(|value| {
-            !value.is_empty()
-                && value.len() <= 10
-                && value.bytes().all(|b| b.is_ascii_digit())
-                && value
-                    .parse::<u32>()
-                    .is_ok_and(|n| n > 0 && i32::try_from(n).is_ok())
-        });
+        && ((super::phase_capability::identity(component, variable).is_some()
+            && matches!(value, Some("true" | "false")))
+            || (limit_identity(component, variable).is_some()
+                && value.is_some_and(|value| {
+                    !value.is_empty()
+                        && value.len() <= 10
+                        && value.bytes().all(|b| b.is_ascii_digit())
+                        && value
+                            .parse::<u32>()
+                            .is_ok_and(|n| n > 0 && i32::try_from(n).is_ok())
+                })));
     DeviceValue201 {
         present: value.is_some(),
         redacted: value.is_some() && !safe,

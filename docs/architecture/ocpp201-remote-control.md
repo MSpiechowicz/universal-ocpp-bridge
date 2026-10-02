@@ -3,9 +3,9 @@
 `v201::remote_control::RemoteControlSession` implements the existing application
 `StationCommandPort` for one authenticated OCPP 2.0.1 socket. Compose it with the ordinary durable
 `CommandCoordinator` and scoped access guard. Start and stop require control permission; native
-Reset and UnlockConnector require privileged control. There is no additional HTTP endpoint or
-authorization path. As with the 1.6 implementation, the management-only executable is not yet a
-composed charging host.
+Reset, UnlockConnector and full native Set/ClearChargingProfile require privileged control.
+There is no additional HTTP endpoint or authorization path. `uob serve` composes this
+boundary only in the independently credentialed, loopback, demo-only charging host.
 
 The owner supplies committed registration, topology, capabilities, availability and transaction
 state. Updates cannot change station identity or connection epoch, or move observation time
@@ -17,15 +17,17 @@ backward. Reconnect requires a new port. Old commands are never queued for a rep
 | RequestStopTransaction | Stop with a retained canonical transaction ID in the addressed station, EVSE or connector | Native transactionId from committed protocol evidence; Accepted/Rejected |
 | Reset | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:ResetRequest`, Immediate or OnIdle | Station scope omits evseId; EVSE scope must match it exactly; Accepted/Rejected/Scheduled |
 | UnlockConnector | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:UnlockConnectorRequest` | Both positive EVSE and connector IDs must match the addressed connector; Unlocked/UnlockFailed/OngoingAuthorizedTransaction/UnknownConnector |
+| SetChargingProfile | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:SetChargingProfileRequest` | Station0 or exact positive EVSE; full request, Accepted/Rejected |
+| ClearChargingProfile | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:ClearChargingProfileRequest` | ID alone or nonempty AND criteria; Accepted/Unknown, no removed IDs |
 
 A start cannot select a connector on the wire. Connector-scoped starts fail explicitly rather
 than widening permission to their EVSE. Station-scoped starts omit evseId and require station-scoped
 local authorization. The service conservatively refuses starting on an EVSE with a retained live
 transaction; it does not infer from Pending alone that an existing transaction is unauthorised.
 Unavailable resources, missing capabilities, unknown payload fields/schemas, unsupported native
-operations and violated advertised parameters fail closed. Optional charging profiles and group
-tokens require their separately planned feature support; raw privileged starts cannot bypass the
-normal start guard.
+operations and violated advertised parameters fail closed. Charging profiles embedded in a
+remote-start request and group tokens remain unsupported; native SetChargingProfile is a
+separate opt-in described below and cannot bypass the normal start guard.
 
 `LocalRemoteStartIdentity::new` resolves at most 128 bounded typed tokens at startup through the
 configured trusted identity provider, with a one-second bound per resolution. It rechecks the
@@ -113,6 +115,117 @@ certificate triggers return `NotImplemented`: it has no private key/CSR
 generator and does not fabricate a signing request. Full certificate-chain,
 CSR issuance and ISO 15118 workflows remain separate planned features.
 
+## Opt-in native charging profiles
+
+`set_charging_profile` and `clear_charging_profile` independently default to `false` in each
+OCPP 2.0.1 station table. Neither enables canonical charging limits, GetVariables, target
+privileged ingress or production charging. Native Set/Clear requires the exact advertised
+station or EVSE resource and a privileged grant. Connector-only permission never widens to
+EVSE authority. Set's `evseId=0` owns a station profile; positive IDs require the configured
+EVSE-only resource. ID clears and criteria without a positive EVSE require station authority.
+For Clear, omitted EVSE means all EVSEs, while zero means station-owned profiles only.
+Profile IDs are station-global: EVSE/connector-scoped replacement cannot erase another
+EVSE's or station0's known/uncertain ownership. Explicit station-privileged ID Clear followed
+by exact-EVSE Set is the recovery path for such a move.
+
+The supported non-ISO context has exactly one schedule with 1–1024 strictly increasing,
+first-zero periods. Signed i32 profile/schedule IDs, native transaction spelling (at most
+36 characters), supplied omissions, validity and anchors, duration, A/W units, exact
+nonnegative tenths including zero/minChargingRate, phase count and phase selection survive
+in immutable evidence. Rates are never rounded or converted using guessed voltage.
+Absolute/Recurring requires startSchedule; Relative prohibits it. Only Recurring has a
+required Daily/Weekly recurrencyKind. validFrom is inclusive, validTo exclusive; omitted
+bounds remain indefinite, and legal duration-truncated periods remain present. Empty/inverted
+supplied windows, unknown fields, customData, salesTariff and ISO multi-schedules are rejected.
+ChargingStationMaxProfile requires station0 and cannot be Relative. TxProfile requires a
+unique established ongoing transaction on its exact EVSE, observed in this connection
+generation and rechecked at dispatch. External constraints cannot be installed or cleared
+through these commands.
+
+### Explicit destructive baseline and exclusive ownership
+
+With full native Set enabled, a new/upgraded database has **unknown pre-existing profiles**.
+Both native Set and canonical SetChargingLimit are blocked until the operator intentionally
+submits three station-privileged all-EVSE **purpose-only** Clears:
+ChargingStationMaxProfile, TxDefaultProfile and TxProfile. Each valid Accepted or Unknown
+acknowledgement establishes that purpose's empty baseline; partial progress persists.
+These clears can remove existing charging policies. The bridge never issues them
+automatically. This prerequisite assumes exclusive CSMS ownership; the ledger is not an
+authoritative discovered inventory. Do not enable full Set where that ownership cannot be
+established. Targeted Unknown cannot reconcile uncertain metadata or establish a baseline.
+Canonical-only mode with full Set disabled retains its existing eligibility, positive
+quantities, stable generated ID, stack0 and phase policy, without a baseline prerequisite.
+Its mutations nevertheless reserve and retain their known ownership metadata; they do not
+gain the full native result field.
+An ordinary canonical charging limit cannot erase a privileged policy sharing its generated ID:
+all existing same-ID footprints must exactly match its current transaction, purpose, stack,
+scope and validity metadata. Quantity-only repeats remain allowed. Privileged full native
+replacement retains its independent within-scope authority. This guard reads durable footprints,
+not historical command ownership, and therefore survives pruning.
+
+Reservation JSON contains only bounded generation/baseline/mutation data. Existing external
+request IDs remain unchanged in SQL identity columns, not duplicated into its 8 KiB payload.
+Footprint scans and transactional selective deletion use compact row IDs rather than copying
+potentially large historical owner strings.
+
+SQLite schema14 adds a metadata-only ledger and reservations through the existing atomic
+worker. A station holds at most128 footprints, including both old and candidate footprints
+after uncertain replacement; there is no eviction. An explicit Clear remains admissible at
+the footprint bound. Admission plus reservation commits before durable dispatch-start and
+wire. Only one station profile mutation is active; busy/conflict/capacity fails without retry,
+while network readers and Heartbeat continue. Accepted Set commits replacement, denial or
+proved-not-sent releases only the candidate, uncertainty conservatively retains both.
+Accepted Clear removes only matching known metadata without inventing removed IDs.
+Purpose-only Accepted/Unknown establishes the explicit baseline. Actual Ended state commits
+TxProfile retirement atomically; disconnect, restart and historical pruning never free it.
+Ledger rows deliberately have no historical-command foreign-key cascade. Old generations
+are fenced before recovery Clear; startup under the exclusive state-directory lock retires
+pending reservations conservatively without any replay.
+The host fences profile enqueue before a TransactionEvent commit and publishes committed
+state before releasing the fence. Snapshot and phase locks cover only bounded enqueue, not
+ACK wait. Invalid/duplicate events publish unchanged state and release normally; RAII
+cancellation/error cleanup invalidates abandoned generation authority rather than sending
+from possibly unpublished state. A fresh reconnect constructs independent authority.
+Ended after enqueue but before ACK retires ownership; a later typed Accepted result cannot
+reinsert that retired footprint or revise terminal acknowledgement evidence.
+
+Conflict checks apply to every known canonical/native producer: K01.FR06 same-purpose/stack/
+EVSE different IDs cannot have overlapping validity; touching endpoints do not overlap.
+K01.FR39 prohibits same-stack/transaction TxProfile IDs without an overlap exception.
+Station0 versus positive-EVSE TxDefault ownership at the same stack is protected.
+
+### Generation-owned phase proof and results
+
+phaseToUse is allowed only with numberPhases=1, phase1..3, and strictly positive proof from
+a correlated, authorized GetVariables Actual result for exact
+SmartChargingCtrlr.ACPhaseSwitchingSupported, no component/variable instances, positive
+configured EVSE and no connector. Only native string `true` grants proof; false, unknown,
+failure, malformed or out-of-order replies revoke it. Issuing a newer matching query revokes
+older proof pending its reply. Reconnect/restart clears authority; persisted snapshot
+protocol_details and report inventory cannot restore it. GetVariables remains independently
+opt-in; no automatic probe occurs. Station0 phase selection fails closed.
+
+Optional action-tagged `CommandResult.charging_profile_201` carries the validated original
+request and valid Set Accepted/Rejected or Clear Accepted/Unknown acknowledgement, with only
+allowlisted reason codes. CALLERROR, malformed reply, timeout and uncertainty never fabricate
+a native status; opaque statusInfo/additionalInfo/customData is not persisted or disclosed.
+Terminal results and ledger transitions commit atomically, remain immutable across conflicting
+writers and survive reopen. Exact duplicates return retained outcomes without another CALL.
+Command-result v1.7 and embedded export-record/export-batch v1.8 retain all historical schema
+bytes/routes. Existing payload caps fail explicitly rather than truncating evidence.
+A version13 binary rejects database14; this is not automatic downgrade qualification.
+Export-schema support is not a new global native-command producer or real PostgreSQL
+delivery claim. Native acknowledgement and independent software-peer state are not evidence
+of hardware enforcement, OCA certification or physical charging.
+
+Focused verification commands after integration are `cargo test --locked -p
+uob-protocol-adapter --test ocpp201_charging_profiles`, `cargo test --locked -p
+uob-storage-adapter --test charging_profile201`, and `cargo test --locked -p uob-service --test
+charging_profiles201`. The service suite uses separately persisted, independently parsed
+software-peer profiles, including replacement, selection, denial, delayed acknowledgement,
+Heartbeat, transaction end and separate bridge/peer reopen. These commands are provided for
+verification; this section does not claim they have been run or passed.
+
 ## Opt-in read-only device-model queries
 
 `GetVariables`, `GetBaseReport` and `GetReport` use the existing authenticated,
@@ -155,13 +268,13 @@ configured topology or grants.
 
 ### Learned request limits and disclosure
 
-Only four specification-backed identities initially disclose values:
-component `DeviceDataCtrlr` with no component instance or EVSE; variable
-`ItemsPerMessage` or `BytesPerMessage`; variable instance `GetVariables` or
-`GetReport`; attribute `Actual`. Disclosure requires a validated positive
-ASCII-digit value within signed 32-bit range. Limits are learned only from
-explicit authorized queries or accepted completed reports, in a bounded
-connection-generation cache that is cleared on reconnect.
+Four station request-limit identities disclose positive numeric values: component DeviceDataCtrlr
+with no instance/EVSE; variable ItemsPerMessage or BytesPerMessage; variable instance
+GetVariables or GetReport; attribute Actual. Validated ASCII-digit values fit signed32-bit
+range. Limits are learned only from explicit authorized queries or accepted completed reports
+in a bounded connection-generation cache cleared on reconnect. The additional exact
+SmartChargingCtrlr.ACPhaseSwitchingSupported EVSE Actual identity discloses only strict
+`true`/`false`; only correlated GetVariables replies can authorize phase selection as above.
 
 Unknown station limits remain unknown. A conservative single-entry GetVariables
 request can bootstrap them; requests with more than one entry/selector require

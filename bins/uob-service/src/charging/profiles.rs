@@ -1,3 +1,4 @@
+pub(super) mod supervisor;
 use crate::configuration::charging::StationControlOptions;
 use uob_contracts::{
     NativeProtocolReference, Operation, ProtocolEdition, StationSnapshot, SupportedOperation,
@@ -8,9 +9,6 @@ pub(super) fn apply(
     protocol: ProtocolEdition,
     options: StationControlOptions,
 ) {
-    if protocol != ProtocolEdition::Ocpp16j {
-        return;
-    }
     for (enabled, action) in [
         (options.set_charging_profile.enabled(), "SetChargingProfile"),
         (
@@ -30,8 +28,30 @@ pub(super) fn apply(
         };
         snapshot.capabilities.operations.push(operation.clone());
         for entry in &mut snapshot.resources {
-            if matches!(entry.resource.native_protocol_reference, Some(NativeProtocolReference::Ocpp16 { connector_id }) if connector_id > 0 && i32::try_from(connector_id).is_ok())
-            {
+            let supported = match (protocol, entry.resource.native_protocol_reference) {
+                (
+                    ProtocolEdition::Ocpp16j,
+                    Some(NativeProtocolReference::Ocpp16 { connector_id }),
+                ) => connector_id > 0 && i32::try_from(connector_id).is_ok(),
+                (
+                    ProtocolEdition::Ocpp201,
+                    Some(NativeProtocolReference::Ocpp201 {
+                        evse_id,
+                        connector_id: None,
+                    }),
+                ) => {
+                    matches!(
+                        entry.resource.resource,
+                        Some(uob_contracts::CanonicalResource::Evse {
+                            connector_id: None,
+                            ..
+                        })
+                    ) && evse_id > 0
+                        && i32::try_from(evse_id).is_ok()
+                }
+                _ => false,
+            };
+            if supported {
                 entry.capabilities.operations.push(operation.clone());
             }
         }

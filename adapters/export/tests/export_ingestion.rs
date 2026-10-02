@@ -125,6 +125,7 @@ fn destination() -> ExportDestination {
 async fn commit(source: &Source, records: Vec<CommittedRecord<ExportRecord>>) {
     source
         .write_atomic(AtomicStoreWrite {
+            charging_profile_201: None,
             purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: vec![],

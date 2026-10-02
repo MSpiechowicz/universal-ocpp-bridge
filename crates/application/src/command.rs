@@ -1,3 +1,4 @@
+mod charging_profile201;
 mod configuration;
 pub mod device_model201;
 mod errors;
@@ -74,6 +75,8 @@ pub enum CommandDispatchOutcome {
     DeviceModelResponse201(uob_contracts::DeviceModelResult201),
     /// Immutable full native OCPP 1.6 profile request and valid acknowledgement.
     ChargingProfileResponse16(uob_contracts::ChargingProfileResult16),
+    /// Immutable full native OCPP 2.0.1 profile request and valid acknowledgement.
+    ChargingProfileResponse201(uob_contracts::ChargingProfileResult201),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -130,6 +133,31 @@ pub trait StationCommandPort<P>: Send + Sync {
         Ok(None)
     }
 
+    /// Capture a validated native201 or canonical201 profile mutation before durable admission.
+    /// Non-profile commands return None; profile producers must supply ownership metadata.
+    ///
+    /// # Errors
+    /// Rejects invalid or unavailable resource/generation context and unsupported profile producers.
+    fn charging_profile_expectation(
+        &self,
+        command: &Command<P>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<crate::ProfileReservation201>, CommandErrorCode>;
+    /// Dispatches a durably reserved profile against the captured generation.
+    /// Ports that do not support native201 fail closed rather than dropping the reservation.
+    fn dispatch_reserved_profile(
+        &self,
+        _command: Command<P>,
+        _generation: Option<u64>,
+        _reservation: crate::ProfileReservation201,
+    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
+        Box::pin(async {
+            Err(StationCommandError::new(
+                "native201 profile dispatch unsupported",
+            ))
+        })
+    }
     /// Dispatches only to the socket observed before durable admission.
     fn dispatch_to_generation(
         &self,
@@ -343,11 +371,28 @@ where
         };
         write.command = Some(command.clone());
         write.command_result = Some(admitted.clone());
-        let outcome = self
-            .store
-            .write_atomic(write)
-            .await
-            .map_err(|error| map_storage_error(&error))?;
+        write.charging_profile_201 = match self
+            .stations
+            .charging_profile_expectation(&command, generation, now)
+        {
+            Ok(reservation) => reservation.map(Box::new),
+            Err(code) => return Ok(charging_profile201::rejected(&command, code, now)),
+        };
+        let profile = write.charging_profile_201.clone();
+        let outcome = match self.store.write_atomic(write).await {
+            Ok(outcome) => outcome,
+            Err(error)
+                if profile.is_some() && error.code() == crate::StorageErrorCode::Conflict =>
+            {
+                return Ok(charging_profile201::rejected_detail(
+                    &command,
+                    CommandErrorCode::PolicyRejected,
+                    now,
+                    error.detail(),
+                ));
+            }
+            Err(error) => return Err(map_storage_error(&error)),
+        };
         match outcome.command {
             Some(CommandAdmissionOutcome::Duplicate {
                 result: Some(result),
@@ -383,8 +428,15 @@ where
         }
         self.persist_result(dispatched).await?;
         trace.emit(FlowStage::CommandDispatch, FlowEvidence::Completed);
-        self.finalize_dispatch(command, generation, trigger, dispatch_started_at, trace)
-            .await
+        self.finalize_dispatch(
+            command,
+            generation,
+            trigger,
+            profile,
+            dispatch_started_at,
+            trace,
+        )
+        .await
     }
 
     async fn persist_result(&self, result: CommandResult) -> Result<(), CommandAdmissionError> {

@@ -97,6 +97,20 @@ pub(super) fn prepare(
                 return trigger::prepare(operation, &command.resource, snapshot)
                     .map(|(payload, _)| ("TriggerMessage", payload));
             }
+            if crate::command_registry::charging_profile201::ACTIONS
+                .contains(&operation.action.as_str())
+            {
+                crate::command_registry::charging_profile201::validate(
+                    &command.resource,
+                    operation,
+                )?;
+                let action = if operation.action.as_str() == "SetChargingProfile" {
+                    "SetChargingProfile"
+                } else {
+                    "ClearChargingProfile"
+                };
+                return Ok((action, operation.payload.clone()));
+            }
             privileged(operation, &command.resource, &snapshot.station, native)
         }
         CommandOperation::Ocpp(_) => Err(UnsupportedOperation),

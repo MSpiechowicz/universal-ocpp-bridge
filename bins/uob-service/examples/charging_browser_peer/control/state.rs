@@ -48,6 +48,7 @@ pub(super) struct State {
     pub(super) availability16: Option<Availability16>,
     pub(super) availability201: Option<Availability201>,
     pub(super) next_id: u32,
+    pub(super) profiles201: Vec<Value>,
 }
 
 impl State {
@@ -145,9 +146,13 @@ impl State {
             (_, "SetChargingProfile") => {
                 let valid = valid_profile(edition, payload, self);
                 self.counts.limit = self.counts.limit.saturating_add(1);
+                if valid && matches!(edition, Edition::Bravo) {
+                    super::profiles::install(self, payload);
+                }
                 // A protocol acceptance is not a physical meter/limit observation.
                 Ok(json!({"status":if valid { "Accepted" } else { "Rejected" }}))
             }
+            (Edition::Bravo, "ClearChargingProfile") => super::profiles::clear(self, payload),
             (Edition::Alpha, "ChangeAvailability") => self.accept_availability_alpha(payload),
             (Edition::Bravo, "ChangeAvailability") => self.accept_availability_bravo(payload),
             _ => Err("unexpected server action"),

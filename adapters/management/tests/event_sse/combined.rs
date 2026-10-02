@@ -145,6 +145,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             composite_schedule_16: None,
             device_model_201: None,
             charging_profile_16: None,
+            charging_profile_201: None,
         }),
         ..EventSource::default()
     });

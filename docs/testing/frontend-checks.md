@@ -66,9 +66,29 @@ invalid measurements, explicit capabilities, disconnect/reconnect refresh and cr
 clearing. Its command scenario additionally checks read/control/privileged separation,
 invalid and expired requests, exact retry deduplication, start/charging-limit/stop/availability
 native replies versus later linked resource/station events, and a pending transaction that
-receives a transaction-bound `TxProfile` without proof of physical charging. To run just
-that real-daemon browser case from `frontend`, after building the service and compiled
-peer as above: `UOB_LIVE_BROWSER=1 npm run test:browser -- live-command.browser.ts`.
+receives a transaction-bound `TxProfile` without proof of physical charging. The command
+fixture fills the 64-child topology limit for both editions: 64 OCPP 1.6 connectors,
+and 62 OCPP 2.0.1 EVSE-only addresses plus two exact connector addresses. Both independent
+native Set/Clear flags are enabled; OCPP 2.0.1 also enables GetVariables independently.
+The scenario checks the complete descriptor roster at every configured resource,
+including the last connector/EVSE in the browser, without truncating options or
+broadening EVSE profile authority to connectors. The existing 512-descriptor,
+24-field and 128-character field-name bounds remain unchanged.
+
+Before canonical controls, the disposable fixture operator explicitly submits three
+station-privileged, all-EVSE, purpose-only native OCPP 2.0.1 ClearChargingProfile requests
+for ChargingStationMaxProfile, TxDefaultProfile and TxProfile. Each must receive an
+Accepted or Unknown native acknowledgement; this deliberately destructive fixture
+baseline is not production auto-clear or discovered inventory. The result checks
+keep native Clear evidence separate from canonical charging-limit evidence and
+later observed effects. Nested/array native profile composition remains unsupported
+in the browser; the scenario verifies no HTTP submission is produced for complex Set
+while canonical charging limits and existing simple controls remain usable. No native
+profile JSON editor is provided.
+
+To run just that real-daemon browser case from `frontend`, after building the service
+and compiled peer as above:
+`UOB_LIVE_BROWSER=1 npm run test:browser -- live-command.browser.ts`.
 Both suites stop their processes and remove private temporary files.
 
 The capture-expiry browser test runs both deadline orderings. It changes only the

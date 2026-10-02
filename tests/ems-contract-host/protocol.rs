@@ -12,14 +12,13 @@ use uob_application::charging_identity::{
 };
 use uob_application::{
     Application, AuthorizationChange, AuthorizationProvider, AuthorizationState,
-    ChargerObservation, CommandClock, CommandCoordinator, CommandDispatchOutcome,
-    LocalAuthorizationService, PageLimit, SensitiveAuthorizationToken, StationCommandContext,
-    StationCommandError, StationCommandFuture, StationCommandPort, StationEvent,
-    TransactionEventKind, registration::RegistrationDecision,
+    ChargerObservation, CommandClock, CommandCoordinator, LocalAuthorizationService, PageLimit,
+    SensitiveAuthorizationToken, StationCommandPort, StationEvent, TransactionEventKind,
+    registration::RegistrationDecision,
 };
 use uob_contracts::{
-    ArtifactDigest, AvailabilityState, BridgeId, CanonicalResource, CommandOperation, Environment,
-    NativeProtocolReference, Operation, ProcessInstanceId, ProtocolEdition, ReleaseId, ResourceRef,
+    ArtifactDigest, AvailabilityState, BridgeId, CanonicalResource, Environment,
+    NativeProtocolReference, Operation, ProcessInstanceId, ProtocolEdition, ReleaseId,
     RuntimeIdentity, ServiceIdentity, StationId, StationSnapshot, SupportedOperation,
     TargetInstanceId, TransactionSnapshot, UtcTimestamp,
 };
@@ -31,6 +30,8 @@ use uob_protocol_adapter::{
 };
 use uob_provider_adapter::{LocalAuthorizationProvider, LocalChargingIdentityProvider};
 
+#[path = "protocol_sessions.rs"]
+mod sessions;
 #[path = "protocol_transactions.rs"]
 mod transactions;
 pub struct Clock;
@@ -168,53 +169,6 @@ struct StationSession {
     stop_ready: watch::Receiver<bool>,
 }
 struct Sessions(RwLock<BTreeMap<String, StationSession>>);
-impl StationCommandPort<Value> for Sessions {
-    fn context(
-        &self,
-        resource: ResourceRef,
-    ) -> StationCommandFuture<'_, Option<StationCommandContext>> {
-        Box::pin(async move {
-            let session = self
-                .0
-                .read()
-                .await
-                .get(resource.station_id.as_str())
-                .cloned();
-            if let Some(session) = session {
-                session.port.context(resource).await
-            } else {
-                Ok(None)
-            }
-        })
-    }
-    fn dispatch(
-        &self,
-        command: uob_contracts::Command<Value>,
-    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
-        Box::pin(async move {
-            let session = self
-                .0
-                .read()
-                .await
-                .get(command.resource.station_id.as_str())
-                .cloned();
-            let mut session =
-                session.ok_or_else(|| StationCommandError::new("station disconnected"))?;
-            if matches!(&command.operation, CommandOperation::Stop { .. }) {
-                // The store commits the start before the charger receives its response.
-                // Its next Heartbeat is sent only after the simulator records that response.
-                while !*session.stop_ready.borrow_and_update() {
-                    session
-                        .stop_ready
-                        .changed()
-                        .await
-                        .map_err(|_| StationCommandError::new("station disconnected"))?;
-                }
-            }
-            session.port.dispatch(command).await
-        })
-    }
-}
 
 async fn authorization(store: &Store) -> (Arc<Auth>, StationSnapshot, StationSnapshot) {
     let authorization = Arc::new(

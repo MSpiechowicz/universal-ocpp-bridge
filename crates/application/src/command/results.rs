@@ -23,6 +23,7 @@ pub(super) fn command_result<P>(
         composite_schedule_16: None,
         device_model_201: None,
         charging_profile_16: None,
+        charging_profile_201: None,
     }
 }
 
@@ -55,6 +56,7 @@ pub(super) fn rejected_external<P>(
         composite_schedule_16: None,
         device_model_201: None,
         charging_profile_16: None,
+        charging_profile_201: None,
     }
 }
 

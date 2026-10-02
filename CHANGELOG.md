@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off privileged demo OCPP 2.0.1 native
+  `SetChargingProfile` and `ClearChargingProfile` alongside existing 1.6J controls
+  (#118). Preserve signed native IDs, exact EVSE/ongoing-transaction authority,
+  exact nonnegative A/W tenths including zero, validity, recurrence and omissions;
+  protect external constraints and require fresh exact-EVSE phase-switch proof.
+  Bound Set to one schedule, 1024 periods and a 256 KiB encoded CALL. Durable
+  metadata-only ownership reserves before dispatch, prevents overlap, serializes
+  station mutations and retains uncertainty across disconnect/restart without
+  replay. Full-native Set requires operator-issued all-EVSE Max/Default/Tx Clears;
+  no automatic initialization or charger-inventory claim.
+  Add immutable `charging_profile_201` ACK evidence in result v1.7 and nested
+  export v1.8; preserve historical schemas and HTTP/MQTT authorization boundaries.
+  SQLite migrates v13 to v14; v13 binaries reject v14 and rollback is not qualified.
+  Four attributed original-byte schemas, eighteen wire fixtures, durable/socket
+  regressions and an independent persistent software-peer smoke verify narrow
+  profile behavior. Complete browser topology and canonical controls remain
+  usable; the complex native Set editor explicitly remains unsupported.
+  Physical effects, hardware interoperability, certification, broad smart charging
+  and automatic global external-export production are not established.
 - Add independently default-off, privileged demo OCPP 1.6J full native
   `SetChargingProfile` and `ClearChargingProfile`, separate from canonical
   `SetChargingLimit`, with station/connector and ongoing-native-transaction

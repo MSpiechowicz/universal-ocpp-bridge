@@ -27,6 +27,15 @@ pub(super) struct DeviceRuntime {
     pub limits: Arc<Mutex<LearnedLimits>>,
     active: AtomicBool,
 }
+
+struct PreparedDeviceCall {
+    request: RequestId,
+    resource: ResourceRef,
+    pending: crate::PendingCall,
+    route: Option<ReportRoute>,
+    metadata: Arc<RuntimeReservation>,
+    phase_sequence: u64,
+}
 impl RemoteControlSession {
     /// Host binds report persistence to this exact connection generation.
     #[must_use]
@@ -59,6 +68,9 @@ impl RemoteControlSession {
     }
     /// Logical generation replacement/teardown closes reporting without changing grants.
     pub fn detach_device_model(&self) {
+        if let Ok(mut phase) = self.phase.lock() {
+            phase.detach();
+        }
         if let Some(runtime) = &self.device_model {
             runtime.active.store(false, Ordering::Release);
         }
@@ -143,18 +155,75 @@ impl RemoteControlSession {
         {
             return mapping::not_sent(CommandErrorCode::StationDisconnected);
         }
-        let now = match self.validate_device_dispatch(&command, &evidence, runtime) {
-            Ok(now) => now,
+        let PreparedDeviceCall {
+            request,
+            resource,
+            pending,
+            route,
+            metadata,
+            phase_sequence,
+        } = match self.prepare_device_call(command, &evidence, runtime) {
+            Ok(prepared) => prepared,
             Err(error) => return mapping::not_sent(error),
         };
-        let metadata = match self.reserve_device_metadata(&evidence) {
-            Ok(metadata) => metadata,
-            Err(error) => return mapping::not_sent(error),
+        let (stop, cancelled) = if route.is_some() {
+            let (stop, cancelled) = oneshot::channel();
+            (Some(stop), Some(cancelled))
+        } else {
+            (None, None)
         };
+        let store = runtime.store.clone();
+        let clock = self.clock.clone();
+        let limits = runtime.limits.clone();
+        if let Some(route) = route {
+            self.spawn_device_collector(
+                route,
+                cancelled.expect("report cancellation receiver"),
+                &evidence,
+                request.clone(),
+                metadata.clone(),
+                runtime,
+            );
+        }
+        // The native reply writer also survives origin cancellation. No HTTP future owns routes.
+        let (response, received) = oneshot::channel();
+        let writer = super::device_model_response::ReplyWriter201 {
+            store,
+            clock,
+            limits,
+            budget: self.handle.resource_budget(),
+            request,
+            resource,
+            evidence,
+            stop,
+            _metadata: metadata,
+            handle: self.handle.clone(),
+            phase: self.phase.clone(),
+            phase_sequence,
+        };
+        tokio::spawn(async move {
+            let _ = response.send(writer.receive(pending).await);
+        });
+        received.await.unwrap_or_else(|_| mapping::uncertain())
+    }
+
+    fn prepare_device_call(
+        &self,
+        command: Command<Value>,
+        evidence: &DeviceModelResult201,
+        runtime: &DeviceRuntime,
+    ) -> Result<PreparedDeviceCall, CommandErrorCode> {
+        let now = self.validate_device_dispatch(&command, evidence, runtime)?;
+        let metadata = self.reserve_device_metadata(evidence)?;
         let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
+        let phase_sequence = self
+            .phase
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .begin(&evidence.query);
         let deadline = Instant::now() + remaining.min(std::time::Duration::from_hours(24));
         let CommandOperation::Ocpp(operation) = command.operation else {
-            return mapping::not_sent(CommandErrorCode::InvalidParameters);
+            return Err(CommandErrorCode::InvalidParameters);
         };
         let call = OutboundCall {
             message_id: command.request_id.as_str().to_owned(),
@@ -173,56 +242,26 @@ impl RemoteControlSession {
                 request_id,
                 correlation: call.correlation_id.clone(),
             };
-            match self
+            let (pending, route) = self
                 .handle
                 .try_report_call_before(call, deadline, key, command.resource.clone())
-            {
-                Ok((pending, route)) => (pending, Some(route)),
-                Err(_) => return mapping::not_sent(CommandErrorCode::PolicyRejected),
-            }
+                .map_err(|_| CommandErrorCode::PolicyRejected)?;
+            (pending, Some(route))
         } else {
-            match self.handle.try_call_before(call, deadline) {
-                Ok(pending) => (pending, None),
-                Err(_) => return mapping::not_sent(CommandErrorCode::PolicyRejected),
-            }
+            let pending = self
+                .handle
+                .try_call_before(call, deadline)
+                .map_err(|_| CommandErrorCode::PolicyRejected)?;
+            (pending, None)
         };
-        let (stop, cancelled) = if route.is_some() {
-            let (stop, cancelled) = oneshot::channel();
-            (Some(stop), Some(cancelled))
-        } else {
-            (None, None)
-        };
-        let store = runtime.store.clone();
-        let clock = self.clock.clone();
-        let limits = runtime.limits.clone();
-        if let Some(route) = route {
-            self.spawn_device_collector(
-                route,
-                cancelled.expect("report cancellation receiver"),
-                &evidence,
-                command.request_id.clone(),
-                metadata.clone(),
-                runtime,
-            );
-        }
-        // The native reply writer also survives origin cancellation. No HTTP future owns routes.
-        let (response, received) = oneshot::channel();
-        let writer = super::device_model_response::ReplyWriter201 {
-            store,
-            clock,
-            limits,
-            budget: self.handle.resource_budget(),
+        Ok(PreparedDeviceCall {
             request: command.request_id,
             resource: command.resource,
-            evidence,
-            stop,
-            _metadata: metadata,
-            handle: self.handle.clone(),
-        };
-        tokio::spawn(async move {
-            let _ = response.send(writer.receive(pending).await);
-        });
-        received.await.unwrap_or_else(|_| mapping::uncertain())
+            pending,
+            route,
+            metadata,
+            phase_sequence,
+        })
     }
 
     fn validate_device_dispatch(

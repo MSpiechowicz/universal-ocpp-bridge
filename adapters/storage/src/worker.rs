@@ -39,6 +39,8 @@ pub(crate) enum Request<C, E, D> {
         Reply<crate::remote_control::Outcome>,
     ),
     Probe(Reply<()>),
+    ChargingProfileOwnership(ResourceRef, Reply<uob_application::ProfileOwnership201>),
+    InterruptChargingProfiles(Reply<()>),
     TransactionId(Reply<i32>),
     EventSequence(Reply<u64>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -149,6 +151,21 @@ fn handle_request<C, E, D>(
 {
     match request {
         Request::Drain(operation, reply) => respond(reply, drain.operation(connection, operation)),
+        Request::ChargingProfileOwnership(station, reply) => {
+            respond(
+                reply,
+                crate::charging_profile201::read(connection, &station),
+            );
+        }
+        Request::InterruptChargingProfiles(reply) => {
+            respond(
+                reply,
+                drain
+                    .check_completion_write()
+                    .and_then(|()| drain.changed())
+                    .and_then(|()| crate::charging_profile201::recover(connection)),
+            );
+        }
         Request::TransactionId(reply) => respond(reply, next_transaction_id(connection)),
         Request::EventSequence(reply) => respond(reply, next_event_sequence(connection)),
         Request::RemoteControl(operation, reply) => {
@@ -316,7 +333,14 @@ fn write_atomic(
         return Ok(AtomicWriteOutcome { command });
     }
     retention::prepare_write(&transaction, retention_policy, &mut write)?;
+    if let Some(reservation) = write.charging_profile_201.as_deref() {
+        crate::charging_profile201::reserve(&transaction, reservation)?;
+    }
     if let Some((station, payload)) = write.snapshot {
+        crate::charging_profile201::retire_ended(
+            &transaction,
+            &crate::codec::decode_snapshot(&payload)?,
+        )?;
         transaction
             .execute(
                 "INSERT INTO station_snapshots(station_key, payload) VALUES (?1, ?2)\n\

@@ -141,6 +141,7 @@ fn event_write(
     let mut event = event_for(event_id, resource(), sequence);
     event.payload = payload;
     AtomicStoreWrite {
+        charging_profile_201: None,
         purpose: StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),

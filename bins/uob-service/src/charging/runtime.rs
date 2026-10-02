@@ -188,6 +188,16 @@ async fn station(
             changed = stop.changed() => { if changed.is_err() || *stop.borrow() { break; } },
             call = outputs.incoming.receive() => {
                 let Some(call) = call else { break; };
+                let _profile_commit = if let Some(generation) =
+                    generation.filter(|_| call.call.action.as_str() == "TransactionEvent")
+                {
+                    if let Ok(commit) = commands.begin_snapshot_commit(&station.station_id, generation) {
+                        commit
+                    } else {
+                        error = Some(unavailable());
+                        break;
+                    }
+                } else { None };
                 let call_context = CallContext {
                     store,
                     authorization,

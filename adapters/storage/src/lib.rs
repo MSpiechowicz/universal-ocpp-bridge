@@ -1,6 +1,7 @@
 #![doc = "Crash-safe SQLite operational storage and isolated export spool adapters."]
 
 pub mod backup;
+mod charging_profile201;
 mod codec;
 mod command;
 mod command_history;

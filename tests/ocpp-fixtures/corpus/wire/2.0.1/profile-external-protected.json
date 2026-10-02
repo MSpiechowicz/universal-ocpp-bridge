@@ -1,0 +1,1 @@
+[2,"profile201-external","SetChargingProfile",{"evseId":0,"chargingProfile":{"id":24,"stackLevel":0,"chargingProfilePurpose":"ChargingStationExternalConstraints","chargingProfileKind":"Absolute","chargingSchedule":[{"id":240,"startSchedule":"2026-01-01T00:00:00Z","chargingRateUnit":"W","chargingSchedulePeriod":[{"startPeriod":0,"limit":30000}]}]}}]

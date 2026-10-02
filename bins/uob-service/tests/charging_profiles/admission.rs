@@ -169,16 +169,6 @@ async fn native_profile_flags_require_independent_grants_supported_protocol_and_
             ),
             "",
         ),
-        original
-            .replace("protocol='ocpp16j'", "protocol='ocpp201'")
-            .replace(
-                "connector_id='one'",
-                "evse_id='one'\nnative_evse_id=1\nconnector_id='one'",
-            )
-            .replace(
-                "connector_id='two'",
-                "evse_id='two'\nnative_evse_id=2\nconnector_id='two'",
-            ),
     ] {
         fs::write(&path, configuration).unwrap();
         let mut child = fixture.start();

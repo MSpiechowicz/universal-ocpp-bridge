@@ -162,7 +162,7 @@ Choose a future expiration and an available resource with the advertised operati
 must be nonblank, at most 256 UTF-8 bytes, and cannot be `.` or `..`. The returned `status_url`
 percent-encodes the ID as one path segment; clients should follow that URL rather than concatenate
 unescaped IDs. Request shapes use the canonical v1.0 ingress contract. Current
-CommandResult uses v1.5; current nested export-record/export-batch use v1.6.
+CommandResult uses v1.7; current nested export-record/export-batch use v1.8.
 The canonical snapshots live under `crates/contracts/schemas`; historical routes
 and released versions remain available.
 
@@ -180,6 +180,21 @@ GetVariables/GetBaseReport/GetReport submission on this integration listener;
 target `kind=ocpp` ingress still returns `403`. Status reads still require exact
 origin/principal, control authority, resource containment and the host query grant.
 There is no same-target cross-principal exception for query results.
+
+Optional `charging_profile_201` preserves complete validated native201 Set/Clear request
+evidence and a native acknowledgement: Set `Accepted`/`Rejected`, Clear `Accepted`/`Unknown`.
+Station/EVSE scope, exact decimal-string A/W rates including zero, native transaction spelling
+and supplied optional fields are retained without 1.6 connector flattening. Only allowlisted
+safe reason codes appear; opaque additional information is omitted. Canonical
+`SetChargingLimit`, CALLERROR, malformed replies and transmission uncertainty do not receive
+the full native field. Neither native Accepted nor the local status response proves physical
+charging or profile enforcement. This is scoped result consumption only: native201 profile
+actions remain forbidden on the integration ingress, and no new export producer is enabled.
+The latest protected schema routes are `/bridge/v1/schemas/v1.7/command-result.schema.json`
+and `/bridge/v1/schemas/v1.8/{export-record,export-batch}.schema.json`; earlier routes retain
+their published bytes and authentication policy. Existing encoded response limits still apply
+to full profile evidence, including maximum-period requests: oversized results return the
+explicit `413` payload error without truncating schedules or substituting a success response.
 
 Command bodies and concurrent requests use the advertised listener bounds. Commands also hold
 an independent `maximum_in_flight_commands` permit. The composition root's `query_deadline`

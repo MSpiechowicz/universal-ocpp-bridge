@@ -1,6 +1,8 @@
 #[path = "call_lifecycle/diagnostics.rs"]
 mod diagnostics;
 mod endpoint_support;
+#[path = "call_lifecycle/frame_caps.rs"]
+mod frame_caps;
 
 use std::time::Duration;
 
@@ -40,8 +42,27 @@ async fn session_with_diagnostics(
     response_timeout: Duration,
     diagnostics: uob_application::FlowDiagnostics,
 ) -> RunningSession {
-    let application =
-        endpoint_support::application(Environment::Demo, None).with_diagnostics(diagnostics);
+    session_with_limits(
+        protocol,
+        response_timeout,
+        diagnostics,
+        uob_application::RuntimeResourceLimits::default(),
+    )
+    .await
+}
+
+async fn session_with_limits(
+    protocol: &str,
+    response_timeout: Duration,
+    diagnostics: uob_application::FlowDiagnostics,
+    limits: uob_application::RuntimeResourceLimits,
+) -> RunningSession {
+    let identity = endpoint_support::application(Environment::Demo, None)
+        .identity()
+        .clone();
+    let application = uob_application::Application::with_resource_limits(identity, limits)
+        .expect("bounded test runtime")
+        .with_diagnostics(diagnostics);
     let (endpoint, mut accepted) = OcppEndpoint::new(
         endpoint_support::authenticator(
             uob_protocol_adapter::StationAuthenticationMode::Credential,

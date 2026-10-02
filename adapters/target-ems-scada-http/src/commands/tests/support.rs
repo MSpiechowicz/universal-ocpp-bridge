@@ -40,6 +40,25 @@ pub(super) type Coordinator = CommandCoordinator<Value, Value, Value, Value>;
 pub(super) struct Stations(pub AtomicUsize);
 
 impl StationCommandPort<Value> for Stations {
+    fn charging_profile_expectation(
+        &self,
+        command: &Command<Value>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<uob_application::ProfileReservation201>, uob_contracts::CommandErrorCode>
+    {
+        if matches!(
+            &command.operation,
+            uob_contracts::CommandOperation::Ocpp(operation)
+                if operation.protocol == uob_contracts::ProtocolEdition::Ocpp201
+                    && matches!(operation.action.as_str(), "SetChargingProfile" | "ClearChargingProfile")
+        ) {
+            return Err(uob_contracts::CommandErrorCode::UnsupportedOperation);
+        }
+        // This fixture always reports OCPP 1.6J, so canonical limits are not native201 producers.
+        Ok(None)
+    }
+
     fn context(
         &self,
         resource: ResourceRef,

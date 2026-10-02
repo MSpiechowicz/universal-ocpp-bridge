@@ -1,12 +1,14 @@
 //! OCPP 2.0.1 remote operations behind the ordinary durable application command path.
 use crate::remote_constraints as constraints;
 mod charging_limit;
+mod charging_profile201;
 pub mod device_model;
 mod device_model_collection;
 mod device_model_response;
 pub mod device_model_values;
 mod identity;
 mod mapping;
+mod phase_capability;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub mod observation;
@@ -48,6 +50,9 @@ pub struct RemoteControlSession {
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
     device_model: Option<device_model::DeviceRuntime>,
+    phase: Arc<std::sync::Mutex<phase_capability::PhaseCapabilities>>,
+    established_transactions: std::sync::Mutex<std::collections::BTreeSet<String>>,
+    pending_snapshot_commit: std::sync::atomic::AtomicBool,
 }
 
 impl RemoteControlSession {
@@ -62,6 +67,7 @@ impl RemoteControlSession {
         evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
     ) -> Result<Self, StationCommandError> {
         validate_snapshot(&handle, &snapshot)?;
+        let phase = phase_capability::PhaseCapabilities::connected(&snapshot);
         Ok(Self {
             handle,
             snapshot: RwLock::new(snapshot),
@@ -69,7 +75,33 @@ impl RemoteControlSession {
             clock,
             evidence,
             device_model: None,
+            phase: Arc::new(std::sync::Mutex::new(phase)),
+            established_transactions: std::sync::Mutex::new(std::collections::BTreeSet::new()),
+            pending_snapshot_commit: std::sync::atomic::AtomicBool::new(false),
         })
+    }
+
+    /// Fences profile enqueue before the host begins committing a transaction observation.
+    /// `update_committed` releases the fence after publishing the committed snapshot.
+    /// # Errors
+    /// Poisoned snapshot state keeps dispatch failed closed.
+    pub fn begin_snapshot_commit(&self) -> Result<(), StationCommandError> {
+        let _snapshot = self.snapshot.write().map_err(|_| state_error())?;
+        self.pending_snapshot_commit
+            .store(true, std::sync::atomic::Ordering::Release);
+        Ok(())
+    }
+
+    /// Releases an abandoned commit fence by invalidating this generation's profile authority.
+    /// Invalid/duplicate observations instead publish unchanged committed state normally.
+    /// A canceled or failed host must reconnect, never dispatch from possibly unpublished state.
+    pub fn abort_snapshot_commit(&self) {
+        if self
+            .pending_snapshot_commit
+            .swap(false, std::sync::atomic::Ordering::AcqRel)
+        {
+            self.detach_device_model();
+        }
     }
 
     /// Publishes a snapshot only after the ordered station handler has committed it.
@@ -84,7 +116,10 @@ impl RemoteControlSession {
         {
             return Err(state_error());
         }
+        self.learn_transactions(&current, &snapshot)?;
         *current = snapshot;
+        self.pending_snapshot_commit
+            .store(false, std::sync::atomic::Ordering::Release);
         Ok(())
     }
 
@@ -93,10 +128,15 @@ impl RemoteControlSession {
         request: &RequestId,
         action: &str,
         pending: PendingCall,
+        profile: Option<crate::command_registry::charging_profile201::Request>,
     ) -> CommandDispatchOutcome {
         match pending.receive().await {
             SessionCallOutcome::Result { payload, .. } => {
-                let outcome = mapping::response(action, &payload);
+                let outcome = if let Some(request) = profile {
+                    charging_profile201::response(request, &payload)
+                } else {
+                    mapping::response(action, &payload)
+                };
                 if action != "SetChargingProfile"
                     && action != "TriggerMessage"
                     && matches!(outcome, CommandDispatchOutcome::ProtocolResponse { .. })
@@ -132,9 +172,134 @@ impl RemoteControlSession {
             | SessionCallOutcome::TransmissionUncertain { .. } => mapping::uncertain(),
         }
     }
+    pub(super) fn dispatch_profile(
+        &self,
+        command: Command<Value>,
+        reservation: Option<uob_application::ProfileReservation201>,
+    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
+        Box::pin(async move {
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::device_model201::ACTIONS.contains(&operation.action.as_str()))
+            {
+                return Ok(self.dispatch_device(command).await);
+            }
+            let remote_start_id = if matches!(
+                command.operation,
+                uob_contracts::CommandOperation::Start { .. }
+            ) {
+                match self
+                    .evidence
+                    .reserve_remote_start(command.request_id.clone())
+                    .await
+                {
+                    Ok(id) => Some(id),
+                    Err(_) => return Ok(mapping::not_sent(CommandErrorCode::PolicyRejected)),
+                }
+            } else {
+                None
+            };
+            // Snapshot/phase locks linearize commit and capability revocation against bounded enqueue.
+            let (action, profile, pending) = {
+                let snapshot = self.snapshot.read().map_err(|_| state_error())?;
+                let phases = self.phase.lock().map_err(|_| state_error())?;
+                if self.handle.is_closed() {
+                    return Ok(mapping::not_sent(CommandErrorCode::StationDisconnected));
+                }
+                let context = match self.profile_context_with_phase(
+                    &command,
+                    &snapshot,
+                    self.clock.now(),
+                    &phases,
+                ) {
+                    Ok(context) => context,
+                    Err(code) => return Ok(mapping::not_sent(code)),
+                };
+                if let Some(reserved) = &reservation
+                    && (reserved.connection != self.handle.connection_id()
+                        || reserved.request_id != command.request_id
+                        || reserved.station != snapshot.station
+                        || context
+                            .as_ref()
+                            .is_none_or(|(_, mutation)| mutation != &reserved.mutation))
+                {
+                    return Ok(mapping::not_sent(CommandErrorCode::PolicyRejected));
+                }
+                let prepared = mapping::prepare(
+                    &command,
+                    &snapshot,
+                    self.identity.as_ref(),
+                    self.clock.now(),
+                    remote_start_id,
+                )
+                .map(|(action, payload)| {
+                    (action, payload, context.and_then(|(request, _)| request))
+                });
+                let (action, payload, profile) = match prepared {
+                    Ok(value) => value,
+                    Err(code) => return Ok(mapping::not_sent(code)),
+                };
+                let now = self.clock.now();
+                if now >= command.expires_at {
+                    return Ok(mapping::not_sent(CommandErrorCode::Expired));
+                }
+                let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
+                // Bound monotonic arithmetic even if an external command uses an extreme UTC expiry.
+                let deadline = Instant::now() + remaining.min(std::time::Duration::from_hours(24));
+                let call = OutboundCall {
+                    message_id: command.request_id.as_str().to_owned(),
+                    action: uob_contracts::ProtocolActionName::new(action).expect("static action"),
+                    payload,
+                    correlation_id: command.correlation_id.clone().unwrap_or_else(|| {
+                        uob_contracts::CorrelationId::new(command.request_id.as_str())
+                            .expect("request identity")
+                    }),
+                };
+                let pending = match self.handle.try_call_before(call, deadline) {
+                    Ok(pending) => pending,
+                    Err(error) => {
+                        return Ok(mapping::not_sent(match error {
+                            SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,
+                            SessionSubmitError::InvalidRequest => {
+                                CommandErrorCode::InvalidParameters
+                            }
+                            SessionSubmitError::Resource(_) | SessionSubmitError::Full => {
+                                CommandErrorCode::PolicyRejected
+                            }
+                        }));
+                    }
+                };
+                (action, profile, pending)
+            };
+            Ok(self
+                .receive_remote_response(&command.request_id, action, pending, profile)
+                .await)
+        })
+    }
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn charging_profile_expectation(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::ProfileReservation201>, CommandErrorCode> {
+        self.profile_expectation(command, generation, now)
+    }
+    fn dispatch_reserved_profile(
+        &self,
+        command: Command<Value>,
+        _generation: Option<u64>,
+        reservation: uob_application::ProfileReservation201,
+    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
+        self.dispatch_profile(command, Some(reservation))
+    }
+    fn dispatch(
+        &self,
+        command: Command<Value>,
+    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
+        self.dispatch_profile(command, None)
+    }
     fn device_model_expectation(
         &self,
         command: &Command<Value>,
@@ -173,83 +338,6 @@ impl StationCommandPort<Value> for RemoteControlSession {
             )
         })
     }
-
-    fn dispatch(
-        &self,
-        command: Command<Value>,
-    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
-        Box::pin(async move {
-            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
-                if crate::command_registry::device_model201::ACTIONS.contains(&operation.action.as_str()))
-            {
-                return Ok(self.dispatch_device(command).await);
-            }
-            let remote_start_id = if matches!(
-                command.operation,
-                uob_contracts::CommandOperation::Start { .. }
-            ) {
-                match self
-                    .evidence
-                    .reserve_remote_start(command.request_id.clone())
-                    .await
-                {
-                    Ok(id) => Some(id),
-                    Err(_) => return Ok(mapping::not_sent(CommandErrorCode::PolicyRejected)),
-                }
-            } else {
-                None
-            };
-            // No await between checking committed state, resolving local policy, and bounded enqueue.
-            let prepared = {
-                let snapshot = self.snapshot.read().map_err(|_| state_error())?;
-                if self.handle.is_closed() {
-                    return Ok(mapping::not_sent(CommandErrorCode::StationDisconnected));
-                }
-                mapping::prepare(
-                    &command,
-                    &snapshot,
-                    self.identity.as_ref(),
-                    self.clock.now(),
-                    remote_start_id,
-                )
-            };
-            let (action, payload) = match prepared {
-                Ok(value) => value,
-                Err(code) => return Ok(mapping::not_sent(code)),
-            };
-            let now = self.clock.now();
-            if now >= command.expires_at {
-                return Ok(mapping::not_sent(CommandErrorCode::Expired));
-            }
-            let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
-            // Bound monotonic arithmetic even if an external command uses an extreme UTC expiry.
-            let deadline = Instant::now() + remaining.min(std::time::Duration::from_hours(24));
-            let call = OutboundCall {
-                message_id: command.request_id.as_str().to_owned(),
-                action: uob_contracts::ProtocolActionName::new(action).expect("static action"),
-                payload,
-                correlation_id: command.correlation_id.clone().unwrap_or_else(|| {
-                    uob_contracts::CorrelationId::new(command.request_id.as_str())
-                        .expect("request identity")
-                }),
-            };
-            let pending = match self.handle.try_call_before(call, deadline) {
-                Ok(pending) => pending,
-                Err(error) => {
-                    return Ok(mapping::not_sent(match error {
-                        SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,
-                        SessionSubmitError::InvalidRequest => CommandErrorCode::InvalidParameters,
-                        SessionSubmitError::Resource(_) | SessionSubmitError::Full => {
-                            CommandErrorCode::PolicyRejected
-                        }
-                    }));
-                }
-            };
-            Ok(self
-                .receive_remote_response(&command.request_id, action, pending)
-                .await)
-        })
-    }
 }
 
 fn connected_at(snapshot: &StationSnapshot) -> Option<UtcTimestamp> {
@@ -271,6 +359,13 @@ fn validate_snapshot(
                 ..
             }
         )
+        || snapshot
+            .resources
+            .iter()
+            .filter_map(|entry| crate::command_registry::charging_profile201::evse(&entry.resource))
+            .filter(|evse| *evse > 0)
+            .count()
+            > 64
         || serde_json::to_vec(snapshot)
             .map_err(|_| state_error())?
             .len()

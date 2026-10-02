@@ -59,6 +59,7 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         composite_schedule_16: None,
         device_model_201: None,
         charging_profile_16: None,
+        charging_profile_201: None,
     }
 }
 fn evidence(limit: ExactDecimal) -> CompositeScheduleResult16 {

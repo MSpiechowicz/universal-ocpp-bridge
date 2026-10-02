@@ -72,6 +72,7 @@ fn commit(
     records: Vec<CommittedRecord<String>>,
 ) -> Result<(), uob_application::StorageError> {
     block_on(store.write_atomic(AtomicStoreWrite {
+        charging_profile_201: None,
         purpose: StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: vec![],
