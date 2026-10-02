@@ -92,6 +92,7 @@ pub(super) fn fixture(
         trigger_observation_201: None,
         composite_schedule_16: None,
         device_model_201: Some(evidence),
+        charging_profile_16: None,
     };
     (command, result)
 }

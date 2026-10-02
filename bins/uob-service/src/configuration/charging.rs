@@ -39,6 +39,8 @@ pub(crate) struct StationControlOptions {
     pub change_availability: bool,
     pub trigger_message: StationActionOption,
     pub get_composite_schedule: StationActionOption,
+    pub set_charging_profile: StationActionOption,
+    pub clear_charging_profile: StationActionOption,
     pub get_variables: StationActionOption,
     pub get_base_report: StationActionOption,
     pub get_report: StationActionOption,
@@ -71,6 +73,9 @@ impl StationActionOption {
 }
 
 impl StationControlOptions {
+    pub fn charging_profiles_enabled(self) -> bool {
+        self.set_charging_profile.enabled() || self.clear_charging_profile.enabled()
+    }
     pub fn device_model_enabled(self) -> bool {
         self.get_variables.enabled() || self.get_base_report.enabled() || self.get_report.enabled()
     }
@@ -173,6 +178,7 @@ impl Configuration {
                     || station.control.change_availability
                     || station.control.trigger_message.enabled()
                     || station.control.get_composite_schedule.enabled()
+                    || station.control.charging_profiles_enabled()
                     || station.control.device_model_enabled()
             })
         {
@@ -183,6 +189,7 @@ impl Configuration {
                 station.control.change_availability
                     || station.control.trigger_message.enabled()
                     || station.control.get_composite_schedule.enabled()
+                    || station.control.charging_profiles_enabled()
                     || station.control.device_model_enabled()
             })
         {
@@ -238,7 +245,8 @@ fn validate_stations(
         if station.control.device_model_enabled() && station.protocol != ProtocolEdition::Ocpp201 {
             return Err(fail);
         }
-        if station.control.get_composite_schedule.enabled()
+        if (station.control.get_composite_schedule.enabled()
+            || station.control.charging_profiles_enabled())
             && (station.protocol != ProtocolEdition::Ocpp16j
                 || station.resources.iter().any(|resource| {
                     resource

@@ -72,6 +72,8 @@ pub enum CommandDispatchOutcome {
     CompositeScheduleResponse16(uob_contracts::CompositeScheduleResult16),
     /// Validated native read evidence; collection has its own durable lifecycle.
     DeviceModelResponse201(uob_contracts::DeviceModelResult201),
+    /// Immutable full native OCPP 1.6 profile request and valid acknowledgement.
+    ChargingProfileResponse16(uob_contracts::ChargingProfileResult16),
 }
 
 /// Sanitized failure to inspect or use the current station session.

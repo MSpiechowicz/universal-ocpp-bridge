@@ -120,7 +120,7 @@ async fn device_result_origin_instance_bridge_and_future_version_are_fail_closed
             "future-version" => {
                 result_mut(&mut delivery).schema_version = ContractVersion {
                     major: 1,
-                    revision: 6,
+                    revision: 7,
                 };
             }
             _ => unreachable!(),

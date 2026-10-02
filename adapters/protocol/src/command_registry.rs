@@ -1,4 +1,6 @@
 //! Pinned, explicitly supported privileged commands. Protocol edition is not a capability.
+pub(crate) mod charging_profile16;
+mod charging_profile16_schedule;
 pub(crate) mod composite_schedule16;
 pub(crate) mod device_model201;
 mod trigger201;
@@ -65,6 +67,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         action: "TriggerMessage".to_owned(),
     };
     if protocol == ProtocolEdition::Ocpp16j {
+        descriptors.extend(charging_profile16::descriptors(snapshot));
         if snapshot.capabilities.supports(&trigger) && station_scope(&snapshot.station) {
             descriptors.push(trigger_descriptor(snapshot.station.clone()));
         }
@@ -296,6 +299,9 @@ pub fn validate_privileged_operation(
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     if device_model201::ACTIONS.contains(&operation.action.as_str()) {
         return device_model201::validate(resource, operation).map(|_| ());
+    }
+    if charging_profile16::ACTIONS.contains(&operation.action.as_str()) {
+        return charging_profile16::validate(resource, operation).map(|_| ());
     }
     if operation.action.as_str() == "GetCompositeSchedule" {
         return composite_schedule16::validate(resource, operation).map(|_| ());

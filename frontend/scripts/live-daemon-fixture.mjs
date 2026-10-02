@@ -63,6 +63,11 @@ export async function startLiveDaemon({ commands = false } = {}) {
     const startBravo = commands ? write('start-b', randomBytes(10).toString('hex')) : undefined;
     const alpha = write('station-a', randomBytes(32).toString('hex'));
     const bravo = write('station-b', randomBytes(32).toString('hex'));
+    const alphaConnectors = commands ? 64 : 1;
+    const alphaResources = Array.from({ length: alphaConnectors }, (_, index) => `[[charging.stations.resources]]
+connector_id = "connector-${index + 1}"
+native_connector_id = ${index + 1}
+`).join('');
     const config = write('bridge.toml', `[bridge]
 id = "live-browser-demo"
 environment = "demo"
@@ -84,11 +89,12 @@ ${commands ? `start_token_file = ${JSON.stringify(startAlpha)}
 allow_stop = true
 allow_charging_limit = true
 change_availability = true
+trigger_message = true
+get_composite_schedule = true
+set_charging_profile = true
+clear_charging_profile = true
 ` : ''}
-[[charging.stations.resources]]
-connector_id = "connector-1"
-native_connector_id = 1
-[[charging.stations]]
+${alphaResources}[[charging.stations]]
 id = "station-b"
 protocol = "ocpp201"
 credential_file = ${JSON.stringify(bravo)}
@@ -132,7 +138,7 @@ native_connector_id = 1
       await delay(250);
     }
     if (!ready) throw new Error('live daemon did not become ready');
-    peers = spawn(join(root, 'target/debug/examples/charging_browser_peer'), [String(charging), alpha, bravo], {
+    peers = spawn(join(root, 'target/debug/examples/charging_browser_peer'), [String(charging), alpha, bravo, String(alphaConnectors)], {
       cwd: root, stdio: ['pipe', 'pipe', 'ignore'],
     });
     peers.on('error', () => {});

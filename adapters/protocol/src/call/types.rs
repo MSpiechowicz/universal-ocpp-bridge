@@ -288,6 +288,12 @@ impl CallSessionHandle {
             let bytes = encoded.len();
             (QueuedWire::Ready(encoded), bytes)
         };
+        if self.protocol == ProtocolEdition::Ocpp16j
+            && ["SetChargingProfile", "ClearChargingProfile"].contains(&request.action.as_str())
+            && bytes > 256 * 1024
+        {
+            return Err(SessionSubmitError::InvalidRequest);
+        }
         self.budget
             .validate_ocpp_message(bytes)
             .map_err(SessionSubmitError::Resource)?;

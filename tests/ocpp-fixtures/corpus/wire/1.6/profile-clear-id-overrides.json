@@ -1,0 +1,11 @@
+[
+  2,
+  "independent-117-profile-clear-id-overrides",
+  "ClearChargingProfile",
+  {
+    "id": -117,
+    "connectorId": 999,
+    "chargingProfilePurpose": "ChargePointMaxProfile",
+    "stackLevel": 0
+  }
+]

@@ -20,6 +20,10 @@ export async function streamEffect(
     params.set('evse_id', resource.resource.evse_id);
     if (resource.resource.connector_id !== undefined) params.set('connector_id', resource.resource.connector_id);
   }
+  // The configured 64 connectors plus the station produce 65 full native reports.
+  // Their derived snapshots stream ~6 MiB cumulatively; this is not retained history.
+  // Only station-wide assertions need that finite allowance; child streams stay strict.
+  const byteLimit = resource.resource === undefined ? 8 * 1024 * 1024 : 512 * 1024;
   const controller = new AbortController();
   let timedOut = false;
   const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 10000);
@@ -67,15 +71,15 @@ export async function streamEffect(
         }
       });
 
-      while (bytes < 512 * 1024 && !matched && category === 'stream_ended') {
+      while (bytes < byteLimit && !matched && category === 'stream_ended') {
         const chunk = await reader.read();
         if (chunk.done) break;
         bytes += chunk.value.byteLength;
-        if (bytes > 512 * 1024) { category = 'byte_limit'; break; }
+        if (bytes > byteLimit) { category = 'byte_limit'; break; }
         try { parser.push(chunk.value); }
         catch { category = 'invalid_framing'; }
       }
-      if (bytes >= 512 * 1024 && !matched && category === 'stream_ended') category = 'byte_limit';
+      if (bytes >= byteLimit && !matched && category === 'stream_ended') category = 'byte_limit';
     }
   } catch {
     category = timedOut ? 'timeout' : 'transport_error';
@@ -87,6 +91,6 @@ export async function streamEffect(
   if (timedOut && !matched && category === 'stream_ended') category = 'timeout';
   if (!matched && category === 'stream_ended' && wrongType > 0) category = 'id_type_mismatch';
   if (!matched) {
-    throw new Error(`Linked event absent from resource-scoped durable stream: ${category}; durable=${durable}, cursor=${cursor}, errors=${errors}, other=${other}, wrong_type=${wrongType}, bytes=${Math.min(bytes, 512 * 1024)}`);
+    throw new Error(`Linked event absent from resource-scoped durable stream: ${category}; durable=${durable}, cursor=${cursor}, errors=${errors}, other=${other}, wrong_type=${wrongType}, bytes=${Math.min(bytes, byteLimit)}`);
   }
 }

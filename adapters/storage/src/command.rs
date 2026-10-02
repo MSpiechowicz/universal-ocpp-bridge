@@ -117,14 +117,16 @@ pub(crate) fn write_result_value(
         ) && matches!(
             incoming.lifecycle,
             CommandLifecycle::ProtocolResponse { .. }
-        ) && (incoming
-            .trigger_observation
-            .as_ref()
-            .is_some_and(|observation| observation.native_response.is_some())
-            || incoming
-                .trigger_observation_201
+        ) && ((previous.trigger_observation.is_some()
+            && incoming
+                .trigger_observation
                 .as_ref()
-                .is_some_and(|observation| observation.native_response.is_some()));
+                .is_some_and(|observation| observation.native_response.is_some()))
+            || (previous.trigger_observation_201.is_some()
+                && incoming
+                    .trigger_observation_201
+                    .as_ref()
+                    .is_some_and(|observation| observation.native_response.is_some())));
         if previous_rank > incoming_rank
             || (previous_rank == 2 && incoming_rank == 2 && !correlated_trigger_reply)
         {
@@ -133,6 +135,7 @@ pub(crate) fn write_result_value(
             incoming.schema_version = previous.schema_version;
             incoming.configuration = previous.configuration;
             incoming.composite_schedule_16 = previous.composite_schedule_16;
+            incoming.charging_profile_16 = previous.charging_profile_16;
         }
         for observation in previous.configuration_observations {
             if !incoming

@@ -119,8 +119,9 @@ Neither is the read grant or a station's WebSocket credential. A privileged gran
 a control grant to be configured, but does not itself authorize standard control operations.
 The files must be separate from one another, station credentials, start identities and the
 private state directory; use the same owner, modes and demo-bound bearer format as the read
-grant. The service rejects command opt-ins without a control grant and
-`change_availability = true` without a privileged grant.
+grant. The service rejects command opt-ins without a control grant and privileged action
+opt-ins (including `change_availability`, native profiles and schedule queries) without a
+privileged grant.
 
 Enable actions individually under each `[[charging.stations]]`: `start_token_file` points to
 a private local charging authorization identity for start, `allow_stop = true` enables stop,
@@ -234,6 +235,163 @@ Duplicates return the original durable result without another send. Restart and 
 never replay the query, and an old connection's response cannot resolve a new request.
 Inspect the original status before issuing a new explicit request after reconnect.
 This opt-in does not implement OCPP 2.0.1 schedules, simulator smart charging or certification.
+
+### Full native OCPP 1.6J Set/Clear charging profiles
+
+`set_charging_profile` and `clear_charging_profile` are independent, **default-off** station
+options, separate from `allow_charging_limit`/canonical `SetChargingLimit`. Neither enables the
+other. Use only isolated demo ingress with both listeners on loopback. The following complete
+configuration shows table placement; replace paths with protected files provisioned as above,
+not inline credentials. Station flags belong before its `[[charging.stations.resources]]` table:
+
+```toml
+[bridge]
+id = "local-demo"
+environment = "demo"
+
+[management]
+listen_addr = "127.0.0.1:8080"
+
+[charging]
+enabled = true
+listen_addr = "127.0.0.1:9000"
+state_directory = "/var/lib/uob/demo-private"
+read_grant_file = "/var/lib/uob/demo-secrets/management-read"
+control_grant_file = "/var/lib/uob/demo-secrets/management-control"
+privileged_grant_file = "/var/lib/uob/demo-secrets/management-privileged"
+
+[[charging.stations]]
+id = "station-a"
+protocol = "ocpp16j"
+credential_file = "/var/lib/uob/demo-secrets/station-a"
+set_charging_profile = true
+clear_charging_profile = true
+
+[[charging.stations.resources]]
+connector_id = "connector-1"
+native_connector_id = 1
+```
+
+For an existing configuration, add only missing keys in those same tables. Both grant files
+are required for either opt-in, but **only the per-request privileged bearer** authorizes
+these OCPP actions. The ordinary control bearer, read bearer and station Basic-auth credential
+cannot substitute for it. OCPP 2.0.1 opt-ins and native connector IDs above 2147483647 fail
+configuration validation. After the authenticated station registers Accepted, query its
+advertised exact-resource command options before submitting. Live resource, socket generation,
+capability, privilege and expiry are rechecked before dispatch.
+
+Here is a complete programmatic management submission, not a browser editor. Angle-bracket
+bearers below are placeholders; load real credentials through the client's protected credential
+facility, never process arguments, logs or URLs. Replace `expires_at` with a short future
+RFC 3339 deadline and use a fresh request ID for each intentional new command:
+
+```http
+POST /api/v1/commands HTTP/1.1
+Host: 127.0.0.1:8080
+Authorization: Bearer <management-privileged>
+Content-Type: application/json
+
+{
+  "request_id": "profile-set-001",
+  "resource": {
+    "bridge_id": "local-demo",
+    "station_id": "station-a",
+    "resource": {"kind": "connector", "connector_id": "connector-1"},
+    "native_protocol_reference": {"protocol": "ocpp16", "connector_id": 1}
+  },
+  "operation": {
+    "kind": "ocpp",
+    "parameters": {
+      "protocol": "ocpp16j",
+      "action": "SetChargingProfile",
+      "payload_schema": "urn:OCPP:1.6:2019:12:SetChargingProfileRequest",
+      "payload": {
+        "connectorId": 1,
+        "csChargingProfiles": {
+          "chargingProfileId": -117,
+          "stackLevel": 2,
+          "chargingProfilePurpose": "TxDefaultProfile",
+          "chargingProfileKind": "Relative",
+          "chargingSchedule": {
+            "chargingRateUnit": "A",
+            "chargingSchedulePeriod": [
+              {"startPeriod": 0, "limit": 8.1, "numberPhases": 4},
+              {"startPeriod": 60, "limit": 0}
+            ]
+          }
+        }
+      }
+    }
+  },
+  "expires_at": "2099-01-01T00:00:00Z"
+}
+```
+
+Native numeric rates use exact nonnegative tenths in `A` or `W`, not canonical unit strings.
+Zero and positive native phases above three are legal; this example's four phases is requested
+metadata, not a claim about installed hardware. Extra meaningful fractional digits, negative
+rates, precision loss and overflow fail without rounding. Profiles retain signed i32 IDs,
+nonnegative stack and optional supplied validity/anchors/duration/minimum rate. `recurrencyKind`
+is optional and only allowed for `Recurring`; omitted fields stay absent, not null. Periods
+must start at 0, strictly increase, and number at most 1024. Native zero duration and periods
+beyond duration/recurrence are retained for charger truncation. Profile CALLs have a 256 KiB
+fully encoded ceiling in addition to existing tighter API/runtime budgets.
+
+`ChargePointMaxProfile` uses a station resource (only bridge/station IDs) and `connectorId: 0`.
+`TxDefaultProfile` permits station 0 or an exact connector as above. `TxProfile` instead requires
+the exact positive connector and a `transactionId` read from that resource's unique ongoing
+native OCPP 1.6 transaction. Pending/Active/Suspended is eligible only after the native identity
+is established; missing, ended, uncertain or ambiguous transactions fail before wire. Other
+purposes prohibit `transactionId`. Native options do not change canonical charging-limit
+conversion, positive-limit or 1–3-phase behavior.
+
+To clear the profile by ID, submit this separate full command using **station authority**:
+
+```http
+POST /api/v1/commands HTTP/1.1
+Host: 127.0.0.1:8080
+Authorization: Bearer <management-privileged>
+Content-Type: application/json
+
+{
+  "request_id": "profile-clear-001",
+  "resource": {"bridge_id": "local-demo", "station_id": "station-a"},
+  "operation": {
+    "kind": "ocpp",
+    "parameters": {
+      "protocol": "ocpp16j",
+      "action": "ClearChargingProfile",
+      "payload_schema": "urn:OCPP:1.6:2019:12:ClearChargingProfileRequest",
+      "payload": {"id": -117}
+    }
+  },
+  "expires_at": "2099-01-01T00:00:00Z"
+}
+```
+
+Clear `id` overrides every other selector, so adding `connectorId: 1` cannot make an ID clear
+child-scoped. Empty/broad/wildcard or connector-0 clears also require station authority.
+A child-scoped clear must omit `id`, address the exact connector resource and supply its native
+`connectorId`; optional `chargingProfilePurpose` and `stackLevel` filters combine with AND.
+The response does not enumerate removed IDs.
+
+HTTP 202 means durable admission, not native acceptance. Read `GET
+/api/v1/commands/profile-set-001` or the clear request's status URL using
+`Authorization: Bearer <management-read>` (the independent station-scoped read grant).
+Optional action-tagged `charging_profile_16` keeps typed snake_case request/selector evidence
+and Set `Accepted`/`Rejected`/`NotSupported` or Clear `Accepted`/`Unknown`. Valid native denials
+are `protocol_rejected`; a valid CALLERROR is sanitized rejection without a fabricated reply.
+Malformed replies, timeout or disconnect stay `transmission_uncertain`. Terminal evidence
+survives restart and cannot be rewritten by a late reply. Exact duplicates return it without
+another CALL; changed content under the same request ID conflicts. Restart/reconnect never
+replays uncertain work: inspect the original status before a new explicit request.
+
+The console's bounded nested schema metadata compatibility lets existing controls load when
+native profiles are enabled, but the complex Set browser editor remains unsupported. These
+native commands do not compute/enforce a local schedule, certify hardware, provide a full
+simulator or automatically produce global external exports. SQLite remains v13 without a
+profile migration. See [native semantics and observed smoke evidence](../architecture/ocpp16-remote-control.md)
+and [current result/schema versions](../contracts/json-schema-versioning.md).
 
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported

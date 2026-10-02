@@ -68,8 +68,19 @@ pub(super) fn phase_calls(
             };
             state.counts.availability_observed =
                 state.counts.availability_observed.saturating_add(1);
-            let connectors: &[u64] = if change.connector == 0 { &[0, 1] } else { &[1] };
-            Ok(connectors.iter().map(|connector| ("StatusNotification", json!({"connectorId":connector,"status":status,"errorCode":"NoError","timestamp":stamp}))).collect())
+            let connectors = if change.connector == 0 {
+                0..=u64::from(state.alpha_connectors)
+            } else {
+                change.connector..=change.connector
+            };
+            Ok(connectors
+                .map(|connector| {
+                    (
+                        "StatusNotification",
+                        json!({"connectorId":connector,"status":status,"errorCode":"NoError","timestamp":stamp}),
+                    )
+                })
+                .collect())
         }
         (Edition::Bravo, Phase::Availability) => {
             let change = state

@@ -188,7 +188,12 @@ async fn close_peer(peer: Peer) -> Result<State> {
     peer.task.await.map_err(|_| "peer task failed")?
 }
 
-async fn connect_peers(port: u16, a: &[u8], b: &[u8]) -> Result<(Peer, Peer)> {
+async fn connect_peers(
+    port: u16,
+    a: &[u8],
+    b: &[u8],
+    alpha_connectors: u8,
+) -> Result<(Peer, Peer)> {
     if connect(port, "station-a", "ocpp1.6", b).await.is_ok()
         || connect(port, "station-a", "ocpp2.0.1", a).await.is_ok()
     {
@@ -205,6 +210,7 @@ async fn connect_peers(port: u16, a: &[u8], b: &[u8]) -> Result<(Peer, Peer)> {
         alpha_socket,
         Edition::Alpha,
         State {
+            alpha_connectors,
             seed_transaction: Some(seed_transaction),
             ..State::default()
         },
@@ -250,8 +256,8 @@ fn print_counts(a: &Counts, b: &Counts) {
     );
 }
 
-pub(super) async fn run(port: u16, a: &[u8], b: &[u8]) -> Result<()> {
-    let (alpha_peer, bravo) = connect_peers(port, a, b).await?;
+pub(super) async fn run(port: u16, a: &[u8], b: &[u8], alpha_connectors: u8) -> Result<()> {
+    let (alpha_peer, bravo) = connect_peers(port, a, b, alpha_connectors).await?;
     let mut alpha = Some(alpha_peer);
     println!("ready");
     let mut disconnected_alpha = None;

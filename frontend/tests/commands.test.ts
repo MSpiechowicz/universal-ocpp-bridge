@@ -143,6 +143,149 @@ test('history is scoped and sanitized, status verifies request and effect linkag
   assert.throws(() => parseSchemas({ items: [{ ...schema, resource: { ...station.station, station_id: 'other' } }] }, station.station), /scope mismatch/);
 });
 
+test('complete native options at 64 connectors preserve scoped ordinary, canonical and flat privileged controls', () => {
+  const profilePrefix = 'csChargingProfiles.';
+  const schedulePrefix = `${profilePrefix}chargingSchedule.`;
+  const periodPrefix = `${schedulePrefix}chargingSchedulePeriod[].`;
+  const field = (name: string, value_type: string, required: boolean, enum_values?: string[]) => ({
+    name, value_type, required, ...(enum_values ? { enum_values } : {}),
+  });
+  const profileSchema = {
+    resource: station.station, protocol: 'ocpp16j', action: 'SetChargingProfile',
+    payload_schema: 'urn:OCPP:1.6:2019:12:SetChargingProfileRequest',
+    fields: [
+      field('connectorId', 'signed_integer', true),
+      field(`${profilePrefix}chargingProfileId`, 'signed_integer', true),
+      field(`${profilePrefix}transactionId`, 'signed_integer', false),
+      field(`${profilePrefix}stackLevel`, 'signed_integer', true),
+      field(`${profilePrefix}chargingProfilePurpose`, 'named_enum', true, ['ChargePointMaxProfile', 'TxDefaultProfile', 'TxProfile']),
+      field(`${profilePrefix}chargingProfileKind`, 'named_enum', true, ['Absolute', 'Recurring', 'Relative']),
+      field(`${profilePrefix}recurrencyKind`, 'named_enum', false, ['Daily', 'Weekly']),
+      field(`${profilePrefix}validFrom`, 'text', false),
+      field(`${profilePrefix}validTo`, 'text', false),
+      field(`${schedulePrefix}duration`, 'signed_integer', false),
+      field(`${schedulePrefix}startSchedule`, 'text', false),
+      field(`${schedulePrefix}chargingRateUnit`, 'named_enum', true, ['A', 'W']),
+      field(`${periodPrefix}startPeriod`, 'signed_integer', true),
+      field(`${periodPrefix}limit`, 'decimal', true),
+      field(`${periodPrefix}numberPhases`, 'signed_integer', false),
+      field(`${schedulePrefix}minChargingRate`, 'decimal', false),
+    ],
+  };
+  const clearSchema = {
+    resource: station.station, protocol: 'ocpp16j', action: 'ClearChargingProfile',
+    payload_schema: 'urn:OCPP:1.6:2019:12:ClearChargingProfileRequest',
+    fields: [
+      field('id', 'signed_integer', false),
+      field('connectorId', 'signed_integer', false),
+      field('chargingProfilePurpose', 'named_enum', false, ['ChargePointMaxProfile', 'TxDefaultProfile', 'TxProfile']),
+      field('stackLevel', 'signed_integer', false),
+    ],
+  };
+  const triggerSchema = {
+    resource: station.station, protocol: 'ocpp16j', action: 'TriggerMessage',
+    payload_schema: 'urn:OCPP:1.6:2019:12:TriggerMessageRequest',
+    fields: [
+      field('requestedMessage', 'named_enum', true, ['BootNotification', 'DiagnosticsStatusNotification',
+        'FirmwareStatusNotification', 'Heartbeat', 'MeterValues', 'StatusNotification']),
+      field('connectorId', 'unsigned_integer', false),
+    ],
+  };
+  const compositeSchema = {
+    resource: station.station, protocol: 'ocpp16j', action: 'GetCompositeSchedule',
+    payload_schema: 'urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest',
+    fields: [
+      field('connectorId', 'unsigned_integer', true),
+      field('duration', 'unsigned_integer', true),
+      field('chargingRateUnit', 'named_enum', false, ['A', 'W']),
+    ],
+  };
+  const nativeSchemas = [profileSchema, clearSchema, triggerSchema, compositeSchema];
+  const children: ResourceRef[] = Array.from({ length: 64 }, (_, index) => ({
+    ...station.station, resource: { kind: 'connector', connector_id: `connector-${index + 1}` },
+    native_protocol_reference: { protocol: 'ocpp16', connector_id: index + 1 },
+  }));
+  const resources = [station.station, ...children];
+  const nativeOperations = nativeSchemas.map(({ protocol, action }) => ({
+    operation: { kind: 'protocol_action', protocol, action }, parameters: [],
+  }));
+  const profileStation: StationSnapshot = {
+    ...station, capabilities: {
+      ...station.capabilities, operations: [...station.capabilities.operations, ...nativeOperations],
+    },
+    resources: children.map(resource => ({
+      resource, availability: 'available', capabilities: {
+        ...station.capabilities, operations: [
+          ...station.capabilities.operations.filter(item => item.operation.kind === 'set_charging_limit'),
+          ...nativeOperations,
+        ],
+      }, data_points: [], current_values: [],
+    })),
+  };
+  const response = {
+    items: [schema, ...resources.flatMap(resource => nativeSchemas.map(item => ({ ...item, resource })))],
+    start: { resource: station.station, authorization_reference: 'opaque' },
+  };
+  const options = parseSchemas(response, station.station);
+  const compose = (resource: ResourceRef, action: string, values: Record<string, string>) => composeOperation(
+    profileStation, resource, 'ocpp', values, options.items.find(item =>
+      item.action === action && JSON.stringify(item.resource.resource) === JSON.stringify(resource.resource)));
+
+  assert.deepEqual(composeOperation(profileStation, options.start!.resource, 'start', {
+    authorization_reference: options.start!.authorization_reference,
+  }), { kind: 'start', parameters: { authorization_reference: 'opaque' } });
+  assert.deepEqual(composeOperation(profileStation, station.station, 'stop', { transaction_id: 'tx-1' }),
+    { kind: 'stop', parameters: { transaction_id: 'tx-1' } });
+  for (const resource of resources) {
+    const connectorId = resource.native_protocol_reference?.protocol === 'ocpp16'
+      ? resource.native_protocol_reference.connector_id : 0;
+    assert.deepEqual(compose(resource, 'GetCompositeSchedule', {
+      connectorId: String(connectorId), duration: '60', chargingRateUnit: 'W',
+    }), { kind: 'ocpp', parameters: { protocol: 'ocpp16j', action: 'GetCompositeSchedule',
+      payload_schema: compositeSchema.payload_schema, payload: { connectorId, duration: 60, chargingRateUnit: 'W' } } });
+    assert.deepEqual(compose(resource, 'ClearChargingProfile', {
+      connectorId: String(connectorId), chargingProfilePurpose: 'TxDefaultProfile', stackLevel: '2',
+    }), { kind: 'ocpp', parameters: { protocol: 'ocpp16j', action: 'ClearChargingProfile',
+      payload_schema: clearSchema.payload_schema, payload: { connectorId, chargingProfilePurpose: 'TxDefaultProfile', stackLevel: 2 } } });
+    assert.deepEqual(compose(resource, 'TriggerMessage', { connectorId: String(connectorId), requestedMessage: 'Heartbeat' }),
+      { kind: 'ocpp', parameters: { protocol: 'ocpp16j', action: 'TriggerMessage',
+        payload_schema: triggerSchema.payload_schema, payload: { connectorId, requestedMessage: 'Heartbeat' } } });
+    if (resource.resource) {
+      assert.deepEqual(composeOperation(profileStation, resource, 'set_charging_limit', { value: '7', unit: 'ampere' }),
+        { kind: 'set_charging_limit', parameters: { value: '7', unit: 'ampere' } });
+      assert.throws(() => composeOperation(profileStation, resource, 'start', { authorization_reference: 'opaque' }));
+      assert.throws(() => composeOperation(profileStation, resource, 'stop', { transaction_id: 'tx-1' }));
+      assert.throws(() => compose(resource, 'ChangeAvailability', { connectorId: String(connectorId), type: 'Operative' }));
+    }
+    assert.throws(() => compose(resource, 'SetChargingProfile', {
+      connectorId: String(connectorId), [`${profilePrefix}chargingProfileId`]: '1',
+    }));
+  }
+  assert.deepEqual(compose(station.station, 'ChangeAvailability', { connectorId: '0', type: 'Operative' }),
+    { kind: 'ocpp', parameters: { protocol: 'ocpp16j', action: 'ChangeAvailability',
+      payload_schema: schema.payload_schema, payload: { connectorId: 0, type: 'Operative' } } });
+  assert.deepEqual(compose(station.station, 'ClearChargingProfile', { id: '-7' }),
+    { kind: 'ocpp', parameters: { protocol: 'ocpp16j', action: 'ClearChargingProfile',
+      payload_schema: clearSchema.payload_schema, payload: { id: -7 } } });
+  const last = children[63];
+  assert.throws(() => composeOperation(profileStation, last, 'ocpp', { connectorId: '64', duration: '60' }, compositeSchema));
+  assert.throws(() => parseSchemas({ ...response, items: [...response.items, {
+    ...profileSchema, resource: { ...last, station_id: 'other' },
+  }] }, station.station));
+  assert.throws(() => parseSchemas({ ...response, items: [...response.items, {
+    ...profileSchema, fields: [field('x'.repeat(129), 'text', false)],
+  }] }, station.station));
+  for (const name of ['__proto__', 'prototype', 'constructor']) {
+    assert.throws(() => composeOperation(profileStation, last, 'ocpp', { [name]: '1' }, {
+      ...compositeSchema, resource: last, fields: [field(name, 'unsigned_integer', true)],
+    }));
+  }
+  const overflow = Array.from({ length: 513 - response.items.length }, (_, index) => ({
+    ...compositeSchema, action: `Unsupported${index}`,
+  }));
+  assert.throws(() => parseSchemas({ ...response, items: [...response.items, ...overflow] }, station.station));
+});
+
 test('accepted request IDs longer than 4096 characters remain readable in history and detail', () => {
   const requestId = 'r'.repeat(5000);
   const row = { request_id: requestId, resource: station.station, observed_effects: [] };

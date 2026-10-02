@@ -421,6 +421,7 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         trigger_observation_201: None,
         composite_schedule_16: None,
         device_model_201: None,
+        charging_profile_16: None,
     }
 }
 fn request_id() -> RequestId {

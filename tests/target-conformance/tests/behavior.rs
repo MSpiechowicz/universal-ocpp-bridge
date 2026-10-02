@@ -14,9 +14,9 @@ use uob_application::{
     TargetRuntimeLimits, TargetTask,
 };
 use uob_contracts::{
-    AuthenticatedCommandOrigin, BridgeId, CommandLifecycle, CommandOperation, CommandRequest,
-    CommandResult, CommandReturnRoute, ContractVersion, ExternalCommand, Operation, PrincipalId,
-    RequestId, ResourceRef, StationId, TargetInstanceId, TargetKind, UtcTimestamp,
+    AuthenticatedCommandOrigin, BridgeId, CommandOperation, CommandRequest, CommandResult,
+    ContractVersion, ExternalCommand, Operation, PrincipalId, RequestId, ResourceRef, StationId,
+    TargetInstanceId, TargetKind, UtcTimestamp,
 };
 use uob_target_conformance::{
     DeliveryRecoveryLedger, FakeTargetHost, HostCapacities, RecoveryDisposition,
@@ -27,7 +27,7 @@ use uob_target_conformance::{
 mod helpers;
 #[path = "support/query.rs"]
 mod query_support;
-use helpers::{text, timeout, timestamp};
+use helpers::{result_for, text, timeout, timestamp};
 
 enum PeerIngress {
     Command {
@@ -455,27 +455,6 @@ fn request(id: &str, expires_at: UtcTimestamp) -> CommandRequest<()> {
             authorization_reference: None,
         },
         expires_at,
-    }
-}
-
-fn result_for(command: &ExternalCommand<()>) -> CommandResult {
-    CommandResult {
-        schema_version: ContractVersion::V1_INITIAL,
-        correlation_id: command.request.correlation_id.clone(),
-        resource: command.request.resource.clone(),
-        return_route: CommandReturnRoute {
-            request_id: command.request.request_id.clone(),
-            origin: command.origin.clone(),
-        },
-        lifecycle: CommandLifecycle::Admitted,
-        recorded_at: timestamp(1),
-        observed_effects: vec![],
-        configuration: None,
-        configuration_observations: vec![],
-        trigger_observation: None,
-        trigger_observation_201: None,
-        composite_schedule_16: None,
-        device_model_201: None,
     }
 }
 

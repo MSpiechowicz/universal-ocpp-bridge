@@ -1,5 +1,6 @@
 {
   "requirements": [
+    {"id":"ocpp16.smart-charging.profiles","feature":"smart_charging.profiles","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.registration.boot","feature":"registration.boot","protocol_version":"1.6","direction":"charging_station_to_csms","required":true,"applicable":true},
     {"id":"ocpp16.heartbeat","feature":"heartbeat","protocol_version":"1.6","direction":"charging_station_to_csms","required":true,"applicable":true},
     {"id":"ocpp16.authorization","feature":"authorization","protocol_version":"1.6","direction":"charging_station_to_csms","required":true,"applicable":true},

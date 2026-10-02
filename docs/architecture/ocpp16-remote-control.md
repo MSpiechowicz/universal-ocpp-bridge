@@ -3,8 +3,8 @@
 `v16::remote_control::RemoteControlSession` implements the application `StationCommandPort` for
 one authenticated OCPP 1.6 socket. Compose the existing `CommandCoordinator` and scoped access
 guard around it: ordinary `Start`/`Stop` require control permission; pinned `Reset`,
-`UnlockConnector`, configuration, `TriggerMessage` and `GetCompositeSchedule` operations require
-privileged control.
+`UnlockConnector`, configuration, `TriggerMessage`, `GetCompositeSchedule`,
+`SetChargingProfile` and `ClearChargingProfile` operations require privileged control.
 No new HTTP or authentication path is introduced. The service composes a charging host for
 explicitly opted-in, loopback-only demo ingress; production charging commands remain disabled.
 
@@ -25,6 +25,8 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | ChangeConfiguration | Privileged `Ocpp`, action `ChangeConfiguration`, bridge reference schema `urn:uob:ocpp16:ChangeConfigurationReference:1`; station scope and locally provisioned key-bound, expiring reference | Accepted / Rejected / RebootRequired / NotSupported |
 | TriggerMessage | Privileged `Ocpp`, action `TriggerMessage`, schema `urn:OCPP:1.6:2019:12:TriggerMessageRequest`; six pinned native classes with station/connector scope | Accepted / Rejected / NotImplemented |
 | GetCompositeSchedule | Privileged `Ocpp`, action `GetCompositeSchedule`, schema `urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest`; station connector 0 or exact positive connector, positive i32 duration and optional A/W unit | Accepted with meaningful typed schedule / Rejected |
+| SetChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:SetChargingProfileRequest`; complete native profile, exact station/connector scope and ongoing transaction checks for TxProfile | Accepted / Rejected / NotSupported |
+| ClearChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:ClearChargingProfileRequest`; station authority for ID/broad clears, exact connector for child filter clears | Accepted / Unknown |
 
 Unknown fields, wrong schemas, OCPP 2.0.1 reset types, unsupported operations and cross-resource
 native addresses fail closed. Unlock connector IDs use real topology rather than the pinned
@@ -170,6 +172,71 @@ is required for another query after reconnect, and replies from an old socket ge
 cannot attach to it or resolve a terminal uncertain result. No OCPP 2.0.1 schedule command,
 simulator smart-charging engine or OCA certification is established by this feature.
 
+## Opt-in native charging profiles
+
+`set_charging_profile` and `clear_charging_profile` are independent, default-off OCPP 1.6J
+station options. Either requires distinct control and privileged grant files; submission uses
+the privileged grant, not the ordinary control grant. Enabling one does not enable the other
+or canonical `SetChargingLimit`. Demo-only, loopback-only ingress and Accepted registration,
+advertised per-resource capability, exact live resource/socket generation, authorization and
+expiry checks still apply at admission and dispatch. Opt-in rejects configured native connector
+IDs above `i32::MAX`; native positive connector IDs must resolve to configured children.
+
+The full native Set is separate from canonical `SetChargingLimit`, even though the latter
+also uses a bounded native TxProfile internally. Canonical unit conversion, positive limits
+and phase policy remain unchanged; canonical results do not acquire `charging_profile_16`.
+The full privileged request preserves native purpose, signed i32 profile/transaction IDs,
+nonnegative i32 stack, `Absolute`/`Recurring`/`Relative` kind, and optional `Daily`/`Weekly`
+recurrence. `recurrencyKind` is permitted only with `Recurring` but is not made mandatory.
+Supplied `validFrom`, `validTo` and `startSchedule` remain supplied timestamp evidence
+(typed instants normalize to UTC); omitted anchors/validity remain absent. Native validity
+windows, including expired windows, remain charger decisions rather than bridge clock policy.
+
+`ChargePointMaxProfile` requires station scope and connector 0. `TxDefaultProfile` permits
+station 0 or the exact positive addressed connector. `TxProfile` requires that exact positive
+connector and a supplied `transactionId` matching one unique established ongoing native
+transaction at dispatch. Pending, Active or Suspended is eligible only with native transaction
+evidence and no stop; missing, ended, uncertain or ambiguous identity fails before wire.
+Other purposes prohibit `transactionId`.
+
+Native `A`/`W` rates and optional `minChargingRate` are exact nonnegative numeric quantities
+with at most one meaningful fractional decimal digit. Zero is legal and retained, including
+with a positive minimum rate. Exact trailing zeros/exponent notation may normalize for decoding;
+overflow, precision loss and extra meaningful fractional digits fail, never round or clamp.
+No voltage/phase conversion or invented charger capacity is applied. Optional `numberPhases`
+is a positive native i32, not the canonical limit's 1–3 policy. There are 1–1024 periods:
+first `startPeriod` is 0 and subsequent nonnegative i32 starts strictly increase. Supplied
+duration is a nonnegative i32, including native zero. Periods beyond duration or recurrence
+are retained for the charger's truncation semantics, not rejected using composite-reply rules.
+The fully encoded Set/Clear native CALL has a profile-only 256 KiB ceiling; tighter existing
+message, queue and pending-request budgets still apply. Installed count, supported units,
+maximum stack and hardware capacity are not discovered or guessed.
+
+For Clear, supplied signed i32 `id` overrides all other selectors on the charger, even a
+supplied connector filter. Therefore every ID clear requires station authority. Empty,
+omitted/wildcard connector or connector-0/broad clears also require station authority.
+A connector-scoped filter clear must omit `id` and supply that child's exact positive native
+`connectorId`; supplied purpose and nonnegative stack filters combine with AND semantics.
+Selectors remain captured even when ID makes them irrelevant. Accepted/Unknown status does
+not identify which profiles were removed; the bridge does not invent an installed-profile inventory.
+
+Optional action-tagged `CommandResult.charging_profile_16` freezes the full Set request or
+Clear selectors and the valid native CALLRESULT. Set retains `Accepted`, `Rejected` or
+`NotSupported`; Clear retains `Accepted` or `Unknown`. Native denial maps to
+`protocol_rejected` with typed status. A valid CALLERROR is sanitized protocol rejection without
+an invented CALLRESULT. Malformed replies, timeout, disconnect and interrupted dispatch remain
+`transmission_uncertain` without fabricated typed reply evidence. Terminal evidence is immutable
+against late replies/conflicting writes, survives SQLite reopen/restart, and exact duplicates
+return the original result. Neither reconnect nor restart replays an uncertain command.
+
+The browser accepts protected option discovery up to 512 descriptors, 24 fields per
+descriptor and 128 characters per field name, within the unchanged 1 MiB response cap.
+The current maximum topology (64 children plus the station, up to five native action
+families) needs at most 325 descriptors; discovery is not truncated. Complex native
+Set has no supported browser editor: use the authenticated programmatic management API described
+in [headless operations](../operations/headless-cli.md). This is not a raw JSON browser bypass.
+Native acceptance proves neither physical enforcement nor a later charging effect.
+
 ## Verification and provenance
 
 The independent fixture corpus includes all four requests (both reset modes) and every native
@@ -230,3 +297,36 @@ verifies immediate and durable result publication on existing topics for command
 v1.0/v1.1 and additive v1.4 composite schedule evidence. The existing v1.2/v1.3 policy is
 unchanged; this is not support for every minor revision or a new MQTT command family.
 Broker PUBACK acknowledges broker receipt, not native acceptance or physical success.
+
+For native profiles, `cargo test --locked -p uob-protocol-adapter --test
+ocpp16_charging_profiles` passed 11 real-socket regressions covering exact rates, native
+statuses, signed/period/frame boundaries, transaction and selector authority, immutable
+request/result evidence and no-replay uncertainty. The canonical `charging_limit` and
+`ocpp16_composite_schedule` suites also passed; their distinct semantics are unchanged.
+`cargo test --locked -p uob-storage-adapter --test charging_profile` passed both terminal
+conflict/reopen and late-reply uncertainty regressions.
+
+`cargo test --locked -p uob-service --test charging_profiles` passed eight actual-daemon
+scenarios, including independent opt-ins/grants, native A/W/zero/statuses, denied admission,
+malformed reply/CALLERROR/30-second timeout, heartbeat progress and apply-disconnect-restart.
+A separate rebuilt-daemon smoke with an independently authored RFC 6455 peer observed
+A 8.1, A 0 and W 7200.1, all action-specific statuses, revision-6 typed results, denied
+connector ID-clear/invalid tenths/ordinary-control submissions without a CALL, heartbeat
+before the profile reply, and retained uncertainty without resend after reconnect/restart.
+The software peer reloaded its own profile state; eight terminal results remained readable.
+This is bounded software-peer evidence, not hardware enforcement or a full simulator.
+
+The narrow `ocpp16.smart-charging.profiles` corpus row links executable regressions and eleven
+hand-authored wire fixtures. Its four attributed OCA schemas retain original bytes; details
+are in [fixture provenance](../testing/ocpp-fixture-corpus.md). Current command-result v1.6
+and nested export v1.7 schemas preserve historical snapshots/routes. HTTP/MQTT tests cover
+their existing result-reader/publisher boundaries; native methods do not create an automatic
+external-export producer. SQLite remains v13 with no profile SQL migration.
+
+`UOB_LIVE_BROWSER=1 npm --prefix frontend run test:browser -- live-command.browser.ts`
+passed one real-daemon scenario with both-edition peers and native profile actions advertised.
+A direct browser inspection also loaded protected options containing Set/Clear and long
+nested field paths while existing controls remained available. This proves metadata/control
+compatibility, not a nested profile editor. Whole-workspace verification and fresh reviews
+remain separate gates. Broad smart charging/enforcement and OCA certification
+remain outside this narrow implementation.

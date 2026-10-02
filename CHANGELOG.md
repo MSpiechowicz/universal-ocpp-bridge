@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off, privileged demo OCPP 1.6J full native
+  `SetChargingProfile` and `ClearChargingProfile`, separate from canonical
+  `SetChargingLimit`, with station/connector and ongoing-native-transaction
+  authority, signed IDs, exact nonnegative A/W tenths including zero,
+  native phase counts and retained optional validity/recurrence/anchors (#117).
+  Bound profiles to 1024 ordered periods and a profile-only 256 KiB encoded CALL;
+  keep native Set Accepted/Rejected/NotSupported and Clear Accepted/Unknown
+  in immutable action-tagged `charging_profile_16` results. Sanitized CALLERROR
+  and malformed/timeout/disconnect uncertainty do not fabricate native replies;
+  reconnect/restart never replay uncertain work.
+  Command-result v1.6 and nested export v1.7 preserve historical schemas/routes,
+  current HTTP/MQTT result boundaries and SQLite v13 without a profile migration.
+  Bounded nested browser metadata compatibility preserves existing controls,
+  exercised by a real-daemon live browser scenario and direct browser inspection;
+  the complex native Set browser editor remains unsupported.
+  Four original-byte attributed OCA schemas, eleven hand-authored wire fixtures,
+  real-socket/storage/actual-daemon regressions and an independent software-peer
+  smoke provide narrow profile evidence. Broad smart charging/enforcement,
+  hardware interoperability, a full simulator, OCA certification and automatic
+  global external-export production are not established by this addition.
 - Add individually default-off, privileged demo OCPP 2.0.1 `GetVariables`,
   `GetBaseReport` and `GetReport` queries with exact native identities/statuses,
   unchanged selectors and signed report IDs, generation-scoped learned limits,

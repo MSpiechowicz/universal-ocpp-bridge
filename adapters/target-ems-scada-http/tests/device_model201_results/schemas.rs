@@ -5,10 +5,10 @@ use serde_json::{Value, json};
 use super::host::{Host, READER};
 
 const BASE: &str = "https://bridge.test";
-pub const RESULT: &str = "/bridge/v1/schemas/v1.5/command-result.schema.json";
+pub const RESULT: &str = "/bridge/v1/schemas/v1.6/command-result.schema.json";
 pub const HISTORICAL: &str = "/bridge/v1/schemas/v1.4/command-result.schema.json";
-pub const RECORD: &str = "/bridge/v1/schemas/v1.6/export-record.schema.json";
-pub const BATCH: &str = "/bridge/v1/schemas/v1.6/export-batch.schema.json";
+pub const RECORD: &str = "/bridge/v1/schemas/v1.7/export-record.schema.json";
+pub const BATCH: &str = "/bridge/v1/schemas/v1.7/export-batch.schema.json";
 
 pub struct Schemas {
     pub document: Value,

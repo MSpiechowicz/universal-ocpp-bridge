@@ -262,7 +262,7 @@ impl ExportRecord {
     /// Current envelope revision, including optional native device-model command evidence.
     pub const SCHEMA_VERSION: ContractVersion = ContractVersion {
         major: 1,
-        revision: 6,
+        revision: 7,
     };
     /// Creates a record only from the closed privacy-filtered payload surface.
     #[must_use]

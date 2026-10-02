@@ -1,0 +1,10 @@
+[
+  2,
+  "independent-117-profile-clear-filter",
+  "ClearChargingProfile",
+  {
+    "connectorId": 2,
+    "chargingProfilePurpose": "TxDefaultProfile",
+    "stackLevel": 1
+  }
+]
