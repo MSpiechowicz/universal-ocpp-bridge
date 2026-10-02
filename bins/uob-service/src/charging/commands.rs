@@ -69,6 +69,15 @@ pub(super) struct LiveCommands {
     sessions: RwLock<BTreeMap<StationId, (u64, Arc<Session>)>>,
 }
 
+pub(super) struct SnapshotCommit(Arc<Session>);
+impl Drop for SnapshotCommit {
+    fn drop(&mut self) {
+        if let Session::V201(session) = self.0.as_ref() {
+            session.abort_snapshot_commit();
+        }
+    }
+}
+
 impl LiveCommands {
     pub(super) fn new() -> Self {
         Self {
@@ -135,6 +144,25 @@ impl LiveCommands {
         Ok(())
     }
 
+    pub(super) fn begin_snapshot_commit(
+        &self,
+        station: &StationId,
+        generation: u64,
+    ) -> Result<Option<SnapshotCommit>, StationCommandError> {
+        let sessions = self
+            .sessions
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((current, session)) = sessions.get(station)
+            && *current == generation
+            && let Session::V201(port) = session.as_ref()
+        {
+            port.begin_snapshot_commit()?;
+            return Ok(Some(SnapshotCommit(session.clone())));
+        }
+        Ok(None)
+    }
+
     pub(super) fn remove(&self, station: &StationId, generation: u64) {
         let mut sessions = self
             .sessions
@@ -159,6 +187,67 @@ impl LiveCommands {
 }
 
 impl StationCommandPort<Value> for LiveCommands {
+    fn charging_profile_expectation(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: uob_contracts::UtcTimestamp,
+    ) -> Result<Option<uob_application::ProfileReservation201>, uob_contracts::CommandErrorCode>
+    {
+        let sessions = self
+            .sessions
+            .read()
+            .map_err(|_| uob_contracts::CommandErrorCode::PolicyRejected)?;
+        let (current, session) = sessions
+            .get(&command.resource.station_id)
+            .ok_or(uob_contracts::CommandErrorCode::StationDisconnected)?;
+        if Some(*current) != generation {
+            return Err(uob_contracts::CommandErrorCode::StationDisconnected);
+        }
+        match session.as_ref() {
+            Session::V201(session) => {
+                session.charging_profile_expectation(command, generation, now)
+            }
+            Session::V16(session) => session.charging_profile_expectation(command, generation, now),
+        }
+    }
+    fn dispatch_reserved_profile(
+        &self,
+        command: Command<Value>,
+        expected: Option<u64>,
+        reservation: uob_application::ProfileReservation201,
+    ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
+        let selected = self.sessions.read().ok().and_then(|sessions| {
+            sessions
+                .get(&command.resource.station_id)
+                .filter(|(generation, _)| {
+                    Some(*generation) == expected && *generation == reservation.generation
+                })
+                .map(|(_, session)| Arc::clone(session))
+        });
+        Box::pin(async move {
+            let Some(session) = selected else {
+                return Ok(disconnected());
+            };
+            let Some(context) = session.context(command.resource.clone()).await? else {
+                return Ok(disconnected());
+            };
+            if !matches!(context.connectivity, Connectivity::Connected { connected_at, .. }
+                if command.admitted_at >= connected_at)
+                || self.session_generation(&command.resource) != expected
+            {
+                return Ok(disconnected());
+            }
+            match session.as_ref() {
+                Session::V201(session) => {
+                    session
+                        .dispatch_reserved_profile(command, expected, reservation)
+                        .await
+                }
+                Session::V16(_) => Ok(disconnected()),
+            }
+        })
+    }
     fn context(
         &self,
         resource: ResourceRef,

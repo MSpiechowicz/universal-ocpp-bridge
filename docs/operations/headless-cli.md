@@ -275,10 +275,10 @@ native_connector_id = 1
 For an existing configuration, add only missing keys in those same tables. Both grant files
 are required for either opt-in, but **only the per-request privileged bearer** authorizes
 these OCPP actions. The ordinary control bearer, read bearer and station Basic-auth credential
-cannot substitute for it. OCPP 2.0.1 opt-ins and native connector IDs above 2147483647 fail
-configuration validation. After the authenticated station registers Accepted, query its
-advertised exact-resource command options before submitting. Live resource, socket generation,
-capability, privilege and expiry are rechecked before dispatch.
+cannot substitute for it. Native IDs above 2147483647 fail configuration validation;
+OCPP 2.0.1 uses the separate EVSE semantics below, not these connector payloads.
+After Accepted registration, query advertised exact-resource options before submitting.
+Live resource, socket generation, capability, privilege and expiry are rechecked before dispatch.
 
 Here is a complete programmatic management submission, not a browser editor. Angle-bracket
 bearers below are placeholders; load real credentials through the client's protected credential
@@ -389,9 +389,96 @@ replays uncertain work: inspect the original status before a new explicit reques
 The console's bounded nested schema metadata compatibility lets existing controls load when
 native profiles are enabled, but the complex Set browser editor remains unsupported. These
 native commands do not compute/enforce a local schedule, certify hardware, provide a full
-simulator or automatically produce global external exports. SQLite remains v13 without a
-profile migration. See [native semantics and observed smoke evidence](../architecture/ocpp16-remote-control.md)
-and [current result/schema versions](../contracts/json-schema-versioning.md).
+simulator or automatically produce global external exports. Native16 has no profile-specific
+migration; current SQLite schema14 adds the separate native201 ownership ledger. See
+[native16 semantics](../architecture/ocpp16-remote-control.md) and
+[current result/schema versions](../contracts/json-schema-versioning.md).
+
+### Full native OCPP 2.0.1 Set/Clear charging profiles
+
+For an existing `[[charging.stations]]` with `protocol = "ocpp201"`, use the same independently
+default-off `set_charging_profile` and `clear_charging_profile` boolean keys. Keep both
+listeners loopback and the demo-only, independent privileged grant above. Native profile
+actions are advertised for the station and configured positive EVSE-only resources, not
+connector resources. Native IDs must fit signed32-bit integers; configured EVSE IDs are positive.
+GetVariables is independently default-off, with no automatic phase-capability query.
+
+**Destructive operational prerequisite:** enabling full native Set blocks both native Set and
+canonical SetChargingLimit until three explicit station-privileged, all-EVSE purpose-only
+Clear requests receive valid Accepted or Unknown replies. These remove existing station
+policies; do this only when exclusive CSMS ownership is established. The bridge does not
+discover or fabricate the charger's full inventory and never sends these clears automatically.
+Repeat the following command envelope with distinct request IDs and purpose values
+ChargingStationMaxProfile, TxDefaultProfile and TxProfile; inspect each retained result.
+Partial baseline progress survives restart. External constraints are protected.
+
+```json
+{
+  "request_id": "profile201-baseline-default-001",
+  "resource": { "bridge_id": "bridge-1", "station_id": "station-b" },
+  "operation": {
+    "kind": "ocpp",
+    "parameters": {
+      "protocol": "ocpp201",
+      "action": "ClearChargingProfile",
+      "payload_schema": "urn:OCPP:Cp:2:2020:3:ClearChargingProfileRequest",
+      "payload": { "chargingProfileCriteria": { "chargingProfilePurpose": "TxDefaultProfile" } }
+    }
+  },
+  "expires_at": "2099-01-01T00:00:00Z"
+}
+```
+
+Submit only through the existing per-request privileged `POST /api/v1/commands` path.
+Clear uses `chargingProfileId` alone **or** nonempty nested chargingProfileCriteria containing
+EVSE, purpose and/or stack filters combined with AND. Mixed/empty selectors and native16
+spellings are invalid. ID/broad clears require station permission; a positive EVSE criterion
+may use its exact EVSE resource. Omitted EVSE means all EVSEs; zero means station-owned
+profiles, not all EVSEs. A targeted Unknown does not release uncertain ownership metadata.
+
+Native Set's schema is `urn:OCPP:Cp:2:2020:3:SetChargingProfileRequest`. Its wire payload has
+evseId and chargingProfile with signed id, nonnegative stackLevel, purpose/kind, optional
+transactionId/recurrencyKind/validFrom/validTo, and exactly one chargingSchedule array entry.
+Each schedule has signed id, A/W chargingRateUnit and 1–1024 strictly increasing first-zero
+periods with exact nonnegative tenths limits, optional numberPhases and phaseToUse. Optional
+duration/startSchedule/minChargingRate omissions remain absent. Absolute/Recurring requires
+startSchedule; Relative prohibits it; only Recurring requires Daily/Weekly recurrencyKind.
+ChargingStationMaxProfile addresses station0 and is not Relative. TxProfile needs one
+established ongoing native transaction on that exact EVSE in the current generation.
+Unknown fields, customData, ISO multiple schedules and salesTariff fail before CALL.
+
+phaseToUse requires numberPhases=1 and phase1..3, plus strictly true current-generation,
+correlated GetVariables Actual proof for exact SmartChargingCtrlr.ACPhaseSwitchingSupported
+at that positive EVSE, no instances or connector. false/unknown/failure/malformed/out-of-order
+responses revoke proof. Reconnect/restart never restores snapshot authority. No native Set
+with phase selection is allowed at station0. Omitting phaseToUse does not require this proof.
+
+One mutation per station is active. Different-ID purpose/stack/EVSE conflicts, station0 versus
+positive-EVSE TxDefault conflicts and same-stack/transaction TxProfile conflicts fail before
+wire. IDs are station-global: an EVSE-only replacement cannot erase another known/uncertain
+scope's profile. Explicit station ID Clear followed by exact-EVSE Set is the recovery path.
+At most128 metadata footprints are retained, including old+candidate uncertain replacement.
+History pruning never frees live ownership; actual transaction Ended does. Clear remains
+available at capacity. Canonical-only mode with full Set off needs no baseline and still
+records known metadata without adding full native result evidence.
+Canonical same-ID replacement additionally requires exact known metadata compatibility
+(current transaction, purpose, stack, scope and validity); it cannot use ordinary control
+permission to replace an incompatible privileged policy. Quantity-only repeats remain allowed.
+
+Optional action-tagged `charging_profile_201` in command-result v1.7 preserves the complete
+validated typed request and Set Accepted/Rejected or Clear Accepted/Unknown reply, plus only
+allowlisted reason codes. No status is fabricated for CALLERROR/malformed/timeout/uncertainty;
+opaque statusInfo additionalInfo/customData is not disclosed. Terminal evidence and ledger
+changes commit atomically; duplicates never resend. Read retained results before issuing any
+new reconciliation request. Embedded export v1.8 supports this evidence without adding a
+global native-command producer, privileged target ingress or real PostgreSQL delivery claim.
+SQLite13 migrates additively to14; a13 binary rejects14 and automatic downgrade is not qualified.
+
+The browser can load both editions' full bounded descriptors while existing controls remain
+usable. Complex native Set/Clear composition remains unsupported; there is no raw-JSON
+editor. Independent software-peer installed state and native acknowledgement are not proof
+of hardware enforcement or OCA certification. See
+[native201 safety and proposed verification commands](../architecture/ocpp201-remote-control.md#opt-in-native-charging-profiles).
 
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported

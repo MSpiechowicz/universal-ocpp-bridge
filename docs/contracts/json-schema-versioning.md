@@ -46,9 +46,9 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains command-result schema routes v1.0–v1.5 and serves
-the current v1.6 command-result; OpenAPI command result responses reference v1.6.
-Current nested export-record and export-batch references use v1.7, while historical
+The EMS HTTP contract retains command-result schema routes v1.0–v1.6 and serves
+the current v1.7 command-result; OpenAPI command result responses reference v1.7.
+Current nested export-record and export-batch references use v1.8, while historical
 schema routes and snapshots remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
@@ -126,39 +126,63 @@ Native command recovery does not replay dispatch.
 Nested export-record and export-batch advance to v1.7 because they embed CommandResult.
 Historical command-result v1.0–v1.5 and export v1.0–v1.6 snapshots/routes remain unchanged.
 The optional/additive compatibility rule does not weaken strict privileged command ingress
-or grant ordinary control permission to native profile actions. SQLite stays at schema v13:
-the optional JSON result field needs no SQL migration. HTTP/MQTT support here is the existing
-scoped result-reader/publisher contract, not a new ingress family or automatic native-command
+or grant ordinary control permission to native profile actions. The 1.6 profile evidence
+addition did not need a SQL migration. HTTP/MQTT support here is the existing scoped
+result-reader/publisher contract, not a new ingress family or automatic native-command
 external-export producer. An available export schema is not evidence of global export delivery.
+
+OCPP 2.0.1 full privileged `SetChargingProfile`/`ClearChargingProfile` add the separate,
+optional `charging_profile_201` to command-result v1.7. Typed Set evidence retains native
+station/EVSE scope, signed profile/schedule IDs, the native transaction string, purpose,
+kind, optional recurrence/validity/anchors/duration and ordered periods. Rates and minimum
+rates are exact decimal strings including zero; omitted optional phases remain omitted.
+Clear evidence retains either the profile ID or nested AND criteria, without inferring
+removed profile IDs or complete inventory. Set uses `Accepted`/`Rejected`; Clear uses
+`Accepted`/`Unknown`. Only allowlisted `NotSupported`/`InvalidValue`/`NotFound` reasons may
+appear as `reason_code`; opaque additional information and extensions are not evidence.
+
+Canonical `SetChargingLimit`, malformed responses, CALLERROR and transmission uncertainty
+do not acquire this full native evidence. Native Accepted is acknowledgement, not physical
+charging or enforcement proof. Nested export-record/export-batch advance to v1.8; all earlier
+published snapshots remain unchanged. The native201 ownership ledger separately adds SQLite
+schema v14, which older schema-v13 binaries reject; additive JSON compatibility does not imply
+database rollback compatibility. Full native Set opt-in requires explicit operator initialization
+with three station-privileged all-EVSE purpose-only Clears, Accepted or Unknown, for
+ChargingStationMaxProfile, TxDefaultProfile and TxProfile. No automatic Clear occurs and these
+operator actions can remove existing charging policies; canonical-only configurations without
+full native Set enabled do not gain this prerequisite.
 
 The EMS schema endpoints follow the listener's existing authentication policy: when
 credentials are configured, unauthenticated access is denied; the documented no-credentials
 loopback policy is unchanged. Current paths are
-`/bridge/v1/schemas/v1.6/command-result.schema.json`,
-`/bridge/v1/schemas/v1.7/export-record.schema.json` and
-`/bridge/v1/schemas/v1.7/export-batch.schema.json`. Historical routes, including v1.5
-command-result and v1.6 exports, remain served; canonical OpenAPI references use
+`/bridge/v1/schemas/v1.7/command-result.schema.json`,
+`/bridge/v1/schemas/v1.8/export-record.schema.json` and
+`/bridge/v1/schemas/v1.8/export-batch.schema.json`. Historical routes, including v1.6
+command-result and v1.7 exports, remain served; canonical OpenAPI references use
 each contract's current revision.
 `cargo test --locked -p uob-contracts` covers serialized payload validation, optional/additive
 compatibility and old-result readability. EMS integration verification uses the independent
 probe executable as configured by `scripts/verify-workspace.sh`.
 
-MQTT's existing immediate and durable result publishers accept additive v1.6 (revision 6)
-on existing topics alongside supported v1.0/v1.1/v1.4/v1.5 results. The v1.2/v1.3 policy is
-unchanged: this addition does not promise every v1 minor revision or add a MQTT command
-family. The EMS integration listener retains exact-origin/principal status ownership and
+MQTT's existing immediate and durable result publishers accept additive v1.7 (revision 7)
+on existing topics alongside supported v1.0/v1.1/v1.4/v1.5/v1.6 results and reject future
+revision 8. The v1.2/v1.3 policy is unchanged: this addition does not promise every v1
+minor revision or add a MQTT command family.
+The EMS integration listener retains exact-origin/principal status ownership and
 does not grant privileged native profile submission through target ingress. Existing target
 payload caps remain unchanged: an oversized serialized result produces an explicit
 delivery/response error, not truncation, dropped evidence or a success-shaped fallback.
 MQTT broker PUBACK remains delivery acknowledgement, never native acceptance, complete
 inventory, profile enforcement or physical charging success.
 
-Scoped verification passed `cargo test --locked -p uob-contracts --test public_schemas`
-(nine tests), `cargo test --locked -p uob-ems-scada-http-target-adapter --test
-charging_profile_results` (three tests) and `cargo test --locked -p
-uob-mqtt-target-adapter --test charging_profile_wire --test outbound_wire` (seven tests).
-They cover current profile/nested schema validation, historical readability, scoped reads,
-existing response/publication caps, exact evidence and correlated broker acknowledgement.
-These scoped results do not claim whole-workspace verification, fresh reviews or release
-qualification. Separate real-daemon browser evidence confirms existing controls load with
-the new bounded native-profile descriptors, not support for a complex Set editor.
+The focused consumer regressions are `charging_profile201_results` in the EMS adapter and
+`charging_profile201_wire` in the MQTT adapter. They exercise current and nested schema
+consumption, historical readability, exact origin/principal/resource and host-grant boundaries,
+1024-period request evidence, explicit encoded-payload failures, and immediate/durable broker
+acknowledgement isolation. Run them after generating the latest canonical schemas and EMS
+OpenAPI snapshot; this documentation makes no claim that the new checks have already passed:
+
+```text
+cargo test --locked -p uob-ems-scada-http-target-adapter --test charging_profile201_results
+cargo test --locked -p uob-mqtt-target-adapter --test charging_profile201_wire
+```

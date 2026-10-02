@@ -126,12 +126,15 @@ impl Fixture {
             if tokio::net::TcpStream::connect(("127.0.0.1", self.management))
                 .await
                 .is_ok()
+                && tokio::net::TcpStream::connect(("127.0.0.1", self.charging))
+                    .await
+                    .is_ok()
             {
                 return;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        panic!("management listener did not start");
+        panic!("management and charging listeners did not start");
     }
 
     pub fn url(&self, path: &str) -> String {

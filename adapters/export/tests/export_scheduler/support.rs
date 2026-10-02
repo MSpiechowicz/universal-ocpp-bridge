@@ -152,6 +152,7 @@ pub(super) async fn populated_records(
     let (source, spool) = fixture.open(resources);
     source
         .write_atomic(AtomicStoreWrite {
+            charging_profile_201: None,
             purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: vec![],

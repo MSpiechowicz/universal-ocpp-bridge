@@ -136,6 +136,7 @@ pub(crate) fn write_result_value(
             incoming.configuration = previous.configuration;
             incoming.composite_schedule_16 = previous.composite_schedule_16;
             incoming.charging_profile_16 = previous.charging_profile_16;
+            incoming.charging_profile_201 = previous.charging_profile_201;
         }
         for observation in previous.configuration_observations {
             if !incoming
@@ -156,6 +157,7 @@ pub(crate) fn write_result_value(
     }
     crate::device_model201::finalize_lifecycle(&mut incoming);
     crate::device_model201::bound_output(&mut incoming)?;
+    crate::charging_profile201::finish(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 

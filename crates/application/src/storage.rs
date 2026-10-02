@@ -7,7 +7,9 @@ use uob_contracts::{
 
 use crate::{DeliveryOutcome, DeliveryReport};
 
+mod charging_profile201;
 mod committed;
+pub use charging_profile201::*;
 mod history;
 mod ports;
 mod retention;
@@ -255,6 +257,9 @@ pub struct AtomicStoreWrite<C, E, D, R> {
     pub command: Option<Command<C>>,
     /// Latest command result to persist, when applicable.
     pub command_result: Option<CommandResult>,
+    /// Native201/canonical201 ownership reservation, atomic with command admission.
+    /// Indirection is allocated only for profile admission, never for an absent reservation.
+    pub charging_profile_201: Option<Box<ProfileReservation201>>,
     /// Durable journal records produced by the operation.
     pub journal_events: Vec<EventEnvelope<E>>,
     /// Required target work produced by the operation.
@@ -274,6 +279,7 @@ impl<C, E, D, R> AtomicStoreWrite<C, E, D, R> {
             command: None,
             command_result: None,
             journal_events: Vec::new(),
+            charging_profile_201: None,
             required_deliveries: Vec::new(),
             committed_records: Vec::new(),
         }

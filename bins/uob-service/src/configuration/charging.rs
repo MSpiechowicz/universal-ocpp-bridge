@@ -245,14 +245,21 @@ fn validate_stations(
         if station.control.device_model_enabled() && station.protocol != ProtocolEdition::Ocpp201 {
             return Err(fail);
         }
+        if station.control.get_composite_schedule.enabled()
+            && station.protocol != ProtocolEdition::Ocpp16j
+        {
+            return Err(fail);
+        }
         if (station.control.get_composite_schedule.enabled()
             || station.control.charging_profiles_enabled())
-            && (station.protocol != ProtocolEdition::Ocpp16j
-                || station.resources.iter().any(|resource| {
-                    resource
+            && station.resources.iter().any(|resource| {
+                resource
+                    .native_evse
+                    .is_some_and(|id| i32::try_from(id).is_err())
+                    || resource
                         .native_connector
                         .is_some_and(|id| i32::try_from(id).is_err())
-                }))
+            })
         {
             return Err(fail);
         }

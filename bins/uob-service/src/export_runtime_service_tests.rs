@@ -264,6 +264,7 @@ async fn pending_export(
     );
     source
         .write_atomic(AtomicStoreWrite {
+            charging_profile_201: None,
             purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: vec![],

@@ -11,6 +11,8 @@ use tokio_tungstenite::tungstenite::Message;
 
 #[path = "control/phases.rs"]
 mod phases;
+#[path = "control/profiles.rs"]
+mod profiles;
 #[path = "control/state.rs"]
 mod state;
 

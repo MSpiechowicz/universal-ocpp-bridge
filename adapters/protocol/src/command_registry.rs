@@ -1,6 +1,8 @@
 //! Pinned, explicitly supported privileged commands. Protocol edition is not a capability.
 pub(crate) mod charging_profile16;
 mod charging_profile16_schedule;
+pub(crate) mod charging_profile201;
+mod charging_profile201_schedule;
 pub(crate) mod composite_schedule16;
 pub(crate) mod device_model201;
 mod trigger201;
@@ -99,6 +101,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
             }
         }
     } else {
+        descriptors.extend(charging_profile201::descriptors(snapshot));
         for (index, action) in device_model201::ACTIONS.iter().enumerate() {
             let operation = Operation::ProtocolAction {
                 protocol,
@@ -301,7 +304,14 @@ pub fn validate_privileged_operation(
         return device_model201::validate(resource, operation).map(|_| ());
     }
     if charging_profile16::ACTIONS.contains(&operation.action.as_str()) {
-        return charging_profile16::validate(resource, operation).map(|_| ());
+        return match operation.protocol {
+            ProtocolEdition::Ocpp16j => {
+                charging_profile16::validate(resource, operation).map(|_| ())
+            }
+            ProtocolEdition::Ocpp201 => {
+                charging_profile201::validate(resource, operation).map(|_| ())
+            }
+        };
     }
     if operation.action.as_str() == "GetCompositeSchedule" {
         return composite_schedule16::validate(resource, operation).map(|_| ());

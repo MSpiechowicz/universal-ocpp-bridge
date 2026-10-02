@@ -214,6 +214,19 @@ impl RemoteControlSession {
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn charging_profile_expectation(
+        &self,
+        command: &Command<Value>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<uob_application::ProfileReservation201>, CommandErrorCode> {
+        if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+            if operation.protocol == uob_contracts::ProtocolEdition::Ocpp201)
+        {
+            return Err(CommandErrorCode::UnsupportedOperation);
+        }
+        Ok(None)
+    }
     fn trigger_expectation(
         &self,
         command: &Command<Value>,

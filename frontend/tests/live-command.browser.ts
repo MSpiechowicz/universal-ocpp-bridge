@@ -5,6 +5,7 @@ import { startLiveDaemon } from '../scripts/live-daemon-fixture.mjs';
 import { streamEffect } from './live-command/effects';
 import type { CanonicalResource, Resource } from './live-command/effects';
 import { enterSecret, historyDuringSnapshotRefresh } from './live-command/history-refresh';
+import { browserProfiles, nativeInventory } from './live-command/profiles';
 
 type Command = { request_id: string; correlation_id: string; resource: Resource; operation: unknown; expires_at: string };
 type Result = { correlation_id: string; return_route: { origin: { kind: string; principal_id: string } }; lifecycle: { stage: string; accepted?: boolean }; observed_effects?: { event_id: string; event_type: string }[] };
@@ -12,6 +13,7 @@ const submissionErrorCodes: Record<string, true> = {
   'command.admission_unavailable': true, 'command.authentication_required': true, 'command.busy': true,
   'command.expired': true, 'command.invalid_configuration_payload': true, 'command.invalid_configuration_schema': true,
   'command.invalid_request': true, 'command.persistence_unavailable': true, 'command.policy_rejected': true,
+  'command.invalid_schema_or_payload': true,
   'command.request_conflict': true, 'command.resource_unauthorized': true, 'command.schema_unavailable': true,
   'command.unauthorized': true, 'command.unsupported': true, 'command.unsupported_schema': true,
   'query.concurrency_limit': true, 'query.deadline_exceeded': true,
@@ -268,22 +270,27 @@ test('real daemon separates command admission, protocol replies and station obse
     expect(typeof authorizationReference === 'string' && authorizationReference.length > 0).toBe(true);
     const schemaA = await (await request.get(`${base}/api/v1/command-schemas?station_id=station-a`, { headers: privileged })).json();
     expect(schemaA.start).toBeNull();
-    expect(schemaA.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ resource: a.station, protocol: 'ocpp16j', action: 'ChangeAvailability' }),
-      expect.objectContaining({ resource: a.station, protocol: 'ocpp16j', action: 'SetChargingProfile',
-        fields: expect.arrayContaining([expect.objectContaining({
-          name: 'csChargingProfiles.chargingSchedule.chargingSchedulePeriod[].numberPhases',
-        })]) }),
-      expect.objectContaining({ resource: a.station, protocol: 'ocpp16j', action: 'ClearChargingProfile' }),
-    ]));
-    for (const resource of [a.station, ...a.resources.map((item: { resource: Resource }) => item.resource)]) {
-      const descriptors = schemaA.items.filter((item: { resource: Resource }) => expect.objectContaining({ resource }).asymmetricMatch(item));
-      const actions = ['ClearChargingProfile', 'GetCompositeSchedule', 'SetChargingProfile', 'TriggerMessage'];
-      if (!resource.resource) actions.push('ChangeAvailability');
-      expect(descriptors.map((item: { action: string }) => item.action).sort()).toEqual(actions.sort());
-      expect(descriptors.find((item: { action: string }) => item.action === 'SetChargingProfile').fields)
-        .toContainEqual(expect.objectContaining({ name: 'csChargingProfiles.chargingSchedule.chargingSchedulePeriod[].numberPhases',
-          value_type: 'signed_integer', required: false }));
+    nativeInventory(schemaA.items, a, 'ocpp16j');
+    const schemaB = await (await request.get(`${base}/api/v1/command-schemas?station_id=station-b`, { headers: privileged })).json();
+    nativeInventory(schemaB.items, b, 'ocpp201');
+    const nativeClear = { kind: 'ocpp', parameters: { protocol: 'ocpp201', action: 'ClearChargingProfile',
+      payload_schema: 'urn:OCPP:Cp:2:2020:3:ClearChargingProfileRequest',
+      payload: { chargingProfileCriteria: { chargingProfilePurpose: 'TxProfile' } } } };
+    await post(draft(b.station, nativeClear), read, 401);
+    await post(draft(b.station, nativeClear), control, 403);
+    const connectorB = b.resources.find((item: { resource: Resource }) => item.resource.resource?.connector_id === 'connector-2').resource;
+    const deniedConnector = draft(connectorB, { ...nativeClear, parameters: { ...nativeClear.parameters,
+      payload: { chargingProfileCriteria: { evseId: 2, chargingProfilePurpose: 'TxProfile' } } } });
+    // Connector scope fails native resource validation before descriptor lookup or
+    // durable admission; it cannot be broadened to its EVSE by a valid payload.
+    const connectorRejection = await post(deniedConnector, privileged, 400);
+    expect((await connectorRejection.json()).error).toBe('command.invalid_schema_or_payload');
+    expect((await request.get(`${commandUrl}/${deniedConnector.request_id}`, { headers: read })).status()).toBe(404);
+    const baselineIds = await fixture.initializeProfiles201(b.station);
+    for (const requestId of baselineIds) {
+      const baseline = await status(requestId);
+      expect(baseline.return_route.origin).toEqual({ kind: 'management', principal_id: 'management-privileged' });
+      expect(baseline.observed_effects ?? []).toEqual([]);
     }
     const rejected = draft(a.station, { kind: 'start', parameters: { authorization_reference: 'not-provisioned' } });
     await post(rejected, read, 401);
@@ -358,6 +365,7 @@ test('real daemon separates command admission, protocol replies and station obse
       const limit = await submit(fixture.control(), 'set charging limit', resource, { value: '16', 'Engineering unit': 'ampere', phases: '1' });
       submitted[id].push(limit);
       const limitReply = await settled(limit, true);
+      expect(limitReply).not.toHaveProperty('charging_profile_201');
       expect(limitReply.observed_effects ?? []).toEqual([]);
       const afterLimit = await (await request.get(`${base}/api/v1/stations/${id}`, { headers: read })).json();
       const stillOpen = afterLimit.transactions.filter((tx: { state: string }) => tx.state !== 'ended');
@@ -391,22 +399,7 @@ test('real daemon separates command admission, protocol replies and station obse
       await selectStation(id);
       const schema = await (await request.get(`${base}/api/v1/command-schemas?station_id=${id}`, { headers: privileged })).json();
       expect(schema.items).toEqual(expect.arrayContaining([expect.objectContaining({ resource: snapshot.station, protocol, action: 'ChangeAvailability' })]));
-      if (id === 'station-a') {
-        await enterSecret(panel.getByLabel('Independent control or privileged credential'), fixture.privileged());
-        await panel.getByRole('button', { name: 'Load protected control options' }).click();
-        await expect(panel.getByText('Protected control options loaded for this credential and station.')).toBeVisible();
-        await panel.getByLabel('Target resource').selectOption({ label: 'Connector connector-64' });
-        const operations = panel.getByLabel('Advertised operation');
-        await expect.poll(() => operations.locator('option').allTextContents().then(labels => labels.sort())).toEqual(['Choose an operation', 'set charging limit',
-          'Privileged ocpp16j / SetChargingProfile', 'Privileged ocpp16j / ClearChargingProfile',
-          'Privileged ocpp16j / TriggerMessage', 'Privileged ocpp16j / GetCompositeSchedule'].sort());
-        await operations.selectOption({ label: 'Privileged ocpp16j / SetChargingProfile' });
-        await expect(panel.getByRole('textbox', { name: 'csChargingProfiles.chargingSchedule.chargingSchedulePeriod[].numberPhases', exact: true })).toBeVisible();
-        await operations.selectOption({ label: 'Privileged ocpp16j / ClearChargingProfile' });
-        await panel.getByRole('textbox', { name: 'connectorId', exact: true }).fill('64');
-        await panel.getByLabel(/Confirm this submission only:/).check();
-        await expect(panel.getByRole('button', { name: 'Submit once' })).toBeEnabled();
-      }
+      await browserProfiles(page, fixture.privileged(), protocol, commandUrl);
       const fields = field === 'connectorId' ? { connectorId: '0', type: 'Inoperative' } : { operationalStatus: 'Inoperative' };
       const availability = await submit(fixture.privileged(), `Privileged ${protocol} / ChangeAvailability`, 'Station', fields);
       submitted[id].push(availability);
@@ -471,7 +464,7 @@ test('real daemon separates command admission, protocol replies and station obse
         });
         expect(observations(other)).toEqual(observations(b));
         expect(await fixture.counts()).toMatchObject({ 'b-start': 0, 'b-stop': 0, 'b-limit': 0, 'b-availability': 0 });
-        expect((await history('station-b')).items).toEqual([]);
+        expect((await history('station-b')).items.map((item: { request_id: string }) => item.request_id).sort()).toEqual([...baselineIds].sort());
       }
     }
 

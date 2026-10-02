@@ -1,3 +1,5 @@
+#[path = "public_schemas/charging_profile201.rs"]
+mod charging_profile201;
 #[path = "public_schemas/compatibility.rs"]
 mod compatibility;
 
@@ -46,7 +48,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.6/command-result.schema.json"),
+        include_str!("../schemas/v1.7/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
@@ -62,11 +64,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.7/export-record.schema.json"),
+        include_str!("../schemas/v1.8/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.7/export-batch.schema.json"),
+        include_str!("../schemas/v1.8/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -84,8 +86,8 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 7,
-        "command-result" => 6,
+        "export-record" | "export-batch" => 8,
+        "command-result" => 7,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };

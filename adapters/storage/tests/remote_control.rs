@@ -97,6 +97,7 @@ async fn allocation_is_atomic_recoverable_nonreused_and_bound_to_command_retenti
         composite_schedule_16: None,
         device_model_201: None,
         charging_profile_16: None,
+        charging_profile_201: None,
     };
     let mut write = AtomicStoreWrite::empty();
     write.command_result = Some(result);

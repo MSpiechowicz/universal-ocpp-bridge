@@ -262,6 +262,7 @@ async fn real_provisional_ingestion_transfer_does_not_terminate_scheduler() {
     let source = fixture.source();
     source
         .write_atomic(AtomicStoreWrite {
+            charging_profile_201: None,
             purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: vec![],

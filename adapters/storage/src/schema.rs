@@ -7,7 +7,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(unavailable)?;
-    if version > 13 {
+    if version > 14 {
         return Err(StorageError::new(
             StorageErrorCode::Unavailable,
             "operational database schema is newer than this release",
@@ -16,6 +16,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let transaction = connection.unchecked_transaction().map_err(unavailable)?;
     create_schema(&transaction)?;
     upgrade_columns(&transaction)?;
+    crate::charging_profile201::create(&transaction)?;
     add_column_if_missing(
         &transaction,
         "command_results",
@@ -88,7 +89,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 13;")
+        .execute_batch("PRAGMA user_version = 14;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
 }

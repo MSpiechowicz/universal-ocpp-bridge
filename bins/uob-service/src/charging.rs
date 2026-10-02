@@ -18,8 +18,8 @@ use std::{
 };
 use tokio::net::TcpListener;
 use uob_application::{
-    Application, AuthorizationGuardedCommandPort, CommandAdmissionPort, CommandCoordinator,
-    LocalAuthorizationService, PageLimit, StationEvent,
+    Application, AuthorizationGuardedCommandPort, ChargingProfileStore201, CommandAdmissionPort,
+    CommandCoordinator, LocalAuthorizationService, PageLimit, StationEvent,
 };
 use uob_contracts::{
     Environment, NativeProtocolReference, ProtocolEdition, ResourceRef, StationId,
@@ -173,6 +173,7 @@ impl ChargingState {
             CommandCoordinator::new(Arc::new(self.store.clone()), self.commands.clone(), clock)
                 .with_diagnostics(application.diagnostics().clone()),
         );
+        let coordinator = Arc::new(profiles::supervisor::Supervisor(coordinator));
         Arc::new(AuthorizationGuardedCommandPort::new(
             coordinator,
             self.authorization.clone(),
@@ -230,6 +231,10 @@ impl ChargingRuntime {
             SqliteOperationalStore::open(&database, DEFAULT_WORK_QUEUE_CAPACITY)
                 .map_err(io::Error::other)?;
         files::check_database_files(&config.state_directory).map_err(fail)?;
+        store
+            .interrupt_charging_profile_mutations()
+            .await
+            .map_err(io::Error::other)?;
         let authorization = Arc::new(
             ChargingAuthorization::recover(
                 Arc::new(store.clone()),

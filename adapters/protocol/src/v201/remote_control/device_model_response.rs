@@ -28,6 +28,8 @@ pub(super) struct ReplyWriter201 {
     pub stop: Option<tokio::sync::oneshot::Sender<()>>,
     pub _metadata: Arc<uob_application::RuntimeReservation>,
     pub handle: crate::CallSessionHandle,
+    pub phase: Arc<Mutex<super::phase_capability::PhaseCapabilities>>,
+    pub phase_sequence: u64,
 }
 impl ReplyWriter201 {
     pub async fn receive(mut self, pending: PendingCall) -> CommandDispatchOutcome {
@@ -57,6 +59,18 @@ impl ReplyWriter201 {
                 self.clock.now(),
             )
             .await;
+        // Only this generation's correlated, validated and durably committed reply grants proof.
+        let variables = match &persisted {
+            Ok(Some(result)) if failure.is_none() => result
+                .device_model_201
+                .as_ref()
+                .map(|evidence| evidence.variables.as_slice()),
+            _ => None,
+        };
+        self.phase
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .finish(self.phase_sequence, &fallback.query, variables);
         if persisted.is_err() || matches!(persisted, Ok(None)) {
             self.handle.report_store_failed(fallback.connection.clone());
             if fallback.query.request_id().is_none() {

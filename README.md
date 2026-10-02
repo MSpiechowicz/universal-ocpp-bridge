@@ -160,6 +160,20 @@ or enforce a local schedule, install profiles or implement OCPP 2.0.1 schedules.
 See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md#opt-in-getcompositeschedule)
 for opt-in, strict native validation and independently observed evidence.
 
+Full native OCPP 2.0.1 SetChargingProfile/ClearChargingProfile is independently default-off,
+privileged and demo-only, with exact station/EVSE scope, native schedule/transaction/phase
+evidence and no automatic replay. Enabling full Set also blocks canonical charging limits
+until the operator intentionally performs three all-EVSE purpose-only Clears; those clears
+can remove existing station policies and assume exclusive CSMS ownership. A bounded durable
+ownership ledger protects conflicts, uncertainty, station-global replacement authority and
+active profiles from history pruning. Canonical-only mode remains usable without that
+baseline. Current result v1.7/embedded export v1.8 adds native201 evidence while preserving
+historical schema bytes; SQLite13→14 is additive, but13 binaries reject14 and downgrade is
+not qualified. No hardware enforcement, certification, privileged target ingress, complex
+browser editor or global native-command export delivery is claimed. See
+[native201 charging profiles](docs/architecture/ocpp201-remote-control.md#opt-in-native-charging-profiles)
+and [operator prerequisites](docs/operations/headless-cli.md#full-native-ocpp-201-setclear-charging-profiles).
+
 OCPP 2.0.1 `TriggerMessage` is separately opt-in for eleven native message
 classes, with station, EVSE and connector targeting. Its privileged demo command
 retains the native reply independently of a 60-second window of compatible,

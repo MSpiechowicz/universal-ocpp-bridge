@@ -5,7 +5,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
@@ -68,6 +68,13 @@ export async function startLiveDaemon({ commands = false } = {}) {
 connector_id = "connector-${index + 1}"
 native_connector_id = ${index + 1}
 `).join('');
+    // Keep the two observed connectors and fill the remaining configured-resource
+    // budget with exact EVSE-only addresses. Native201 profile scope never includes
+    // a connector; the command fixture reaches the daemon's 64-child limit.
+    const bravoExtraResources = commands ? Array.from({ length: 60 }, (_, index) => `[[charging.stations.resources]]
+evse_id = "evse-${index + 3}"
+native_evse_id = ${index + 3}
+`).join('') : '';
     const config = write('bridge.toml', `[bridge]
 id = "live-browser-demo"
 environment = "demo"
@@ -102,6 +109,9 @@ ${commands ? `start_token_file = ${JSON.stringify(startBravo)}
 allow_stop = true
 allow_charging_limit = true
 change_availability = true
+set_charging_profile = true
+clear_charging_profile = true
+get_variables = true
 ` : ''}
 [[charging.stations.resources]]
 evse_id = "evse-1"
@@ -119,6 +129,7 @@ evse_id = "evse-2"
 connector_id = "connector-2"
 native_evse_id = 2
 native_connector_id = 1
+${bravoExtraResources}
 `);
     const environment = { ...process.env };
     delete environment.NOTIFY_SOCKET;
@@ -172,10 +183,60 @@ native_connector_id = 1
       return Object.fromEntries(entries);
     };
     await phase(null, 'ready');
+    // Explicit fixture-operator intent, not production initialization: these three
+    // station-privileged purpose-only Clears can remove existing charging policies.
+    // Call only for the disposable full-native201 roster, before canonical controls.
+    const initializeProfiles201 = async station => {
+      if (!commands || station.station_id !== 'station-b' || station.resource) {
+        throw new Error('profile baseline requires the disposable native201 station');
+      }
+      const ids = [];
+      for (const purpose of ['ChargingStationMaxProfile', 'TxDefaultProfile', 'TxProfile']) {
+        const requestId = randomUUID();
+        const correlationId = randomUUID();
+        const response = await fetch(`${management}/api/v1/commands`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${readFileSync(privilegedPath, 'utf8')}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: requestId, correlation_id: correlationId, resource: station,
+            operation: { kind: 'ocpp', parameters: { protocol: 'ocpp201', action: 'ClearChargingProfile',
+              payload_schema: 'urn:OCPP:Cp:2:2020:3:ClearChargingProfileRequest',
+              payload: { chargingProfileCriteria: { chargingProfilePurpose: purpose } } } },
+            expires_at: new Date(Date.now() + 120000).toISOString() }),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (response.status !== 202) throw new Error('explicit profile baseline admission failed');
+        let acknowledged = false;
+        for (let attempt = 0; attempt < 60; attempt++) {
+          const detail = await fetch(`${management}/api/v1/commands/${requestId}`, {
+            headers: { Authorization: `Bearer ${readFileSync(grantPath, 'utf8')}` }, signal: AbortSignal.timeout(5000),
+          });
+          if (detail.status !== 200) throw new Error('explicit profile baseline status unavailable');
+          const result = await detail.json();
+          if (result.lifecycle?.stage === 'protocol_response') {
+            const native = result.charging_profile_201;
+            if (result.correlation_id !== correlationId || native?.action !== 'ClearChargingProfile' ||
+                !['Accepted', 'Unknown'].includes(native.status) ||
+                native.request?.charging_profile_criteria?.charging_profile_purpose !== purpose ||
+                result.lifecycle.accepted !== (native.status === 'Accepted')) {
+              throw new Error('explicit profile baseline acknowledgement invalid');
+            }
+            acknowledged = true;
+            break;
+          }
+          if (['rejected', 'transmission_uncertain'].includes(result.lifecycle?.stage)) {
+            throw new Error('explicit profile baseline was not acknowledged');
+          }
+          await delay(250);
+        }
+        if (!acknowledged) throw new Error('explicit profile baseline acknowledgement timed out');
+        ids.push(requestId);
+      }
+      return ids;
+    };
     return { base: management, grant: () => readFileSync(grantPath, 'utf8'),
       control: () => { if (!controlPath) throw new Error('control grant unavailable'); return readFileSync(controlPath, 'utf8'); },
       privileged: () => { if (!privilegedPath) throw new Error('privileged grant unavailable'); return readFileSync(privilegedPath, 'utf8'); },
-      phase, counts, cleanup };
+      phase, counts, initializeProfiles201, cleanup };
   } catch (error) {
     await cleanup();
     throw error;

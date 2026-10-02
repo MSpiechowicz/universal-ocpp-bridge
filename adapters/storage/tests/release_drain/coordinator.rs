@@ -13,6 +13,24 @@ use uob_contracts::{
 };
 struct Peer(AtomicUsize);
 impl StationCommandPort<String> for Peer {
+    fn charging_profile_expectation(
+        &self,
+        command: &uob_contracts::Command<String>,
+        _generation: Option<u64>,
+        _now: uob_contracts::UtcTimestamp,
+    ) -> Result<Option<uob_application::ProfileReservation201>, uob_contracts::CommandErrorCode>
+    {
+        if matches!(
+            &command.operation,
+            uob_contracts::CommandOperation::SetChargingLimit(_)
+        ) || matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if operation.protocol == uob_contracts::ProtocolEdition::Ocpp201
+                    && ["SetChargingProfile", "ClearChargingProfile"].contains(&operation.action.as_str()))
+        {
+            return Err(uob_contracts::CommandErrorCode::UnsupportedOperation);
+        }
+        Ok(None)
+    }
     fn context(&self, _: ResourceRef) -> StationCommandFuture<'_, Option<StationCommandContext>> {
         Box::pin(async {
             Ok(Some(StationCommandContext {

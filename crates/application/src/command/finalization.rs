@@ -22,6 +22,7 @@ where
         command: Command<P>,
         generation: Option<u64>,
         trigger: Option<TriggerExpectation>,
+        profile: Option<Box<crate::ProfileReservation201>>,
         dispatch_started_at: UtcTimestamp,
         trace: crate::FlowSpan,
     ) -> Result<CommandResult, CommandAdmissionError> {
@@ -31,12 +32,18 @@ where
         let mut composite_schedule = None;
         let mut device_model = None;
         let mut charging_profile = None;
-        let lifecycle = match self
-            .stations
-            .dispatch_to_generation(command.clone(), generation)
-            .await
-            .map_err(|error| map_station_error(&error))?
-        {
+        let mut charging_profile_201 = None;
+        let outcome = if let Some(reservation) = profile {
+            self.stations
+                .dispatch_reserved_profile(command.clone(), generation, *reservation)
+                .await
+        } else {
+            self.stations
+                .dispatch_to_generation(command.clone(), generation)
+                .await
+        }
+        .map_err(|error| map_station_error(&error))?;
+        let lifecycle = match outcome {
             CommandDispatchOutcome::NotTransmitted { error } => {
                 trace.emit_fields(
                     FlowStage::ProtocolResponse,
@@ -159,6 +166,15 @@ where
                 charging_profile = Some(response);
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
+            CommandDispatchOutcome::ChargingProfileResponse201(response) => {
+                let accepted = response.accepted();
+                let error = (!accepted).then_some(CommandError {
+                    code: CommandErrorCode::ProtocolRejected,
+                    detail: None,
+                });
+                charging_profile_201 = Some(response);
+                CommandLifecycle::ProtocolResponse { accepted, error }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -188,6 +204,10 @@ where
         if let Some(evidence) = charging_profile {
             result.schema_version = ContractVersion::V1_CHARGING_PROFILE_16;
             result.charging_profile_16 = Some(evidence);
+        }
+        if let Some(evidence) = charging_profile_201 {
+            result.schema_version = ContractVersion::V1_CHARGING_PROFILE_201;
+            result.charging_profile_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

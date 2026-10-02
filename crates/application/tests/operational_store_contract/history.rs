@@ -180,6 +180,7 @@ fn write_history_command(
     command_result: Option<uob_contracts::CommandResult>,
 ) {
     block_on(store.write_atomic(AtomicStoreWrite {
+        charging_profile_201: None,
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -240,6 +241,7 @@ fn write_command(
         composite_schedule_16: None,
         device_model_201: None,
         charging_profile_16: None,
+        charging_profile_201: None,
     });
     write_history_command(store, command, command_result);
 }

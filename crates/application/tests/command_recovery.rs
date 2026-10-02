@@ -19,8 +19,8 @@ use uob_contracts::{
     AuthenticatedCommandOrigin, BridgeId, Command, CommandError, CommandErrorCode,
     CommandLifecycle, CommandOperation, CommandRequest, CommandResult, Connectivity,
     ContractVersion, EventId, EventType, ExternalCommand, ObservedCommandEffect, Operation,
-    PrincipalId, RequestId, ResourceCapabilities, ResourceRef, StationId, StationSnapshot,
-    SupportedOperation, UtcTimestamp,
+    PrincipalId, ProtocolEdition, RequestId, ResourceCapabilities, ResourceRef, StationId,
+    StationSnapshot, SupportedOperation, UtcTimestamp,
 };
 
 type Coordinator = CommandCoordinator<String, String, String, String>;
@@ -71,6 +71,21 @@ impl Stations {
 }
 
 impl StationCommandPort<String> for Stations {
+    fn charging_profile_expectation(
+        &self,
+        command: &Command<String>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<uob_application::ProfileReservation201>, CommandErrorCode> {
+        if matches!(&command.operation, CommandOperation::SetChargingLimit(_))
+            || matches!(&command.operation, CommandOperation::Ocpp(operation)
+                if operation.protocol == ProtocolEdition::Ocpp201
+                    && ["SetChargingProfile", "ClearChargingProfile"].contains(&operation.action.as_str()))
+        {
+            return Err(CommandErrorCode::UnsupportedOperation);
+        }
+        Ok(None)
+    }
     fn context(
         &self,
         _resource: ResourceRef,
@@ -328,6 +343,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         composite_schedule_16: None,
         device_model_201: None,
         charging_profile_16: None,
+        charging_profile_201: None,
     }
 }
 

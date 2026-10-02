@@ -152,12 +152,6 @@ async fn historical_schema_remains_discoverable_and_export_schemas_validate_new_
     invalid["device_model_201"]["report"]["progress"]["fragments"] = json!(-1);
     assert!(!record_validator.is_valid(&fixtures::export_record(&invalid)));
     assert!(!batch_validator.is_valid(&fixtures::export_batch(&invalid)));
-    assert_eq!(
-        host.get("/bridge/v1/schemas/v1.7/command-result.schema.json", READER)
-            .await
-            .0,
-        404
-    );
     host.stop().await;
 }
 

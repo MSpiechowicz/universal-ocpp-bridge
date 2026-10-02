@@ -71,6 +71,7 @@ pub(super) fn populated_write()
 -> AtomicStoreWrite<TestCommandPayload, TestEventPayload, TestDeliveryPayload, TestCommittedPayload>
 {
     AtomicStoreWrite {
+        charging_profile_201: None,
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: Some(snapshot()),
         authorization_changes: vec![AuthorizationChange {

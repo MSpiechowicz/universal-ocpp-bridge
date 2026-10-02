@@ -321,3 +321,105 @@ restart without replay. Current/historical EMS schema reads and existing MQTT
 result publication exercise consumer boundaries separately. These observations
 do not assert that the full workspace checks or final correctness/security reviews
 are complete; `coverage.json` remains the machine-readable evidence status.
+
+## OCPP 2.0.1 native Set/Clear charging-profile fixtures
+
+The narrow bidirectional `ocpp201.smart-charging.profiles` row starts `planned`.
+Only observed behavioral evidence can advance it; the broad `ocpp201.smart-charging`
+row remains `planned`. `scenario_ids` is empty because no checked scenario registry
+exists. Static fixtures contain valid CALL/CALLRESULT envelopes, not malformed
+requests, CALLERRORs or assertions of physical charging.
+
+The four files below are byte-for-byte copies of the exact members under
+`OCPP-2.0.1_part3_JSON_schemas/` in the pinned Part 3 schema ZIP. They retain
+original CRLF bytes and OCA copyright/CC BY-ND 4.0 attribution. The outer archive
+SHA-256 is `192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a`;
+the schema ZIP SHA-256 is
+`6279c40b74929cce7fca439622194a8890a0d250de5665f3e4d80ef8529c51ce`.
+The existing `provenance.json` source entry already pins both archives.
+
+| Schema under `schemas/2.0.1/` | Original-byte SHA-256 |
+| --- | --- |
+| `SetChargingProfileRequest.json` | `fd905c14648a36fec256da24e4f2befd75f20051bbb2c9bf4985ebbe96f3c497` |
+| `SetChargingProfileResponse.json` | `3b8db1dad2ec907c1aa8a5550b8e2c35a130a27ef58774c8c7d334056f24b175` |
+| `ClearChargingProfileRequest.json` | `9a9866944e376a7d04ef9340432a3bd9772f7d25ea7de936ab5f764ef4ec9bc6` |
+| `ClearChargingProfileResponse.json` | `db7d11e02cb27c634b665f0b9995f10416a2ff420495f07a82a4b0b03c4a36c2` |
+
+The 18 independently authored `wire.ocpp201.profile-*` fixtures preserve native
+`evseId`, signed profile/schedule IDs and nested `chargingProfileCriteria`.
+Set fixtures include station maximum, station Daily default, positive-EVSE Weekly
+default, Relative transaction zero and an Absolute transaction with one-phase
+selection on EVSE 1. Both A/W, optional validity anchors, duration truncation,
+omitted optional phases and exact tenths are represented. Positive phase selection
+is conditional on exact-EVSE native capability proof; a fixture alone cannot grant
+that proof. The schema-valid external-constraints Set fixture is deliberately
+inadmissible as a CSMS command. Clear fixtures include ID-only, nested AND filters,
+station-zero scope, three all-EVSE purpose-only baseline clears, nonmatching ID
+and protected external purpose. Reply fixtures distinguish Set Accepted/Rejected
+and Clear Accepted/Unknown. The native profile and schedule are not OCPP 1.6
+`csChargingProfiles`/`chargingSchedule` objects, and an empty clear is not accepted.
+
+### Independent persistent software peer
+
+`bins/uob-service/tests/charging_profiles201/peer.rs` and its children implement
+one raw-wire peer reused by the test-tool-only `profile201_wire_peer` example.
+It imports no bridge profile model or production validator. Its own 128-profile
+inventory retains native JSON numbers, does not compute physical power or a
+composite schedule, replaces only the same profile ID, applies clear selectors
+with AND, and protects locally seeded external constraints. Independent validation
+checks transaction/EVSE association, first-zero ordered periods, exact nonnegative
+tenths, kinds/recurrence/anchors/validity and positive exact-EVSE phase capability.
+Denied or unmatched operations leave persistent state unchanged. Profiles are
+written to an owned private file by a synced atomic replacement and reopened on
+peer restart; malformed, oversized, nonprivate or symlinked state fails closed.
+Runtime transaction associations and phase capability maps are independently
+established, not fabricated from persisted bridge outcomes.
+
+To prepare an actual-process smoke, build with:
+
+```text
+cargo build --locked -p uob-service --example profile201_wire_peer
+target/debug/examples/profile201_wire_peer /private/directory/peer.json
+```
+
+The sole argument is a private configuration path, not a credential. Configuration
+is JSON with `url` (loopback `ws` only), `state_file`, optional `authorization_file`
+(private file containing the exact HTTP Authorization header), `phase_evse`
+(default 1) and `phase_supported` (default false). The state parent directory must
+be owned and private; configuration/credential/state files must deny group/other
+access. The process performs an explicit native PowerUp boot and requires Accepted.
+It does not seed transactions or automatically clear existing policies.
+
+stdin accepts bounded JSON controls: `{"action":"inspect"}`,
+`{"action":"phase","evse":1,"supported":true}`,
+`{"action":"transaction","evse":1,"id":"native-transaction","ended":false}`,
+`{"action":"heartbeat"}`,
+`{"action":"controls","reject_next":true,"delay_ms":1000,"disconnect_after_apply":false}`,
+`{"action":"reconnect"}` and `{"action":"quit"}`. Transactions send explicit
+native Started/Ended events; issue them when no other response is pending.
+Delay is bounded to 30 seconds and pending acknowledgements to 128; stdin and
+heartbeat responses continue while acknowledgements wait. Disconnect-after-apply
+persists the actual operation and closes before its acknowledgement. Reconnect
+or a separate process restart reopens inventory and performs a new boot.
+
+stdout emits sanitized fixed event labels and `inspect` includes native numeric
+profile/schedule/EVSE/rate metadata and incoming Set/Clear/GetVariables counters.
+It never prints credentials, transaction strings or raw server diagnostics.
+Counters are connection-local: inspect before/after a duplicate or denied command
+to observe no resend; reopen and inspect actual installed profiles to distinguish
+charger-side persistence from bridge result/ledger persistence. Named peer
+regressions cover replacement/reopen, selective clear/no-match, transaction/phase
+denial, mixed-selector errors, external protection, capacity and boolean query
+scope. Verification observed all six native protocol regressions and ten durable
+ownership regressions passing. An actual `uob daemon` plus this separate peer
+passed nine smoke checks: explicit three-purpose initialization, exact EVSE and
+transaction authority, zero and decimal rates, omitted fields and periods at the
+duration boundary, replacement, denial without mutation, duplicate suppression,
+heartbeat progress during a delayed Set, AND-selective Clear, and disconnect/
+restart persistence without replay. Explicit recovery Clear reconciled the
+uncertain profile before a later Set.
+
+The narrow `ocpp201.smart-charging.profiles` corpus row is verified; the broad
+smart-charging row remains planned. Peer state and protocol ACKs do not establish
+physical charging effects, hardware enforcement, certification, full
+smart-charging coverage or product-simulator functionality.
