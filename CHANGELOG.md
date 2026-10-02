@@ -156,6 +156,14 @@ All notable changes to this project will be documented in this file. See [conven
   Disposable PostgreSQL acceptance checks cover data preservation, identity conflicts, and
   privilege/upgrade safety.
 
+### Bug Fixes
+- Preserve browser command history, detail and pagination reads across same-station
+  snapshot invalidation, with independent read/control generations and busy owners.
+  Stale or hidden views still clear protected options, credentials and confirmation
+  and disable mutations; identity/station/destination changes and page departure
+  invalidate late reads. A deterministic real-daemon response-delay regression
+  retains both-edition and 64-connector control coverage (#117).
+
 ### Tests
 - Align release-manager preflight and rollback test fixtures with the operational
   SQLite v9 format used by the browser command history migration (#91).

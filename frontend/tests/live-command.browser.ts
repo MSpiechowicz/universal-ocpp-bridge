@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { startLiveDaemon } from '../scripts/live-daemon-fixture.mjs';
 import { streamEffect } from './live-command/effects';
 import type { CanonicalResource, Resource } from './live-command/effects';
+import { enterSecret, historyDuringSnapshotRefresh } from './live-command/history-refresh';
 
 type Command = { request_id: string; correlation_id: string; resource: Resource; operation: unknown; expires_at: string };
 type Result = { correlation_id: string; return_route: { origin: { kind: string; principal_id: string } }; lifecycle: { stage: string; accepted?: boolean }; observed_effects?: { event_id: string; event_type: string }[] };
@@ -37,16 +38,6 @@ const draft = (resource: Resource, operation: unknown): Command => ({
   request_id: randomUUID(), correlation_id: randomUUID(), resource, operation,
   expires_at: new Date(Date.now() + 120000).toISOString(),
 });
-
-async function enterSecret(input: Locator, value: string) {
-  await input.evaluate((element, secret) => {
-    const password = element as HTMLInputElement;
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    if (!setter || password.type !== 'password') throw new Error('Credential field unavailable');
-    setter.call(password, secret);
-    password.dispatchEvent(new Event('input', { bubbles: true }));
-  }, value);
-}
 
 // All private grants travel in headers or password inputs. Neither requests, URLs, nor assertions
 // print them; the live Playwright configuration disables trace capture and screenshots.
@@ -456,8 +447,7 @@ test('real daemon separates command admission, protocol replies and station obse
         expect(summary?.admitted_at).toBeTruthy();
         expect((await status(commandId)).correlation_id).toBe(summary.correlation_id);
       }
-      await panel.getByRole('button', { name: 'Refresh history' }).click();
-      await expect(panel.getByText(`Request ${start}`, { exact: false }).first()).toBeVisible();
+      await historyDuringSnapshotRefresh(page, base, id, start, fixture.control());
       const linked = rows.items.find((item: { request_id: string }) => item.request_id === start);
       await panel.getByRole('link', { name: `Search retained diagnostics by correlation ${linked.correlation_id}` }).first().click();
       await expect(page.getByLabel('Filter correlation')).toHaveValue(linked.correlation_id);
