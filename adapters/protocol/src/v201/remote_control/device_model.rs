@@ -61,13 +61,16 @@ impl RemoteControlSession {
         self.device_model = Some(DeviceRuntime {
             store,
             generation,
-            limits: Arc::new(Mutex::new(LearnedLimits::default())),
+            limits: self.configuration_limits.clone(),
             active: AtomicBool::new(true),
         });
         self
     }
     /// Logical generation replacement/teardown closes reporting without changing grants.
     pub fn detach_device_model(&self) {
+        if let Ok(mut active) = self.configuration_active.lock() {
+            *active = false;
+        }
         if let Ok(mut phase) = self.phase.lock() {
             phase.detach();
         }

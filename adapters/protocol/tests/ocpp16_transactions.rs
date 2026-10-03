@@ -124,6 +124,7 @@ async fn assert_retained_outbox(store: &Store, state: &uob_contracts::StationSna
     assert_eq!(
         store
             .recover(RecoveryQuery {
+                after_command: None,
                 limit: PageLimit::new(100).unwrap()
             })
             .await

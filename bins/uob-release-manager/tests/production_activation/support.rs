@@ -180,6 +180,7 @@ impl ProductionProcess for Process {
             let recovered = self
                 .store
                 .recover(RecoveryQuery {
+                    after_command: None,
                     limit: PageLimit::new(10).unwrap(),
                 })
                 .await

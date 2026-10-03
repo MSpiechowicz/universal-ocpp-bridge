@@ -223,6 +223,7 @@ fn recovery_returns_only_unresolved_commands_and_latest_results() {
     }
 
     let recovery = block_on(store.recover(uob_application::RecoveryQuery {
+        after_command: None,
         limit: uob_application::PageLimit::new(10).expect("recovery limit"),
     }))
     .expect("recover unresolved commands");
@@ -380,6 +381,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle, hour: i64) -> 
         device_model_201: None,
         charging_profile_16: None,
         charging_profile_201: None,
+        configuration_201: None,
     }
 }
 

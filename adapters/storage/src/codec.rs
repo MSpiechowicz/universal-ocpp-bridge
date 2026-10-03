@@ -12,6 +12,8 @@ use uob_contracts::{
 
 #[path = "codec_configuration.rs"]
 mod configuration;
+#[path = "codec_configuration201.rs"]
+pub(crate) mod configuration201;
 #[path = "codec_helpers.rs"]
 mod helpers;
 use helpers::{
@@ -146,6 +148,7 @@ where
     let command_result = write
         .command_result
         .map(|value| {
+            configuration201::validate_result(&value)?;
             Ok(EncodedCommandResult {
                 request_id: value.return_route.request_id.as_str().to_owned(),
                 payload: json(&value)?,
@@ -214,6 +217,7 @@ pub(crate) fn encode_command<P: Serialize>(
     value: &Command<P>,
 ) -> Result<EncodedCommand, StorageError> {
     configuration::validate_command(value)?;
+    configuration201::validate_command(value)?;
     let admitted_at = value.admitted_at.into_inner().unix_timestamp();
     let retain_until = admitted_at
         .checked_add(COMMAND_DEDUPLICATION_RETENTION_SECONDS)
@@ -402,11 +406,28 @@ pub(crate) fn decode_event<E: DeserializeOwned>(
 }
 
 pub(crate) fn decode_command<C: DeserializeOwned>(value: &str) -> Result<Command<C>, StorageError> {
+    let envelope: Command<serde_json::Value> = from_json(value)?;
+    configuration201::validate_command(&envelope)?;
     from_json(value)
 }
 
 pub(crate) fn decode_result(value: &str) -> Result<CommandResult, StorageError> {
-    from_json(value)
+    let result: CommandResult = from_json(value)?;
+    configuration201::validate_result(&result)?;
+    Ok(result)
+}
+
+pub(crate) fn decode_stored_result(
+    connection: &rusqlite::Connection,
+    value: &str,
+    request: &str,
+) -> Result<CommandResult, StorageError> {
+    let result = decode_result(value)?;
+    if result.return_route.request_id.as_str() != request {
+        return Err(corrupt("stored command result request identity changed"));
+    }
+    configuration201::validate_stored(connection, &result)?;
+    Ok(result)
 }
 
 pub(crate) fn resource_key(value: &ResourceRef) -> Result<String, StorageError> {

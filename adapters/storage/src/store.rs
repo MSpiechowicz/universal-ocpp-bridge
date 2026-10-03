@@ -299,7 +299,7 @@ where
     }
 
     fn recover(&self, query: RecoveryQuery) -> StorageFuture<'_, RecoveryBatch<C, D>> {
-        self.request(|reply| Request::Recover(usize::from(query.limit.get()), reply))
+        self.request(|reply| Request::Recover(query, reply))
     }
 
     fn command_by_request_id(

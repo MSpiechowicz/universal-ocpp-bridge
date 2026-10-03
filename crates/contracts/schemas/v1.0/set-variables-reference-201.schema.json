@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "DeviceAttributeType201": {
+      "description": "Native attribute type; omitted requests mean Actual.",
+      "enum": [
+        "Actual",
+        "Target",
+        "MinSet",
+        "MaxSet"
+      ],
+      "type": "string"
+    },
+    "DeviceComponent201": {
+      "additionalProperties": false,
+      "description": "Case-preserving native component identity.",
+      "properties": {
+        "evse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceEvse201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "DeviceEvse201": {
+      "additionalProperties": false,
+      "description": "Native EVSE/connector scope, not canonical topology.",
+      "properties": {
+        "connectorId": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "DeviceVariable201": {
+      "additionalProperties": false,
+      "description": "Case-preserving native variable identity.",
+      "properties": {
+        "instance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "SetVariableReference201": {
+      "additionalProperties": false,
+      "properties": {
+        "attributeType": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceAttributeType201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "component": {
+          "$ref": "#/$defs/DeviceComponent201"
+        },
+        "valueReference": {
+          "type": "string"
+        },
+        "variable": {
+          "$ref": "#/$defs/DeviceVariable201"
+        }
+      },
+      "required": [
+        "component",
+        "variable",
+        "valueReference"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/set-variables-reference-201.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "setVariableData": {
+      "items": {
+        "$ref": "#/$defs/SetVariableReference201"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "setVariableData"
+  ],
+  "title": "SetVariablesReference201",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

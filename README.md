@@ -167,7 +167,7 @@ until the operator intentionally performs three all-EVSE purpose-only Clears; th
 can remove existing station policies and assume exclusive CSMS ownership. A bounded durable
 ownership ledger protects conflicts, uncertainty, station-global replacement authority and
 active profiles from history pruning. Canonical-only mode remains usable without that
-baseline. Current result v1.7/embedded export v1.8 adds native201 evidence while preserving
+baseline. That addition introduced result v1.7/embedded export v1.8 while preserving
 historical schema bytes; SQLite13→14 is additive, but13 binaries reject14 and downgrade is
 not qualified. No hardware enforcement, certification, privileged target ingress, complex
 browser editor or global native-command export delivery is claimed. See
@@ -191,8 +191,24 @@ Durable sanitized evidence survives restart without automatic replay. See
 for opt-ins, native limits, redaction, correlation and recovery. Command-result v1.5
 and nested export v1.6 retain historical snapshots and existing target payload caps.
 SQLite v12 migrates to v13, but an old v12 binary rejects v13: this feature does not
-qualify automatic old-to-new-to-old rollback. Broader device writes/monitoring,
-certification and the complete-release gate remain outside this narrow capability.
+qualify automatic old-to-new-to-old rollback. Other device writes/monitoring,
+certification and the complete-release gate remain outside that read-only capability.
+
+OCPP 2.0.1 `SetVariables` and `SetNetworkProfile` are independently default-off,
+privileged demo commands using **reference-only** public envelopes and a bounded,
+owner-only private startup file. Exact resource/identity/slot/expiry binding is
+checked before fresh admission and again at the actual socket send; neither values,
+profiles nor reusable capabilities enter results or diagnostics. Native per-item
+outcomes remain distinct from physical effects, and network `Accepted` means
+stored/staged until a separate operator-controlled reboot. There is no automatic
+Reset, migration, probing, splitting, retry or replay. Result v1.8, nested export
+schemas v1.9 and runtime export revision 8 retain historical compatibility without
+changing SQLite schema 14 or enabling global export/provider delivery.
+See [protected device/network writes](docs/architecture/ocpp201-remote-control.md#opt-in-protected-device-and-network-writes)
+and the [private provisioning and command examples](docs/operations/headless-cli.md#protected-ocpp-201-device-and-network-configuration).
+Actual-daemon software-peer tests and an independent redacted-capture smoke exercised
+these boundaries; they do not establish hardware interoperability, OCA certification,
+production charging or a new browser configuration editor.
 
 OCPP 1.6 availability commands retain scheduled intent separately from committed connector and
 station observations. See [OCPP 1.6 availability](docs/architecture/ocpp16-availability.md) for

@@ -33,6 +33,7 @@ where
         let mut device_model = None;
         let mut charging_profile = None;
         let mut charging_profile_201 = None;
+        let mut configuration_201 = None;
         let outcome = if let Some(reservation) = profile {
             self.stations
                 .dispatch_reserved_profile(command.clone(), generation, *reservation)
@@ -175,6 +176,23 @@ where
                 charging_profile_201 = Some(response);
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
+            CommandDispatchOutcome::ConfigurationResponse201(response) => {
+                let accepted = response.accepted();
+                let error = (!accepted).then_some(CommandError {
+                    code: CommandErrorCode::ProtocolRejected,
+                    detail: None,
+                });
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                configuration_201 = Some(response);
+                CommandLifecycle::ProtocolResponse { accepted, error }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -208,6 +226,10 @@ where
         if let Some(evidence) = charging_profile_201 {
             result.schema_version = ContractVersion::V1_CHARGING_PROFILE_201;
             result.charging_profile_201 = Some(evidence);
+        }
+        if let Some(evidence) = configuration_201 {
+            result.schema_version = ContractVersion::V1_CONFIGURATION_201;
+            result.configuration_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

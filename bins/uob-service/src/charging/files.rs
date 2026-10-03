@@ -11,6 +11,41 @@ use rustix::fs::OFlags;
 const INVALID: &str = "charging private state or credential unavailable";
 const NOFOLLOW: i32 = OFlags::NOFOLLOW.bits().cast_signed();
 
+pub(super) struct PrivateBytes(pub(super) Vec<u8>);
+
+pub(super) fn wipe(bytes: &mut [u8]) {
+    bytes.fill(0);
+    std::hint::black_box(bytes);
+    std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+}
+
+impl Drop for PrivateBytes {
+    fn drop(&mut self) {
+        wipe(&mut self.0);
+    }
+}
+
+pub(super) fn protected(
+    path: &Path,
+    max: usize,
+    seen: &mut BTreeSet<(u64, u64)>,
+) -> Result<PrivateBytes, &'static str> {
+    let file = opened_file(path, max as u64)?;
+    let meta = file.metadata().map_err(|_| INVALID)?;
+    if !seen.insert((meta.dev(), meta.ino())) {
+        return Err(INVALID);
+    }
+    let expected = usize::try_from(meta.len()).map_err(|_| INVALID)?;
+    let mut bytes = PrivateBytes(Vec::with_capacity(expected));
+    if file.take(max as u64 + 1).read_to_end(&mut bytes.0).is_err()
+        || bytes.0.len() != expected
+        || bytes.0.len() > max
+    {
+        return Err(INVALID);
+    }
+    Ok(bytes)
+}
+
 pub(crate) struct ReadGrant(Vec<u8>);
 
 impl ReadGrant {

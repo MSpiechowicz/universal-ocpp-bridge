@@ -16,6 +16,7 @@ use uob_management_adapter::{
 };
 
 use super::files::ReadGrant;
+use uob_protocol_adapter::v201::remote_control::configuration201_values::LocalConfigurationValues201;
 
 pub(super) struct ControlCredentials {
     environment: Environment,
@@ -90,6 +91,7 @@ impl ControlCredentials {
         self: Arc<Self>,
         roster: &[ResourceRef],
         inner: Arc<dyn CommandAdmissionPort<Value>>,
+        protected: Option<Arc<LocalConfigurationValues201>>,
     ) -> Result<ManagementCommandConfiguration, &'static str> {
         let scopes = roster
             .iter()
@@ -120,7 +122,7 @@ impl ControlCredentials {
         Ok(ManagementCommandConfiguration {
             admission: Arc::new(ScopedCommandAdmissionPort::new(inner, policy)),
             authenticator: self,
-            privileged_payloads: Arc::new(PinnedPayloads),
+            privileged_payloads: Arc::new(PinnedPayloads { protected }),
         })
     }
 }
@@ -168,7 +170,9 @@ impl ManagementCommandAuthenticator for ControlCredentials {
     }
 }
 
-struct PinnedPayloads;
+struct PinnedPayloads {
+    protected: Option<Arc<LocalConfigurationValues201>>,
+}
 impl PrivilegedPayloadValidator for PinnedPayloads {
     fn validate(
         &self,
@@ -196,14 +200,35 @@ impl PrivilegedPayloadValidator for PinnedPayloads {
         resource: &ResourceRef,
         operation: &uob_contracts::PrivilegedOcppOperation<Value>,
     ) -> bool {
-        uob_protocol_adapter::command_registry::command_schemas(snapshot)
+        let offered = uob_protocol_adapter::command_registry::command_schemas(snapshot)
             .iter()
             .any(|schema| {
                 &schema.resource == resource
                     && schema.protocol == operation.protocol
                     && schema.action == operation.action.as_str()
                     && schema.payload_schema == operation.payload_schema.as_str()
+            });
+        if !offered {
+            return false;
+        }
+        if matches!(
+            operation.action.as_str(),
+            "SetVariables" | "SetNetworkProfile"
+        ) {
+            // Offers is evaluated only for fresh commands after the existing scoped
+            // durable retry hint. Recheck all references again at the actual socket send.
+            self.protected.as_ref().is_some_and(|provider| {
+                provider
+                    .validate_operation(
+                        resource,
+                        operation,
+                        uob_contracts::UtcTimestamp::new(time::OffsetDateTime::now_utc()),
+                    )
+                    .is_ok()
             })
+        } else {
+            true
+        }
     }
 }
 

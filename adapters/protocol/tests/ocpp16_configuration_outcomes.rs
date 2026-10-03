@@ -223,7 +223,7 @@ async fn exact_write_statuses_deduplication_and_invalid_response_never_trigger_r
         vec![AccessPermission::PrivilegedControl],
     );
     let recovered = next_coordinator
-        .recover_unresolved(PageLimit::new(100).unwrap())
+        .recover_unresolved(None, PageLimit::new(100).unwrap())
         .await
         .unwrap();
     assert!(

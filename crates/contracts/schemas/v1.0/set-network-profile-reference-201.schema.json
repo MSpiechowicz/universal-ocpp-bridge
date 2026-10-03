@@ -1,0 +1,26 @@
+{
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/set-network-profile-reference-201.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "configurationSlot": {
+      "format": "int32",
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "type": "integer"
+    },
+    "profileReference": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "configurationSlot",
+    "profileReference"
+  ],
+  "title": "SetNetworkProfileReference201",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

@@ -294,6 +294,7 @@ fn admitted_result(command: &ExternalCommand<()>) -> CommandResult {
         device_model_201: None,
         charging_profile_16: None,
         charging_profile_201: None,
+        configuration_201: None,
     }
 }
 

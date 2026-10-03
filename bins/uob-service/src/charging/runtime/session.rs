@@ -64,6 +64,10 @@ pub(super) async fn attach(
                 Arc::new(context.store.clone()),
             )
             .map_err(|_| unavailable())?;
+            let session = match &configuration.configuration {
+                Some(provider) => session.with_configuration_201(provider.clone()),
+                None => session,
+            };
             context
                 .commands
                 .attach_201(station.clone(), session, context.store.clone())

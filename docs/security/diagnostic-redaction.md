@@ -37,3 +37,30 @@ the trusted provider rechecks revocation, scope and expiry at the socket-send bo
 The encoded frame transiently holds the value; a revocation after sending starts cannot
 cancel an in-flight WebSocket send. Native write acknowledgements and later observations
 are distinct evidence, not claims of physical state change.
+
+OCPP 2.0.1 protected `SetVariables` and `SetNetworkProfile` follow the same privacy
+boundary. Public commands and durable queues carry references only; the owner-only
+startup provider holds the actual values and full native network profiles. Reusable
+`cfg201:` capabilities are sensitive too: they may be retained in the protected
+command envelope, but are not diagnostic safe fields, result metadata or export
+evidence. Native `connectionData`, CSMS URLs, APN/VPN usernames, passwords, keys and
+SIM PINs are sensitive even when they look like ordinary configuration. The bridge
+never fetches a profile URL, and a native URL is not a safe endpoint display label.
+
+Typed `configuration_201` evidence contains only component/variable/attribute identity,
+slot and native statuses, with a separate network staging flag. It omits values,
+profiles, capabilities and native `statusInfo`/`customData`; later observed effects
+remain independent. Invalid provisioning and admission errors do not reproduce
+rejected private material. An independent actual-daemon smoke exercised enabled,
+redacted capture and verified synthetic private values/profiles/capabilities were
+absent from public results and capture; private values were also absent from
+SQLite/WAL and logs.
+
+Bridge-owned provisioning, decoded secret and transient wire buffers are wiped at
+their ownership boundaries. This is not a claim that allocator spare memory,
+third-party parser/transport buffers, operating-system copies or bytes already
+transmitted are erased. Revocation, tightened limits and socket-generation detachment
+fence writes before the first send poll; after asynchronous transmission begins,
+the bridge cannot unsend bytes. Stop, rotate the private file with fresh independent
+capabilities, and restart to replace daemon provisioning; there is no hot reload or
+public secret/revocation endpoint.

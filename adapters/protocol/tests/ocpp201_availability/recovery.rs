@@ -156,7 +156,7 @@ async fn missing_malformed_late_and_callerror_responses_never_invent_availabilit
         let mut next = session("ocpp2.0.1", Duration::from_secs(1)).await;
         let (_, _, coordinator) = setup(&store, next.handle.clone()).await;
         let recovered = coordinator
-            .recover_unresolved(PageLimit::new(100).unwrap())
+            .recover_unresolved(None, PageLimit::new(100).unwrap())
             .await
             .unwrap();
         assert_eq!(recovered.commands.len(), usize::from(mode != "callerror"));

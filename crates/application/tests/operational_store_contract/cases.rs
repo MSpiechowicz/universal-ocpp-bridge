@@ -27,6 +27,7 @@ fn atomic_failure_exposes_no_command_event_delivery_or_committed_record() {
     );
     assert!(
         block_on(store.recover(RecoveryQuery {
+            after_command: None,
             limit: PageLimit::new(10).expect("bounded page"),
         }))
         .expect("recovery read")
@@ -35,6 +36,7 @@ fn atomic_failure_exposes_no_command_event_delivery_or_committed_record() {
     );
     assert!(
         block_on(store.recover(RecoveryQuery {
+            after_command: None,
             limit: PageLimit::new(10).expect("bounded page"),
         }))
         .expect("recovery read")
@@ -77,6 +79,7 @@ fn atomic_success_and_identical_retry_are_visible_without_duplication() {
     assert_eq!(conflict.code(), StorageErrorCode::Conflict);
 
     let recovery = block_on(store.recover(RecoveryQuery {
+        after_command: None,
         limit: PageLimit::new(10).expect("bounded page"),
     }))
     .expect("recovery read");

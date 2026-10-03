@@ -420,6 +420,9 @@ pub struct CommandResult {
     /// Full privileged OCPP 2.0.1 profile request and native acknowledgement.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub charging_profile_201: Option<crate::ChargingProfileResult201>,
+    /// Value-free native configuration write acknowledgement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration_201: Option<crate::ConfigurationResult201>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

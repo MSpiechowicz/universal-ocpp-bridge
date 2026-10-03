@@ -46,7 +46,7 @@ pub(super) fn variable(value: &Value) -> Option<DeviceVariable201> {
 fn named(value: &str, lowercase: &str) -> bool {
     value.chars().default_case_fold().eq(lowercase.chars())
 }
-/// Only the four Appendix CSV 1.5 station request-limit identities disclose numeric values.
+/// Only explicitly queried native station request-limit identities disclose numeric values.
 #[must_use]
 pub fn limit_identity(
     component: &DeviceComponent201,
@@ -61,6 +61,7 @@ pub fn limit_identity(
     let action = match variable.instance.as_deref()? {
         name if named(name, "getvariables") => 0,
         name if named(name, "getreport") => 1,
+        name if named(name, "setvariables") => 2,
         _ => return None,
     };
     if named(&variable.name, "itemspermessage") {
@@ -238,8 +239,8 @@ pub fn report_items(payload: &Value, resource: &ResourceRef) -> Option<Vec<Devic
 
 /// Generation-scoped learned station limits. No probing, splitting or retries.
 #[derive(Default)]
-pub(super) struct LearnedLimits {
-    pub values: [[Option<usize>; 2]; 2],
+pub(crate) struct LearnedLimits {
+    pub values: [[Option<usize>; 2]; 3],
 }
 impl LearnedLimits {
     pub fn learn(
@@ -271,6 +272,17 @@ impl LearnedLimits {
             return false;
         }
         let [item_limit, byte_limit] = self.values[action];
+        if items > 1 && (item_limit.is_none() || byte_limit.is_none()) {
+            return false;
+        }
+        item_limit.is_none_or(|limit| items <= limit)
+            && byte_limit.is_none_or(|limit| bytes <= limit)
+    }
+    pub fn allows_variables(&self, items: usize, bytes: usize) -> bool {
+        if items == 0 || items > 4096 || bytes > 256 * 1024 {
+            return false;
+        }
+        let [item_limit, byte_limit] = self.values[2];
         if items > 1 && (item_limit.is_none() || byte_limit.is_none()) {
             return false;
         }

@@ -61,7 +61,7 @@ async fn revision7_full_native_evidence_waits_for_its_correlated_durable_puback(
 }
 
 #[tokio::test]
-async fn revision8_foreign_origins_and_maximum_period_payload_fail_without_publication() {
+async fn future_revision_foreign_origins_and_maximum_period_payload_fail_without_publication() {
     let broker = TestBroker::bind().await;
     let mut target = start_target(
         &broker,
@@ -81,7 +81,7 @@ async fn revision8_foreign_origins_and_maximum_period_payload_fail_without_publi
             "future" => {
                 result.schema_version = ContractVersion {
                     major: 1,
-                    revision: 8,
+                    revision: ContractVersion::V1_CONFIGURATION_201.revision + 1,
                 }
             }
             "management" => {

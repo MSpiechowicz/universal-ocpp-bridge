@@ -259,10 +259,10 @@ pub struct ExportRecord {
 }
 
 impl ExportRecord {
-    /// Current envelope revision, including optional native device-model command evidence.
+    /// Current envelope revision, including value-free native configuration command evidence.
     pub const SCHEMA_VERSION: ContractVersion = ContractVersion {
         major: 1,
-        revision: 7,
+        revision: 8,
     };
     /// Creates a record only from the closed privacy-filtered payload surface.
     #[must_use]

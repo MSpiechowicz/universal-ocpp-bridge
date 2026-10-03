@@ -1,8 +1,8 @@
 use std::{error::Error, fmt, future::Future, pin::Pin};
 
 use uob_contracts::{
-    Command, CommandResult, EventEnvelope, EventId, ResourceRef, StationSnapshot, TargetInstanceId,
-    UtcTimestamp,
+    Command, CommandResult, EventEnvelope, EventId, RequestId, ResourceRef, StationSnapshot,
+    TargetInstanceId, UtcTimestamp,
 };
 
 use crate::{DeliveryOutcome, DeliveryReport};
@@ -360,6 +360,9 @@ pub struct CommittedRecordQuery {
 /// Bounded authoritative state needed to resume application work after restart.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RecoveryQuery {
+    /// Exclusive request-ID cursor for unresolved commands and their matching results.
+    /// Other recovered streams retain their independent existing behavior.
+    pub after_command: Option<RequestId>,
     /// Maximum number of commands and deliveries returned in this batch.
     pub limit: PageLimit,
 }

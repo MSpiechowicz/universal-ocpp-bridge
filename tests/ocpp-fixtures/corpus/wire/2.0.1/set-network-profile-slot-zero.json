@@ -1,0 +1,1 @@
+[2,"synthetic-snp-zero","SetNetworkProfile",{"configurationSlot":0,"connectionData":{"ocppVersion":"OCPP20","ocppTransport":"JSON","ocppCsmsUrl":"wss://synthetic-csms.invalid/ocpp","messageTimeout":30,"securityProfile":3,"ocppInterface":"Wired0"}}]

@@ -1,10 +1,13 @@
 //! Opt-in demo station runtime; one private store and one bounded authenticated socket owner.
 mod commands;
+mod configuration201;
 mod control_auth;
 mod device_model;
 mod files;
 mod profiles;
 mod provision;
+mod recovery;
+mod roster;
 mod runtime;
 
 use serde_json::Value;
@@ -26,13 +29,12 @@ use uob_contracts::{
     TargetInstanceId, TransactionSnapshot,
 };
 use uob_protocol_adapter::{
-    OcppEndpoint, StationAuthenticator, StationCredential, StationRegistration,
+    OcppEndpoint, StationAuthenticator,
+    v201::remote_control::configuration201_values::LocalConfigurationValues201,
 };
 use uob_storage_adapter::{DEFAULT_WORK_QUEUE_CAPACITY, SqliteOperationalStore};
 
-use crate::configuration::charging::{
-    StationControlOptions, ValidatedChargingConfiguration, ValidatedChargingStation,
-};
+use crate::configuration::charging::{StationControlOptions, ValidatedChargingConfiguration};
 
 pub(crate) type ChargingStore =
     SqliteOperationalStore<Value, StationEvent, TransactionSnapshot, String>;
@@ -47,6 +49,7 @@ pub(crate) struct ChargingState {
     pub(crate) authorization: Arc<ChargingAuthorization>,
     commands: Arc<commands::LiveCommands>,
     credentials: Option<Arc<control_auth::ControlCredentials>>,
+    protected_configuration: Option<Arc<LocalConfigurationValues201>>,
     _directory: File,
     _lock: File,
 }
@@ -66,6 +69,7 @@ pub(super) struct StationSettings {
     protocol: ProtocolEdition,
     start: Option<provision::StartIdentity>,
     control: StationControlOptions,
+    configuration: Option<Arc<LocalConfigurationValues201>>,
 }
 
 impl StationSettings {
@@ -190,7 +194,11 @@ impl ChargingState {
         };
         credentials
             .clone()
-            .configuration(&self.roster, self.command_port(application))
+            .configuration(
+                &self.roster,
+                self.command_port(application),
+                self.protected_configuration.clone(),
+            )
             .map(Some)
             .map_err(io::Error::other)
     }
@@ -212,13 +220,19 @@ impl ChargingRuntime {
         let lock = files::state_lock(&config.state_directory).map_err(fail)?;
         let mut seen = BTreeSet::new();
         let (read_grant, control, privileged) = load_grants(&config, &mut seen)?;
-        let StationRoster {
+        let roster::StationRoster {
             registrations,
             resources,
             roster,
             mut settings,
             tokens,
-        } = load_stations(config.stations, &mut seen)?;
+        } = roster::load_stations(config.stations, &mut seen)?;
+        let protected_configuration = configuration201::install(
+            config.configuration_values_file.as_deref(),
+            &resources,
+            &mut settings,
+            &mut seen,
+        )?;
         let capacity = resources.len();
         let authenticator =
             StationAuthenticator::demo_with_protocols(registrations).map_err(io::Error::other)?;
@@ -235,6 +249,8 @@ impl ChargingRuntime {
             .interrupt_charging_profile_mutations()
             .await
             .map_err(io::Error::other)?;
+        let commands = Arc::new(commands::LiveCommands::new());
+        recovery::recover(&store, commands.clone()).await?;
         let authorization = Arc::new(
             ChargingAuthorization::recover(
                 Arc::new(store.clone()),
@@ -276,8 +292,9 @@ impl ChargingRuntime {
                 roster,
                 read_grant,
                 authorization,
-                commands: Arc::new(commands::LiveCommands::new()),
+                commands,
                 credentials,
+                protected_configuration,
                 _directory: directory,
                 _lock: lock,
             },
@@ -297,14 +314,6 @@ impl ChargingRuntime {
     ) -> io::Result<()> {
         runtime::serve(self, application, stop).await
     }
-}
-
-struct StationRoster {
-    registrations: Vec<(StationRegistration, ProtocolEdition, StationCredential)>,
-    resources: BTreeMap<StationId, Vec<ResourceRef>>,
-    roster: Vec<ResourceRef>,
-    settings: BTreeMap<StationId, StationSettings>,
-    tokens: Vec<(StationId, ProtocolEdition, ResourceRef, files::ReadGrant)>,
 }
 
 fn load_grants(
@@ -338,60 +347,6 @@ fn load_grants(
         .transpose()
         .map_err(fail)?;
     Ok((read_grant, control, privileged))
-}
-
-fn load_stations(
-    stations: Vec<ValidatedChargingStation>,
-    seen: &mut BTreeSet<(u64, u64)>,
-) -> io::Result<StationRoster> {
-    let mut registrations = Vec::with_capacity(stations.len());
-    let mut resources = BTreeMap::new();
-    let mut roster = Vec::new();
-    let mut settings = BTreeMap::new();
-    let mut tokens = Vec::new();
-    for station in stations {
-        let path = PathBuf::from(station.credential_file.as_str());
-        let mut secret = files::secret(&path, seen).map_err(io::Error::other)?;
-        let credential = StationCredential::from_secret(&secret);
-        secret.fill(0);
-        let credential = credential.map_err(io::Error::other)?;
-        registrations.push((
-            StationRegistration {
-                station_id: station.station_id.clone(),
-                credential: station.credential_file,
-                client_certificate: None,
-            },
-            station.protocol,
-            credential,
-        ));
-        roster.push(station.resources[0].clone());
-        if let Some(file) = &station.start_token_file {
-            let bytes =
-                files::secret(&PathBuf::from(file.as_str()), seen).map_err(io::Error::other)?;
-            tokens.push((
-                station.station_id.clone(),
-                station.protocol,
-                station.resources[0].clone(),
-                files::grant(bytes),
-            ));
-        }
-        settings.insert(
-            station.station_id.clone(),
-            StationSettings {
-                protocol: station.protocol,
-                start: None,
-                control: station.control,
-            },
-        );
-        resources.insert(station.station_id, station.resources);
-    }
-    Ok(StationRoster {
-        registrations,
-        resources,
-        roster,
-        settings,
-        tokens,
-    })
 }
 
 fn prepare_database(

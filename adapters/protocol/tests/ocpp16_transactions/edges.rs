@@ -91,6 +91,7 @@ async fn atomic_failure_has_no_success_or_partial_stop_and_retry_can_commit() {
     assert_eq!(
         store
             .recover(RecoveryQuery {
+                after_command: None,
                 limit: PageLimit::new(100).unwrap()
             })
             .await

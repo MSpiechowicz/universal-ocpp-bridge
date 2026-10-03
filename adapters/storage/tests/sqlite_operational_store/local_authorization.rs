@@ -35,6 +35,7 @@ fn expiry_and_revocation_survive_restart() {
 
     let reopened = Store::open(database.path(), 8).expect("reopen SQLite store");
     let recovered = block_on(reopened.recover(RecoveryQuery {
+        after_command: None,
         limit: PageLimit::new(10).expect("recovery limit"),
     }))
     .expect("recover authorization policy");
@@ -65,6 +66,7 @@ fn expiry_and_revocation_survive_restart() {
     drop(reopened);
     let reopened = Store::open(database.path(), 8).expect("reopen after revocation");
     let recovered = block_on(reopened.recover(RecoveryQuery {
+        after_command: None,
         limit: PageLimit::new(10).expect("recovery limit"),
     }))
     .expect("recover revoked policy");
