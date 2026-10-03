@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Locator } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { startLiveDaemon } from '../scripts/live-daemon-fixture.mjs';
+import { availabilityBurstDelivered } from './live-command/availability-burst';
 import { streamEffect } from './live-command/effects';
 import type { CanonicalResource, Resource } from './live-command/effects';
 import { enterSecret, historyDuringSnapshotRefresh } from './live-command/history-refresh';
@@ -144,7 +145,7 @@ test('real daemon separates command admission, protocol replies and station obse
     try {
       await enterSecret(panel.getByLabel('Independent control or privileged credential'), credential);
       await panel.getByRole('button', { name: 'Load protected control options' }).click({ timeout: 3000 });
-      await expect(panel.getByText('Protected control options loaded for this credential and station.')).toBeVisible({ timeout: 3000 });
+      await expect(resourceSelect).toBeEnabled({ timeout: 3000 });
 
       stage = 'selecting target resource';
       expectedResource = (await resourceSelect.selectOption({ label: resource === 'Station' ? `Station ${selectedStation}` : resource }, { timeout: 3000 }))[0];
@@ -152,6 +153,7 @@ test('real daemon separates command admission, protocol replies and station obse
 
       stage = 'waiting for resource-specific operation';
       await expect(operationSelect.locator('option').filter({ hasText: operation })).toHaveCount(1, { timeout: 3000 });
+      await expect(operationSelect).toBeEnabled({ timeout: 3000 });
       stage = 'selecting advertised operation';
       expectedOperation = (await operationSelect.selectOption({ label: operation }, { timeout: 3000 }))[0];
       await assertSelection();
@@ -432,6 +434,9 @@ test('real daemon separates command admission, protocol replies and station obse
         ? Array(64).fill('unavailable')
         : ['unavailable', 'unavailable', 'unknown', 'unknown']);
       await effect(availability, id, snapshot.station, 'station.availability.observed');
+      await availabilityBurstDelivered(page, base, read, id, snapshot.resources
+        .map((item: { resource: Resource }) => item.resource)
+        .filter((target: Resource) => target.resource?.connector_id !== undefined));
       await reset();
       const rows = await history(id);
       for (const commandId of submitted[id]) {

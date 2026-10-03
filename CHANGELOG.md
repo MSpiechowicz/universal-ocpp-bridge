@@ -200,6 +200,12 @@ All notable changes to this project will be documented in this file. See [conven
   and disable mutations; identity/station/destination changes and page departure
   invalidate late reads. A deterministic real-daemon response-delay regression
   retains both-edition and 64-connector control coverage (#117).
+  The test-only CI follow-up waits for the selected page to consume the genuine
+  availability-event burst and refresh its inventory before protected preparation,
+  comparing canonical resource identities independently of JSON property order.
+  Held real history responses still survive stale snapshots while protected controls
+  clear; freshness alone cannot restore credentials, operations or confirmation.
+  Explicit control re-preparation is covered without changing production behavior.
 
 ### Tests
 - Align release-manager preflight and rollback test fixtures with the operational
