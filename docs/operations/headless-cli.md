@@ -480,13 +480,286 @@ editor. Independent software-peer installed state and native acknowledgement are
 of hardware enforcement or OCA certification. See
 [native201 safety and proposed verification commands](../architecture/ocpp201-remote-control.md#opt-in-native-charging-profiles).
 
+### Protected OCPP 2.0.1 device and network configuration
+
+`set_variables` and `set_network_profile` independently default to `false`. Either
+requires `protocol = "ocpp201"`, the existing distinct control/privileged grant
+files and a non-secret absolute `configuration_values_file` path under `[charging]`.
+Only the **per-request privileged bearer** authorizes these commands. Keep both
+listeners loopback and the environment `demo`; station Basic authentication and
+the read/control grants do not grant configuration-write authority.
+
+This complete example shows table placement, not real credentials:
+
+```toml
+[bridge]
+id = "bridge-1"
+environment = "demo"
+
+[management]
+listen_addr = "127.0.0.1:8080"
+
+[charging]
+enabled = true
+listen_addr = "127.0.0.1:9000"
+state_directory = "/var/lib/uob/demo-private"
+read_grant_file = "/var/lib/uob/demo-secrets/management-read"
+control_grant_file = "/var/lib/uob/demo-secrets/management-control"
+privileged_grant_file = "/var/lib/uob/demo-secrets/management-privileged"
+configuration_values_file = "/var/lib/uob/demo-secrets/configuration201.json"
+
+[[charging.stations]]
+id = "station-a"
+protocol = "ocpp201"
+credential_file = "/var/lib/uob/demo-secrets/station-a"
+set_variables = true
+set_network_profile = true
+# Independent query opt-in; writes do not enable this or issue probes:
+get_variables = true
+
+[[charging.stations.resources]]
+evse_id = "evse-one"
+native_evse_id = 1
+
+[[charging.stations.resources]]
+evse_id = "evse-one"
+connector_id = "one"
+native_evse_id = 1
+native_connector_id = 1
+```
+
+For an existing configuration, add only missing keys in their existing tables;
+flags precede the station's resource tables. `get_variables`, `get_base_report`
+and `get_report` retain separate default-off permissions. A provisioned entry for
+a disabled write, non201 station or any resource that is not an exact configured
+canonical/native address fails startup. Network profiles are station-only;
+variable entries may use the station or an exact configured EVSE/connector.
+
+#### Private startup file
+
+Both root arrays are required, including an empty array for an unused entry kind.
+Root/entry objects reject unknown fields. Outer names use snake_case; `entry` is
+the protected native-style component/variable reference DTO and uses camelCase.
+`profile` is a complete native `connectionData` **object**, not a JSON string.
+The following values and 256-bit-shaped capabilities are **synthetic examples**:
+do not copy these predictable examples into real provisioning. Generate each
+capability independently with a cryptographically secure 32-byte random source;
+use `cfg201:` plus its 64 hexadecimal digits, not a content hash or counter.
+
+```json
+{
+  "variables": [
+    {
+      "resource": { "bridge_id": "bridge-1", "station_id": "station-a" },
+      "entry": {
+        "component": { "name": "VendorCtrlr" },
+        "variable": { "name": "DemoValue" },
+        "valueReference": "cfg201:2f4c19b8a6d30e759bc17a05e2d846f19e07c5d2b8a3416fa09de753c1264b80"
+      },
+      "value": "",
+      "expires_at": "2099-01-01T00:00:00Z"
+    }
+  ],
+  "network_profiles": [
+    {
+      "resource": { "bridge_id": "bridge-1", "station_id": "station-a" },
+      "configuration_slot": 0,
+      "reference": "cfg201:7ac9e0124bd63f85d190a6b3e8c247f0536d12ea94b80fc72e5a6d8139cf042b",
+      "profile": {
+        "ocppVersion": "OCPP20",
+        "ocppTransport": "JSON",
+        "ocppCsmsUrl": "wss://csms.invalid/ocpp",
+        "messageTimeout": 30,
+        "securityProfile": 2,
+        "ocppInterface": "Wired0",
+        "apn": {
+          "apn": "demo.invalid",
+          "apnUserName": "demo",
+          "apnPassword": "demo-only-password",
+          "simPin": 0,
+          "preferredNetwork": "20404",
+          "useOnlyPreferredNetwork": false,
+          "apnAuthentication": "PAP"
+        },
+        "vpn": {
+          "server": "vpn.invalid",
+          "user": "demo",
+          "group": "demo",
+          "password": "demo-only-password",
+          "key": "demo-only-key",
+          "type": "IKEv2"
+        }
+      },
+      "expires_at": "2099-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+Choose real expiry deadlines appropriate to the operation; the long example
+deadline is not a recommended policy. Bind each capability immutably to this
+exact resource, content and expiry plus full variable identity/attribute or signed
+slot. Omitted `attributeType` means `Actual`; comparisons use Unicode case folding
+for component/variable names and instances while preserving original metadata.
+Capabilities themselves compare exactly. For a child entry, copy its exact
+configured ResourceRef (canonical `kind = "evse"` and matching native address)
+and put its contained native EVSE/connector selector in `entry.component.evse`.
+Do not infer an EVSE-only resource merely because a connector is configured.
+
+Create the file as a canonical absolute, service-owned **0600 regular file**,
+with one link, no symlink components and a protected containing directory. Keep
+it outside the `0700` state directory and distinct from every grant, station
+credential and start-identity file; opened inode identity and NOFOLLOW checks
+also reject aliases/races. Startup reads at most 2 MiB (2,097,152 bytes), separately
+from the provider's 1 MiB (1,048,576 bytes) aggregate secret-content bound.
+There are at most 128 combined entries, each profile at most 64 KiB (65,536 bytes)
+and JSON depth 16, and each variable at most 1,000 Unicode characters, including
+legal empty strings. Component/variable names and instances are at most 50 Unicode
+characters; resource identity strings are at most 256 bytes each. Native profile
+fields obey the pinned schema's own bounds, including CSMS/APN/VPN string lengths
+and signed 32-bit integer fields. Slot 0 is valid; native station policy can still
+reject a slot or setting. Do not put private values/profiles in TOML, environment
+variables, command arguments, public API requests, logs or version control.
+Treat reusable capabilities as sensitive too.
+
+#### Reference-only command API
+
+After Accepted registration, submit through the existing privileged
+`POST /api/v1/commands` endpoint. The two protected URNs below are **not** the
+native OCA SetVariablesRequest/SetNetworkProfileRequest URNs. Raw `attributeValue`
+or `connectionData`, unknown fields, wrong schemas and uncontained selectors fail
+closed. These public envelopes match the synthetic private file above:
+
+```json
+{
+  "request_id": "demo-variable-001",
+  "resource": { "bridge_id": "bridge-1", "station_id": "station-a" },
+  "operation": {
+    "kind": "ocpp",
+    "parameters": {
+      "protocol": "ocpp201",
+      "action": "SetVariables",
+      "payload_schema": "urn:uob:ocpp201:SetVariablesReference:1",
+      "payload": {
+        "setVariableData": [
+          {
+            "component": { "name": "VendorCtrlr" },
+            "variable": { "name": "DemoValue" },
+            "valueReference": "cfg201:2f4c19b8a6d30e759bc17a05e2d846f19e07c5d2b8a3416fa09de753c1264b80"
+          }
+        ]
+      }
+    }
+  },
+  "expires_at": "2099-01-01T00:00:00Z"
+}
+```
+
+```json
+{
+  "request_id": "demo-network-001",
+  "resource": { "bridge_id": "bridge-1", "station_id": "station-a" },
+  "operation": {
+    "kind": "ocpp",
+    "parameters": {
+      "protocol": "ocpp201",
+      "action": "SetNetworkProfile",
+      "payload_schema": "urn:uob:ocpp201:SetNetworkProfileReference:1",
+      "payload": {
+        "configurationSlot": 0,
+        "profileReference": "cfg201:7ac9e0124bd63f85d190a6b3e8c247f0536d12ea94b80fc72e5a6d8139cf042b"
+      }
+    }
+  },
+  "expires_at": "2099-01-01T00:00:00Z"
+}
+```
+
+Use the independent read bearer for `GET /api/v1/commands/<request_id>` and command
+history. A fresh missing/expired/revoked or wrongly bound reference is rejected
+before admission (normally 422 for an unoffered protected command); its `GET` is 404.
+Malformed schemas/payloads fail 400 before admission. A valid admitted command
+definitely not sent because of native item/byte budgets instead returns HTTP 400
+with a **flat** `CommandResult` whose lifecycle is `rejected`; its retained `GET`
+is 200 and matches that result. Do not assume every 400 has only `{error}`, or
+that every rejected command was sent. Valid native responses and transmission
+uncertainty use the existing 202 `{result}` envelope, not proof of physical effect.
+
+SetVariables preserves Accepted, Rejected, UnknownComponent, UnknownVariable,
+NotSupportedAttributeType and RebootRequired independently. Reordered complete
+replies are valid; missing/duplicate/extra/mismatched identities are uncertain.
+Aggregate acceptance is true only when every item is Accepted or RebootRequired;
+mixed outcomes remain visible with aggregate false. ReadOnly, malformed-format
+and out-of-range decisions remain the station's genuine Rejected evidence.
+
+Unknown SetVariables limits permit only a single item. Before multi-item writes,
+explicitly query DeviceDataCtrlr (no component instance/EVSE), variable
+ItemsPerMessage and BytesPerMessage, each with variable instance `SetVariables`
+and Actual attribute. GetVariables has its own independent opt-in; query these
+identities one at a time when its own limits are unknown. Valid NotifyReport
+evidence can also teach limits through independently enabled report workflows.
+Both native item and byte limits are needed for multi-item writes. Local bounds
+are 4,096 entries and a 256 KiB **complete escaped native CALL**, including resolved
+values and framing, not merely the reference JSON size. Reconnect/restart loses
+the shared generation's learned proof; stored query results do not restore it.
+There is no automatic querying, splitting, truncation, retry or replay.
+
+SetNetworkProfile carries every supplied validated native field, including
+APN/VPN credentials and version/transport/interface. The bridge does not resolve
+or fetch its URL. Native Accepted means **stored/staged**, even when replacing
+the currently active slot; it is not active before a separate operator-controlled
+reboot. Rejected and Failed remain exact native statuses. No automatic Reset,
+B10 migration, security-profile orchestration or connectivity probe is issued.
+Disconnect after possible application but before ACK is transmission uncertainty;
+reconnect alone proves neither activation nor a safe resend.
+
+Optional `configuration_201` in command-result v1.8 contains identities or slot,
+native status and network staging only, never values/profiles/capabilities or
+opaque statusInfo/customData. Nested export schemas are v1.9 and runtime export
+revision is 8; historical schemas/routes remain intact and existing payload and
+target authorization limits remain unchanged. SQLite stays at schema 14 with no
+new SQL migration or configuration ledger. This does not enable global external
+export delivery, a provider or a native configuration browser editor.
+
+#### Replacement, revocation and restart
+
+There is **no hot reload, watcher or public secret/revocation endpoint**.
+To change content or expiry, stop the daemon, produce a new service-owned mode `0600`
+private file with independently generated fresh capabilities, atomically replace
+the original file without links/overlap, then restart. Omit a capability to revoke
+it from that startup set. The embedding library also offers explicit
+`LocalConfigurationValues201::revoke(reference)`, not a daemon HTTP operation.
+Revocation and expiry are rechecked before actual send; after sending begins,
+the bridge cannot unsend bytes or prove that an interrupted update was unapplied.
+Owned private/decoded/transient buffers wipe on drop/error; third-party buffers,
+OS copies and transmitted bytes are outside that guarantee.
+
+Startup pages common unresolved-command recovery before listener binding.
+Crash-left Dispatched becomes TransmissionUncertain; Admitted and already
+uncertain records are preserved, with cursor progress past them and no replay.
+Inspect durable results before a new intentional request. An exact retained
+request under the same authorized origin/resource may return its historical
+result even after capability expiry/replacement, without resolving the old secret
+or another CALL. A changed body under that ID, wrong resource or ordinary control
+grant does not gain cached privileged authority.
+
+The actual-daemon configuration suite passed 13 tests, and an independent
+software-peer smoke exercised 15 native writes, 20 durable commands/results and 190
+capture traces, including status/limits/scope/expiry/rotation, pending Heartbeat,
+staged peer reboot and crash/disconnect no replay. Synthetic private values/
+profiles/capabilities were absent from public results and enabled redacted capture;
+private values were absent from SQLite/WAL and logs. This is software boundary
+evidence, not hardware activation/interoperability, OCA certification or production
+charging qualification. See [the architecture and safety boundaries](../architecture/ocpp201-remote-control.md#opt-in-protected-device-and-network-writes).
+
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported
 requests are rejected. An HTTP 202 records admission, not native acceptance or physical effect.
 Inspect the station-scoped sanitized command history or detail by request ID before deciding
-whether to intentionally retry the **same unexpired request**; an exact duplicate does not
-redispatch, while changed content under the same ID conflicts. History/detail distinguish
-admission, dispatch, protocol response and later linked observed effects. Event IDs connect
+whether to intentionally retry the **same request with identical content and authenticated
+origin**; an exact retained duplicate does not redispatch, while changed content under the same ID conflicts.
+History/detail distinguish admission, dispatch, protocol response and later linked
+observed effects. Event IDs connect
 observations to the station/resource stream; the correlation link searches the separately
 retained, possibly incomplete Debug timeline. A pending native transaction can receive a
 transaction-bound `TxProfile` charging limit without proof of power flow; even an accepted

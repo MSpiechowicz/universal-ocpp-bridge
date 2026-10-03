@@ -2,6 +2,8 @@
 mod charging_profile201;
 #[path = "public_schemas/compatibility.rs"]
 mod compatibility;
+#[path = "public_schemas/configuration201.rs"]
+mod configuration201;
 
 use std::collections::BTreeSet;
 
@@ -10,7 +12,8 @@ use serde_json::{Map, Value, json};
 use uob_contracts::{
     Command, CommandResult, ConfigurationChangeReference, DataPointDescriptor, DataPointValue,
     EventEnvelope, ExportBatch, ExportRecord, ExportReport, ResourceCapabilities, ResourceRef,
-    RuntimeIdentity, ServiceIdentity, StationSnapshot, TraceRecord,
+    RuntimeIdentity, ServiceIdentity, SetNetworkProfileReference201, SetVariablesReference201,
+    StationSnapshot, TraceRecord,
 };
 
 const SCHEMAS: &[(&str, &str)] = &[
@@ -48,11 +51,19 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.7/command-result.schema.json"),
+        include_str!("../schemas/v1.8/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
         include_str!("../schemas/v1.1/configuration-change-reference.schema.json"),
+    ),
+    (
+        "set-variables-reference-201",
+        include_str!("../schemas/v1.0/set-variables-reference-201.schema.json"),
+    ),
+    (
+        "set-network-profile-reference-201",
+        include_str!("../schemas/v1.0/set-network-profile-reference-201.schema.json"),
     ),
     (
         "event-envelope",
@@ -64,11 +75,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.8/export-record.schema.json"),
+        include_str!("../schemas/v1.9/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.8/export-batch.schema.json"),
+        include_str!("../schemas/v1.9/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -86,8 +97,8 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 8,
-        "command-result" => 7,
+        "export-record" | "export-batch" => 9,
+        "command-result" => 8,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
@@ -158,6 +169,14 @@ fn published_schema_snapshots_match_the_rust_contracts() {
     assert_eq!(
         published("configuration-change-reference"),
         generated::<ConfigurationChangeReference>("configuration-change-reference")
+    );
+    assert_eq!(
+        published("set-variables-reference-201"),
+        generated::<SetVariablesReference201>("set-variables-reference-201")
+    );
+    assert_eq!(
+        published("set-network-profile-reference-201"),
+        generated::<SetNetworkProfileReference201>("set-network-profile-reference-201")
     );
     assert_eq!(
         published("event-envelope"),

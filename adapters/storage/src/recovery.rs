@@ -9,6 +9,7 @@ use crate::{codec, configuration::unavailable};
 
 pub(crate) fn recover<C: DeserializeOwned, D: DeserializeOwned>(
     connection: &Connection,
+    after_command: Option<&str>,
     limit: usize,
 ) -> Result<RecoveryBatch<C, D>, StorageError> {
     let station_snapshots = query_json(
@@ -19,24 +20,8 @@ pub(crate) fn recover<C: DeserializeOwned, D: DeserializeOwned>(
     .map(|value| codec::decode_snapshot(value))
     .collect::<Result<_, _>>()?;
     let authorization = read_authorization(connection)?;
-    let active_commands = query_json_limit(
-        connection,
-        "SELECT payload FROM commands WHERE unresolved = 1 ORDER BY request_id LIMIT ?1",
-        limit,
-    )?
-    .iter()
-    .map(|value| codec::decode_command(value))
-    .collect::<Result<_, _>>()?;
-    let command_results = query_json_limit(
-        connection,
-        "SELECT command_results.payload FROM command_results\n\
-         JOIN commands USING(request_id) WHERE commands.unresolved = 1\n\
-         ORDER BY command_results.request_id LIMIT ?1",
-        limit,
-    )?
-    .iter()
-    .map(|value| codec::decode_result(value))
-    .collect::<Result<_, _>>()?;
+    let active_commands = read_active_commands(connection, after_command, limit)?;
+    let command_results = read_command_results(connection, after_command, limit)?;
     let pending_deliveries = read_deliveries(connection, limit)?;
     Ok(RecoveryBatch {
         station_snapshots,
@@ -44,7 +29,7 @@ pub(crate) fn recover<C: DeserializeOwned, D: DeserializeOwned>(
         active_commands,
         command_results,
         pending_deliveries,
-        has_more: count_unresolved_commands(connection)? > limit
+        has_more: count_unresolved_commands(connection, after_command)? > limit
             || count(connection, "target_deliveries")? > limit,
     })
 }
@@ -62,7 +47,7 @@ pub(crate) fn command_result(
         .optional()
         .map_err(unavailable)?;
     value
-        .map(|payload| codec::decode_result(&payload))
+        .map(|payload| codec::decode_stored_result(connection, &payload, request_id))
         .transpose()
 }
 
@@ -145,6 +130,32 @@ fn read_deliveries<D: DeserializeOwned>(
         .collect()
 }
 
+fn read_command_results(
+    connection: &Connection,
+    after_command: Option<&str>,
+    limit: usize,
+) -> Result<Vec<uob_contracts::CommandResult>, StorageError> {
+    let mut statement = connection
+        .prepare(
+            "WITH command_page AS (
+                SELECT request_id FROM commands WHERE unresolved = 1
+                AND (?2 IS NULL OR request_id > ?2) ORDER BY request_id LIMIT ?1
+             )
+             SELECT command_results.request_id, command_results.payload FROM command_results
+             JOIN command_page USING(request_id) ORDER BY command_results.request_id",
+        )
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map(rusqlite::params![limit_i64(limit)?, after_command], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(unavailable)?;
+    collect_rows(rows)?
+        .into_iter()
+        .map(|(request, payload)| codec::decode_stored_result(connection, &payload, &request))
+        .collect()
+}
+
 fn query_json(connection: &Connection, sql: &str) -> Result<Vec<String>, StorageError> {
     let mut statement = connection.prepare(sql).map_err(unavailable)?;
     let rows = statement
@@ -153,16 +164,35 @@ fn query_json(connection: &Connection, sql: &str) -> Result<Vec<String>, Storage
     collect_rows(rows)
 }
 
-fn query_json_limit(
+fn read_active_commands<C: DeserializeOwned>(
     connection: &Connection,
-    sql: &str,
+    after_command: Option<&str>,
     limit: usize,
-) -> Result<Vec<String>, StorageError> {
-    let mut statement = connection.prepare(sql).map_err(unavailable)?;
-    let rows = statement
-        .query_map([limit_i64(limit)?], |row| row.get(0))
+) -> Result<Vec<Command<C>>, StorageError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT request_id, payload FROM commands WHERE unresolved = 1
+         AND (?2 IS NULL OR request_id > ?2) ORDER BY request_id LIMIT ?1",
+        )
         .map_err(unavailable)?;
-    collect_rows(rows)
+    let rows = statement
+        .query_map(rusqlite::params![limit_i64(limit)?, after_command], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(unavailable)?;
+    collect_rows(rows)?
+        .into_iter()
+        .map(|(request, payload)| {
+            let command: Command<C> = codec::decode_command(&payload)?;
+            if command.request_id.as_str() != request {
+                return Err(StorageError::new(
+                    StorageErrorCode::IntegrityFailure,
+                    "stored command recovery request identity changed",
+                ));
+            }
+            Ok(command)
+        })
+        .collect()
 }
 
 fn count(connection: &Connection, table: &str) -> Result<usize, StorageError> {
@@ -174,11 +204,14 @@ fn count(connection: &Connection, table: &str) -> Result<usize, StorageError> {
         .map_err(|_| StorageError::new(StorageErrorCode::IntegrityFailure, "negative row count"))
 }
 
-fn count_unresolved_commands(connection: &Connection) -> Result<usize, StorageError> {
+fn count_unresolved_commands(
+    connection: &Connection,
+    after_command: Option<&str>,
+) -> Result<usize, StorageError> {
     let count: i64 = connection
         .query_row(
-            "SELECT COUNT(*) FROM commands WHERE unresolved = 1",
-            [],
+            "SELECT COUNT(*) FROM commands WHERE unresolved = 1 AND (?1 IS NULL OR request_id > ?1)",
+            [after_command],
             |row| row.get(0),
         )
         .map_err(unavailable)?;

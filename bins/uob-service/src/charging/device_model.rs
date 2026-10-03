@@ -16,6 +16,8 @@ pub(super) fn apply(
         ("GetVariables", options.get_variables.enabled()),
         ("GetBaseReport", options.get_base_report.enabled()),
         ("GetReport", options.get_report.enabled()),
+        ("SetVariables", options.set_variables.enabled()),
+        ("SetNetworkProfile", options.set_network_profile.enabled()),
     ];
     for (action, enabled) in enabled {
         if !enabled {
@@ -29,7 +31,7 @@ pub(super) fn apply(
             parameters: Vec::new(),
         };
         snapshot.capabilities.operations.push(operation.clone());
-        if action == "GetBaseReport" {
+        if action == "GetBaseReport" || action == "SetNetworkProfile" {
             continue;
         }
         for entry in &mut snapshot.resources {

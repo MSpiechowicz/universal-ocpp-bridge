@@ -29,6 +29,8 @@ pub(crate) struct Configuration {
     read_grant_file: Option<String>,
     control_grant_file: Option<String>,
     privileged_grant_file: Option<String>,
+    #[serde(rename = "configuration_values_file")]
+    values_file: Option<String>,
     stations: Vec<StationConfiguration>,
 }
 
@@ -44,6 +46,8 @@ pub(crate) struct StationControlOptions {
     pub get_variables: StationActionOption,
     pub get_base_report: StationActionOption,
     pub get_report: StationActionOption,
+    pub set_variables: StationActionOption,
+    pub set_network_profile: StationActionOption,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
 }
@@ -78,6 +82,17 @@ impl StationControlOptions {
     }
     pub fn device_model_enabled(self) -> bool {
         self.get_variables.enabled() || self.get_base_report.enabled() || self.get_report.enabled()
+    }
+    pub fn configuration_enabled(self) -> bool {
+        self.set_variables.enabled() || self.set_network_profile.enabled()
+    }
+    fn requires_privileged_grant(self) -> bool {
+        self.change_availability
+            || self.trigger_message.enabled()
+            || self.get_composite_schedule.enabled()
+            || self.charging_profiles_enabled()
+            || self.device_model_enabled()
+            || self.configuration_enabled()
     }
 }
 
@@ -116,6 +131,7 @@ pub(crate) struct ValidatedChargingConfiguration {
     pub stations: Vec<ValidatedChargingStation>,
     pub control_grant_file: Option<CredentialReference>,
     pub privileged_grant_file: Option<CredentialReference>,
+    pub configuration_values_file: Option<PathBuf>,
 }
 
 pub(crate) struct ValidatedChargingStation {
@@ -143,6 +159,7 @@ impl Configuration {
                 && self.read_grant_file.is_none()
                 && self.control_grant_file.is_none()
                 && self.privileged_grant_file.is_none()
+                && self.values_file.is_none()
                 && self.stations.is_empty()
             {
                 Ok(None)
@@ -175,23 +192,16 @@ impl Configuration {
                 station.start_token_file.is_some()
                     || station.control.allow_stop
                     || station.control.allow_charging_limit
-                    || station.control.change_availability
-                    || station.control.trigger_message.enabled()
-                    || station.control.get_composite_schedule.enabled()
-                    || station.control.charging_profiles_enabled()
-                    || station.control.device_model_enabled()
+                    || station.control.requires_privileged_grant()
             })
         {
             return Err(fail);
         }
         if self.privileged_grant_file.is_none()
-            && self.stations.iter().any(|station| {
-                station.control.change_availability
-                    || station.control.trigger_message.enabled()
-                    || station.control.get_composite_schedule.enabled()
-                    || station.control.charging_profiles_enabled()
-                    || station.control.device_model_enabled()
-            })
+            && self
+                .stations
+                .iter()
+                .any(|station| station.control.requires_privileged_grant())
         {
             return Err(fail);
         }
@@ -214,6 +224,16 @@ impl Configuration {
             };
         let control_grant_file = credential(self.control_grant_file)?;
         let privileged_grant_file = credential(self.privileged_grant_file)?;
+        let configuration_values_file =
+            credential(self.values_file)?.map(|file| PathBuf::from(file.as_str()));
+        if self
+            .stations
+            .iter()
+            .any(|station| station.control.configuration_enabled())
+            && configuration_values_file.is_none()
+        {
+            return Err(fail);
+        }
         let stations = validate_stations(self.stations, &state_directory, paths, bridge_name)?;
         Ok(Some(ValidatedChargingConfiguration {
             listen_addr,
@@ -222,6 +242,7 @@ impl Configuration {
             stations,
             control_grant_file,
             privileged_grant_file,
+            configuration_values_file,
         }))
     }
 }
@@ -242,7 +263,9 @@ fn validate_stations(
     let mut stations = Vec::with_capacity(entries.len());
     let mut total_resources = 0;
     for station in entries {
-        if station.control.device_model_enabled() && station.protocol != ProtocolEdition::Ocpp201 {
+        if (station.control.device_model_enabled() || station.control.configuration_enabled())
+            && station.protocol != ProtocolEdition::Ocpp201
+        {
             return Err(fail);
         }
         if station.control.get_composite_schedule.enabled()
@@ -251,7 +274,8 @@ fn validate_stations(
             return Err(fail);
         }
         if (station.control.get_composite_schedule.enabled()
-            || station.control.charging_profiles_enabled())
+            || station.control.charging_profiles_enabled()
+            || station.control.configuration_enabled())
             && station.resources.iter().any(|resource| {
                 resource
                     .native_evse

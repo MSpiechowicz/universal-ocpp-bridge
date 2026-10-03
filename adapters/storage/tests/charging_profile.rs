@@ -59,6 +59,7 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         device_model_201: None,
         charging_profile_16: None,
         charging_profile_201: None,
+        configuration_201: None,
     }
 }
 fn clear(id: i32, status: ClearChargingProfileStatus16) -> ChargingProfileResult16 {

@@ -2,6 +2,11 @@
 use crate::remote_constraints as constraints;
 mod charging_limit;
 mod charging_profile201;
+mod configuration201;
+mod configuration201_profile_parse;
+mod configuration201_response;
+pub mod configuration201_values;
+pub(crate) mod configuration201_wire;
 pub mod device_model;
 mod device_model_collection;
 mod device_model_response;
@@ -53,6 +58,9 @@ pub struct RemoteControlSession {
     phase: Arc<std::sync::Mutex<phase_capability::PhaseCapabilities>>,
     established_transactions: std::sync::Mutex<std::collections::BTreeSet<String>>,
     pending_snapshot_commit: std::sync::atomic::AtomicBool,
+    configuration_201: Option<Arc<configuration201_values::LocalConfigurationValues201>>,
+    configuration_limits: Arc<std::sync::Mutex<device_model_values::LearnedLimits>>,
+    configuration_active: Arc<std::sync::Mutex<bool>>,
 }
 
 impl RemoteControlSession {
@@ -78,6 +86,11 @@ impl RemoteControlSession {
             phase: Arc::new(std::sync::Mutex::new(phase)),
             established_transactions: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             pending_snapshot_commit: std::sync::atomic::AtomicBool::new(false),
+            configuration_201: None,
+            configuration_limits: Arc::new(std::sync::Mutex::new(
+                device_model_values::LearnedLimits::default(),
+            )),
+            configuration_active: Arc::new(std::sync::Mutex::new(true)),
         })
     }
 
@@ -182,6 +195,11 @@ impl RemoteControlSession {
                 if crate::command_registry::device_model201::ACTIONS.contains(&operation.action.as_str()))
             {
                 return Ok(self.dispatch_device(command).await);
+            }
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::configuration201::ACTIONS.contains(&operation.action.as_str()))
+            {
+                return Ok(self.dispatch_configuration_201(command).await);
             }
             let remote_start_id = if matches!(
                 command.operation,

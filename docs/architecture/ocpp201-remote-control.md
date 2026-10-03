@@ -3,7 +3,8 @@
 `v201::remote_control::RemoteControlSession` implements the existing application
 `StationCommandPort` for one authenticated OCPP 2.0.1 socket. Compose it with the ordinary durable
 `CommandCoordinator` and scoped access guard. Start and stop require control permission; native
-Reset, UnlockConnector and full native Set/ClearChargingProfile require privileged control.
+Reset, UnlockConnector, full native Set/ClearChargingProfile and protected
+SetVariables/SetNetworkProfile require privileged control.
 There is no additional HTTP endpoint or authorization path. `uob serve` composes this
 boundary only in the independently credentialed, loopback, demo-only charging host.
 
@@ -19,6 +20,8 @@ backward. Reconnect requires a new port. Old commands are never queued for a rep
 | UnlockConnector | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:UnlockConnectorRequest` | Both positive EVSE and connector IDs must match the addressed connector; Unlocked/UnlockFailed/OngoingAuthorizedTransaction/UnknownConnector |
 | SetChargingProfile | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:SetChargingProfileRequest` | Station0 or exact positive EVSE; full request, Accepted/Rejected |
 | ClearChargingProfile | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:ClearChargingProfileRequest` | ID alone or nonempty AND criteria; Accepted/Unknown, no removed IDs |
+| SetVariables | Privileged Ocpp with `urn:uob:ocpp201:SetVariablesReference:1` | Exact bound references resolve to native attribute values only at send; all six independent native statuses |
+| SetNetworkProfile | Privileged Ocpp with `urn:uob:ocpp201:SetNetworkProfileReference:1` | Station-only signed configurationSlot and private full connectionData; Accepted/Rejected/Failed, Accepted means staged |
 
 A start cannot select a connector on the wire. Connector-scoped starts fail explicitly rather
 than widening permission to their EVSE. Station-scoped starts omit evseId and require station-scoped
@@ -268,12 +271,12 @@ configured topology or grants.
 
 ### Learned request limits and disclosure
 
-Four station request-limit identities disclose positive numeric values: component DeviceDataCtrlr
+Six station request-limit identities disclose positive numeric values: component DeviceDataCtrlr
 with no instance/EVSE; variable ItemsPerMessage or BytesPerMessage; variable instance
-GetVariables or GetReport; attribute Actual. Validated ASCII-digit values fit signed32-bit
-range. Limits are learned only from explicit authorized queries or accepted completed reports
-in a bounded connection-generation cache cleared on reconnect. The additional exact
-SmartChargingCtrlr.ACPhaseSwitchingSupported EVSE Actual identity discloses only strict
+GetVariables, GetReport or SetVariables; attribute Actual. Validated ASCII-digit values fit
+signed 32-bit range. Limits are learned only from explicit authorized queries or valid report
+evidence in a bounded connection-generation cache cleared on reconnect.
+The additional exact SmartChargingCtrlr.ACPhaseSwitchingSupported EVSE Actual identity discloses only strict
 `true`/`false`; only correlated GetVariables replies can authorize phase selection as above.
 
 Unknown station limits remain unknown. A conservative single-entry GetVariables
@@ -344,8 +347,159 @@ all released snapshots. Current management/EMS schemas and existing MQTT result
 topics carry the additive evidence without widening target ingress privileges
 or payload limits.
 
-This implements the narrow read-only #109 capability, not device-model writes,
-monitoring, OCA certification or the complete-release gate.
+The read-only #109 addition remains distinct from the protected writes below.
+Other device-model writes, monitoring, OCA certification and the complete-release gate
+are not implied by either capability.
+
+## Opt-in protected device and network writes
+
+`set_variables` and `set_network_profile` independently default to `false` in each
+OCPP 2.0.1 station table. Either opt-in requires the non-secret
+`[charging].configuration_values_file` path and existing separate control/privileged
+grant files. Only a per-request privileged bearer authorizes the native operation;
+the control, read and station credentials do not substitute for it. The ordinary
+pinned command registry, advertised resource capabilities, scoped access guard and
+durable coordinator remain the only admission/dispatch route. The host stays
+loopback and demo-only. Neither write option enables queries, provider/export
+delivery, a browser editor or any production charging interface.
+
+### Protected envelopes and immutable ownership
+
+Public SetVariables contains `setVariableData` entries with component, variable,
+optional `attributeType` and `valueReference`, **not** `attributeValue`. Public
+SetNetworkProfile contains signed 32-bit `configurationSlot` and `profileReference`,
+**not** `connectionData`. Their bridge-owned URNs differ from native OCA request
+URNs; substituting a native URN, supplying raw material or adding unknown envelope
+fields fails closed. Durable command bodies and deferred queues retain references
+and metadata only. Result/export evidence never includes a reusable capability.
+
+The startup-only `LocalConfigurationValues201` provider owns values and complete
+native profiles. A capability is `cfg201:` plus 64 hexadecimal digits representing
+an independently random 256-bit value, never a hash of its content, a counter or
+an example copied from documentation. Bind it immutably to the exact ResourceRef,
+full component/variable/attribute identity or signed slot, content and expiry.
+References compare exactly; native identity comparison uses Unicode case folding
+without rewriting preserved names. Omitted attributeType compares as `Actual`.
+Instance and EVSE/connector identity remain part of the binding. Duplicate complete
+request identities and duplicate installed capabilities are rejected.
+
+SetVariables may address the station or an exactly configured EVSE/connector with
+contained native selectors. Connector authority cannot widen to another connector
+or an unconfigured EVSE. SetNetworkProfile requires the station-only address.
+Provisioning entries for an unconfigured address, another protocol, or a disabled
+action fail startup even if their DTO shape is valid.
+
+The private JSON format has required `variables` and `network_profiles` arrays;
+root and entry objects reject unknown fields. The loader uses the existing canonical
+absolute-path, effective-owner mode `0600`, regular-file, single-link and NOFOLLOW defenses,
+checks opened inode identity and keeps provisioning outside the private state
+directory and distinct from grants, station credentials and start identities.
+Owner-only read buffers, decoded secret values and raw profiles wipe on error/drop;
+stored secret types do not implement Debug or Serialize. Errors omit private content.
+This is not a guarantee about third-party parser/transport buffers or OS copies.
+See [the operator format and reference-only commands](../operations/headless-cli.md#protected-ocpp-201-device-and-network-configuration).
+
+| Bound | Limit |
+|---|---|
+| Entire private startup file | 2 MiB (2,097,152 bytes), independently bounded before decode |
+| Combined installed variables and network profiles | 128 |
+| Aggregate provider secret content | 1 MiB (1,048,576 bytes) |
+| One native profile JSON object | 64 KiB (65,536 bytes), depth at most 16 |
+| One variable value | At most 1,000 Unicode characters; empty is valid |
+| Component/variable names and instances | At most 50 Unicode characters each |
+| Each resource identity string | At most 256 bytes |
+| SetVariables local request/frame | At most 4,096 entries and 256 KiB complete encoded CALL |
+
+### Fresh admission and actual-send fences
+
+The daemon uses the **same provider Arc** for schema offering preflight and native
+dispatch. For a fresh command, the existing registry validates its envelope and
+the advertised schema offering checks every reference atomically against resource,
+identity/slot, expiry and revocation **before durable admission**. There is no
+public secret endpoint or separate authorization route. The existing exact-resource
+and authenticated-origin retained-result retry hint runs before this fresh offering
+check: a fully authorized identical historical retry can return its retained result
+after expiry/rotation without resolving the old value or sending another CALL.
+Changed content under the same request ID and foreign resource/origin cannot use
+that historical hint as authority.
+
+The actual socket owner re-resolves all references together and rechecks expiry,
+revocation, generation and learned native limits immediately before send. Failure
+sends no partial request. Counting includes the exact escaped complete native frame
+without retaining an encoded secret frame in the queue; raw material is serialized
+only at the send boundary. Provider, limit and generation fences linearize against
+the first socket-send poll. Once asynchronous transmission begins, revocation cannot
+unsend bytes and interruption cannot prove the station did not apply the change.
+There are no probes, truncation, splitting, automatic retries or replay.
+
+SetVariables shares the generation-owned LearnedLimits cache with independently
+enabled GetVariables/GetBaseReport/GetReport sessions. Learn its exact
+DeviceDataCtrlr ItemsPerMessage/BytesPerMessage identities with variable instance
+`SetVariables` and attribute `Actual` through explicit GetVariables or validated
+NotifyReport evidence. Unknown native limits permit only a conservative single-item
+write; multi-item writes need both item and byte limits. Known limits and the local
+bounds above apply at actual send, including changes while queued. Reconnect/restart
+loses this proof; persisted query/report results cannot restore a new generation.
+
+### Native outcomes, staging and durable recovery
+
+SetVariables preserves each native `Accepted`, `Rejected`, `UnknownComponent`,
+`UnknownVariable`, `NotSupportedAttributeType` and `RebootRequired`. Reordered
+replies are valid only if every complete requested identity appears exactly once.
+Missing, extra, duplicate or mismatched responses are transmission uncertainty,
+not fabricated status or partial success. Aggregate acceptance is true only when
+every item is Accepted or RebootRequired; mixed outcomes retain every item with
+aggregate false. ReadOnly, wrong-format and out-of-range decisions remain genuine
+native Rejected evidence; the bridge does not invent station metadata or rewrite
+values.
+
+SetNetworkProfile validates and retains every supplied pinned native field:
+OCPP version/transport/interface, CSMS URL, signed native integers and full APN/VPN
+configuration, including credentials and SIM PIN. Slot 0 is valid; slot and applicable
+integer fields must fit signed 32-bit, while native policy determines valid settings.
+The bridge never resolves or fetches the profile URL; describing SOAP or an older
+OCPP version in a profile does not add bridge transport support. Preserve exact
+Accepted/Rejected/Failed. **Accepted means stored/staged**, including replacement of
+an active slot, not activation before a separately operator-controlled reboot.
+The bridge issues no Reset, B10 migration, security-profile orchestration or
+connectivity probe. Disconnect before an authoritative reply remains uncertain;
+reconnect/restart proves neither activation nor permission to resend.
+
+Optional action-tagged `CommandResult.configuration_201` contains identities or
+configuration slot, native statuses and a network `staged` flag. It contains no
+values, profiles, capabilities, statusInfo or customData. Native acknowledgement,
+staging and later independently observed effects remain separate. Result v1.8,
+nested export-record/export-batch schemas v1.9 and runtime export revision 8 retain
+historical schemas/routes and existing target authorization/payload boundaries.
+This addition uses existing atomic result JSON; SQLite stays at schema 14 with no
+new SQL migration, configuration ledger or global export producer.
+
+A fresh invalid reference fails preflight without a durable command (`GET` status
+is 404). A command admitted but definitely not sent because of actual native budgets
+returns HTTP 400 with a **flat Rejected CommandResult**; its retained `GET` is 200 and
+matches the result. Neither rejection is a native acknowledgement. Ordinary native
+response or uncertainty uses the existing HTTP 202 `{result}` envelope. On startup,
+the coordinator pages all unresolved commands by request ID before listener binding,
+changes crash-left Dispatched to TransmissionUncertain, preserves Admitted/already
+uncertain state and advances past preserved rows without dispatching anything.
+Historical retries return retained outcomes, never a resend.
+
+The library's explicit `revoke(reference)` removes a capability under the provider
+fence. The daemon exposes no revocation endpoint, watcher or hot reload. For operator
+replacement/revocation, stop the daemon, safely replace its owner-only private file
+with independently generated fresh capabilities for changed content/expiry, then
+restart. Inspect retained uncertain results before any new intentional command.
+
+The actual daemon's 13 retained configuration tests and an independent
+software-peer smoke passed after integration. The smoke exercised native limits,
+all statuses, case-folded/reordered identities, empty/max-Unicode values, contained
+scope, durable-before-ACK and Heartbeat progress, staged versus separately rebooted
+peer state, malformed uncertainty, expiry/rotation and disconnect/restart no replay.
+Enabled redacted capture and public results excluded synthetic values/profiles/
+capabilities; SQLite/WAL and logs excluded private values. These are software
+boundary observations, not hardware interoperability, physical activation or OCA
+certification. Broader monitoring, simulator completeness and production/provider
+enablement remain separate.
 
 ## Verification and specification provenance
 

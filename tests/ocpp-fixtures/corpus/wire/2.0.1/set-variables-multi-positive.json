@@ -1,0 +1,1 @@
+[2,"synthetic-sv-all-positive","SetVariables",{"setVariableData":[{"component":{"name":"AuthCtrlr"},"variable":{"name":"Enabled"},"attributeValue":"false"},{"component":{"name":"SecurityCtrlr"},"variable":{"name":"BasicAuthPassword"},"attributeType":"Actual","attributeValue":"SYNTHETIC_ONLY_PASSWORD"}]}]

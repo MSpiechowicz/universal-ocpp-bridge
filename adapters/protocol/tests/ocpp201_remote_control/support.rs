@@ -220,16 +220,18 @@ pub async fn setup(
     setup_enabled(store, handle, false).await
 }
 #[allow(dead_code)] // Independently compiled roots share this opt-in socket harness.
-pub async fn setup_device(
+pub fn setup_device(
     store: &Store,
     handle: CallSessionHandle,
-) -> (
-    StationSnapshot,
-    Arc<Auth>,
-    Arc<RemoteControlSession>,
-    Arc<Coordinator>,
-) {
-    setup_enabled(store, handle, true).await
+) -> impl Future<
+    Output = (
+        StationSnapshot,
+        Arc<Auth>,
+        Arc<RemoteControlSession>,
+        Arc<Coordinator>,
+    ),
+> {
+    setup_enabled(store, handle, true)
 }
 async fn setup_enabled(
     store: &Store,

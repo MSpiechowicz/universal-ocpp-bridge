@@ -5,12 +5,27 @@ with contract version 1.0.0. The checked-in artifact is generated from the integ
 models, query parameters, error mapping and resource inventory. The listener serves that exact
 artifact without per-request schema generation.
 
-Canonical objects use references to `/bridge/v1/schemas/v1.0/{schema}` on the same listener.
-These responses contain the unmodified files in `crates/contracts/schemas/v1.0`, including their
-canonical `$id` and Draft 2020-12 definitions. Clients can resolve the contract without contacting
-a schema registry. Configure resolvers with the document's retrieval URL as their base and supply
-the integration bearer token for same-origin schema requests. The contract probe preloads these
-files into an offline registry and never forwards credentials to another origin.
+Canonical objects reference each contract's current versioned schema on the same listener:
+command-result uses `/bridge/v1/schemas/v1.8/command-result.schema.json`, and nested
+export-record/export-batch use `/bridge/v1/schemas/v1.9/{schema}`. Other unchanged
+contracts retain their existing versioned paths. Responses contain the unmodified files
+from `crates/contracts/schemas`, including their canonical `$id` and Draft 2020-12
+definitions. Released command-result schemas through v1.7 and export schemas through
+v1.8 remain available byte-identical; old result JSON remains readable.
+
+The initial protected request envelopes are served at
+`/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json` and
+`/bridge/v1/schemas/v1.0/set-network-profile-reference-201.schema.json`. Their payload
+identities are `urn:uob:ocpp201:SetVariablesReference:1` and
+`urn:uob:ocpp201:SetNetworkProfileReference:1`, distinct from native OCA request URNs.
+They describe reference-only inputs, not secret-bearing native network profiles.
+Schema discovery neither grants privileged target ingress nor enables a protected-value
+provider or automatic export production.
+
+Clients can resolve the contract without contacting a schema registry. Configure
+resolvers with the document's retrieval URL as their base and supply the integration
+bearer token for same-origin schema requests. The contract probe preloads these files
+into an offline registry and never forwards credentials to another origin.
 
 The document covers capabilities, station inventory/snapshots, point pages/values, command
 admission/status, SSE, schemas, and the document itself, including Axum's implicit HEAD methods.
@@ -27,6 +42,24 @@ EventEnvelope and cursor; `gap` and `error` are terminal control records without
 Telemetry is best effort and outside this durable stream. Full transport semantics are embedded
 in the document from `adapters/target-ems-scada-http/openapi/semantics.md`.
 
+Optional command-result v1.8 `configuration_201` preserves value-free native write
+acknowledgements. SetVariables keeps exact component/variable/attribute identities and
+all six native statuses: `Accepted`, `Rejected`, `UnknownComponent`, `UnknownVariable`,
+`NotSupportedAttributeType` and `RebootRequired`. A mixed result preserves every item
+with aggregate acceptance false; all Accepted/RebootRequired items aggregate positively
+without proving an observed effect. SetNetworkProfile keeps the signed 32-bit slot
+(zero is valid), exact `Accepted`/`Rejected`/`Failed`, and `staged`; Accepted means stored
+for activation after a separate operator-controlled reboot, not already active connectivity.
+Results contain no values, profiles, `statusInfo`, `customData` or reusable capabilities.
+Native acceptance, reboot staging, HTTP exposure and independently observed effects
+remain separate facts.
+
+Nested export public schema v1.9 is intentionally distinct from runtime export envelope
+revision 8. This additive result change does not migrate SQL; SQLite remains at schema v14.
+The existing exact-origin/principal/resource status checks, configured authentication
+policy and encoded-payload caps are unchanged. Ordinary target credentials cannot submit
+these privileged writes, and oversized results fail explicitly without truncated success.
+
 ## Separate MQTT transport
 
 The optional `ems-scada` preset on the MQTT target exposes the same canonical point descriptors
@@ -38,9 +71,16 @@ The direct HTTP/SSE listener and its broker-free acceptance below remain unchang
 one target does not implicitly start the other. Neither target's transport acknowledgement proves
 EMS consumption or electrical energy delivery.
 
+MQTT adds only the named command-result v1.8 to its existing explicit version allowlist;
+historically unsupported v1.2/v1.3 remain unsupported, and future revision 9 is rejected
+before publication. Immediate and durable results retain packet-specific PUBACK
+correlation. Broker receipt is not native acceptance, profile activation or proof of
+physical effects; this compatibility change grants no native target privilege.
+
 ## Regeneration and CI drift gate
 
 ```text
+cargo run --locked -p uob-contracts --example export_public_schemas -- crates/contracts/schemas
 cargo run --locked --quiet -p uob-ems-scada-http-target-adapter \
   --example export_openapi > /tmp/uob-openapi.json
 cp /tmp/uob-openapi.json adapters/target-ems-scada-http/openapi/v1.json

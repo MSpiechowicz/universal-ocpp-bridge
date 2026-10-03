@@ -129,7 +129,7 @@ async fn timeout_disconnect_callerror_and_late_reply_never_replay_after_restart(
         let mut next = session("ocpp1.6", Duration::from_secs(1)).await;
         let (next_state, _, coordinator) = configured(&store, &next).await;
         let recovered = coordinator
-            .recover_unresolved(PageLimit::new(100).unwrap())
+            .recover_unresolved(None, PageLimit::new(100).unwrap())
             .await
             .unwrap();
         assert_eq!(recovered.commands.len(), usize::from(mode != "callerror"));
@@ -203,7 +203,7 @@ async fn interrupted_dispatch_recovers_uncertain_without_resending_schedule() {
     let mut next = session("ocpp1.6", Duration::from_secs(1)).await;
     let (_, _, coordinator) = configured(&store, &next).await;
     let recovered = coordinator
-        .recover_unresolved(PageLimit::new(100).unwrap())
+        .recover_unresolved(None, PageLimit::new(100).unwrap())
         .await
         .unwrap();
     assert_eq!(recovered.commands.len(), 1);

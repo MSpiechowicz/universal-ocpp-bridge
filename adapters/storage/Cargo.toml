@@ -16,6 +16,7 @@ time.workspace = true
 tokio = { workspace = true, features = ["sync", "time"] }
 uob-application = { path = "../../crates/application" }
 uob-contracts = { path = "../../crates/contracts" }
+caseless = "=0.2.2"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

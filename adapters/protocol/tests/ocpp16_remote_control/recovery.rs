@@ -84,7 +84,7 @@ async fn delayed_malformed_and_disconnected_results_remain_uncertain_after_resta
         let mut next = session("ocpp1.6", Duration::from_secs(1)).await;
         let (_, _, _, coordinator) = setup(&store, next.handle.clone()).await;
         let recovered = coordinator
-            .recover_unresolved(PageLimit::new(100).unwrap())
+            .recover_unresolved(None, PageLimit::new(100).unwrap())
             .await
             .unwrap();
         assert_eq!(recovered.commands.len(), usize::from(mode != "callerror"));
@@ -135,7 +135,7 @@ async fn crash_after_dispatch_is_recovered_without_sending_a_second_reset() {
     let mut next = session("ocpp1.6", Duration::from_secs(1)).await;
     let (_, _, _, coordinator) = setup(&store, next.handle.clone()).await;
     let recovered = coordinator
-        .recover_unresolved(PageLimit::new(100).unwrap())
+        .recover_unresolved(None, PageLimit::new(100).unwrap())
         .await
         .unwrap();
     assert_eq!(recovered.commands.len(), 1);

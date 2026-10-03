@@ -1,3 +1,4 @@
+mod enqueue;
 mod pending;
 mod task;
 
@@ -180,6 +181,9 @@ pub struct PendingCall {
 pub(super) enum QueuedWire {
     Ready(String),
     Configuration(DeferredConfigurationCall),
+    Configuration201(
+        crate::v201::remote_control::configuration201_wire::DeferredConfigurationCall201,
+    ),
 }
 
 pub(super) struct QueuedOutbound {
@@ -231,7 +235,24 @@ impl CallSessionHandle {
         deadline: Instant,
         deferred: DeferredConfigurationCall,
     ) -> Result<PendingCall, SessionSubmitError> {
-        self.enqueue(request, Some(deadline), Some(deferred))
+        self.enqueue(
+            request,
+            Some(deadline),
+            Some(QueuedWire::Configuration(deferred)),
+        )
+    }
+
+    pub(crate) fn try_configuration_201_call_before(
+        &self,
+        request: OutboundCall,
+        deadline: Instant,
+        deferred: crate::v201::remote_control::configuration201_wire::DeferredConfigurationCall201,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        self.enqueue(
+            request,
+            Some(deadline),
+            Some(QueuedWire::Configuration201(deferred)),
+        )
     }
 
     /// Exact authenticated socket identity; a handle never follows a reconnect.
@@ -250,83 +271,6 @@ impl CallSessionHandle {
     #[must_use]
     pub fn is_closed(&self) -> bool {
         self.sender.is_closed()
-    }
-
-    fn enqueue(
-        &self,
-        request: OutboundCall,
-        send_before: Option<Instant>,
-        deferred: Option<DeferredConfigurationCall>,
-    ) -> Result<PendingCall, SessionSubmitError> {
-        self.enqueue_observed(request, send_before, deferred, None)
-    }
-
-    pub(super) fn enqueue_observed(
-        &self,
-        request: OutboundCall,
-        send_before: Option<Instant>,
-        deferred: Option<DeferredConfigurationCall>,
-        dispatched: Option<oneshot::Sender<Instant>>,
-    ) -> Result<PendingCall, SessionSubmitError> {
-        let native_query = self.protocol == ProtocolEdition::Ocpp201
-            && ["GetVariables", "GetBaseReport", "GetReport"].contains(&request.action.as_str());
-        if request.message_id.trim().is_empty()
-            || !request.payload.is_object()
-            || (native_query && request.message_id.len() > 256)
-        {
-            return Err(SessionSubmitError::InvalidRequest);
-        }
-        let (wire, bytes) = if let Some(deferred) = deferred {
-            let bytes = deferred.wire_size(&request.message_id).unwrap_or_default();
-            (QueuedWire::Configuration(deferred), bytes)
-        } else {
-            let encoded = frame::call(
-                &request.message_id,
-                request.action.as_str(),
-                &request.payload,
-            );
-            let bytes = encoded.len();
-            (QueuedWire::Ready(encoded), bytes)
-        };
-        if ["SetChargingProfile", "ClearChargingProfile"].contains(&request.action.as_str())
-            && bytes > 256 * 1024
-        {
-            return Err(SessionSubmitError::InvalidRequest);
-        }
-        self.budget
-            .validate_ocpp_message(bytes)
-            .map_err(SessionSubmitError::Resource)?;
-        let reservation = self
-            .budget
-            .try_reserve(WorkClass::PendingRequest, bytes)
-            .map_err(SessionSubmitError::Resource)?;
-        let correlation_id = request.correlation_id.clone();
-        let (result, receiver) = oneshot::channel();
-        let (response_reservation, retained) = if native_query {
-            let (sender, receiver) = oneshot::channel();
-            (Some(sender), Some(receiver))
-        } else {
-            (None, None)
-        };
-        self.sender
-            .try_send(QueuedOutbound {
-                request,
-                wire,
-                result,
-                reservation,
-                send_before,
-                dispatched,
-                response_reservation,
-            })
-            .map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => SessionSubmitError::Full,
-                mpsc::error::TrySendError::Closed(_) => SessionSubmitError::Closed,
-            })?;
-        Ok(PendingCall {
-            receiver,
-            correlation_id,
-            response_reservation: retained,
-        })
     }
 }
 

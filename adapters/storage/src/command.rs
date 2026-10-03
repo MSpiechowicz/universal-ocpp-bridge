@@ -35,7 +35,10 @@ pub(crate) fn admit(
                 )
                 .optional()
                 .map_err(unavailable)?
-                .map(|payload| codec::decode_result(&payload).map(Box::new))
+                .map(|payload| {
+                    codec::decode_stored_result(transaction, &payload, &command.request_id)
+                        .map(Box::new)
+                })
                 .transpose()?;
             Ok(Some(CommandAdmissionOutcome::Duplicate { result }))
         } else {
@@ -75,6 +78,7 @@ pub(crate) fn write_result_value(
     mut incoming: uob_contracts::CommandResult,
     request: &str,
 ) -> Result<(), StorageError> {
+    codec::configuration201::validate_stored(transaction, &incoming)?;
     let previous = transaction
         .query_row(
             "SELECT payload FROM command_results WHERE request_id = ?1",
@@ -83,7 +87,7 @@ pub(crate) fn write_result_value(
         )
         .optional()
         .map_err(unavailable)?
-        .map(|payload| codec::decode_result(&payload))
+        .map(|payload| codec::decode_stored_result(transaction, &payload, request))
         .transpose()?;
 
     let mut retire_trigger_201 = false;
@@ -137,6 +141,7 @@ pub(crate) fn write_result_value(
             incoming.composite_schedule_16 = previous.composite_schedule_16;
             incoming.charging_profile_16 = previous.charging_profile_16;
             incoming.charging_profile_201 = previous.charging_profile_201;
+            incoming.configuration_201 = previous.configuration_201;
         }
         for observation in previous.configuration_observations {
             if !incoming
@@ -158,6 +163,7 @@ pub(crate) fn write_result_value(
     crate::device_model201::finalize_lifecycle(&mut incoming);
     crate::device_model201::bound_output(&mut incoming)?;
     crate::charging_profile201::finish(transaction, &incoming)?;
+    codec::configuration201::validate_stored(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 

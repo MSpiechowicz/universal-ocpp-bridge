@@ -185,7 +185,7 @@ fn uncertain_transmission_is_not_resent_and_observation_does_not_manufacture_suc
 
         let restarted = coordinator(Arc::clone(&store), Arc::clone(&stations));
         let recovery = restarted
-            .recover_unresolved(PageLimit::new(10).expect("limit"))
+            .recover_unresolved(None, PageLimit::new(10).expect("limit"))
             .await
             .expect("recovery");
         assert_eq!(recovery.commands.len(), 1);
@@ -295,7 +295,7 @@ fn restart_converts_in_flight_dispatch_to_uncertain_without_replay() {
             .expect("seed in-flight command");
 
         let recovered = coordinator(Arc::clone(&store), Arc::clone(&stations))
-            .recover_unresolved(PageLimit::new(10).expect("limit"))
+            .recover_unresolved(None, PageLimit::new(10).expect("limit"))
             .await
             .expect("recover in-flight command");
         assert!(matches!(
@@ -344,6 +344,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         device_model_201: None,
         charging_profile_16: None,
         charging_profile_201: None,
+        configuration_201: None,
     }
 }
 

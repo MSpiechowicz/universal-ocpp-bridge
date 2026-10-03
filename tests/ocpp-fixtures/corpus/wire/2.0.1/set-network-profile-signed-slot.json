@@ -1,0 +1,1 @@
+[2,"synthetic-snp-signed","SetNetworkProfile",{"configurationSlot":-1,"connectionData":{"ocppVersion":"OCPP16","ocppTransport":"SOAP","ocppCsmsUrl":"https://synthetic-csms.invalid/soap","messageTimeout":-30,"securityProfile":-1,"ocppInterface":"Wired3"}}]

@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains command-result schema routes v1.0–v1.6 and serves
-the current v1.7 command-result; OpenAPI command result responses reference v1.7.
-Current nested export-record and export-batch references use v1.8, while historical
-schema routes and snapshots remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.7 and serves
+the current v1.8 command-result; OpenAPI command result responses reference v1.8.
+Current nested export-record and export-batch references use v1.9, while released
+export schemas through v1.8 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -152,37 +152,85 @@ ChargingStationMaxProfile, TxDefaultProfile and TxProfile. No automatic Clear oc
 operator actions can remove existing charging policies; canonical-only configurations without
 full native Set enabled do not gain this prerequisite.
 
+OCPP 2.0.1 protected `SetVariables`/`SetNetworkProfile` writes add optional typed
+`configuration_201` to command-result v1.8. SetVariables evidence retains each
+component/variable identity, attribute type and exact native `Accepted`, `Rejected`,
+`UnknownComponent`, `UnknownVariable`, `NotSupportedAttributeType` or `RebootRequired`.
+Mixed results preserve every item with aggregate `accepted: false`; aggregate acceptance
+requires every item to be `Accepted` or `RebootRequired`. Neither status proves an
+independently observed change, and `RebootRequired` does not trigger an automatic reboot.
+
+SetNetworkProfile evidence retains the full signed 32-bit `configuration_slot`, including
+zero, exact native `Accepted`/`Rejected`/`Failed`, and a separate `staged` fact. Native
+Accepted means staged, not active connectivity, even when replacing the active slot.
+Activation requires a separate operator-controlled reboot; reconnect or restart cannot
+establish activation. Typed configuration evidence contains no values, profiles,
+`statusInfo`, `customData` or reusable capabilities. Malformed or uncorrelated replies,
+CALLERROR and transmission uncertainty do not acquire fabricated typed native outcomes.
+
+Nested export-record/export-batch public schemas advance to v1.9 because they embed
+CommandResult. **Published schema version v1.9 and runtime export envelope revision 8
+are intentionally separate namespaces**: `ExportRecord::SCHEMA_VERSION` and
+`ExportBatch::SCHEMA_VERSION` identify runtime revision 8. Retained historical record
+versions are not rewritten. Released command-result schemas through v1.7 and export
+schemas through v1.8 remain byte-identical; old result JSON still decodes with
+`configuration_201` absent, and compatible older readers may ignore the optional field.
+This addition requires no SQL migration; the existing SQLite schema remains v14.
+
+The initial public protected-envelope schemas are
+`v1.0/set-variables-reference-201.schema.json` and
+`v1.0/set-network-profile-reference-201.schema.json`, with `$id` prefixes
+`https://schemas.universal-ocpp-bridge.dev/contracts/`. Their privileged payload identities
+are respectively `urn:uob:ocpp201:SetVariablesReference:1` and
+`urn:uob:ocpp201:SetNetworkProfileReference:1`; these URNs are not native OCA request
+identities or public schema revision numbers. SetVariables carries `setVariableData`
+identities and `valueReference`, never `attributeValue`; SetNetworkProfile carries signed
+`configurationSlot` and `profileReference`, never `connectionData`. The envelopes reject
+unknown fields. Only protected-reference envelopes are published here, not the
+secret-bearing native network profile input schema. Serving these schemas grants no
+privileged target ingress, protected-value provider or automatic export production.
+
 The EMS schema endpoints follow the listener's existing authentication policy: when
 credentials are configured, unauthenticated access is denied; the documented no-credentials
 loopback policy is unchanged. Current paths are
-`/bridge/v1/schemas/v1.7/command-result.schema.json`,
-`/bridge/v1/schemas/v1.8/export-record.schema.json` and
-`/bridge/v1/schemas/v1.8/export-batch.schema.json`. Historical routes, including v1.6
-command-result and v1.7 exports, remain served; canonical OpenAPI references use
-each contract's current revision.
+`/bridge/v1/schemas/v1.8/command-result.schema.json`,
+`/bridge/v1/schemas/v1.9/export-record.schema.json` and
+`/bridge/v1/schemas/v1.9/export-batch.schema.json`. Historical routes, including v1.7
+command-result and v1.8 exports, remain served; canonical OpenAPI references use
+each contract's current revision. The initial protected-reference schemas are served at
+`/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json` and
+`/bridge/v1/schemas/v1.0/set-network-profile-reference-201.schema.json`.
 `cargo test --locked -p uob-contracts` covers serialized payload validation, optional/additive
 compatibility and old-result readability. EMS integration verification uses the independent
 probe executable as configured by `scripts/verify-workspace.sh`.
 
-MQTT's existing immediate and durable result publishers accept additive v1.7 (revision 7)
-on existing topics alongside supported v1.0/v1.1/v1.4/v1.5/v1.6 results and reject future
-revision 8. The v1.2/v1.3 policy is unchanged: this addition does not promise every v1
-minor revision or add a MQTT command family.
-The EMS integration listener retains exact-origin/principal status ownership and
-does not grant privileged native profile submission through target ingress. Existing target
-payload caps remain unchanged: an oversized serialized result produces an explicit
-delivery/response error, not truncation, dropped evidence or a success-shaped fallback.
-MQTT broker PUBACK remains delivery acknowledgement, never native acceptance, complete
-inventory, profile enforcement or physical charging success.
+MQTT's existing immediate and durable result publishers explicitly accept named v1.8
+(revision 8) on existing topics alongside supported v1.0/v1.1/v1.4/v1.5/v1.6/v1.7
+results, and reject future revision 9 before broker handoff. The v1.2/v1.3 policy is
+unchanged: this addition does not promise every v1 minor revision or add a MQTT
+command family.
+The EMS integration listener retains exact-origin/principal/resource status ownership and
+does not grant privileged native profile or configuration writes through target ingress.
+Neither target gains privileged native command authority or a protected-value provider;
+result/schema consumption does not enable automatic external-export production.
+Existing target payload caps remain unchanged: an oversized serialized result produces
+an explicit delivery/response error, not truncation, dropped evidence or a success-shaped
+fallback. MQTT broker PUBACK remains packet-correlated delivery acknowledgement, never
+native acceptance, complete inventory, profile activation/enforcement or physical success.
 
-The focused consumer regressions are `charging_profile201_results` in the EMS adapter and
-`charging_profile201_wire` in the MQTT adapter. They exercise current and nested schema
-consumption, historical readability, exact origin/principal/resource and host-grant boundaries,
-1024-period request evidence, explicit encoded-payload failures, and immediate/durable broker
-acknowledgement isolation. Run them after generating the latest canonical schemas and EMS
-OpenAPI snapshot; this documentation makes no claim that the new checks have already passed:
+The focused consumer regressions are `charging_profile201_results` and
+`configuration201_results` in the EMS adapter, and `charging_profile201_wire` and
+`configuration201_wire` in the MQTT adapter. They exercise current and nested schema
+consumption, historical readability, exact origin/principal/resource and host-grant
+boundaries, per-item native outcomes and staged-only network evidence, signed slot
+bounds, 1024-period charging-profile evidence, explicit encoded-payload failures, and
+immediate/durable broker acknowledgement isolation. Run them after generating the latest
+canonical schemas and EMS OpenAPI snapshot; the commands below are verification
+instructions, not a claim that the checks have passed:
 
 ```text
 cargo test --locked -p uob-ems-scada-http-target-adapter --test charging_profile201_results
 cargo test --locked -p uob-mqtt-target-adapter --test charging_profile201_wire
+cargo test --locked -p uob-ems-scada-http-target-adapter --test configuration201_results
+cargo test --locked -p uob-mqtt-target-adapter --test configuration201_wire
 ```

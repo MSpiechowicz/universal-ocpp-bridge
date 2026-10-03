@@ -4,6 +4,7 @@ mod charging_profile16_schedule;
 pub(crate) mod charging_profile201;
 mod charging_profile201_schedule;
 pub(crate) mod composite_schedule16;
+pub(crate) mod configuration201;
 pub(crate) mod device_model201;
 mod trigger201;
 use rust_ocpp::v1_6::messages::{
@@ -102,6 +103,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         }
     } else {
         descriptors.extend(charging_profile201::descriptors(snapshot));
+        configuration201::append_descriptors(snapshot, &mut descriptors);
         for (index, action) in device_model201::ACTIONS.iter().enumerate() {
             let operation = Operation::ProtocolAction {
                 protocol,
@@ -300,6 +302,9 @@ pub fn validate_privileged_operation(
     operation: &PrivilegedOcppOperation<Value>,
 ) -> Result<(), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
+    if configuration201::ACTIONS.contains(&operation.action.as_str()) {
+        return configuration201::validate(resource, operation).map(|_| ());
+    }
     if device_model201::ACTIONS.contains(&operation.action.as_str()) {
         return device_model201::validate(resource, operation).map(|_| ());
     }

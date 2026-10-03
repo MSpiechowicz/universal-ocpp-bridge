@@ -216,7 +216,12 @@ where
         store: Arc<dyn OperationalStore<C, E, D, R>>,
         limit: PageLimit,
     ) -> Result<Self, StorageError> {
-        let recovered = store.recover(RecoveryQuery { limit }).await?;
+        let recovered = store
+            .recover(RecoveryQuery {
+                after_command: None,
+                limit,
+            })
+            .await?;
         let policy = LocalAuthorizationPolicy::restore(recovered.authorization).map_err(|_| {
             StorageError::new(
                 crate::StorageErrorCode::IntegrityFailure,

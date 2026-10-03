@@ -18,16 +18,22 @@ where
     ///
     /// A persisted `Dispatched` state is conservatively converted to `TransmissionUncertain`
     /// because the process cannot prove whether the station acted before restart.
+    /// Advance with the last returned command's request ID; stop at an empty page.
+    /// Retained admitted and uncertain commands are not removed to advance the cursor.
     #[must_use]
     pub fn recover_unresolved(
         &self,
+        after: Option<RequestId>,
         limit: PageLimit,
     ) -> CommandAdmissionFuture<'_, CommandRecoveryBatch<P>> {
         Box::pin(async move {
             let now = self.clock.now();
             let recovery = self
                 .store
-                .recover(RecoveryQuery { limit })
+                .recover(RecoveryQuery {
+                    after_command: after,
+                    limit,
+                })
                 .await
                 .map_err(|error| map_storage_error(&error))?;
             let mut results = recovery

@@ -26,7 +26,8 @@ export async function historyDuringSnapshotRefresh(page: Page, base: string, sta
   await expect(credential).toBeEnabled();
   await enterSecret(credential, control);
   await panel.getByRole('button', { name: 'Load protected control options' }).click();
-  await expect(panel.getByText('Protected control options loaded for this credential and station.')).toBeVisible();
+  await expect(operation.getByRole('option', { name: 'start', exact: true })).toHaveCount(1);
+  await expect(operation).toBeEnabled();
   await operation.selectOption('start');
   await confirmation.check();
   await expect(row).toBeHidden();
@@ -62,19 +63,12 @@ export async function historyDuringSnapshotRefresh(page: Page, base: string, sta
   try {
     await refreshHistory.click();
     await expect.poll(() => historyHeld).toBe(true);
-    // Drain any earlier automatic refresh before arming the snapshot gate. This
-    // guarantees a fresh-to-stale transition during this pending durable read.
+    // The caller drained the genuine availability burst before preparation.
+    // Hold a real manual refresh to force a fresh-to-stale transition while this
+    // unmodified durable history response remains pending.
     await expect(stale).toBeHidden();
     snapshotArmed = true;
-
-    // An SSE-triggered refresh may already own the snapshot lane. In that case
-    // use its real invalidation instead of waiting to click a disabled button.
-    if (!await stale.isVisible()) {
-      await page.getByRole('button', { name: 'Refresh snapshot' }).evaluate(element => {
-        const button = element as HTMLButtonElement;
-        if (!button.disabled) button.click();
-      });
-    }
+    await page.getByRole('button', { name: 'Refresh snapshot' }).click();
     await expect(stale).toBeVisible();
     await expect.poll(() => snapshotHeld).toBe(true);
     await expect(confirmation).not.toBeChecked();
@@ -102,4 +96,20 @@ export async function historyDuringSnapshotRefresh(page: Page, base: string, sta
   await expect(confirmation).not.toBeChecked();
   await expect(operation).toHaveValue('');
   await expect(panel.getByRole('button', { name: 'Submit once' })).toBeDisabled();
+  await expect.poll(() => credential.evaluate(element => (element as HTMLInputElement).value === '')).toBe(true);
+  await expect(operation.getByRole('option', { name: 'start', exact: true })).toHaveCount(0);
+  await expect(confirmation).toBeDisabled();
+  await expect(row).toBeVisible();
+
+  // Freshness alone must not restore a protected operation or consent. The
+  // operator must explicitly re-enter the grant, reload options and confirm.
+  await enterSecret(credential, control);
+  await panel.getByRole('button', { name: 'Load protected control options' }).click();
+  await expect(operation.getByRole('option', { name: 'start', exact: true })).toHaveCount(1);
+  await expect(operation).toBeEnabled();
+  await operation.selectOption('start');
+  await expect(confirmation).not.toBeChecked();
+  await expect(panel.getByRole('button', { name: 'Submit once' })).toBeDisabled();
+  await confirmation.check();
+  await expect(panel.getByRole('button', { name: 'Submit once' })).toBeEnabled();
 }

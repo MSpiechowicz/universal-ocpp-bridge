@@ -1,6 +1,7 @@
 mod command_requests;
 mod configuration;
 mod reads;
+mod recovery_requests;
 
 use std::{collections::hash_map::RandomState, sync::mpsc};
 
@@ -11,8 +12,8 @@ use uob_application::{
     AtomicWriteOutcome, CommandAdmissionOutcome, CommandHistoryCursor, CommandHistoryQuery,
     CommandHistoryScope, CommittedRecordChunkQuery, CommittedRecordChunkResult,
     CommittedRecordPage, CommittedRecordQuery, Page, RecordedDeliveryAttempt, RecoveryBatch,
-    RetainedEventPage, RuntimeReservation, ScheduledDelivery, SnapshotCursor, StorageError,
-    StorageErrorCode, StorageRetentionStatus,
+    RecoveryQuery, RetainedEventPage, RuntimeReservation, ScheduledDelivery, SnapshotCursor,
+    StorageError, StorageErrorCode, StorageRetentionStatus,
 };
 use uob_contracts::{
     Command, CommandResult, CommandSummary, ConfigurationObservation, EventEnvelope, ResourceRef,
@@ -27,7 +28,7 @@ use crate::{
     },
     command,
     configuration::unavailable,
-    delivery, recovery, retention, snapshots,
+    delivery, retention, snapshots,
 };
 
 use reads::{read_events, read_record_chunk, read_records};
@@ -67,7 +68,7 @@ pub(crate) enum Request<C, E, D> {
         RuntimeReservation,
         Reply<CommittedRecordChunkResult>,
     ),
-    Recover(usize, Reply<RecoveryBatch<C, D>>),
+    Recover(RecoveryQuery, Reply<RecoveryBatch<C, D>>),
     Command(String, Reply<Option<Command<C>>>),
     CommandResult(String, Reply<Option<uob_contracts::CommandResult>>),
     CommandCandidates(
@@ -200,12 +201,10 @@ fn handle_request<C, E, D>(
                 read_record_chunk(connection, &query, reservation, token_key),
             );
         }
-        Request::Recover(limit, reply) => respond(reply, recovery::recover(connection, limit)),
-        Request::Command(request_id, reply) => {
-            respond(reply, recovery::command(connection, &request_id));
-        }
-        Request::CommandResult(request_id, reply) => {
-            respond(reply, recovery::command_result(connection, &request_id));
+        recovery_request @ (Request::Recover(..)
+        | Request::Command(..)
+        | Request::CommandResult(..)) => {
+            recovery_requests::handle(connection, recovery_request);
         }
         command_request @ (Request::CommandCandidates(..)
         | Request::JournalEvent(..)

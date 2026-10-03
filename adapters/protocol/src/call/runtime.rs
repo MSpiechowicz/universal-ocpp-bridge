@@ -1,5 +1,7 @@
 mod incoming;
+mod outbound;
 mod support;
+use outbound::send_outbound;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     time::Duration,
@@ -214,91 +216,6 @@ async fn run_session(
             }
         }
     }
-}
-
-async fn send_outbound(
-    connection: &mut StationConnection,
-    state: &mut SessionState,
-    queued: QueuedOutbound,
-    configuration: CallSessionConfiguration,
-) {
-    if queued
-        .send_before
-        .is_some_and(|deadline| Instant::now() >= deadline)
-    {
-        finish_not_transmitted(queued, "command expired before socket send");
-        return;
-    }
-    if state.pending.len() == configuration.pending_call_capacity {
-        finish_not_transmitted(queued, "pending call capacity exhausted");
-        return;
-    }
-    if state.pending.contains_key(&queued.request.message_id)
-        || state
-            .timed_out
-            .iter()
-            .any(|(id, _)| id == &queued.request.message_id)
-        || state.retired_outbound.contains(&queued.request.message_id)
-    {
-        finish_not_transmitted(queued, "duplicate or retired message ID");
-        return;
-    }
-    let trace = state.span(Some(queued.request.correlation_id.clone()));
-    let message_id = queued.request.message_id.clone();
-    let correlation_id = queued.request.correlation_id.clone();
-    // Resolve only at the socket-owner send boundary. There is no task suspension between
-    // this policy check and initiating the WebSocket send; a send already in flight remains
-    // uncertain if policy changes while its async write is pending.
-    let deferred_encoded = match &queued.wire {
-        QueuedWire::Ready(_) => None,
-        QueuedWire::Configuration(deferred) => {
-            let Some(encoded) = deferred.encode_at_send(&queued.request.message_id) else {
-                finish_not_transmitted(
-                    queued,
-                    "protected configuration reference unavailable before socket send",
-                );
-                return;
-            };
-            Some(encoded)
-        }
-    };
-    let encoded = match queued.wire {
-        QueuedWire::Ready(encoded) => encoded,
-        QueuedWire::Configuration(_) => deferred_encoded.expect("checked above"),
-    };
-    if let Some(dispatched) = queued.dispatched {
-        let _ = dispatched.send(Instant::now());
-    }
-    if connection
-        .send(Message::Text(encoded.into()))
-        .await
-        .is_err()
-    {
-        trace.emit(FlowStage::OcppSend, FlowEvidence::Uncertain);
-        let _ = queued
-            .result
-            .send(SessionCallOutcome::TransmissionUncertain {
-                reason: TransmissionUncertainReason::WriteFailed,
-                correlation_id,
-            });
-        uncertain_all(
-            &mut state.pending,
-            TransmissionUncertainReason::Disconnected,
-        );
-        return;
-    }
-    trace.emit(FlowStage::OcppSend, FlowEvidence::Completed);
-    state.pending.insert(
-        message_id,
-        PendingEntry {
-            trace,
-            result: queued.result,
-            correlation_id,
-            deadline: Instant::now() + configuration.response_timeout,
-            _reservation: queued.reservation,
-            response_reservation: queued.response_reservation,
-        },
-    );
 }
 
 async fn process_frame(

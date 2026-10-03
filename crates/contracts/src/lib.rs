@@ -7,6 +7,8 @@ mod command;
 pub use charging_profile16::*;
 mod composite_schedule16;
 mod configuration;
+mod configuration201;
+pub use configuration201::*;
 mod device_model201;
 pub use device_model201::*;
 mod event;
@@ -131,6 +133,11 @@ impl ContractVersion {
     pub const V1_CHARGING_PROFILE_201: Self = Self {
         major: 1,
         revision: 7,
+    };
+    /// Additive protected OCPP 2.0.1 configuration acknowledgement evidence.
+    pub const V1_CONFIGURATION_201: Self = Self {
+        major: 1,
+        revision: 8,
     };
 }
 

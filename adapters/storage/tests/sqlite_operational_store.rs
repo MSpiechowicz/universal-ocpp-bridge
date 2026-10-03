@@ -117,6 +117,7 @@ fn failed_delivery_insert_rolls_back_event_after_reopen() {
     );
 
     let recovery = block_on(reopened.recover(RecoveryQuery {
+        after_command: None,
         limit: PageLimit::new(10).expect("recovery limit"),
     }))
     .expect("recover deliveries after reopen");
@@ -143,6 +144,7 @@ fn same_event_is_independent_across_target_revisions() {
 
     let reopened = Store::open(database.path(), 8).expect("reopen SQLite store");
     let recovery = block_on(reopened.recover(RecoveryQuery {
+        after_command: None,
         limit: PageLimit::new(10).expect("recovery limit"),
     }))
     .expect("recover target revisions");

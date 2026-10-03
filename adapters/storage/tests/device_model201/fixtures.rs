@@ -94,6 +94,7 @@ pub(super) fn fixture(
         device_model_201: Some(evidence),
         charging_profile_16: None,
         charging_profile_201: None,
+        configuration_201: None,
     };
     (command, result)
 }

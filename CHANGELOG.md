@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off, privileged demo OCPP 2.0.1 `SetVariables` and
+  station-only `SetNetworkProfile` through the existing durable command API (#110).
+  Public requests contain exact bound opaque references, never native values or
+  profiles; a bounded owner-only startup file provisions immutable, expiring
+  secret material. Recheck every reference at fresh admission and actual send,
+  sharing generation-owned limits learned only through explicit device queries.
+  Preserve all six variable statuses, empty/1000-Unicode-character values,
+  reordered replies and mixed outcomes; network Accepted acknowledges staging,
+  not activation before a separately controlled reboot. Keep Rejected/Failed and
+  disconnect uncertainty distinct; restart recovery pages past preserved admitted
+  and uncertain rows without replay. Add value-free `configuration_201` in result
+  v1.8, nested export schemas v1.9 and runtime export revision 8, retaining historical
+  schemas and SQLite 14 without a SQL migration or broader target/provider authority.
+  Actual-daemon regressions and an independent software-peer smoke exercised
+  privilege/scope/expiry/rotation, native limits, pending Heartbeat, durable recovery,
+  staged peer state and secret-free results, SQLite/WAL, logs and enabled capture.
+  No hot reload, public secret endpoint, automatic Reset/B10 migration, native
+  retries, production charging, hardware/certification or new browser editor claim.
 - Add independently default-off privileged demo OCPP 2.0.1 native
   `SetChargingProfile` and `ClearChargingProfile` alongside existing 1.6J controls
   (#118). Preserve signed native IDs, exact EVSE/ongoing-transaction authority,
@@ -182,6 +200,12 @@ All notable changes to this project will be documented in this file. See [conven
   and disable mutations; identity/station/destination changes and page departure
   invalidate late reads. A deterministic real-daemon response-delay regression
   retains both-edition and 64-connector control coverage (#117).
+  The test-only CI follow-up waits for the selected page to consume the genuine
+  availability-event burst and refresh its inventory before protected preparation,
+  comparing canonical resource identities independently of JSON property order.
+  Held real history responses still survive stale snapshots while protected controls
+  clear; freshness alone cannot restore credentials, operations or confirmation.
+  Explicit control re-preparation is covered without changing production behavior.
 
 ### Tests
 - Align release-manager preflight and rollback test fixtures with the operational

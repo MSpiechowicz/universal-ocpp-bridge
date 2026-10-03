@@ -1,0 +1,2651 @@
+{
+  "$defs": {
+    "AuthenticatedCommandOrigin": {
+      "description": "Trusted identity established by an adapter's authenticated connection or mapping.",
+      "oneOf": [
+        {
+          "description": "Authenticated caller of the independent management surface.",
+          "properties": {
+            "kind": {
+              "const": "management",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from management credentials."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Authenticated caller routed through one selected target instance.",
+          "properties": {
+            "kind": {
+              "const": "target",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Principal resolved from the target connection or mapping configuration."
+            },
+            "target_instance_id": {
+              "$ref": "#/$defs/TargetInstanceId",
+              "description": "Stable configured target instance used for result routing."
+            }
+          },
+          "required": [
+            "kind",
+            "target_instance_id",
+            "principal_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Trusted application or recovery component.",
+          "properties": {
+            "kind": {
+              "const": "bridge",
+              "type": "string"
+            },
+            "principal_id": {
+              "$ref": "#/$defs/PrincipalId",
+              "description": "Stable internal component identity."
+            }
+          },
+          "required": [
+            "kind",
+            "principal_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BridgeId": {
+      "description": "Stable logical identity of a bridge installation.",
+      "type": "string"
+    },
+    "CanonicalConnectorId": {
+      "description": "Stable canonical identity of a connector.",
+      "type": "string"
+    },
+    "CanonicalEvseId": {
+      "description": "Stable canonical identity of an EVSE.",
+      "type": "string"
+    },
+    "CanonicalResource": {
+      "description": "Optional canonical charging resource below a station.",
+      "oneOf": [
+        {
+          "description": "OCPP 1.6-style connector resource.",
+          "properties": {
+            "connector_id": {
+              "$ref": "#/$defs/CanonicalConnectorId",
+              "description": "Stable connector identity."
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "OCPP 2.0.1-style EVSE, optionally narrowed to one connector.",
+          "properties": {
+            "connector_id": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CanonicalConnectorId"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable connector identity within the EVSE, when applicable."
+            },
+            "evse_id": {
+              "$ref": "#/$defs/CanonicalEvseId",
+              "description": "Stable EVSE identity."
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ChargingProfile16": {
+      "description": "Complete supplied profile identity and schedule.",
+      "properties": {
+        "charging_profile_id": {
+          "description": "Signed native profile identity.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "charging_profile_kind": {
+          "$ref": "#/$defs/ChargingProfileKind16",
+          "description": "Native anchor semantics."
+        },
+        "charging_profile_purpose": {
+          "$ref": "#/$defs/ChargingProfilePurpose16",
+          "description": "Native purpose."
+        },
+        "charging_schedule": {
+          "$ref": "#/$defs/CompositeSchedule16",
+          "description": "Exact native A/W schedule; legal truncated periods remain present."
+        },
+        "recurrency_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChargingProfileRecurrency16"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional recurrence; allowed only for recurring profiles."
+        },
+        "stack_level": {
+          "description": "Nonnegative priority stack.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "transaction_id": {
+          "description": "Exact ongoing native transaction, only for `TxProfile`.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supplied validity lower bound."
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supplied validity upper bound."
+        }
+      },
+      "required": [
+        "charging_profile_id",
+        "stack_level",
+        "charging_profile_purpose",
+        "charging_profile_kind",
+        "charging_schedule"
+      ],
+      "type": "object"
+    },
+    "ChargingProfile201": {
+      "description": "Complete validated profile. Omitted validity remains indefinite.",
+      "properties": {
+        "charging_profile_kind": {
+          "$ref": "#/$defs/ChargingProfileKind201"
+        },
+        "charging_profile_purpose": {
+          "$ref": "#/$defs/ChargingProfilePurpose201"
+        },
+        "charging_schedule": {
+          "description": "Exactly one schedule in the supported non-ISO context.",
+          "items": {
+            "$ref": "#/$defs/ChargingSchedule201"
+          },
+          "type": "array"
+        },
+        "id": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "recurrency_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChargingProfileRecurrency201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stack_level": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "transaction_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inclusive lower bound."
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exclusive upper bound."
+        }
+      },
+      "required": [
+        "id",
+        "stack_level",
+        "charging_profile_purpose",
+        "charging_profile_kind",
+        "charging_schedule"
+      ],
+      "type": "object"
+    },
+    "ChargingProfileCriteria201": {
+      "description": "Native AND filters; absent EVSE addresses all EVSEs, zero only station profiles.",
+      "properties": {
+        "charging_profile_purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChargingProfilePurpose201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evse_id": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stack_level": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ChargingProfileKind16": {
+      "description": "Native schedule anchor semantics.",
+      "oneOf": [
+        {
+          "const": "Absolute",
+          "description": "Absolute time anchor.",
+          "type": "string"
+        },
+        {
+          "const": "Recurring",
+          "description": "Repeating schedule.",
+          "type": "string"
+        },
+        {
+          "const": "Relative",
+          "description": "Relative to transaction start.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChargingProfileKind201": {
+      "description": "Native schedule anchor semantics.",
+      "enum": [
+        "Absolute",
+        "Recurring",
+        "Relative"
+      ],
+      "type": "string"
+    },
+    "ChargingProfilePurpose16": {
+      "description": "Native profile purpose.",
+      "oneOf": [
+        {
+          "const": "ChargePointMaxProfile",
+          "description": "Station aggregate ceiling.",
+          "type": "string"
+        },
+        {
+          "const": "TxDefaultProfile",
+          "description": "Default for future transactions.",
+          "type": "string"
+        },
+        {
+          "const": "TxProfile",
+          "description": "A specific ongoing transaction.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChargingProfilePurpose201": {
+      "description": "Native CSMS-owned profile purpose. External constraints cannot be set or cleared here.",
+      "enum": [
+        "ChargingStationMaxProfile",
+        "TxDefaultProfile",
+        "TxProfile"
+      ],
+      "type": "string"
+    },
+    "ChargingProfileReason201": {
+      "description": "Narrow safe reason codes. Opaque additionalInfo, customData and unknown reasons are excluded.",
+      "enum": [
+        "NotSupported",
+        "InvalidValue",
+        "NotFound"
+      ],
+      "type": "string"
+    },
+    "ChargingProfileRecurrency16": {
+      "description": "Native repetition interval.",
+      "oneOf": [
+        {
+          "const": "Daily",
+          "description": "Daily repetition.",
+          "type": "string"
+        },
+        {
+          "const": "Weekly",
+          "description": "Weekly repetition.",
+          "type": "string"
+        }
+      ]
+    },
+    "ChargingProfileRecurrency201": {
+      "description": "Native recurrence interval.",
+      "enum": [
+        "Daily",
+        "Weekly"
+      ],
+      "type": "string"
+    },
+    "ChargingProfileResult16": {
+      "description": "Action-specific immutable request and valid native CALLRESULT.",
+      "oneOf": [
+        {
+          "description": "Full privileged native Set, never canonical `SetChargingLimit`.",
+          "properties": {
+            "action": {
+              "const": "SetChargingProfile",
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/$defs/SetChargingProfileRequest16",
+              "description": "Validated original request."
+            },
+            "status": {
+              "$ref": "#/$defs/SetChargingProfileStatus16",
+              "description": "Exact native status."
+            }
+          },
+          "required": [
+            "action",
+            "request",
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native Clear; status does not reveal removed profile identities.",
+          "properties": {
+            "action": {
+              "const": "ClearChargingProfile",
+              "type": "string"
+            },
+            "request": {
+              "$ref": "#/$defs/ClearChargingProfileRequest16",
+              "description": "Validated original selectors."
+            },
+            "status": {
+              "$ref": "#/$defs/ClearChargingProfileStatus16",
+              "description": "Exact native status."
+            }
+          },
+          "required": [
+            "action",
+            "request",
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ChargingProfileResult201": {
+      "description": "Full native request plus a valid correlated CALLRESULT, never a CALLERROR or uncertainty.",
+      "oneOf": [
+        {
+          "properties": {
+            "action": {
+              "const": "SetChargingProfile",
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChargingProfileReason201"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "request": {
+              "$ref": "#/$defs/SetChargingProfileRequest201"
+            },
+            "status": {
+              "$ref": "#/$defs/SetChargingProfileStatus201"
+            }
+          },
+          "required": [
+            "action",
+            "request",
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "ClearChargingProfile",
+              "type": "string"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChargingProfileReason201"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "request": {
+              "$ref": "#/$defs/ClearChargingProfileRequest201"
+            },
+            "status": {
+              "$ref": "#/$defs/ClearChargingProfileStatus201"
+            }
+          },
+          "required": [
+            "action",
+            "request",
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ChargingSchedule201": {
+      "description": "Complete supplied native schedule, including legal duration-truncated periods.",
+      "properties": {
+        "charging_rate_unit": {
+          "$ref": "#/$defs/ChargingScheduleRateUnit201"
+        },
+        "charging_schedule_period": {
+          "items": {
+            "$ref": "#/$defs/ChargingSchedulePeriod201"
+          },
+          "type": "array"
+        },
+        "duration": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "min_charging_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExactDecimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "start_schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "charging_rate_unit",
+        "charging_schedule_period"
+      ],
+      "type": "object"
+    },
+    "ChargingSchedulePeriod201": {
+      "description": "One exact nonnegative native tenths rate; omitted phases remain absent.",
+      "properties": {
+        "limit": {
+          "$ref": "#/$defs/ExactDecimal"
+        },
+        "number_phases": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "phase_to_use": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start_period": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_period",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "ChargingScheduleRateUnit201": {
+      "description": "Native rate unit, never converted using guessed electrical characteristics.",
+      "enum": [
+        "A",
+        "W"
+      ],
+      "type": "string"
+    },
+    "ClearChargingProfileRequest16": {
+      "description": "Supplied Clear selectors. ID overrides all other supplied filters on the charger.",
+      "properties": {
+        "charging_profile_purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChargingProfilePurpose16"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional purpose filter."
+        },
+        "connector_id": {
+          "description": "Optional native connector filter.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Optional signed native ID.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stack_level": {
+          "description": "Optional nonnegative stack filter.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ClearChargingProfileRequest201": {
+      "description": "ID alone or at least one nested criterion, never both.",
+      "properties": {
+        "charging_profile_criteria": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChargingProfileCriteria201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "charging_profile_id": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ClearChargingProfileStatus16": {
+      "description": "Clear native acknowledgement; removed identities are not returned.",
+      "oneOf": [
+        {
+          "const": "Accepted",
+          "description": "Charger acknowledged clear.",
+          "type": "string"
+        },
+        {
+          "const": "Unknown",
+          "description": "No matching profile known.",
+          "type": "string"
+        }
+      ]
+    },
+    "ClearChargingProfileStatus201": {
+      "enum": [
+        "Accepted",
+        "Unknown"
+      ],
+      "type": "string"
+    },
+    "CommandError": {
+      "description": "Stable, machine-readable command error.",
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/CommandErrorCode",
+          "description": "Stable error category for automation and diagnostics."
+        },
+        "detail": {
+          "description": "Sanitized detail that must not contain credentials or untrusted raw payloads.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "type": "object"
+    },
+    "CommandErrorCode": {
+      "description": "Stable categories for command admission and execution failures.",
+      "oneOf": [
+        {
+          "const": "unauthorized",
+          "description": "Authenticated principal lacks permission for the operation or resource.",
+          "type": "string"
+        },
+        {
+          "const": "invalid_parameters",
+          "description": "Command parameters failed validation.",
+          "type": "string"
+        },
+        {
+          "const": "expired",
+          "description": "Command expired before admission or dispatch.",
+          "type": "string"
+        },
+        {
+          "const": "unsupported_operation",
+          "description": "Resource does not explicitly advertise the requested operation.",
+          "type": "string"
+        },
+        {
+          "const": "station_disconnected",
+          "description": "Target station is disconnected.",
+          "type": "string"
+        },
+        {
+          "const": "policy_rejected",
+          "description": "Safety or local policy rejected the operation.",
+          "type": "string"
+        },
+        {
+          "const": "protocol_rejected",
+          "description": "Charger returned a protocol-level rejection or error.",
+          "type": "string"
+        }
+      ]
+    },
+    "CommandLifecycle": {
+      "description": "Lifecycle stage and outcome of a command, without conflating later observed effects.",
+      "oneOf": [
+        {
+          "description": "Command was durably accepted for execution.",
+          "properties": {
+            "stage": {
+              "const": "admitted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Command was rejected before durable admission or dispatch.",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/CommandError",
+              "description": "Stable rejection reason."
+            },
+            "stage": {
+              "const": "rejected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Command was dispatched to the station and awaits a response.",
+          "properties": {
+            "stage": {
+              "const": "dispatched",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Charger supplied a protocol response; this is not proof of physical effect.",
+          "properties": {
+            "accepted": {
+              "description": "Whether the charger accepted the requested protocol operation.",
+              "type": "boolean"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CommandError"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stable error when the protocol response rejected the operation."
+            },
+            "stage": {
+              "const": "protocol_response",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "accepted"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Transmission may have occurred, but retrying could duplicate a non-idempotent action.",
+          "properties": {
+            "detail": {
+              "description": "Sanitized reason for the uncertain outcome.",
+              "type": "string"
+            },
+            "stage": {
+              "const": "transmission_uncertain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "stage",
+            "detail"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CommandReturnRoute": {
+      "description": "Immutable routing context carried by every command result.",
+      "properties": {
+        "origin": {
+          "$ref": "#/$defs/AuthenticatedCommandOrigin",
+          "description": "Authenticated management or target context, including target instance when applicable."
+        },
+        "request_id": {
+          "$ref": "#/$defs/RequestId",
+          "description": "Request whose origin receives the result."
+        }
+      },
+      "required": [
+        "request_id",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "CompositeSchedule16": {
+      "description": "Charger-calculated schedule at query time.",
+      "properties": {
+        "charging_rate_unit": {
+          "$ref": "#/$defs/CompositeScheduleRateUnit16",
+          "description": "Unit of all rates in this schedule."
+        },
+        "charging_schedule_period": {
+          "description": "Ordered relative period boundaries, starting at zero.",
+          "items": {
+            "$ref": "#/$defs/CompositeSchedulePeriod16"
+          },
+          "type": "array"
+        },
+        "duration": {
+          "description": "Native horizon, absent when not supplied.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "min_charging_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExactDecimal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native minimum rate; it need not be below an off period."
+        },
+        "start_schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Independent native schedule timestamp."
+        }
+      },
+      "required": [
+        "charging_rate_unit",
+        "charging_schedule_period"
+      ],
+      "type": "object"
+    },
+    "CompositeSchedulePeriod16": {
+      "description": "One exact native rate and optional phase count.",
+      "properties": {
+        "limit": {
+          "$ref": "#/$defs/ExactDecimal",
+          "description": "Exact nonnegative rate, encoded as a canonical decimal string."
+        },
+        "number_phases": {
+          "description": "Positive native phase count; omission remains absent.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "start_period": {
+          "description": "Relative start in seconds.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_period",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "CompositeScheduleRateUnit16": {
+      "description": "Native current or power unit, never implicitly converted.",
+      "oneOf": [
+        {
+          "const": "A",
+          "description": "Amperes.",
+          "type": "string"
+        },
+        {
+          "const": "W",
+          "description": "Watts.",
+          "type": "string"
+        }
+      ]
+    },
+    "CompositeScheduleRequest16": {
+      "description": "Validated immutable context of the one native schedule query.",
+      "properties": {
+        "charging_rate_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositeScheduleRateUnit16"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional forced unit; omission never invents a unit."
+        },
+        "connector_id": {
+          "description": "Zero addresses grid consumption; positive IDs address the exact connector.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "duration": {
+          "description": "Requested horizon in seconds.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connector_id",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "CompositeScheduleResult16": {
+      "description": "Validated native response and original query context.",
+      "properties": {
+        "charging_schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompositeSchedule16"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Charger-calculated schedule, required for Accepted."
+        },
+        "connector_id": {
+          "description": "Native identity, only when supplied.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "request": {
+          "$ref": "#/$defs/CompositeScheduleRequest16",
+          "description": "Context captured before transmission."
+        },
+        "schedule_start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtcTimestamp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Composite-period anchor, only when supplied."
+        },
+        "status": {
+          "$ref": "#/$defs/CompositeScheduleStatus16",
+          "description": "Exact native status."
+        }
+      },
+      "required": [
+        "request",
+        "status"
+      ],
+      "type": "object"
+    },
+    "CompositeScheduleStatus16": {
+      "description": "Native schedule request outcome, not evidence of physical enforcement.",
+      "oneOf": [
+        {
+          "const": "Accepted",
+          "description": "Charger returned a meaningful schedule.",
+          "type": "string"
+        },
+        {
+          "const": "Rejected",
+          "description": "Charger explicitly declined the query.",
+          "type": "string"
+        }
+      ]
+    },
+    "ConfigurationKey": {
+      "additionalProperties": false,
+      "description": "A returned key, including its independent read-only and value-presence facts.",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "readonly": {
+          "type": "boolean"
+        },
+        "redacted": {
+          "description": "True when a value was returned but its classification forbids disclosure.",
+          "type": "boolean"
+        },
+        "value": {
+          "description": "`None` means the charger omitted the value, not that it returned an empty string.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "readonly"
+      ],
+      "type": "object"
+    },
+    "ConfigurationObservation": {
+      "additionalProperties": false,
+      "description": "A separately requested later read, never inferred from protocol acknowledgement.",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/ConfigurationKey"
+        },
+        "read_request_id": {
+          "$ref": "#/$defs/RequestId"
+        }
+      },
+      "required": [
+        "read_request_id",
+        "key"
+      ],
+      "type": "object"
+    },
+    "ConfigurationResult": {
+      "description": "Validated, bounded reply to one `GetConfiguration` or `ChangeConfiguration` call.",
+      "oneOf": [
+        {
+          "properties": {
+            "keys": {
+              "description": "Omitted when the charger omitted configurationKey; an empty list is explicit.",
+              "items": {
+                "$ref": "#/$defs/ConfigurationKey"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "read",
+              "type": "string"
+            },
+            "requested_keys": {
+              "description": "Requested keys; absent means all keys and an empty list means an explicit empty list.",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "unknown_keys": {
+              "description": "Omitted when the charger omitted unknownKey; an empty list is explicit.",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "write",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/ConfigurationWriteStatus",
+              "description": "Exact OCPP status, including `RebootRequired` and `NotSupported`."
+            }
+          },
+          "required": [
+            "kind",
+            "key",
+            "status"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConfigurationResult201": {
+      "description": "No raw values, profiles, native extension data or reusable capabilities.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "SetVariables",
+              "type": "string"
+            },
+            "variables": {
+              "items": {
+                "$ref": "#/$defs/SetVariableResult201"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "action",
+            "variables"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "const": "SetNetworkProfile",
+              "type": "string"
+            },
+            "configuration_slot": {
+              "format": "int32",
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            "staged": {
+              "description": "Native Accepted acknowledges staging only, never active connectivity.",
+              "type": "boolean"
+            },
+            "status": {
+              "$ref": "#/$defs/SetNetworkProfileStatus201"
+            }
+          },
+          "required": [
+            "action",
+            "configuration_slot",
+            "status",
+            "staged"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConfigurationWriteStatus": {
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "RebootRequired",
+        "NotSupported"
+      ],
+      "type": "string"
+    },
+    "ContractVersion": {
+      "description": "Identifies the version of an application-owned contract.",
+      "properties": {
+        "major": {
+          "description": "Major compatibility version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "description": "Additive revision within the major version.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CorrelationId": {
+      "description": "Stable identifier correlating related operations and events.",
+      "type": "string"
+    },
+    "DeviceAttributeType201": {
+      "description": "Native attribute type; omitted requests mean Actual.",
+      "enum": [
+        "Actual",
+        "Target",
+        "MinSet",
+        "MaxSet"
+      ],
+      "type": "string"
+    },
+    "DeviceCharacteristics201": {
+      "description": "Specification-defined characteristics; opaque valuesList is deliberately excluded.",
+      "properties": {
+        "data_type": {
+          "$ref": "#/$defs/DeviceDataType201"
+        },
+        "max_limit": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "min_limit": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "supports_monitoring": {
+          "type": "boolean"
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "data_type",
+        "supports_monitoring"
+      ],
+      "type": "object"
+    },
+    "DeviceComponent201": {
+      "additionalProperties": false,
+      "description": "Case-preserving native component identity.",
+      "properties": {
+        "evse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceEvse201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "DeviceComponentCriterion201": {
+      "description": "Native OR criteria, not host-side filters.",
+      "enum": [
+        "Active",
+        "Available",
+        "Enabled",
+        "Problem"
+      ],
+      "type": "string"
+    },
+    "DeviceDataType201": {
+      "enum": [
+        "string",
+        "decimal",
+        "integer",
+        "dateTime",
+        "boolean",
+        "OptionList",
+        "SequenceList",
+        "MemberList"
+      ],
+      "type": "string"
+    },
+    "DeviceEvse201": {
+      "additionalProperties": false,
+      "description": "Native EVSE/connector scope, not canonical topology.",
+      "properties": {
+        "connectorId": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "DeviceModelQuery201": {
+      "description": "Immutable query and exact native report request ID.",
+      "oneOf": [
+        {
+          "properties": {
+            "action": {
+              "const": "GetVariables",
+              "type": "string"
+            },
+            "entries": {
+              "items": {
+                "$ref": "#/$defs/DeviceVariableQuery201"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "action",
+            "entries"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "GetBaseReport",
+              "type": "string"
+            },
+            "report_base": {
+              "$ref": "#/$defs/DeviceReportBase201"
+            },
+            "request_id": {
+              "format": "int32",
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "action",
+            "request_id",
+            "report_base"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "action": {
+              "const": "GetReport",
+              "type": "string"
+            },
+            "criteria": {
+              "items": {
+                "$ref": "#/$defs/DeviceComponentCriterion201"
+              },
+              "type": "array"
+            },
+            "request_id": {
+              "format": "int32",
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            "selectors": {
+              "items": {
+                "$ref": "#/$defs/DeviceSelector201"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "action",
+            "request_id",
+            "selectors",
+            "criteria"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DeviceModelResult201": {
+      "description": "Typed disclosure-safe command evidence, with immutable connection context.",
+      "properties": {
+        "connection": {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        "dispatch_recorded_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "native_ack": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceReportAck201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "query": {
+          "$ref": "#/$defs/DeviceModelQuery201"
+        },
+        "report": {
+          "$ref": "#/$defs/DeviceReportState201"
+        },
+        "variables": {
+          "items": {
+            "$ref": "#/$defs/DeviceVariableResult201"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "query",
+        "connection",
+        "generation",
+        "dispatch_recorded_at",
+        "report"
+      ],
+      "type": "object"
+    },
+    "DeviceMutability201": {
+      "enum": [
+        "ReadOnly",
+        "WriteOnly",
+        "ReadWrite"
+      ],
+      "type": "string"
+    },
+    "DeviceReportAck201": {
+      "description": "Exact native report acknowledgement, independent of collection.",
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "NotSupported",
+        "EmptyResultSet"
+      ],
+      "type": "string"
+    },
+    "DeviceReportAttribute201": {
+      "description": "Safe native attribute metadata.",
+      "properties": {
+        "attribute_type": {
+          "$ref": "#/$defs/DeviceAttributeType201"
+        },
+        "constant": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "mutability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceMutability201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persistent": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/DeviceValue201"
+        }
+      },
+      "required": [
+        "attribute_type",
+        "value"
+      ],
+      "type": "object"
+    },
+    "DeviceReportBase201": {
+      "description": "Supported native report bases.",
+      "enum": [
+        "ConfigurationInventory",
+        "FullInventory",
+        "SummaryInventory"
+      ],
+      "type": "string"
+    },
+    "DeviceReportFailure201": {
+      "description": "Payload-free terminal reason.",
+      "enum": [
+        "timeout",
+        "byte_limit",
+        "item_limit",
+        "fragment_limit",
+        "capacity",
+        "duplicate_sequence",
+        "out_of_order_sequence",
+        "correlation",
+        "invalid_fragment",
+        "disconnected",
+        "interrupted",
+        "output_limit",
+        "storage_unavailable",
+        "not_transmitted",
+        "native_rejected",
+        "missing_acknowledgement"
+      ],
+      "type": "string"
+    },
+    "DeviceReportFragment201": {
+      "description": "Metadata for every accepted native fragment.",
+      "properties": {
+        "generated_at": {
+          "type": "string"
+        },
+        "items": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "more": {
+          "type": "boolean"
+        },
+        "sequence": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "generated_at",
+        "sequence",
+        "more",
+        "items"
+      ],
+      "type": "object"
+    },
+    "DeviceReportItem201": {
+      "description": "Ordered report item, never used to update topology or grants.",
+      "properties": {
+        "attributes": {
+          "items": {
+            "$ref": "#/$defs/DeviceReportAttribute201"
+          },
+          "type": "array"
+        },
+        "characteristics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceCharacteristics201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "component": {
+          "$ref": "#/$defs/DeviceComponent201"
+        },
+        "variable": {
+          "$ref": "#/$defs/DeviceVariable201"
+        }
+      },
+      "required": [
+        "component",
+        "variable",
+        "attributes"
+      ],
+      "type": "object"
+    },
+    "DeviceReportProgress201": {
+      "description": "Counts include only accepted fragments; recovered unavailable counts remain absent.",
+      "properties": {
+        "bytes": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fragments": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "items": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fragments",
+        "items",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "DeviceReportState201": {
+      "description": "Collection result is independent of the native CALL response.",
+      "oneOf": [
+        {
+          "properties": {
+            "state": {
+              "const": "pending",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "fragments": {
+              "items": {
+                "$ref": "#/$defs/DeviceReportFragment201"
+              },
+              "type": "array"
+            },
+            "items": {
+              "items": {
+                "$ref": "#/$defs/DeviceReportItem201"
+              },
+              "type": "array"
+            },
+            "progress": {
+              "$ref": "#/$defs/DeviceReportProgress201"
+            },
+            "state": {
+              "const": "complete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "progress",
+            "fragments",
+            "items"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "progress": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DeviceReportProgress201"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "$ref": "#/$defs/DeviceReportFailure201"
+            },
+            "state": {
+              "const": "incomplete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "not_expected",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DeviceSelector201": {
+      "additionalProperties": false,
+      "description": "Native selector: absent variable and instances remain wildcards.",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/DeviceComponent201"
+        },
+        "variable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceVariable201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "component"
+      ],
+      "type": "object"
+    },
+    "DeviceValue201": {
+      "description": "Disclosure-safe value, retaining absent versus explicitly empty versus redacted.",
+      "properties": {
+        "empty": {
+          "type": "boolean"
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "present",
+        "redacted",
+        "empty"
+      ],
+      "type": "object"
+    },
+    "DeviceVariable201": {
+      "additionalProperties": false,
+      "description": "Case-preserving native variable identity.",
+      "properties": {
+        "instance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "DeviceVariableQuery201": {
+      "additionalProperties": false,
+      "description": "One exact `GetVariables` request identity.",
+      "properties": {
+        "attributeType": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceAttributeType201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "component": {
+          "$ref": "#/$defs/DeviceComponent201"
+        },
+        "variable": {
+          "$ref": "#/$defs/DeviceVariable201"
+        }
+      },
+      "required": [
+        "component",
+        "variable"
+      ],
+      "type": "object"
+    },
+    "DeviceVariableResult201": {
+      "description": "Matched native result; native names and instances are preserved.",
+      "properties": {
+        "attribute_type": {
+          "$ref": "#/$defs/DeviceAttributeType201"
+        },
+        "component": {
+          "$ref": "#/$defs/DeviceComponent201"
+        },
+        "status": {
+          "$ref": "#/$defs/DeviceVariableStatus201"
+        },
+        "value": {
+          "$ref": "#/$defs/DeviceValue201"
+        },
+        "variable": {
+          "$ref": "#/$defs/DeviceVariable201"
+        }
+      },
+      "required": [
+        "component",
+        "variable",
+        "attribute_type",
+        "status",
+        "value"
+      ],
+      "type": "object"
+    },
+    "DeviceVariableStatus201": {
+      "description": "Native independent per-variable outcome.",
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "UnknownComponent",
+        "UnknownVariable",
+        "NotSupportedAttributeType"
+      ],
+      "type": "string"
+    },
+    "EventId": {
+      "description": "Globally unique identity of one durable event.",
+      "type": "string"
+    },
+    "EventType": {
+      "description": "Versioned semantic name of an event payload.",
+      "type": "string"
+    },
+    "ExactDecimal": {
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "NativeProtocolReference": {
+      "description": "Original protocol-specific address retained as mapping evidence.",
+      "oneOf": [
+        {
+          "description": "Native OCPP 1.6 connector number.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp16",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "connector_id"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Native OCPP 2.0.1 EVSE and optional connector numbers.",
+          "properties": {
+            "connector_id": {
+              "description": "Connector number within the EVSE, when supplied.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "evse_id": {
+              "description": "EVSE number from the OCPP frame.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protocol": {
+              "const": "ocpp201",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol",
+            "evse_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ObservedCommandEffect": {
+      "description": "Separately linked evidence of a later observed charging effect.",
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/EventId",
+          "description": "Durable event that records the observed effect."
+        },
+        "event_type": {
+          "$ref": "#/$defs/EventType",
+          "description": "Semantic type of the observed effect."
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp",
+          "description": "UTC instant at which the bridge observed it."
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "PrincipalId": {
+      "description": "Authenticated principal identity assigned by an adapter.",
+      "type": "string"
+    },
+    "RequestId": {
+      "description": "Stable idempotency identity of a command request.",
+      "type": "string"
+    },
+    "ResourceRef": {
+      "description": "Stable canonical resource identity, independent of runtime and transports.",
+      "properties": {
+        "bridge_id": {
+          "$ref": "#/$defs/BridgeId",
+          "description": "Bridge installation that owns the resource."
+        },
+        "native_protocol_reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeProtocolReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional protocol address retained separately from canonical identity."
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanonicalResource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional connector or EVSE below the station."
+        },
+        "station_id": {
+          "$ref": "#/$defs/StationId",
+          "description": "Charging station that owns the resource."
+        }
+      },
+      "required": [
+        "bridge_id",
+        "station_id"
+      ],
+      "type": "object"
+    },
+    "SetChargingProfileRequest16": {
+      "description": "Immutable Set request captured before enqueue.",
+      "properties": {
+        "connector_id": {
+          "description": "Zero denotes station, positive denotes exact connector.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "cs_charging_profiles": {
+          "$ref": "#/$defs/ChargingProfile16",
+          "description": "Complete supplied native profile."
+        }
+      },
+      "required": [
+        "connector_id",
+        "cs_charging_profiles"
+      ],
+      "type": "object"
+    },
+    "SetChargingProfileRequest201": {
+      "description": "Immutable native Set request; zero addresses the station, not all EVSEs.",
+      "properties": {
+        "charging_profile": {
+          "$ref": "#/$defs/ChargingProfile201"
+        },
+        "evse_id": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "evse_id",
+        "charging_profile"
+      ],
+      "type": "object"
+    },
+    "SetChargingProfileStatus16": {
+      "description": "Set native acknowledgement.",
+      "oneOf": [
+        {
+          "const": "Accepted",
+          "description": "Profile accepted; no enforcement claim.",
+          "type": "string"
+        },
+        {
+          "const": "Rejected",
+          "description": "Profile declined.",
+          "type": "string"
+        },
+        {
+          "const": "NotSupported",
+          "description": "Operation/profile unsupported by charger.",
+          "type": "string"
+        }
+      ]
+    },
+    "SetChargingProfileStatus201": {
+      "enum": [
+        "Accepted",
+        "Rejected"
+      ],
+      "type": "string"
+    },
+    "SetNetworkProfileStatus201": {
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "Failed"
+      ],
+      "type": "string"
+    },
+    "SetVariableResult201": {
+      "additionalProperties": false,
+      "properties": {
+        "attribute_type": {
+          "$ref": "#/$defs/DeviceAttributeType201"
+        },
+        "component": {
+          "$ref": "#/$defs/DeviceComponent201"
+        },
+        "status": {
+          "$ref": "#/$defs/SetVariableStatus201"
+        },
+        "variable": {
+          "$ref": "#/$defs/DeviceVariable201"
+        }
+      },
+      "required": [
+        "component",
+        "variable",
+        "attribute_type",
+        "status"
+      ],
+      "type": "object"
+    },
+    "SetVariableStatus201": {
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "UnknownComponent",
+        "UnknownVariable",
+        "NotSupportedAttributeType",
+        "RebootRequired"
+      ],
+      "type": "string"
+    },
+    "StationId": {
+      "description": "Stable logical identity of a charging station.",
+      "type": "string"
+    },
+    "TargetInstanceId": {
+      "description": "Stable identity of a configured target instance.",
+      "type": "string"
+    },
+    "TriggerEvse201": {
+      "additionalProperties": false,
+      "description": "Native EVSE identity, retaining the independent connector index within that EVSE.",
+      "properties": {
+        "connectorId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "TriggerMessageClass": {
+      "description": "OCPP 1.6 message requested by `TriggerMessage`; never an extended or 2.0.1 action.",
+      "enum": [
+        "BootNotification",
+        "DiagnosticsStatusNotification",
+        "FirmwareStatusNotification",
+        "Heartbeat",
+        "MeterValues",
+        "StatusNotification"
+      ],
+      "type": "string"
+    },
+    "TriggerMessageClass201": {
+      "description": "The eleven pinned OCPP 2.0.1 `TriggerMessage` `requestedMessage` values.",
+      "enum": [
+        "BootNotification",
+        "LogStatusNotification",
+        "FirmwareStatusNotification",
+        "Heartbeat",
+        "MeterValues",
+        "SignChargingStationCertificate",
+        "SignV2GCertificate",
+        "StatusNotification",
+        "TransactionEvent",
+        "SignCombinedCertificate",
+        "PublishFirmwareStatusNotification"
+      ],
+      "type": "string"
+    },
+    "TriggerNativeResponse": {
+      "description": "Exact native response, independent of later station messages.",
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "NotImplemented"
+      ],
+      "type": "string"
+    },
+    "TriggerNativeResponse201": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/TriggerNativeStatus201"
+        },
+        "statusInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerStatusInfo201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "TriggerNativeStatus201": {
+      "enum": [
+        "Accepted",
+        "Rejected",
+        "NotImplemented"
+      ],
+      "type": "string"
+    },
+    "TriggerObservation": {
+      "description": "Immutable dispatch expectation and bounded later observations for `TriggerMessage`.",
+      "properties": {
+        "deadline": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "dispatch_started_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "expected_targets": {
+          "description": "Unique native connector IDs fixed before dispatch; zero is station-only.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "native_response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerNativeResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A missing response is not Accepted, including after restart."
+        },
+        "native_scope": {
+          "description": "Original optional connectorId: None requests all applicable native IDs.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "observed": {
+          "items": {
+            "$ref": "#/$defs/TriggerObservedEvent"
+          },
+          "type": "array"
+        },
+        "requested_class": {
+          "$ref": "#/$defs/TriggerMessageClass"
+        },
+        "status": {
+          "$ref": "#/$defs/TriggerObservationStatus"
+        }
+      },
+      "required": [
+        "requested_class",
+        "expected_targets",
+        "dispatch_started_at",
+        "deadline",
+        "status"
+      ],
+      "type": "object"
+    },
+    "TriggerObservation201": {
+      "description": "Immutable targets/window and bounded durable later compatible-message observations.",
+      "properties": {
+        "deadline": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "dispatch_started_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "expected_targets": {
+          "items": {
+            "$ref": "#/$defs/TriggerTarget201"
+          },
+          "type": "array"
+        },
+        "native_response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerNativeResponse201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "native_scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TriggerEvse201"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed": {
+          "items": {
+            "$ref": "#/$defs/TriggerObservedEvent201"
+          },
+          "type": "array"
+        },
+        "requested_class": {
+          "$ref": "#/$defs/TriggerMessageClass201"
+        },
+        "status": {
+          "$ref": "#/$defs/TriggerObservationStatus201"
+        }
+      },
+      "required": [
+        "requested_class",
+        "expected_targets",
+        "dispatch_started_at",
+        "deadline",
+        "status"
+      ],
+      "type": "object"
+    },
+    "TriggerObservationStatus": {
+      "description": "Later compatible-message observation, distinct from protocol acceptance.",
+      "enum": [
+        "pending",
+        "partial",
+        "observed",
+        "absent",
+        "unsupported"
+      ],
+      "type": "string"
+    },
+    "TriggerObservationStatus201": {
+      "description": "Unattributable means station-level certificate receipt cannot prove the scoped EVSE.",
+      "enum": [
+        "pending",
+        "partial",
+        "observed",
+        "absent",
+        "unsupported",
+        "unattributable"
+      ],
+      "type": "string"
+    },
+    "TriggerObservedEvent": {
+      "description": "Evidence from one durable, compatible station-origin message, not causal proof.",
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/EventId"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "target": {
+          "description": "Native connector number; zero identifies the station, not all connectors.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "target",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "TriggerObservedEvent201": {
+      "properties": {
+        "event_id": {
+          "$ref": "#/$defs/EventId"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        "target": {
+          "$ref": "#/$defs/TriggerTarget201"
+        }
+      },
+      "required": [
+        "event_id",
+        "target",
+        "observed_at"
+      ],
+      "type": "object"
+    },
+    "TriggerStatusInfo201": {
+      "additionalProperties": false,
+      "description": "Native statusInfo is response detail, not evidence of a later notification.",
+      "properties": {
+        "additionalInfo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reasonCode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reasonCode"
+      ],
+      "type": "object"
+    },
+    "TriggerTarget201": {
+      "description": "Native target evidence. A connector is never conflated with its EVSE ID.",
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "station",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "evse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "connector_id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "connector_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.8/command-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Versioned command result returned to its authenticated origin and available to observers.",
+  "properties": {
+    "charging_profile_16": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ChargingProfileResult16"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Full privileged OCPP 1.6 profile request and native acknowledgement."
+    },
+    "charging_profile_201": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ChargingProfileResult201"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Full privileged OCPP 2.0.1 profile request and native acknowledgement."
+    },
+    "composite_schedule_16": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CompositeScheduleResult16"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Indicative OCPP 1.6 schedule reply, never a charging effect."
+    },
+    "configuration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfigurationResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Validated configuration reply, absent on older command results."
+    },
+    "configuration_201": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfigurationResult201"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Value-free native configuration write acknowledgement."
+    },
+    "configuration_observations": {
+      "description": "Explicit later read observations; never imply that a write took effect.",
+      "items": {
+        "$ref": "#/$defs/ConfigurationObservation"
+      },
+      "type": "array"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CorrelationId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Request/result correlation identity."
+    },
+    "device_model_201": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeviceModelResult201"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Read-only native OCPP 2.0.1 query and independent report evidence."
+    },
+    "lifecycle": {
+      "$ref": "#/$defs/CommandLifecycle",
+      "description": "Latest command lifecycle stage."
+    },
+    "observed_effects": {
+      "description": "Later observed effects, linked independently from charger protocol acceptance.",
+      "items": {
+        "$ref": "#/$defs/ObservedCommandEffect"
+      },
+      "type": "array"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/UtcTimestamp",
+      "description": "UTC instant at which this result state was recorded."
+    },
+    "resource": {
+      "$ref": "#/$defs/ResourceRef",
+      "description": "Canonical charging resource targeted by the request."
+    },
+    "return_route": {
+      "$ref": "#/$defs/CommandReturnRoute",
+      "description": "Immutable route back to the authenticated origin and target instance."
+    },
+    "schema_version": {
+      "$ref": "#/$defs/ContractVersion",
+      "description": "Version of this result contract."
+    },
+    "trigger_observation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TriggerObservation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "OCPP 1.6 `TriggerMessage` native reply and separately observed compatible messages."
+    },
+    "trigger_observation_201": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TriggerObservation201"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "OCPP 2.0.1 native reply and separately observed native EVSE/connector evidence."
+    }
+  },
+  "required": [
+    "schema_version",
+    "resource",
+    "return_route",
+    "lifecycle",
+    "recorded_at"
+  ],
+  "title": "CommandResult",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 8
+  }
+}

@@ -66,7 +66,7 @@ async fn assert_failed_clear_is_one_shot_after_reopen(mode: &str) {
     let mut next = session("ocpp1.6", Duration::from_secs(1)).await;
     let (_, _, coordinator) = configured(&store, &next).await;
     coordinator
-        .recover_unresolved(PageLimit::new(100).unwrap())
+        .recover_unresolved(None, PageLimit::new(100).unwrap())
         .await
         .unwrap();
     assert_eq!(coordinator.submit(body.clone()).await.unwrap(), result);

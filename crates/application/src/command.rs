@@ -77,6 +77,8 @@ pub enum CommandDispatchOutcome {
     ChargingProfileResponse16(uob_contracts::ChargingProfileResult16),
     /// Immutable full native OCPP 2.0.1 profile request and valid acknowledgement.
     ChargingProfileResponse201(uob_contracts::ChargingProfileResult201),
+    /// Value-free native configuration write acknowledgement.
+    ConfigurationResponse201(uob_contracts::ConfigurationResult201),
 }
 
 /// Sanitized failure to inspect or use the current station session.
