@@ -247,6 +247,10 @@ All notable changes to this project will be documented in this file. See [conven
   privilege/upgrade safety.
 
 ### Bug Fixes
+- Anchor the PostgreSQL qualification lost-commit-ACK gate to the backend's
+  actual `COMMIT` response, not frontend request timing. Prevent a preceding
+  INSERT's readiness message from being mistaken for commit completion while
+  preserving adapter uncertainty and durable-marker assertions.
 - Release native simulator private-state locks when the last model owner drops,
   even while an unrelated subprocess holds an inherited descriptor. Preserve
   live-owner exclusion in both OCPP editions and prevent spurious recovery
