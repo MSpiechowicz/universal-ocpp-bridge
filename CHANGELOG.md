@@ -247,6 +247,10 @@ All notable changes to this project will be documented in this file. See [conven
   privilege/upgrade safety.
 
 ### Bug Fixes
+- Release native simulator private-state locks when the last model owner drops,
+  even while an unrelated subprocess holds an inherited descriptor. Preserve
+  live-owner exclusion in both OCPP editions and prevent spurious recovery
+  failures after close-and-reopen.
 - Scope Gitleaks exceptions for the two synthetic OCPP 2.0.1 fixture identities
   to their exact values, exact files and `generic-api-key` rule (#112), retaining
   full-history scanning and detection of other secrets in those files.

@@ -19,6 +19,14 @@ pub(super) struct PrivateStorage {
     pub(super) fail_directory_sync: bool,
 }
 
+impl Drop for PrivateStorage {
+    fn drop(&mut self) {
+        // A forked helper may retain this open-file description until exec.
+        // Release ownership now rather than waiting for its inherited fd to close.
+        let _ = self.lock.unlock();
+    }
+}
+
 impl PrivateStorage {
     pub(super) fn open(path: &str) -> Result<Self, &'static str> {
         let path = PathBuf::from(path);
@@ -213,4 +221,48 @@ impl Write for BoundedWriter {
     fn flush(&mut self) -> std::io::Result<()> {
         self.file.flush()
     }
+}
+
+#[cfg(test)]
+#[test]
+fn last_owner_drop_releases_lock_with_inherited_descriptor() {
+    use super::LocalAuthorization201Handle;
+    use crate::local_authorization::LocalAuthorizationConfig;
+
+    let directory =
+        std::env::temp_dir().join(format!("uob-lock-owner201-{}", uuid::Uuid::new_v4()));
+    fs::create_dir(&directory).unwrap();
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
+    let directory = fs::canonicalize(directory).unwrap();
+    let config = LocalAuthorizationConfig {
+        private_state_file: directory.join("state.json").to_str().unwrap().to_owned(),
+        list_supported: true,
+        cache_supported: true,
+    };
+    let owner = LocalAuthorization201Handle::open("lock-owner", &config).unwrap();
+    let inherited = owner
+        .0
+        .lock()
+        .storage
+        .as_ref()
+        .unwrap()
+        .lock
+        .try_clone()
+        .unwrap();
+    let remaining_owner = owner.clone();
+    drop(owner);
+    assert!(matches!(
+        LocalAuthorization201Handle::open("lock-owner", &config),
+        Err("private_state_already_owned")
+    ));
+    drop(remaining_owner);
+    let recovered = LocalAuthorization201Handle::open("lock-owner", &config)
+        .expect("the last model owner must release the lock despite an inherited descriptor");
+    drop(inherited);
+    assert!(matches!(
+        LocalAuthorization201Handle::open("lock-owner", &config),
+        Err("private_state_already_owned")
+    ));
+    drop(recovered);
+    fs::remove_dir_all(directory).unwrap();
 }
