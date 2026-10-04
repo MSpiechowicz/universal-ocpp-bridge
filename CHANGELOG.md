@@ -247,6 +247,9 @@ All notable changes to this project will be documented in this file. See [conven
   privilege/upgrade safety.
 
 ### Bug Fixes
+- Scope Gitleaks exceptions for the two synthetic OCPP 2.0.1 fixture identities
+  to their exact values, exact files and `generic-api-key` rule (#112), retaining
+  full-history scanning and detection of other secrets in those files.
 - Preserve browser command history, detail and pagination reads across same-station
   snapshot invalidation, with independent read/control generations and busy owners.
   Stale or hidden views still clear protected options, credentials and confirmation
