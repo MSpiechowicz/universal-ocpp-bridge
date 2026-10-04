@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.7 and serves
-the current v1.8 command-result; OpenAPI command result responses reference v1.8.
-Current nested export-record and export-batch references use v1.9, while released
-export schemas through v1.8 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.8 and serves
+the current v1.9 command-result; OpenAPI command result responses reference v1.9.
+Current nested export-record and export-batch references use v1.10, while released
+export schemas through v1.9 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -192,7 +192,7 @@ privileged target ingress, protected-value provider or automatic export producti
 
 The EMS schema endpoints follow the listener's existing authentication policy: when
 credentials are configured, unauthenticated access is denied; the documented no-credentials
-loopback policy is unchanged. Current paths are
+loopback policy is unchanged. At the configuration-evidence introduction, paths were
 `/bridge/v1/schemas/v1.8/command-result.schema.json`,
 `/bridge/v1/schemas/v1.9/export-record.schema.json` and
 `/bridge/v1/schemas/v1.9/export-batch.schema.json`. Historical routes, including v1.7
@@ -204,11 +204,11 @@ each contract's current revision. The initial protected-reference schemas are se
 compatibility and old-result readability. EMS integration verification uses the independent
 probe executable as configured by `scripts/verify-workspace.sh`.
 
-MQTT's existing immediate and durable result publishers explicitly accept named v1.8
-(revision 8) on existing topics alongside supported v1.0/v1.1/v1.4/v1.5/v1.6/v1.7
-results, and reject future revision 9 before broker handoff. The v1.2/v1.3 policy is
-unchanged: this addition does not promise every v1 minor revision or add a MQTT
-command family.
+The configuration-evidence addition explicitly admitted named v1.8 (revision 8)
+on existing MQTT topics alongside supported v1.0/v1.1/v1.4/v1.5/v1.6/v1.7.
+The later local-list addition also explicitly admits v1.9. Current publishers reject
+future revision 10 before broker handoff, while v1.2/v1.3 remain unsupported. This
+does not promise every v1 minor revision or add a privileged MQTT command family.
 The EMS integration listener retains exact-origin/principal/resource status ownership and
 does not grant privileged native profile or configuration writes through target ingress.
 Neither target gains privileged native command authority or a protected-value provider;
@@ -234,3 +234,31 @@ cargo test --locked -p uob-mqtt-target-adapter --test charging_profile201_wire
 cargo test --locked -p uob-ems-scada-http-target-adapter --test configuration201_results
 cargo test --locked -p uob-mqtt-target-adapter --test configuration201_wire
 ```
+
+OCPP 1.6 `GetLocalListVersion`, protected `SendLocalList` and `ClearCache` add
+optional action-tagged `local_authorization_16` to command-result v1.9. Queries
+retain the exact signed 32-bit reported version, including empty `0` and unsupported
+`-1`. Send retains requested version/update type and native `Accepted`, `Failed`,
+`NotSupported` or `VersionMismatch`; Clear retains `Accepted` or `Rejected`.
+Native casing is preserved for action/status; safe typed fields use snake_case.
+Evidence contains no entries, parent identities, capabilities or arbitrary native
+errors. Accepted ACK is not retained-content, offline-authorization or physical
+effect proof. Malformed, unpaired, lost and CALLERROR responses do not manufacture
+this field; old results still decode with it absent.
+
+The public protected envelope is
+`v1.0/send-local-list-reference-16.schema.json`, payload identity
+`urn:uob:ocpp16:SendLocalListReference:1`; it contains `listVersion`, `updateType`
+and an exact bound `updateReference`, not the native OCA list payload.
+Query/Clear use the pinned native empty request objects. Strict privileged ingress
+and per-resource capability/grant checks remain unchanged.
+
+Nested export-record/export-batch public snapshots advance to v1.10, with
+**separately named runtime envelope revision 9**. Earlier snapshots/routes remain
+unchanged; this addition has no SQL migration and SQLite remains v14. Existing
+HTTP/MQTT result transport does not grant new privileged target ingress, create an
+authoritative service-side station list or enable automatic global export delivery.
+MQTT immediate and durable consumers preserve all typed native statuses and query
+versions under the explicit v1.9 result gate, existing topic ownership, payload caps
+and packet-specific PUBACK rules. A PUBACK is only broker receipt, never evidence of
+installed contents or offline authorization; future revision 10 is unsupported.

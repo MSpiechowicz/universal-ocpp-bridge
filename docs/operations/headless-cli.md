@@ -752,6 +752,88 @@ private values were absent from SQLite/WAL and logs. This is software boundary
 evidence, not hardware activation/interoperability, OCA certification or production
 charging qualification. See [the architecture and safety boundaries](../architecture/ocpp201-remote-control.md#opt-in-protected-device-and-network-writes).
 
+### Protected OCPP 1.6 station authorization list and cache
+
+`get_local_list_version`, `send_local_list` and `clear_cache` are independent,
+default-off, privileged **demo-only** station options. They require `protocol =
+"ocpp16j"`, separate control/privileged grants and the existing protected charging
+state directory. They neither enable each other nor change the service's independent
+exact-byte SHA allowlist. They add no production control or public provisioning API.
+
+```toml
+[charging]
+enabled = true
+listen_addr = "127.0.0.1:9000"
+state_directory = "/srv/uob-demo/private/charging"
+read_grant_file = "/srv/uob-demo/private/read.grant"
+control_grant_file = "/srv/uob-demo/private/control.grant"
+privileged_grant_file = "/srv/uob-demo/private/privileged.grant"
+local_authorization_updates_file = "/srv/uob-demo/private/local-list.json"
+
+[[charging.stations]]
+id = "demo-1"
+protocol = "ocpp16j"
+credential_file = "/srv/uob-demo/private/demo-1.credential"
+get_local_list_version = true
+send_local_list = true
+clear_cache = true
+```
+
+The startup-only provider file is service-owned mode `0600`, under a protected
+owner-only canonical directory, outside the charging state directory and without
+credential aliases. Its exact shape is:
+
+```json
+{
+  "updates": [{
+    "station_id": "demo-1",
+    "update_reference": "list16:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expires_at": "2099-01-01T00:00:00Z",
+    "request": {
+      "listVersion": 17,
+      "updateType": "Full",
+      "localAuthorizationList": [{
+        "idTag": "demo-native-tag",
+        "idTagInfo": {"status": "Accepted"}
+      }]
+    }
+  }]
+}
+```
+
+The reference above is illustrative; generate an independent random 64-lowercase-hex
+capability for each real provisioned update. Raw tags and parent tags belong only in
+this protected file and native station traffic. Public `SendLocalList` parameters use
+`payload_schema = "urn:uob:ocpp16:SendLocalListReference:1"` and only
+`{"listVersion":17,"updateType":"Full","updateReference":"list16:…"}`
+through the existing authenticated `POST /api/v1/commands` envelope. Target the exact
+station-root resource, not a connector. `GetLocalListVersion` and `ClearCache` use the
+unchanged OCPP 1.6 request URNs and `{}` payloads through the same privileged route.
+
+Provisioning is bounded to 128 updates, 256 entries per update, 64 KiB per native
+update, 1 MiB retained content plus metadata, and a 2 MiB startup file. Native tags and
+parent tags permit up to 20 Unicode characters; original spelling is preserved.
+Full entries require `idTagInfo`; a Differential entry without it deletes that tag.
+Absent/empty Full clears the list. Absent/empty Differential changes only the stored
+update version. Versions are signed native `i32`; update versions `-1` and `0` are
+invalid, while query `0` means empty and `-1` means unsupported. Known
+`SendLocalListMaxLength` bounds every update, and known `LocalAuthListMaxLength`
+bounds Full entry count; unknown limits remain unknown.
+
+The provider rechecks exact scope, capability expiry/revocation, native limits,
+active connection generation and command deadline before first send polling.
+Accepted Send evidence records the requested version, not independently observed
+contents or offline usability. ClearCache affects the authorization cache, not the
+local list. Lost/malformed/unpaired replies remain uncertain and are never implicitly
+replayed. A later version query does not prove contents or settle that uncertainty;
+an explicit fresh Full update is the conservative resynchronization.
+
+Stop the daemon, atomically replace the private file with fresh capabilities and
+restart to replace provisioning. There is no hot reload or public revocation endpoint.
+See [authorization boundaries](../security/local-authorization.md) and the
+[independent simulator scenarios](../simulator/scenario-runner.md) for actual offline,
+disk recovery and native Reset verification.
+
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported
 requests are rejected. An HTTP 202 records admission, not native acceptance or physical effect.

@@ -1,4 +1,4 @@
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -124,10 +124,7 @@ pub(super) async fn register(
                     let result =
                         send_call(&dispatcher, &job.request.requested_message, payload).await;
                     if result.as_ref().is_ok_and(|accepted| *accepted) {
-                        let mut state = dispatch_state.lock().expect("OCPP 1.6 state lock");
-                        if job.generation == generation.load(Ordering::SeqCst) {
-                            state.registered = true;
-                        }
+                        commit_triggered_boot(&dispatch_state, &generation, job.generation);
                     }
                     dispatch_traces.push(
                         if result.is_ok() {
@@ -154,9 +151,10 @@ pub(super) async fn register(
             } else {
                 let payloads = payloads(&request, &connectors, &state);
                 let mut status = responses.for_message(&request.requested_message);
-                if matches!(&request.requested_message, Requested::BootNotification)
-                    && state.lock().expect("OCPP 1.6 state lock").registered
-                {
+                if matches!(&request.requested_message, Requested::BootNotification) && {
+                    let state = state.lock().expect("OCPP 1.6 state lock");
+                    state.boot_accepted_generation == Some(state.socket_generation)
+                } {
                     status = Status::Rejected;
                 }
                 if status == Status::Accepted && payloads.is_empty() {
@@ -188,6 +186,18 @@ pub(super) async fn register(
         })
         .await;
     barrier.arm();
+}
+
+fn can_register_triggered_boot(state: &Ocpp16State) -> bool {
+    state.socket_connected && state.boot_accepted_generation == Some(state.socket_generation)
+}
+
+fn commit_triggered_boot(state: &Mutex<Ocpp16State>, generation: &AtomicU64, job_generation: u64) {
+    let mut state = state.lock().expect("OCPP 1.6 state lock");
+    if job_generation == generation.load(Ordering::SeqCst) && can_register_triggered_boot(&state) {
+        state.registered = true;
+        state.replay_requested = true;
+    }
 }
 
 fn message_name(message: &Requested) -> &'static str {

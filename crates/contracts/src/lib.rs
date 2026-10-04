@@ -21,7 +21,9 @@ mod transaction16;
 mod trigger;
 mod trigger201;
 pub use transaction16::Ocpp16TransactionEvidence;
+mod local_authorization16;
 mod trace;
+pub use local_authorization16::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -138,6 +140,11 @@ impl ContractVersion {
     pub const V1_CONFIGURATION_201: Self = Self {
         major: 1,
         revision: 8,
+    };
+    /// Additive value-free OCPP 1.6 local authorization acknowledgement evidence.
+    pub const V1_LOCAL_AUTHORIZATION_16: Self = Self {
+        major: 1,
+        revision: 9,
     };
 }
 

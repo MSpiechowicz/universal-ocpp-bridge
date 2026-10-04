@@ -230,6 +230,18 @@ fn privileged(
 ) -> Result<(&'static str, Value), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
     match operation.action.as_str() {
+        "GetLocalListVersion" | "SendLocalList" | "ClearCache" => {
+            if resource != station || native != 0 {
+                return Err(InvalidParameters);
+            }
+            crate::command_registry::local_authorization16::validate(resource, operation)?;
+            let action = match operation.action.as_str() {
+                "GetLocalListVersion" => "GetLocalListVersion",
+                "SendLocalList" => "SendLocalList",
+                _ => "ClearCache",
+            };
+            Ok((action, operation.payload.clone()))
+        }
         "GetCompositeSchedule" => {
             crate::command_registry::composite_schedule16::validate(resource, operation)?;
             Ok(("GetCompositeSchedule", operation.payload.clone()))

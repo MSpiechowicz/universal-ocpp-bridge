@@ -16,6 +16,9 @@ use uob_sim::{
 };
 
 const TEST_BOUND: Duration = Duration::from_secs(4);
+#[path = "client_adapter/reset_peer.rs"]
+mod reset_peer;
+use reset_peer::websocket_server;
 
 fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
     SimulatorClientConfig {
@@ -30,63 +33,9 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         evse_connectors: vec![(1, 1), (2, 1)],
         trigger_responses: TriggerResponses::default(),
         trigger_observation: TriggerObservation::default(),
+        local_authorization: None,
+        local_authorization_file: None,
     }
-}
-
-async fn websocket_server(
-    listener: TcpListener,
-    expected_protocol: &'static str,
-) -> (String, Value) {
-    let (tcp, _) = listener.accept().await.unwrap();
-    let offered = Arc::new(Mutex::new(String::new()));
-    let observed = Arc::clone(&offered);
-    let mut socket = tokio_tungstenite::accept_hdr_async(
-        tcp,
-        move |request: &tokio_tungstenite::tungstenite::handshake::server::Request,
-              mut response: tokio_tungstenite::tungstenite::handshake::server::Response| {
-            request
-                .headers()
-                .get("Sec-WebSocket-Protocol")
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .clone_into(&mut observed.lock().unwrap());
-            response
-                .headers_mut()
-                .insert("Sec-WebSocket-Protocol", expected_protocol.parse().unwrap());
-            Ok(response)
-        },
-    )
-    .await
-    .unwrap();
-
-    let heartbeat = receive_json(&mut socket).await;
-    assert_eq!(heartbeat[0], 2);
-    assert_eq!(heartbeat[2], "Heartbeat");
-    let heartbeat_id = heartbeat[1].as_str().unwrap();
-    socket
-        .send(Message::text(
-            json!([3, heartbeat_id, {"currentTime": "2026-09-01T00:00:00Z"}]).to_string(),
-        ))
-        .await
-        .unwrap();
-
-    let reset_payload = if expected_protocol == "ocpp1.6" {
-        json!({"type": "Soft"})
-    } else {
-        json!({"type": "Immediate"})
-    };
-    socket
-        .send(Message::text(
-            json!([2, "server-reset", "Reset", reset_payload]).to_string(),
-        ))
-        .await
-        .unwrap();
-    let reset_response = receive_json(&mut socket).await;
-    socket.close(None).await.unwrap();
-
-    let protocol = offered.lock().unwrap().clone();
-    (protocol, reset_response)
 }
 
 async fn receive_json(

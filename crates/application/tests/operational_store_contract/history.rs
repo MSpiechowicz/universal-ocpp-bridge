@@ -243,6 +243,7 @@ fn write_command(
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     });
     write_history_command(store, command, command_result);
 }

@@ -6,14 +6,19 @@ use rust_ocpp::v1_6::{
     types::{AuthorizationStatus, IdTagInfo},
 };
 use serde_json::{Value, json};
+use std::time::Duration;
 use uob_application::{
     AuthorizationDecision, AuthorizationDenialReason, AuthorizationProvider,
     LocalAuthorizationService, SensitiveAuthorizationToken,
 };
+use uob_application::{
+    ChargerObservation, CommandClock,
+    charging_identity::{ChargingTokenKind, PresentedChargingIdentity},
+};
 use uob_contracts::{NativeProtocolReference, ResourceRef, UtcTimestamp};
 
 use super::{PROTOCOL, parse_frame, validated_payload};
-use crate::{DecodeError, DecodeErrorKind};
+use crate::{DecodeError, DecodeErrorKind, DecodedCall, OcppCallError, OcppErrorCode};
 
 /// OCPP 1.6 workflow whose presented `idTag` was checked by application policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -137,4 +142,83 @@ const fn denial_status(reason: AuthorizationDenialReason) -> AuthorizationStatus
         | AuthorizationDenialReason::ResourceDenied
         | AuthorizationDenialReason::ProviderUnavailable => AuthorizationStatus::Invalid,
     }
+}
+
+pub(super) fn observation(payload: Value) -> Result<ChargerObservation, DecodeError> {
+    if !payload
+        .as_object()
+        .is_some_and(|fields| fields.len() == 1 && fields.contains_key("idTag"))
+    {
+        return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
+    }
+    let request: AuthorizeRequest = validated_payload(payload)?;
+    if request.id_tag.is_empty() {
+        return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload));
+    }
+    Ok(ChargerObservation::ChargingIdentity(
+        PresentedChargingIdentity {
+            token: request.id_tag,
+            kind: ChargingTokenKind::Local,
+            additional: Vec::new(),
+            certificate: None,
+            certificate_hashes: Vec::new(),
+        },
+    ))
+}
+
+/// Completes a validated native Authorize call using the current durable service policy.
+/// # Errors
+/// Rejects non-native authorization input and invalid provider timeout configuration.
+/// # Panics
+/// Panics only if a canonical policy timestamp cannot round-trip through the pinned native model.
+pub async fn complete_authorization<
+    C: Send + 'static,
+    E: Send + 'static,
+    D: Send + 'static,
+    R: Send + 'static,
+>(
+    call: DecodedCall,
+    resource: &ResourceRef,
+    authorization: &LocalAuthorizationService<C, E, D, R>,
+    provider: &dyn AuthorizationProvider,
+    clock: &dyn CommandClock,
+    timeout: Duration,
+) -> Result<Value, OcppCallError> {
+    let error = |code| OcppCallError {
+        protocol: PROTOCOL,
+        code,
+        description: "Native authorization unavailable",
+        field_path: None,
+    };
+    if call.action.as_str() != "Authorize" {
+        return Err(error(OcppErrorCode::NotImplemented));
+    }
+    let ChargerObservation::ChargingIdentity(identity) = call.observation else {
+        return Err(error(OcppErrorCode::NotImplemented));
+    };
+    if identity.kind != ChargingTokenKind::Local
+        || !identity.additional.is_empty()
+        || identity.certificate.is_some()
+        || !identity.certificate_hashes.is_empty()
+    {
+        return Err(error(OcppErrorCode::NotImplemented));
+    }
+    if timeout.is_zero() || timeout > Duration::from_secs(30) {
+        return Err(error(OcppErrorCode::InternalError));
+    }
+    let token = SensitiveAuthorizationToken::new(&identity.token)
+        .map_err(|_| error(OcppErrorCode::PropertyConstraintViolation))?;
+    let decision = match tokio::time::timeout(timeout, provider.resolve(&token)).await {
+        Ok(Ok(reference)) => authorization.authorize_reference(&reference, resource, clock.now()),
+        _ => AuthorizationDecision::Denied {
+            reason: AuthorizationDenialReason::ProviderUnavailable,
+        },
+    };
+    Ok(Ocpp16AuthorizationOutcome {
+        message_id: call.message_id,
+        flow: Ocpp16AuthorizationFlow::Authorize,
+        decision,
+    }
+    .authorize_response_frame()
+    .expect("native Authorize outcome"))
 }

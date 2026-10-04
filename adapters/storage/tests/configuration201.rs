@@ -54,6 +54,7 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 fn accepted(command: &Command<Value>) -> CommandResult {

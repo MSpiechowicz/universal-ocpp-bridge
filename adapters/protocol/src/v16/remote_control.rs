@@ -5,8 +5,11 @@ mod charging_profile;
 mod composite_schedule;
 mod configuration;
 mod configuration_values;
+mod enqueue;
 pub(crate) mod exact_rate;
 mod identity;
+mod local_authorization;
+mod local_authorization_values;
 mod mapping;
 mod trigger;
 pub(crate) use configuration_values::DeferredConfigurationCall;
@@ -14,12 +17,16 @@ pub use configuration_values::{
     LocalConfigurationValues, ProtectedConfigurationText, ProtectedConfigurationValue,
 };
 pub use identity::LocalRemoteStartIdentity;
+pub(crate) use local_authorization::DeferredLocalAuthorizationCall16;
+pub use local_authorization_values::{
+    LocalAuthorizationUpdates16, ProtectedLocalListUpdate16, ProtectedLocalListValue16,
+    wipe_local_authorization_json,
+};
 pub mod observation;
 
-use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
+use crate::{CallSessionHandle, SessionCallOutcome};
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
-use tokio::time::Instant;
 use uob_application::{
     CommandClock, CommandDispatchOutcome, SensitiveAuthorizationToken, StationCommandContext,
     StationCommandError, StationCommandFuture, StationCommandPort,
@@ -52,6 +59,9 @@ pub struct RemoteControlSession {
     identity: Arc<dyn RemoteStartIdentity>,
     configuration_values: Option<Arc<LocalConfigurationValues>>,
     configuration_facts: RwLock<configuration::SessionFacts>,
+    local_authorization_updates: Option<Arc<LocalAuthorizationUpdates16>>,
+    local_list_limits: Arc<std::sync::Mutex<local_authorization::LocalListLimits16>>,
+    local_list_active: Arc<std::sync::Mutex<bool>>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
 }
@@ -75,6 +85,11 @@ impl RemoteControlSession {
             clock,
             configuration_values: None,
             configuration_facts: RwLock::new(configuration::SessionFacts::default()),
+            local_authorization_updates: None,
+            local_list_limits: Arc::new(std::sync::Mutex::new(
+                local_authorization::LocalListLimits16::default(),
+            )),
+            local_list_active: Arc::new(std::sync::Mutex::new(true)),
             evidence,
         })
     }
@@ -83,6 +98,22 @@ impl RemoteControlSession {
     pub fn with_configuration_values(mut self, values: Arc<LocalConfigurationValues>) -> Self {
         self.configuration_values = Some(values);
         self
+    }
+
+    #[must_use]
+    pub fn with_local_authorization_updates(
+        mut self,
+        provider: Arc<LocalAuthorizationUpdates16>,
+    ) -> Self {
+        self.local_authorization_updates = Some(provider);
+        self
+    }
+
+    /// Retires this exact socket generation before any queued protected send can begin.
+    pub fn detach_local_authorization(&self) {
+        if let Ok(mut active) = self.local_list_active.lock() {
+            *active = false;
+        }
     }
 
     /// Publishes a snapshot only after the ordered station handler has committed it.
@@ -96,6 +127,12 @@ impl RemoteControlSession {
             || connected_at(&snapshot) != connected_at(&current)
         {
             return Err(state_error());
+        }
+        let enabled = snapshot.capabilities.operations.iter().any(|supported| {
+            matches!(&supported.operation, uob_contracts::Operation::ProtocolAction { protocol: ProtocolEdition::Ocpp16j, action } if action == "SendLocalList")
+        });
+        if !enabled {
+            *self.local_list_active.lock().map_err(|_| state_error())? = false;
         }
         *current = snapshot;
         Ok(())
@@ -125,6 +162,10 @@ impl RemoteControlSession {
                 .write()
                 .map_err(|_| state_error())?
                 .learn(&configuration);
+            self.local_list_limits
+                .lock()
+                .map_err(|_| state_error())?
+                .learn(&configuration);
         }
         let (accepted, error) = match &configuration {
             uob_contracts::ConfigurationResult::Read { .. } => (true, None),
@@ -146,70 +187,6 @@ impl RemoteControlSession {
             error,
             configuration,
         })
-    }
-
-    fn enqueue_call(
-        &self,
-        action: &str,
-        call: OutboundCall,
-        deadline: Instant,
-        resource: &ResourceRef,
-    ) -> Result<PendingCall, SessionSubmitError> {
-        if action == "ChangeConfiguration" {
-            let provider = self
-                .configuration_values
-                .as_ref()
-                .expect("validated provider");
-            let deferred = DeferredConfigurationCall::new(
-                provider.clone(),
-                self.clock.clone(),
-                resource.clone(),
-                call.payload["key"]
-                    .as_str()
-                    .expect("validated key")
-                    .to_owned(),
-                call.payload["valueReference"]
-                    .as_str()
-                    .expect("validated reference")
-                    .to_owned(),
-            );
-            self.handle
-                .try_configuration_call_before(call, deadline, deferred)
-        } else {
-            self.handle.try_call_before(call, deadline)
-        }
-    }
-
-    fn enqueue_prepared(
-        &self,
-        command: &Command<Value>,
-        action: &str,
-        payload: Value,
-        now: uob_contracts::UtcTimestamp,
-    ) -> Result<PendingCall, CommandErrorCode> {
-        if now >= command.expires_at {
-            return Err(CommandErrorCode::Expired);
-        }
-        let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
-        // Bound monotonic arithmetic even for an extreme externally supplied UTC expiry.
-        let deadline = Instant::now() + remaining.min(std::time::Duration::from_hours(24));
-        let call = OutboundCall {
-            message_id: command.request_id.as_str().to_owned(),
-            action: uob_contracts::ProtocolActionName::new(action).expect("static action"),
-            payload,
-            correlation_id: command.correlation_id.clone().unwrap_or_else(|| {
-                uob_contracts::CorrelationId::new(command.request_id.as_str())
-                    .expect("request identity")
-            }),
-        };
-        self.enqueue_call(action, call, deadline, &command.resource)
-            .map_err(|error| match error {
-                SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,
-                SessionSubmitError::InvalidRequest => CommandErrorCode::InvalidParameters,
-                SessionSubmitError::Resource(_) | SessionSubmitError::Full => {
-                    CommandErrorCode::PolicyRejected
-                }
-            })
     }
 }
 
@@ -320,7 +297,12 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 (pending, schedule_request)
             };
             Ok(match pending.receive().await {
-                SessionCallOutcome::Result { payload, .. } => {
+                SessionCallOutcome::Result { mut payload, .. } => {
+                    if crate::command_registry::local_authorization16::ACTIONS.contains(&action) {
+                        let outcome = local_authorization::response(action, &payload, &command);
+                        wipe_local_authorization_json(&mut payload);
+                        return Ok(outcome);
+                    }
                     if action == "GetConfiguration" || action == "ChangeConfiguration" {
                         return self.configuration_response(action, &payload, &command);
                     }

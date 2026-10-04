@@ -28,6 +28,9 @@ pub struct StationState {
     command_requests: HashMap<String, CommandState>,
     command_deliveries: HashSet<String>,
     physical_effects: u64,
+    pub(crate) local: Option<crate::local_authorization::LocalAuthorizationHandle>,
+    pub(crate) boot_payload: Option<serde_json::Value>,
+    pub(crate) observed_reboots: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,16 +80,39 @@ impl StationState {
             command_requests: HashMap::new(),
             command_deliveries: HashSet::new(),
             physical_effects: 0,
+            local: None,
+            boot_payload: None,
+            observed_reboots: 0,
         }
     }
 
     pub fn authorize(&mut self, id_tag: impl Into<String>) {
-        self.authorized_tags.insert(id_tag.into());
+        let id_tag = id_tag.into();
+        let identity = if self.version == OcppVersion::V1_6 {
+            caseless::default_case_fold_str(&id_tag)
+        } else {
+            id_tag
+        };
+        self.authorized_tags.insert(identity);
     }
 
     #[must_use]
     pub fn is_authorized(&self, id_tag: &str) -> bool {
-        self.authorized_tags.contains(id_tag)
+        if self.version == OcppVersion::V1_6 {
+            self.authorized_tags
+                .contains(&caseless::default_case_fold_str(id_tag))
+        } else {
+            self.authorized_tags.contains(id_tag)
+        }
+    }
+
+    pub(crate) fn deny_authorization(&mut self, id_tag: &str) {
+        if self.version == OcppVersion::V1_6 {
+            self.authorized_tags
+                .remove(&caseless::default_case_fold_str(id_tag));
+        } else {
+            self.authorized_tags.remove(id_tag);
+        }
     }
 
     pub(crate) fn set_target_online(&mut self, online: bool) {

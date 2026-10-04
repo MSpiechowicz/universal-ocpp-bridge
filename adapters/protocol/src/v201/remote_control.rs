@@ -3,7 +3,7 @@ use crate::remote_constraints as constraints;
 mod charging_limit;
 mod charging_profile201;
 mod configuration201;
-mod configuration201_profile_parse;
+pub(crate) mod configuration201_profile_parse;
 mod configuration201_response;
 pub mod configuration201_values;
 pub(crate) mod configuration201_wire;

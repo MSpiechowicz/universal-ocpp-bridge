@@ -60,6 +60,7 @@ pub(super) fn load_stations(
                 start: None,
                 control: station.control,
                 configuration: None,
+                local_authorization: None,
             },
         );
         resources.insert(station.station_id, station.resources);

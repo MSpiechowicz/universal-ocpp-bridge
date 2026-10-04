@@ -33,14 +33,14 @@ impl SecretText {
         String::from_utf8(std::mem::take(&mut self.0.0)).expect("decoded UTF-8 string")
     }
 }
-struct SecretJson(Option<Box<RawValue>>);
+pub(super) struct SecretJson(Option<Box<RawValue>>);
 impl<'de> Deserialize<'de> for SecretJson {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Box::<RawValue>::deserialize(deserializer).map(|raw| Self(Some(raw)))
     }
 }
 impl SecretJson {
-    fn take_bytes(&mut self) -> Vec<u8> {
+    pub(super) fn take_bytes(&mut self) -> Vec<u8> {
         let raw: Box<str> = self.0.take().expect("owned raw JSON").into();
         raw.into_string().into_bytes()
     }

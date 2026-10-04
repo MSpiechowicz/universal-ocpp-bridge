@@ -10,7 +10,7 @@
     {"id":"ocpp16.availability","feature":"availability","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.remote-control","feature":"remote_control","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
     {"id":"ocpp16.configuration","feature":"configuration","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
-    {"id":"ocpp16.local-authorization","feature":"local_authorization","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
+    {"id":"ocpp16.local-authorization","feature":"local_authorization","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.reservations","feature":"reservations","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.remote-trigger","feature":"remote_trigger","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
     {"id":"ocpp16.firmware-diagnostics","feature":"firmware_diagnostics","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},

@@ -51,7 +51,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.8/command-result.schema.json"),
+        include_str!("../schemas/v1.9/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
@@ -66,6 +66,10 @@ const SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v1.0/set-network-profile-reference-201.schema.json"),
     ),
     (
+        "send-local-list-reference-16",
+        include_str!("../schemas/v1.0/send-local-list-reference-16.schema.json"),
+    ),
+    (
         "event-envelope",
         include_str!("../schemas/v1.0/event-envelope.schema.json"),
     ),
@@ -75,11 +79,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.9/export-record.schema.json"),
+        include_str!("../schemas/v1.10/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.9/export-batch.schema.json"),
+        include_str!("../schemas/v1.10/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -97,8 +101,8 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 9,
-        "command-result" => 8,
+        "export-record" | "export-batch" => 10,
+        "command-result" => 9,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };

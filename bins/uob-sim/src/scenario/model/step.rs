@@ -7,10 +7,22 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             "step delay and jitter exceed the supported duration range",
         ));
     }
-    if matches!(step.action, ActionKind::Wait) != step.duration_ms.is_some() {
+    if matches!(step.action, ActionKind::Wait | ActionKind::DelayLocalReply)
+        != step.duration_ms.is_some()
+    {
         return Err(setup_failure(
             "invalid_action_fields",
             "only wait actions require duration_ms",
+        ));
+    }
+    if matches!(step.action, ActionKind::DelayLocalReply)
+        && step
+            .duration_ms
+            .is_some_and(|duration| duration == 0 || duration > 30_000)
+    {
+        return Err(setup_failure(
+            "invalid_native_delay",
+            "native delay must be 1..=30000 milliseconds",
         ));
     }
     command::validate_fields(step)?;
@@ -23,30 +35,18 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             | ActionKind::MeterValues
             | ActionKind::StopTransaction
     );
-    if is_charging_call != step.payload.is_some() {
+    let has_payload = is_charging_call
+        || matches!(
+            step.action,
+            ActionKind::OfflineStart | ActionKind::OfflineStop
+        );
+    if has_payload != step.payload.is_some() {
         return Err(setup_failure(
             "invalid_action_payload",
             "charging calls require payload and other actions do not accept it",
         ));
     }
-    if step.use_awaited_remote_start_id {
-        if !matches!(step.action, ActionKind::StartTransaction) {
-            return Err(setup_failure(
-                "invalid_remote_start_binding",
-                "only start_transaction accepts use_awaited_remote_start_id",
-            ));
-        }
-        if step
-            .payload
-            .as_ref()
-            .is_some_and(|payload| payload.pointer("/transactionInfo/remoteStartId").is_some())
-        {
-            return Err(setup_failure(
-                "invalid_remote_start_binding",
-                "bound start payload must omit transactionInfo.remoteStartId",
-            ));
-        }
-    }
+    validate_remote_start_binding(step)?;
     if is_charging_call != step.fixture_id.is_some() {
         return Err(setup_failure(
             "missing_wire_fixture",
@@ -64,6 +64,10 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::StopTransaction
                 | ActionKind::AwaitRemoteStart
                 | ActionKind::AwaitRemoteStop
+                | ActionKind::OfflineStart
+                | ActionKind::OfflineStop
+                | ActionKind::AssertLocalAuthorization
+                | ActionKind::AwaitLocalAuthorization
         )
     {
         return Err(setup_failure(
@@ -88,5 +92,28 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
         ));
     }
     command::validate_fault(step)?;
+    Ok(())
+}
+
+fn validate_remote_start_binding(step: &StepDefinition) -> Result<(), RunFailure> {
+    if !step.use_awaited_remote_start_id {
+        return Ok(());
+    }
+    if !matches!(step.action, ActionKind::StartTransaction) {
+        return Err(setup_failure(
+            "invalid_remote_start_binding",
+            "only start_transaction accepts use_awaited_remote_start_id",
+        ));
+    }
+    if step
+        .payload
+        .as_ref()
+        .is_some_and(|payload| payload.pointer("/transactionInfo/remoteStartId").is_some())
+    {
+        return Err(setup_failure(
+            "invalid_remote_start_binding",
+            "bound start payload must omit transactionInfo.remoteStartId",
+        ));
+    }
     Ok(())
 }

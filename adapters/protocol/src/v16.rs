@@ -14,7 +14,9 @@ pub use registration::{
     complete_registration_with_trigger, registration_call,
 };
 
-pub use authorization::{Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call};
+pub use authorization::{
+    Ocpp16AuthorizationFlow, Ocpp16AuthorizationOutcome, authorize_call, complete_authorization,
+};
 
 use rust_ocpp::v1_6::messages::meter_values::MeterValuesRequest;
 use rust_ocpp::v1_6::types::{
@@ -50,6 +52,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
     }
     let (message_id, action, payload) = parse_frame(frame)?;
     let observation = match action.as_str() {
+        "Authorize" => authorization::observation(payload)?,
         "BootNotification" => {
             ChargerObservation::Registration(registration::boot_observation(payload)?)
         }

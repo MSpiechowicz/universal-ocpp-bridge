@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use super::{
     ActionKind, CommandAdmission, DiagnosticCounts, FailureCategory, FaultKind, LiveRun,
-    RunFailure, ScenarioClock, ScenarioConnector, StationDefinition, StationResource, StationState,
-    StepDefinition,
+    RunFailure, ScenarioClock, ScenarioConnector, StationDefinition, StationState, StepDefinition,
 };
 use crate::{
     ClientDiagnostics, ProtocolClient, RemoteCommandKind, ReplyDelayReceipt, SimulatorAction,
@@ -50,6 +49,17 @@ pub(super) async fn execute_action(
             Ok(format!("{duration_ms}ms"))
         }
         ActionKind::Disconnect => disconnect(client, state).await,
+        ActionKind::CsmsOffline
+        | ActionKind::CsmsReconnect
+        | ActionKind::OfflineStart
+        | ActionKind::OfflineStop
+        | ActionKind::AssertLocalAuthorization
+        | ActionKind::AwaitLocalAuthorization
+        | ActionKind::AwaitReboot
+        | ActionKind::DelayLocalReply
+        | ActionKind::DropLocalReply => {
+            super::local_authorization::execute(connector, station, step, client, state).await
+        }
     }
 }
 
@@ -62,20 +72,28 @@ async fn connect(
     if client.is_some() {
         return Err(failure("already_connected", "station is already connected"));
     }
-    let connected = connector
-        .connect(station.client_config())
-        .await
-        .map_err(|_| {
-            RunFailure::new(
-                FailureCategory::Setup,
-                "peer_unavailable",
-                "station peer is unavailable or rejected the connection",
-            )
-        })?;
+    super::local_authorization::initialize(station, state)?;
+    let mut configuration = station.client_config();
+    configuration.local_authorization.clone_from(&state.local);
+    let connected = connector.connect(configuration).await.map_err(|_| {
+        RunFailure::new(
+            FailureCategory::Setup,
+            "peer_unavailable",
+            "station peer is unavailable or rejected the connection",
+        )
+    })?;
     let detail = connected.version().websocket_protocol().to_owned();
     *client = Some(connected);
+    if state.local.is_none() {
+        state.local = client
+            .as_deref()
+            .and_then(ProtocolClient::local_authorization)
+            // Only a durable owner may be carried into another native connection.
+            .filter(crate::local_authorization::LocalAuthorizationHandle::has_persistence);
+    }
     state.awaited_remote_start_id = None;
     state.connected = true;
+    state.observed_reboots = client.as_deref().map_or(0, ProtocolClient::reboot_count);
     Ok(detail)
 }
 
@@ -116,7 +134,7 @@ async fn charging_call(
         state.registered = registered;
     }
     match state.version {
-        crate::OcppVersion::V1_6 => validate_before_16(state, step, action)?,
+        crate::OcppVersion::V1_6 => super::execution_16::validate_before(state, step, action)?,
         crate::OcppVersion::V2_0_1 => super::execution_201::validate_before(state, step, action)?,
     }
     let mut payload = step.payload.clone().expect("validated charging payload");
@@ -144,13 +162,25 @@ async fn charging_call(
         .await
         .map_err(|_| failure("charging_call_failed", "OCPP charging call failed"))?;
     assert_response(step, &response)?;
+    super::local_authorization::await_boot_replay(state, client.as_deref(), action, &response)
+        .await?;
     match state.version {
-        crate::OcppVersion::V1_6 => apply_after_16(state, step, action, &response)?,
+        crate::OcppVersion::V1_6 => {
+            super::execution_16::apply_after(state, step, action, &response)?;
+        }
         crate::OcppVersion::V2_0_1 => {
             super::execution_201::apply_after(state, step, action, &response)?;
         }
     }
-    Ok(response.to_string())
+    if action == SimulatorAction::BootNotification {
+        state.boot_payload.clone_from(&step.payload);
+    }
+    Ok(match state.version {
+        crate::OcppVersion::V1_6 => {
+            super::local_authorization::safe_response(&response).to_string()
+        }
+        crate::OcppVersion::V2_0_1 => response.to_string(),
+    })
 }
 
 async fn remote_command(
@@ -243,7 +273,10 @@ async fn remote_command(
             state.authorize(id_tag);
         }
     }
-    Ok(response.to_string())
+    Ok(match state.version {
+        crate::OcppVersion::V1_6 => serde_json::json!({"accepted":command.accepted}).to_string(),
+        crate::OcppVersion::V2_0_1 => response.to_string(),
+    })
 }
 
 fn target_state(state: &mut StationState, online: bool) -> String {
@@ -276,7 +309,10 @@ fn reconcile_command(
     ))
 }
 
-fn assert_response(step: &StepDefinition, actual: &serde_json::Value) -> Result<(), RunFailure> {
+pub(super) fn assert_response(
+    step: &StepDefinition,
+    actual: &serde_json::Value,
+) -> Result<(), RunFailure> {
     if step
         .expect_response
         .as_ref()
@@ -291,173 +327,7 @@ fn assert_response(step: &StepDefinition, actual: &serde_json::Value) -> Result<
     }
 }
 
-fn validate_before_16(
-    state: &StationState,
-    step: &StepDefinition,
-    action: SimulatorAction,
-) -> Result<(), RunFailure> {
-    if state.version != crate::OcppVersion::V1_6 {
-        return Err(failure(
-            "wrong_protocol_action",
-            "OCPP 1.6 charging action used for a different station version",
-        ));
-    }
-    let payload = step.payload.as_ref().expect("validated charging payload");
-    if action != SimulatorAction::BootNotification && !state.registered {
-        return Err(failure(
-            "station_not_registered",
-            "charging calls require an accepted BootNotification",
-        ));
-    }
-    if matches!(
-        action,
-        SimulatorAction::MeterValues | SimulatorAction::StopTransaction
-    ) {
-        validate_active_transaction(state, payload, action)?;
-    }
-    if action == SimulatorAction::StartTransaction {
-        let id_tag = payload
-            .get("idTag")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| failure("missing_id_tag", "start requires idTag"))?;
-        if !state.is_authorized(id_tag) {
-            return Err(failure(
-                "not_authorized",
-                "transaction start requires a previously accepted authorization",
-            ));
-        }
-        let resource = connector_resource(payload)?;
-        let current = state
-            .resource(resource)
-            .ok_or_else(|| failure("unknown_connector", "connector is not configured"))?;
-        if current.transaction_id.is_some() {
-            return Err(failure(
-                "transaction_already_active",
-                "connector already has an active transaction",
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn validate_active_transaction(
-    state: &StationState,
-    payload: &serde_json::Value,
-    action: SimulatorAction,
-) -> Result<(), RunFailure> {
-    let transaction_id = payload
-        .get("transactionId")
-        .and_then(serde_json::Value::as_i64)
-        .ok_or_else(|| failure("missing_transaction_id", "transactionId is required"))?
-        .to_string();
-    let resource = if action == SimulatorAction::MeterValues {
-        connector_resource(payload)?
-    } else {
-        active_resource(state, &transaction_id)?
-    };
-    if state
-        .resource(resource)
-        .and_then(|item| item.transaction_id.as_deref())
-        != Some(transaction_id.as_str())
-    {
-        return Err(failure(
-            "transaction_not_active",
-            "metering and stop calls require the matching active transaction",
-        ));
-    }
-    Ok(())
-}
-
-fn apply_after_16(
-    state: &mut StationState,
-    step: &StepDefinition,
-    action: SimulatorAction,
-    response: &serde_json::Value,
-) -> Result<(), RunFailure> {
-    let payload = step.payload.as_ref().expect("validated charging payload");
-    if action == SimulatorAction::BootNotification
-        && response.get("status").and_then(serde_json::Value::as_str) == Some("Accepted")
-    {
-        state.registered = true;
-    }
-    if action == SimulatorAction::Authorize
-        && response
-            .pointer("/idTagInfo/status")
-            .and_then(serde_json::Value::as_str)
-            == Some("Accepted")
-    {
-        state.authorize(
-            payload["idTag"]
-                .as_str()
-                .expect("typed authorization payload"),
-        );
-    }
-    if action == SimulatorAction::StartTransaction
-        && response
-            .pointer("/idTagInfo/status")
-            .and_then(serde_json::Value::as_str)
-            == Some("Accepted")
-    {
-        let transaction_id = response
-            .get("transactionId")
-            .and_then(serde_json::Value::as_i64)
-            .ok_or_else(|| {
-                failure(
-                    "missing_transaction_id",
-                    "accepted start omitted transactionId",
-                )
-            })?;
-        state
-            .start_transaction(connector_resource(payload)?, transaction_id.to_string())
-            .map_err(|_| {
-                failure(
-                    "invalid_transaction_transition",
-                    "could not start transaction",
-                )
-            })?;
-        state.record_local_effect();
-    }
-    if action == SimulatorAction::StopTransaction {
-        let transaction_id = payload["transactionId"]
-            .as_i64()
-            .expect("validated transactionId")
-            .to_string();
-        state
-            .stop_transaction(active_resource(state, &transaction_id)?)
-            .map_err(|_| {
-                failure(
-                    "invalid_transaction_transition",
-                    "could not stop transaction",
-                )
-            })?;
-    }
-    Ok(())
-}
-
-fn connector_resource(payload: &serde_json::Value) -> Result<StationResource, RunFailure> {
-    let connector_id = payload
-        .get("connectorId")
-        .and_then(serde_json::Value::as_u64)
-        .and_then(|value| u16::try_from(value).ok())
-        .ok_or_else(|| {
-            failure(
-                "invalid_connector",
-                "connectorId must be a positive integer",
-            )
-        })?;
-    Ok(StationResource::Connector { connector_id })
-}
-
-fn active_resource(
-    state: &StationState,
-    transaction_id: &str,
-) -> Result<StationResource, RunFailure> {
-    state
-        .resource_for_transaction(transaction_id)
-        .ok_or_else(|| failure("transaction_not_active", "transaction is not active"))
-}
-
-fn failure(code: &'static str, message: &'static str) -> RunFailure {
+pub(super) fn failure(code: &'static str, message: &'static str) -> RunFailure {
     RunFailure::new(FailureCategory::Assertion, code, message)
 }
 

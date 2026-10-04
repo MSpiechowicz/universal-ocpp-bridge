@@ -26,6 +26,7 @@ fn persisted_result(command: &Command<Value>, lifecycle: CommandLifecycle) -> Co
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 

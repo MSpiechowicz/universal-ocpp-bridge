@@ -185,7 +185,11 @@ id = "heartbeat""#,
     assert_eq!(report["status"], "passed", "{report}");
     assert!(began.elapsed() >= Duration::from_millis(400));
     assert_eq!(report["steps"][2]["action"], "disconnect");
+    assert_eq!(report["steps"][2]["effect_status"], "applied");
+    assert_eq!(report["steps"][2]["actual_event"], "disconnected");
     assert_eq!(report["steps"][3]["action"], "connect");
+    assert_eq!(report["steps"][3]["effect_status"], "applied");
+    assert_eq!(report["steps"][3]["actual_event"], "connected");
     assert_eq!(report["steps"][4]["fault"], "response_delay");
     assert_eq!(report["steps"][4]["fault_selected"], true);
     assert_eq!(report["steps"][4]["actual_event"], "heartbeat_result");

@@ -6,12 +6,12 @@ models, query parameters, error mapping and resource inventory. The listener ser
 artifact without per-request schema generation.
 
 Canonical objects reference each contract's current versioned schema on the same listener:
-command-result uses `/bridge/v1/schemas/v1.8/command-result.schema.json`, and nested
-export-record/export-batch use `/bridge/v1/schemas/v1.9/{schema}`. Other unchanged
+command-result uses `/bridge/v1/schemas/v1.9/command-result.schema.json`, and nested
+export-record/export-batch use `/bridge/v1/schemas/v1.10/{schema}`. Other unchanged
 contracts retain their existing versioned paths. Responses contain the unmodified files
 from `crates/contracts/schemas`, including their canonical `$id` and Draft 2020-12
-definitions. Released command-result schemas through v1.7 and export schemas through
-v1.8 remain available byte-identical; old result JSON remains readable.
+definitions. Released command-result schemas through v1.8 and export schemas through
+v1.9 remain available byte-identical; old result JSON remains readable.
 
 The initial protected request envelopes are served at
 `/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json` and
@@ -21,6 +21,11 @@ identities are `urn:uob:ocpp201:SetVariablesReference:1` and
 They describe reference-only inputs, not secret-bearing native network profiles.
 Schema discovery neither grants privileged target ingress nor enables a protected-value
 provider or automatic export production.
+
+The protected OCPP 1.6 list envelope is served at
+`/bridge/v1/schemas/v1.0/send-local-list-reference-16.schema.json`, payload identity
+`urn:uob:ocpp16:SendLocalListReference:1`. It carries version, update type and a
+station-bound opaque capability, never inline native entries or parent identities.
 
 Clients can resolve the contract without contacting a schema registry. Configure
 resolvers with the document's retrieval URL as their base and supply the integration
@@ -54,11 +59,22 @@ Results contain no values, profiles, `statusInfo`, `customData` or reusable capa
 Native acceptance, reboot staging, HTTP exposure and independently observed effects
 remain separate facts.
 
-Nested export public schema v1.9 is intentionally distinct from runtime export envelope
-revision 8. This additive result change does not migrate SQL; SQLite remains at schema v14.
+The configuration-evidence addition used public nested export v1.9 and separately
+named runtime envelope revision 8. Current local-list evidence advances these to
+public v1.10/runtime revision 9, without a SQL migration; SQLite remains v14.
 The existing exact-origin/principal/resource status checks, configured authentication
 policy and encoded-payload caps are unchanged. Ordinary target credentials cannot submit
 these privileged writes, and oversized results fail explicitly without truncated success.
+
+Optional command-result v1.9 `local_authorization_16` preserves native OCPP 1.6
+Get version, Send requested version/update type and exact native status, or Clear
+status. Query empty `0` and unsupported `-1` remain distinct; Send forbids the
+update sentinels but preserves other signed 32-bit versions. No entries, parents,
+capabilities or arbitrary native errors appear in results. ACK is not installed
+contents, offline use or physical effect proof; malformed/lost/unpaired replies
+have no fabricated local-list field. Result retrieval remains exact-origin,
+principal and resource scoped; this schema addition does not permit privileged
+OCPP target ingress or automatic global export production.
 
 ## Separate MQTT transport
 
@@ -71,11 +87,13 @@ The direct HTTP/SSE listener and its broker-free acceptance below remain unchang
 one target does not implicitly start the other. Neither target's transport acknowledgement proves
 EMS consumption or electrical energy delivery.
 
-MQTT adds only the named command-result v1.8 to its existing explicit version allowlist;
-historically unsupported v1.2/v1.3 remain unsupported, and future revision 9 is rejected
-before publication. Immediate and durable results retain packet-specific PUBACK
-correlation. Broker receipt is not native acceptance, profile activation or proof of
-physical effects; this compatibility change grants no native target privilege.
+MQTT explicitly accepts named command-result v1.0/v1.1/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9
+on existing topics. Historically unsupported v1.2/v1.3 remain unsupported, and future
+revision 10 is rejected before publication. Immediate and durable results retain
+packet-specific PUBACK correlation and existing encoded-message caps; oversized
+results fail without truncated evidence. Broker receipt is not native acceptance,
+installed list contents, offline authorization or physical effects. Result compatibility
+grants no native target privilege.
 
 ## Regeneration and CI drift gate
 

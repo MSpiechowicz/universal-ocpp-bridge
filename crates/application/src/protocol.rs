@@ -16,7 +16,7 @@ use uob_contracts::{
 /// not erase OCPP 1.6J versus 2.0.1 meaning.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChargerObservation {
-    /// Validated sensitive OCPP 2.0.1 authorization input; never a charging permission.
+    /// Validated sensitive native authorization input; never a charging permission.
     ChargingIdentity(crate::charging_identity::PresentedChargingIdentity),
     /// A station has announced its identity and boot reason, when the edition defines one.
     Registration(RegistrationObservation),

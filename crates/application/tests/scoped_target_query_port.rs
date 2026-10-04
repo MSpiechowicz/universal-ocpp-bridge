@@ -424,6 +424,7 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 fn request_id() -> RequestId {

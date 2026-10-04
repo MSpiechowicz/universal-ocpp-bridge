@@ -19,6 +19,7 @@ pub(super) struct TriggerStream {
     pub(super) inner: Box<dyn TransportStream>,
     pub(super) barrier: TriggerBarrier,
     pub(super) armed: watch::Receiver<bool>,
+    pub(super) socket_generation: Option<u64>,
 }
 
 impl TransportStream for TriggerStream {
@@ -138,13 +139,18 @@ impl TriggerStream {
         if let Some(state) = &self.barrier.state_201 {
             state.lock().expect("OCPP 2.0.1 state lock").registered = accepted;
         } else {
-            self.barrier
+            let mut state = self
+                .barrier
                 .state
                 .as_ref()
                 .expect("OCPP 1.6 barrier")
                 .lock()
-                .expect("OCPP 1.6 state lock")
-                .registered = accepted;
+                .expect("OCPP 1.6 state lock");
+            if self.socket_generation != Some(state.socket_generation) {
+                return;
+            }
+            state.registered = accepted;
+            state.boot_accepted_generation = accepted.then_some(state.socket_generation);
         }
     }
 

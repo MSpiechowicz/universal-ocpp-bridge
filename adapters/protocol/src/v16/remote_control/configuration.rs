@@ -227,19 +227,22 @@ pub(super) fn write_response(payload: &Value, key: &str) -> Option<Configuration
 
 /// Explicit OCPP Core keys with low-sensitivity scalar semantics; all other keys are opaque.
 fn safe_value(key: &str, value: &str) -> bool {
-    matches!(
-        key,
-        "HeartbeatInterval"
-            | "GetConfigurationMaxKeys"
-            | "NumberOfConnectors"
-            | "MeterValueSampleInterval"
-            | "ClockAlignedDataInterval"
-            | "MinimumStatusDuration"
-            | "ConnectionTimeOut"
-            | "ResetRetries"
-            | "WebSocketPingInterval"
-    ) && !value.is_empty()
-        && value.len() <= 10
-        && value.as_bytes().iter().all(u8::is_ascii_digit)
-        && value.parse::<u32>().is_ok()
+    (key == "LocalAuthListEnabled" && matches!(value, "true" | "false"))
+        || matches!(
+            key,
+            "LocalAuthListMaxLength"
+                | "SendLocalListMaxLength"
+                | "HeartbeatInterval"
+                | "GetConfigurationMaxKeys"
+                | "NumberOfConnectors"
+                | "MeterValueSampleInterval"
+                | "ClockAlignedDataInterval"
+                | "MinimumStatusDuration"
+                | "ConnectionTimeOut"
+                | "ResetRetries"
+                | "WebSocketPingInterval"
+        ) && !value.is_empty()
+            && value.len() <= 10
+            && value.as_bytes().iter().all(u8::is_ascii_digit)
+            && value.parse::<u32>().is_ok()
 }

@@ -115,6 +115,18 @@ not advertised as immediate socket changes. Already-running, completed, unknown 
 edited steps fail with a conflict. Edits and worker admission share a lock, preventing a late
 control from silently changing another step. Every applied edit remains visible in step metadata.
 
+Authored native OCPP 1.6 local-list/cache scenarios can run through the same
+authenticated catalog/run API; there is no separate list editor or provisioning
+endpoint. Their `csms_offline`/`csms_reconnect`, local offline start/stop, persistent
+state assertions, native Reset observation and actual reply-fault actions are
+described in [the scenario guide](scenario-runner.md#native-ocpp-16-local-list-cache-and-real-offline-recovery).
+Catalog and progress omit raw tags, parents and private state-file paths; only safe
+counters, native statuses and lifecycle results are exposed. Persistent native
+state remains in the separately configured owner-only simulator recovery file.
+An independent real control smoke exercised authenticated catalog/run/final
+progress over that model and verified private identities were absent from public
+output. This does not authorize any bridge charging command or production peer.
+
 ## Bounds and evidence
 
 Startup documents and request bodies are limited to 64 KiB; the token file to 128 bytes.

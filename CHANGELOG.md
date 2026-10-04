@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off privileged demo OCPP 1.6
+  `GetLocalListVersion`, protected `SendLocalList` and `ClearCache` (#111).
+  Keep station list/cache authority separate from the service's exact-byte SHA
+  allowlist. Complete the normal native 1.6 Authorize decoded-call boundary using
+  that unchanged policy/provider and native denial mapping. Public updates carry
+  immutable station/version/type-bound references;
+  owner-only startup content holds raw native identities and parent tags. Bound
+  provisioning and retained content; cap complete escaped native CALLs at 64 KiB,
+  including actual message IDs and envelopes. Fence scope, expiry, revocation,
+  current learned limits and live connection generation before send.
+  Preserve signed native versions, Full/Differential/deletion/omission semantics,
+  native statuses and honest malformed/lost/unpaired reply uncertainty without replay.
+  Add value-free `local_authorization_16` in result v1.9, nested export v1.10 and
+  separately named runtime export revision 9; retain released schemas and SQLite14.
+  Existing HTTP/MQTT result consumers gain no privileged target ingress or automatic
+  export producer. The separate simulator has bounded owner-only persistent
+  list/cache/offline state, Unicode casefold lookup with original native spelling,
+  real socket-offline starts/stops, bounded timestamped transaction replay, actual
+  native Reset/disk recovery and new-process recovery. Uncertain native execution
+  remains unreplayed; directory-sync uncertainty makes state unavailable rather
+  than reporting a fictitious rollback. Software-peer smokes exercised protected
+  bridge outcomes/privacy/restart, cache/list/exact-byte policy independence,
+  real offline replay and kill/new-process recovery, genuine native Reset/control,
+  and delayed/lost ACK followed by explicit reconnect/query/fresh Full. Additional
+  real-daemon/CLI boundary probes cover the exact frame cap, disabled-list/cache
+  recovery and online connector occupancy after disconnection. Ordinary OCPP 1.6
+  automatic reconnect retains prior Accepted registration without inventing one
+  for Pending/Rejected; new-socket triggered Boot remains independently eligible.
+  Persistent recovery and Reset still require real fresh Boot evidence.
+  Late Boot completions cannot register or schedule replay on a replacement socket;
+  recovery adapters and replay sends remain bound to their accepted native generation,
+  including every transport poll after SDK/sink queuing.
+  After Pending/Rejected reconnect Boot, an actual current-socket Accepted triggered
+  Boot automatically schedules original durable facts; native denied responses and
+  TriggerMessage acceptance alone do not. Lost Start replies remain durably uncertain
+  without retransmission on recovered state and a new registered native socket.
+  No production controls, public provisioning/hot reload, browser editor, physical charging, hardware
+  interoperability, OCA certification or exactly-once network guarantee is implied.
 - Add independently default-off, privileged demo OCPP 2.0.1 `SetVariables` and
   station-only `SetNetworkProfile` through the existing durable command API (#110).
   Public requests contain exact bound opaque references, never native values or

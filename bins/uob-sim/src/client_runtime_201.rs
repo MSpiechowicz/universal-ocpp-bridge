@@ -165,6 +165,7 @@ pub(super) async fn run(
                     let response = remote_commands.recv().await.ok_or(SimulatorClientError::Stopped);
                     let _ = result.send(response);
                 }
+                Some(Command::LocalListConflict) => unreachable!("native notification sender exists only for OCPP 1.6"),
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
                     let response = client.disconnect().await

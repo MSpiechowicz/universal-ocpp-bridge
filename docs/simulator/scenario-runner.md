@@ -32,7 +32,10 @@ Scenario steps name their station, action, and nonzero wall-clock timeout. Versi
 `connect`, `boot`, `authorize`, `status`, `start_transaction`, `meter_values`,
 `stop_transaction`, `await_remote_start`, `await_remote_stop`, `heartbeat`, `wait`, and
 `disconnect`. Resilience scenarios additionally use `target_offline`, `target_online`, and
-`reconcile_command`. Each station executes its own ordered step queue,
+`reconcile_command`. Native OCPP 1.6 list/cache scenarios add `csms_offline`,
+`csms_reconnect`, `offline_start`, `offline_stop`, `assert_local_authorization`,
+`await_local_authorization`, `await_reboot`, `delay_local_reply` and `drop_local_reply`.
+Each station executes its own ordered step queue,
 so a delayed, disconnected, or missing-response station cannot stop another station from making
 progress. Reports are reconstructed in source-step order to retain deterministic JSONL identifiers
 even though station workers execute concurrently.
@@ -127,3 +130,79 @@ Configuration can reference a credential file, but reports never serialize that 
 endpoint. Parser and connection failures use redacted messages instead of echoing TOML source,
 URLs, or dependency errors. On failure or Ctrl-C, the runner cancels every station worker,
 force-closes in-flight connections, and drains the worker set before it returns.
+
+## Native OCPP 1.6 local list, cache and real offline recovery
+
+Configure a separate protected persistent model in the simulator document:
+
+```toml
+[[stations]]
+id = "demo-1"
+endpoint = "ws://127.0.0.1:9000/ocpp/demo-1"
+ocpp_version = "1.6"
+connectors = [1]
+
+[stations.local_authorization]
+private_state_file = "/srv/uob-demo/private/simulator/demo-1.json"
+list_supported = true
+cache_supported = true
+```
+
+The file's canonical directory must be owner-only mode `0700`; an existing file
+must be service-owned mode `0600`. It must not alias credentials or another station.
+Provision it separately from bridge state and protected bridge update content.
+Missing model configuration is genuinely unsupported, not ephemeral Accepted.
+Only OCPP 1.6 accepts this configuration. The authored
+`bins/uob-sim/examples/local-authorization-1.6.toml` shows scenario action shapes;
+the independent CSMS must actually send the native updates expected by the scenario.
+
+Native Full replaces the list; absent/empty Full clears it. Differential upserts,
+deletes entries without `idTagInfo`, and requires its version to exceed the stored
+version; absent/empty Differential changes no entries. Query reports `0` for empty,
+even after a versioned clear; `-1` means unsupported. ClearCache never clears the
+list. List/cache lookup uses full Unicode casefold without changing transmitted
+spelling or the service's independent exact-byte SHA policy. Negative/expired entries
+deny local starts. An enabled list takes priority over the separate cache; a retained
+disabled list does not suppress an enabled cache. Recovery preserves legitimate
+overlap between the independent maps across support toggles, and re-enabling the
+list restores its priority.
+
+Unlike `target_offline`, `csms_offline` actually shuts down the station socket.
+`offline_start` requires a native payload with `connectorId`, `idTag`, `meterStart`
+and `timestamp`, with `expect_response = { accepted = true }` or false as appropriate.
+A confirmed online transaction still occupies its connector after `csms_offline`;
+`offline_start` rejects that connector before adding any durable record. A distinct
+free connector remains usable, and a confirmed native online Stop frees its connector.
+`offline_stop` requires `connectorId`, `meterStop`, `timestamp` and expects
+`{ stopped = true }`. Native accepted facts are durably recorded without an Authorize
+CALL or open socket. Denied starts create no transaction. Caps fail rather than
+truncate or invent successfully persisted facts.
+
+`csms_reconnect` establishes a new socket, obtains native Boot acceptance and performs
+bounded Start/Stop replay with original tags, meters and timestamps and the returned
+signed native transaction ID. It reports `registered_and_replayed` or honestly
+`registered_replay_uncertain`; it does not retry an uncertain Start. Successful finished
+records leave the queue only after native mapping/Stop and durable commit.
+
+`assert_local_authorization` checks a requested subset of safe state metrics, and
+`await_local_authorization` waits under the step deadline. Metrics include
+`listVersion`, `listEntries`, `cacheEntries`, `offlineRecords`, `uncertainRecords`
+and `stateAvailable`, never raw/parent identities. `await_reboot` observes an actual
+native Reset lifecycle: Accepted reply, actual close, disk recovery, new socket,
+Boot and bounded replay attempt. Configured successful recovery reports
+`disk_recovered_and_registered`. An unconfigured Reset cannot claim disk recovery.
+Reset ends ongoing offline records with the native Reset reason; absent an explicit
+later stop measurement, their last available reading is the recorded start meter,
+not invented energy growth.
+
+`delay_local_reply` uses `duration_ms` to delay the next actual local-list/cache
+CALLRESULT after durable mutation. `drop_local_reply` commits that mutation, drops
+its acknowledgement and actually closes the socket. Both require a connected
+native client; explicit reconnect/query and a fresh authorized Full can reconcile
+state, while a version alone cannot establish list contents.
+
+Public JSONL, adapter traces and the authenticated control catalog/progress expose
+safe counters/statuses only. Raw tags/parents necessarily remain in the separate
+owner-only recovery file and native traffic. Kill/new-process recovery and native
+Reset are different exercised boundaries; neither implies physical charger behavior,
+OCA certification or exactly-once network execution.

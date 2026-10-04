@@ -159,17 +159,16 @@ impl TriggerBarrier {
         sink: Box<dyn TransportSink>,
         stream: Box<dyn TransportStream>,
     ) -> (Box<dyn TransportSink>, Box<dyn TransportStream>) {
+        let socket_generation = self
+            .state
+            .as_ref()
+            .map(|state| state.lock().expect("OCPP 1.6 state lock").socket_generation);
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         if let Some(state) = &self.state_201 {
             state.lock().expect("OCPP 2.0.1 state lock").registered = false;
-        } else {
-            self.state
-                .as_ref()
-                .expect("OCPP 1.6 barrier")
-                .lock()
-                .expect("OCPP 1.6 state lock")
-                .registered = false;
         }
+        // OCPP 1.6 registration fences belong to the underlying native
+        // transport, which distinguishes ordinary reconnect from recovery.
         self.clear();
         (
             Box::new(TriggerSink {
@@ -181,6 +180,7 @@ impl TriggerBarrier {
                 inner: stream,
                 barrier: self.clone(),
                 armed: self.armed.subscribe(),
+                socket_generation,
             }),
         )
     }

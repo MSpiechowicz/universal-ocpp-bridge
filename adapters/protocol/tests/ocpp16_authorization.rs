@@ -333,3 +333,25 @@ impl Drop for TestDatabase {
         let _shared_memory = std::fs::remove_file(format!("{}-shm", self.0.display()));
     }
 }
+
+#[test]
+fn native_authorize_fixture_enters_the_sensitive_decoded_call_flow_without_token_debug_echo() {
+    let call = v16::decode_call(AUTHORIZE).expect("validated native Authorize fixture");
+    assert!(!format!("{call:?}").contains("LOCAL-USER-1"));
+    let uob_application::ChargerObservation::ChargingIdentity(identity) = call.observation else {
+        panic!("native Authorize must reach the existing sensitive identity boundary");
+    };
+    assert_eq!(
+        identity.kind,
+        uob_application::charging_identity::ChargingTokenKind::Local
+    );
+    for invalid in [
+        br#"[2,"empty","Authorize",{"idTag":""}]"#.as_slice(),
+        br#"[2,"extra","Authorize",{"idTag":"LOCAL-USER-1","unexpected":true}]"#.as_slice(),
+    ] {
+        assert_eq!(
+            v16::decode_call(invalid).unwrap_err().kind(),
+            DecodeErrorKind::InvalidPayload
+        );
+    }
+}

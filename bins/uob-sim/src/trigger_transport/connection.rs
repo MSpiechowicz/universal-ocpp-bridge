@@ -41,6 +41,11 @@ impl Reconnector for TriggerReconnector {
                 self.credentials_file.as_deref(),
             )
             .await?;
+            let (sink, stream) = if let Some(state) = &self.barrier.state {
+                crate::local_authorization::transport::wrap(sink, stream, Arc::clone(state))
+            } else {
+                (sink, stream)
+            };
             Ok(self.barrier.wrap(sink, stream))
         })
     }
@@ -62,10 +67,11 @@ pub(crate) async fn connect(
     TransportError,
 > {
     let (delivered, receiver) = mpsc::unbounded_channel();
-    let barrier = TriggerBarrier::new(capacity, delivered, state, timeout);
+    let barrier = TriggerBarrier::new(capacity, delivered, Arc::clone(&state), timeout);
     let (sink, stream) =
         crate::station_auth::connect(endpoint, ocpp_client::OcppVersion::V1_6, credentials_file)
             .await?;
+    let (sink, stream) = crate::local_authorization::transport::wrap(sink, stream, state);
     let (sink, stream) = barrier.wrap(sink, stream);
     let mut config = ClientConfig::new(timeout);
     if reconnect {

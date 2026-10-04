@@ -147,6 +147,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             charging_profile_16: None,
             charging_profile_201: None,
             configuration_201: None,
+            local_authorization_16: None,
         }),
         ..EventSource::default()
     });

@@ -1,7 +1,7 @@
 //! Validate syntax/depth/numbers before allocating decoded sensitive strings.
 /// A borrowed `RawValue` validates strings and JSON syntax without owning decoded secrets.
 /// The subsequent `Value` parse cannot fail midway on excessive depth or number range.
-pub(super) fn safe_to_decode(bytes: &[u8]) -> bool {
+pub(crate) fn safe_to_decode(bytes: &[u8]) -> bool {
     if serde_json::from_slice::<&serde_json::value::RawValue>(bytes).is_err() {
         return false;
     }

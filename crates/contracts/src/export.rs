@@ -259,10 +259,10 @@ pub struct ExportRecord {
 }
 
 impl ExportRecord {
-    /// Current envelope revision, including value-free native configuration command evidence.
+    /// Runtime revision, distinct from the additive public nested schema revision.
     pub const SCHEMA_VERSION: ContractVersion = ContractVersion {
         major: 1,
-        revision: 8,
+        revision: 9,
     };
     /// Creates a record only from the closed privacy-filtered payload surface.
     #[must_use]

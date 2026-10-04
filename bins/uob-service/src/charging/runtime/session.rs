@@ -31,16 +31,19 @@ pub(super) async fn attach(
                     .map_err(|_| unavailable())?,
                 ),
             };
-            let session = Arc::new(
-                uob_protocol_adapter::v16::remote_control::RemoteControlSession::new(
-                    handle.clone(),
-                    snapshot.clone(),
-                    start,
-                    Arc::new(Clock),
-                    Arc::new(context.store.clone()),
-                )
-                .map_err(|_| unavailable())?,
-            );
+            let session = uob_protocol_adapter::v16::remote_control::RemoteControlSession::new(
+                handle.clone(),
+                snapshot.clone(),
+                start,
+                Arc::new(Clock),
+                Arc::new(context.store.clone()),
+            )
+            .map_err(|_| unavailable())?;
+            let session = match &configuration.local_authorization {
+                Some(provider) => session.with_local_authorization_updates(provider.clone()),
+                None => session,
+            };
+            let session = Arc::new(session);
             context.commands.attach_16(station.clone(), session)
         }
         ProtocolEdition::Ocpp201 => {

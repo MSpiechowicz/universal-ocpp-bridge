@@ -24,6 +24,47 @@ impl ProtocolClient for SimulatorProtocolClient {
                     .map(|state| state.lock().expect("OCPP 2.0.1 state lock").registered)
             })
     }
+    fn local_authorization(&self) -> Option<crate::local_authorization::LocalAuthorizationHandle> {
+        self.ocpp16_state
+            .as_ref()
+            .and_then(|state| state.lock().expect("OCPP 1.6 state lock").local.clone())
+    }
+
+    fn reboot_count(&self) -> u64 {
+        self.ocpp16_state.as_ref().map_or(0, |state| {
+            state.lock().expect("OCPP 1.6 state lock").reboot_count
+        })
+    }
+
+    fn socket_connected(&self) -> Option<bool> {
+        self.ocpp16_state
+            .as_ref()
+            .map(|state| state.lock().expect("OCPP 1.6 state lock").socket_connected)
+    }
+
+    fn arm_local_reply_fault(
+        &self,
+        fault: crate::local_authorization::transport::NativeReplyFault,
+    ) -> Result<(), SimulatorClientError> {
+        let state = self
+            .ocpp16_state
+            .as_ref()
+            .ok_or_else(|| SimulatorClientError::Protocol("wrong native edition".to_owned()))?;
+        let mut state = state.lock().expect("OCPP 1.6 state lock");
+        if state.local_reply_fault.is_some() {
+            return Err(SimulatorClientError::Protocol(
+                "native reply fault already armed".to_owned(),
+            ));
+        }
+        if matches!(fault, crate::local_authorization::transport::NativeReplyFault::Delay(duration) if duration.is_zero() || duration > Duration::from_secs(30))
+        {
+            return Err(SimulatorClientError::Protocol(
+                "native reply delay bound".to_owned(),
+            ));
+        }
+        state.local_reply_fault = Some(fault);
+        Ok(())
+    }
 
     fn heartbeat(&self) -> ClientFuture<'_, String> {
         Box::pin(async move { self.send_command(Command::Heartbeat).await })
@@ -70,13 +111,22 @@ impl ProtocolClient for SimulatorProtocolClient {
     }
 
     fn force_shutdown(&self) -> ClientFuture<'_, ()> {
-        Box::pin(async move { self.emergency_client.disconnect().await })
+        Box::pin(async move {
+            let response = self.emergency_client.disconnect().await;
+            if let Some(state) = &self.ocpp16_state {
+                state.lock().expect("OCPP 1.6 state lock").local = None;
+            }
+            response
+        })
     }
 
     fn abort(&self) {
         self.traces
             .push(TraceKind::Stopped, "client task force-stopped");
         self.worker.abort();
+        if let Some(state) = &self.ocpp16_state {
+            state.lock().expect("OCPP 1.6 state lock").local = None;
+        }
     }
 
     fn traces(&self) -> Vec<TraceEvent> {
