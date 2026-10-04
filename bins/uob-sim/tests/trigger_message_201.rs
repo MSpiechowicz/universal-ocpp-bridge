@@ -253,6 +253,10 @@ async fn native_evse_targets_use_latest_meter_and_transaction_without_cross_evse
     let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(async move {
         let mut socket = accept(&listener).await;
+        let boot = recv(&mut socket).await;
+        assert_eq!(boot[0], 2);
+        assert_eq!(boot[2], "BootNotification");
+        reply(&mut socket, &boot[1], response("BootNotification")).await;
         for _ in 0..2 {
             let call = recv(&mut socket).await;
             assert_eq!(call[2], "TransactionEvent");
@@ -310,6 +314,14 @@ async fn native_evse_targets_use_latest_meter_and_transaction_without_cross_evse
     let client = SimulatorProtocolClient::connect(config(endpoint))
         .await
         .unwrap();
+    let boot = call(
+        &client,
+        SimulatorAction::BootNotification,
+        json!({"reason":"PowerUp","chargingStation":{"model":"Simulator","vendorName":"UOB"}}),
+    )
+    .await;
+    assert_eq!(boot, response("BootNotification"));
+    assert_eq!(client.accepted_registration(), Some(true));
     let start: Value = serde_json::from_str(include_str!("fixtures/ocpp201/start.json")).unwrap();
     let meter: Value = serde_json::from_str(include_str!("fixtures/ocpp201/meter.json")).unwrap();
     call(&client, SimulatorAction::StartTransaction, start[3].clone()).await;

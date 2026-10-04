@@ -4,7 +4,7 @@ mod configuration201;
 mod control_auth;
 mod device_model;
 mod files;
-mod local_authorization16;
+mod local_authorization;
 mod profiles;
 mod provision;
 mod recovery;
@@ -51,8 +51,7 @@ pub(crate) struct ChargingState {
     commands: Arc<commands::LiveCommands>,
     credentials: Option<Arc<control_auth::ControlCredentials>>,
     protected_configuration: Option<Arc<LocalConfigurationValues201>>,
-    protected_local_authorization:
-        Option<Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>>,
+    protected_local_authorization: local_authorization::Providers,
     _directory: File,
     _lock: File,
 }
@@ -75,6 +74,8 @@ pub(super) struct StationSettings {
     configuration: Option<Arc<LocalConfigurationValues201>>,
     local_authorization:
         Option<Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>>,
+    local_authorization_201:
+        Option<Arc<uob_protocol_adapter::v201::remote_control::LocalAuthorizationUpdates201>>,
 }
 
 impl StationSettings {
@@ -180,7 +181,7 @@ impl StationSettings {
             (self.control.send_local_list.enabled(), "SendLocalList"),
             (self.control.clear_cache.enabled(), "ClearCache"),
         ] {
-            if enabled && self.protocol == ProtocolEdition::Ocpp16j {
+            if enabled {
                 operations.push(uob_contracts::Operation::ProtocolAction {
                     protocol: self.protocol,
                     action: action.to_owned(),
@@ -257,7 +258,7 @@ impl ChargingRuntime {
             &mut settings,
             &mut seen,
         )?;
-        let protected_local_authorization = local_authorization16::install(
+        let protected_local_authorization = local_authorization::install(
             config.local_authorization_updates_file.as_deref(),
             &resources,
             &mut settings,

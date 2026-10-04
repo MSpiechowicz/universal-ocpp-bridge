@@ -296,6 +296,7 @@ fn admitted_result(command: &ExternalCommand<()>) -> CommandResult {
         charging_profile_201: None,
         configuration_201: None,
         local_authorization_16: None,
+        local_authorization_201: None,
     }
 }
 

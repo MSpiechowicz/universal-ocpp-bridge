@@ -1,4 +1,6 @@
 //! Retained test-only Target-origin evidence exercises production scoped reads, not native ingress.
+#[path = "device_model201_results/admission_schema.rs"]
+mod admission_schema;
 #[allow(dead_code)]
 #[path = "device_model201_results/fixtures.rs"]
 mod fixtures;

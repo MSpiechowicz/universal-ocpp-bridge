@@ -524,3 +524,65 @@ evidence, not OCA certification or physical charging verification.
 exercise the opt-in trigger separately, including a running daemon with HTTP,
 WebSocket and SQLite, and simulator ordering. These are implementation tests,
 not OCA certification or a causal link from native acceptance to later reports.
+
+## Protected native local authorization list and cache
+
+GetLocalListVersion, SendLocalList and ClearCache use the existing durable
+privileged demo command path, independently enabled only at the station root.
+Admission dispatches by edition before applying native rules: identical action
+names do not make a 201 request a 1.6 request. The owner-only
+`local_authorization_updates_file` retains its existing updates entry shape,
+while exact roster edition and capability prefix select separately typed providers.
+Every update binds resource, edition, positive version, update type and expiry.
+There is no public raw-list ingress, provisioning API, hot reload or installed-list
+ledger; the service's exact-byte allowlist remains independent.
+
+Public Send uses `urn:uob:ocpp201:SendLocalListReference:1` and camelCase
+versionNumber/updateType/updateReference, with `list201:<64 hex>` capabilities.
+Native protected metadata is validated against pinned Edition4 schemas and semantic
+integer, identifierString, language, typed identity and expiry constraints. Generic
+UTF-8 vendor/message fields remain valid, inert and private. Complete wire byte
+counting includes escaping, actual message ID and CALL envelope, not just raw payload.
+The bounded deferred send rechecks capability/grant authority, expiry, revocation,
+current generation and smaller learned session limits before starting the socket send.
+Queued Query/Clear also retain current action and generation authority.
+
+Native positive-i32 versions, omission versus empty arrays and typed identity remain
+201-specific; old 1.6 signed-version and Unicode rules are unchanged. Send native
+Accepted/Failed/VersionMismatch and Clear Accepted/Rejected become value-free
+`local_authorization_201` evidence. Query must report nonnegative i32.
+Native statusInfo/customData do not become public diagnostics or result fields.
+Malformed/lost replies and unsupported CALLERRORs use existing safe failure paths;
+they do not manufacture native evidence, retry a mutation or turn Differential into Full.
+
+Generation-local explicit correlated device-model results learn only exact
+LocalAuthListCtrlr ItemsPerMessage/BytesPerMessage/Entries/Enabled/Available/
+SupportsExpiryDateTime and AuthCacheCtrlr Enabled. Entries Actual (including zero)
+is not capacity: numeric Integer maxLimit separately constrains Full count.
+No instances or guessed DeviceDataCtrlr SendLocalList identity are accepted.
+Old persisted device facts cannot restore authority on a new socket.
+
+Result v1.10 and nested public export schemas v1.11 are additive; the runtime
+export envelope is separately revision 10. Released files/routes and stored
+record versions stay unchanged. SQLite remains schema14 with no migration.
+HTTP/MQTT schema/result consumers gain neither privileged target ingress nor
+automatic global export production. ACK, query, installed contents, offline use
+and physical charging remain distinct evidence.
+
+Retained regressions are executable assertions, not certification:
+
+```text
+cargo test --locked -p uob-contracts --test local_authorization201
+cargo test --locked -p uob-application --test local_authorization201
+cargo test --locked -p uob-storage-adapter --test local_authorization201
+cargo test --locked -p uob-protocol-adapter local_authorization
+cargo test --locked -p uob-service --test local_authorization201
+cargo test --locked -p uob-mqtt-target-adapter --test local_authorization201_wire
+```
+
+The service suite starts the actual daemon and exercises authenticated admission,
+native wire requests/results, durable SQLite/history, malformed/unpaired replies
+and process restart non-replay. Native simulator behavior remains independently
+implemented; joint service/simulator scenarios provide separate installed-state and
+offline facts. These commands are verification instructions, not a claim they ran.
+

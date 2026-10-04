@@ -71,6 +71,10 @@ pub(super) async fn attach(
                 Some(provider) => session.with_configuration_201(provider.clone()),
                 None => session,
             };
+            let session = match &configuration.local_authorization_201 {
+                Some(provider) => session.with_local_authorization_updates(provider.clone()),
+                None => session,
+            };
             context
                 .commands
                 .attach_201(station.clone(), session, context.store.clone())

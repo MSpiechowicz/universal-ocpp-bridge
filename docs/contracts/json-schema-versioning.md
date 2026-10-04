@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.8 and serves
-the current v1.9 command-result; OpenAPI command result responses reference v1.9.
-Current nested export-record and export-batch references use v1.10, while released
-export schemas through v1.9 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.9 and serves
+the current v1.10 command-result; OpenAPI command result responses reference v1.10.
+Current nested export-record and export-batch references use v1.11, while released
+export schemas through v1.10 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -261,4 +261,27 @@ authoritative service-side station list or enable automatic global export delive
 MQTT immediate and durable consumers preserve all typed native statuses and query
 versions under the explicit v1.9 result gate, existing topic ownership, payload caps
 and packet-specific PUBACK rules. A PUBACK is only broker receipt, never evidence of
-installed contents or offline authorization; future revision 10 is unsupported.
+installed contents or offline authorization. The subsequent 201 addition below extends this gate.
+
+OCPP 2.0.1 GetLocalListVersion, protected SendLocalList and ClearCache add optional
+action-tagged `local_authorization_201` in command-result v1.10. Query contains
+nonnegative i32 version_number; Send contains the requested positive version_number,
+update_type and exact Accepted/Failed/VersionMismatch; Clear contains Accepted/Rejected.
+No native entries, typed token/group metadata, personal messages, references,
+statusInfo or customData appear in this evidence. Cross-edition or simultaneous
+incompatible evidence fails independent application/storage correlation.
+
+The new initial envelope is `v1.0/send-local-list-reference-201.schema.json`,
+payload identity `urn:uob:ocpp201:SendLocalListReference:1`. Its camelCase
+versionNumber/updateType/updateReference fields accept only positive i32 versions
+and exact `list201:<64 hex>` capabilities; no aliases for 1.6 names are introduced.
+The native OCA Send schema and service reference schema are distinct.
+
+Nested public exports advance to v1.11; runtime ExportRecord/ExportBatch advance
+separately to revision10, without rewriting stored record versions. Released schemas
+remain byte-identical and older result JSON reads with 201 evidence absent.
+SQLite remains v14 without migration. MQTT explicitly supports result v1.10 while
+historically unsupported v1.2/v1.3 and future v1.11 remain rejected before publication.
+Immediate and durable result payload caps and packet-specific PUBACK ownership remain
+unchanged; a schema revision grants neither privileged ingress nor physical-effect proof.
+

@@ -91,3 +91,26 @@ Independent software-peer smokes exercised real native Reset/recovery, post-rebo
 offline authorization/replay, delayed durable ACK and lost ACK/explicit reconnection/
 fresh Full. These are software-boundary results, not charger hardware qualification,
 OCA certification, exactly-once execution or third-party memory-erasure guarantees.
+
+## Persistent native OCPP 2.0.1 authorization
+
+The native 2.0.1 adapter uses separately typed list/cache DTOs and owner-bound private
+state, not the 1.6 normalizers or service-domain authorization model. Native Send
+statuses are Accepted/Failed/VersionMismatch; unsupported operation is CALLERROR
+NotSupported, never a fabricated response status. Get returns nonnegative i32,
+including zero before initialization/when disabled and positive versions for
+installed-but-emptied lists. ClearCache only changes the separate authorization cache.
+
+Native identifiers follow the ASCII identifierString primitive and typed,
+ASCII-case-insensitive identity, while valid generic/private UTF-8 metadata remains
+intact. Native C10 caches latest actual CSMS information regardless of status or list
+membership, evicts older received entries at capacity, and applies explicit cache
+expiry. Optional LifeTime is not advertised or given an invented default.
+Enabled list membership retains its priority, including denial and expiry.
+
+Generation-fenced transport handles native station commands before SDK normalization,
+preserves original offline TransactionEvent timestamp spelling and observes original
+CSMS metadata before an SDK can discard fields. Actual reconnect Boot gates pending
+original delivery; uncertainty is durable and never automatically made certain.
+See [native runnable instructions and boundaries](local-authorization201.md).
+

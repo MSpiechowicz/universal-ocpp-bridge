@@ -7,6 +7,7 @@ mod execution_201;
 mod fault;
 mod live;
 mod local_authorization;
+mod local_authorization201;
 mod model;
 mod report;
 mod runner;

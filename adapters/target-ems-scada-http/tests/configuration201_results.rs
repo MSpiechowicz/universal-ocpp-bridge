@@ -1,4 +1,6 @@
 //! Test-only authoritative target-owned evidence, not privileged EMS native command dispatch.
+#[path = "device_model201_results/admission_schema.rs"]
+mod admission_schema;
 #[path = "configuration201_results/boundaries.rs"]
 mod boundaries;
 #[allow(dead_code)]

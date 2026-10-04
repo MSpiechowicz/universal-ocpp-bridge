@@ -1,0 +1,100 @@
+# Run with local-authorization-2.0.1-config.toml after substituting private paths.
+# Authenticated daemon management must independently install the native Full7
+# golden fixture while await-full is active. This scenario never injects a list.
+schema_version = 1
+seed = 112
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.boot.accepted"
+payload = { reason = "PowerUp", chargingStation = { model = "Simulator", vendorName = "UOB" } }
+
+[[steps]]
+id = "await-full"
+station = "alpha"
+action = "await_local_authorization"
+timeout_ms = 30000
+expect_response = { listVersion = 7, listEntries = 1, cacheEntries = 0 }
+
+[[steps]]
+id = "offline"
+station = "alpha"
+action = "csms_offline"
+timeout_ms = 5000
+
+[[steps]]
+id = "offline-allowed"
+station = "alpha"
+action = "offline_start"
+timeout_ms = 5000
+payload = { eventType = "Started", timestamp = "2026-10-04T00:00:01.123Z", triggerReason = "Authorized", seqNo = 0, offline = true, transactionInfo = { transactionId = "native-offline-112", chargingState = "Charging" }, evse = { id = 1, connectorId = 1 }, idToken = { idToken = "list-marker-112", type = "Central" } }
+expect_response = { accepted = true }
+
+[[steps]]
+id = "offline-stop"
+station = "alpha"
+action = "offline_stop"
+timeout_ms = 5000
+payload = { eventType = "Ended", timestamp = "2026-10-04T00:00:02.123Z", triggerReason = "StopAuthorized", seqNo = 1, offline = true, transactionInfo = { transactionId = "native-offline-112", chargingState = "Idle", stoppedReason = "Local" }, evse = { id = 1, connectorId = 1 } }
+expect_response = { stopped = true }
+
+[[steps]]
+id = "typed-token-denied"
+station = "alpha"
+action = "offline_start"
+timeout_ms = 5000
+payload = { eventType = "Started", timestamp = "2026-10-04T00:00:03Z", triggerReason = "Authorized", seqNo = 0, offline = true, transactionInfo = { transactionId = "denied-type-112" }, evse = { id = 1, connectorId = 1 }, idToken = { idToken = "list-marker-112", type = "Local" } }
+expect_response = { accepted = false }
+
+[[steps]]
+id = "evse-denied"
+station = "alpha"
+action = "offline_start"
+timeout_ms = 5000
+payload = { eventType = "Started", timestamp = "2026-10-04T00:00:04Z", triggerReason = "Authorized", seqNo = 0, offline = true, transactionInfo = { transactionId = "denied-evse-112" }, evse = { id = 2, connectorId = 1 }, idToken = { idToken = "list-marker-112", type = "Central" } }
+expect_response = { accepted = false }
+
+[[steps]]
+id = "assert-originals-queued"
+station = "alpha"
+action = "assert_local_authorization"
+timeout_ms = 5000
+expect_response = { listVersion = 7, listEntries = 1, offlineRecords = 2, uncertainRecords = 0 }
+
+[[steps]]
+id = "reconnect-and-replay"
+station = "alpha"
+action = "csms_reconnect"
+timeout_ms = 10000
+expect_detail = "registered_and_replayed"
+
+[[steps]]
+id = "assert-delivered"
+station = "alpha"
+action = "assert_local_authorization"
+timeout_ms = 5000
+expect_response = { listVersion = 7, listEntries = 1, offlineRecords = 0, uncertainRecords = 0 }
+
+# This bounded window lets management query7, Diff8 omission, Diff9 deletion,
+# Full1 omission and ClearCache, or arm a separate fault scenario variant.
+[[steps]]
+id = "management-window"
+station = "alpha"
+action = "wait"
+timeout_ms = 31000
+duration_ms = 30000
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

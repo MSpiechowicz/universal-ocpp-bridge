@@ -10,3 +10,22 @@ paths = [
 ]
 regexTarget = "secret"
 regexes = ['''^DE-TEST-C12345678$''']
+
+[[allowlists]]
+description = "Synthetic OCPP 2.0.1 additional identifier used by native list fixtures"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^tests/ocpp-fixtures/corpus/wire/2\.0\.1/local-list-full\.json$''',
+  '''^tests/ocpp-fixtures/corpus/wire/2\.0\.1/local-list-negative-cases\.json$''',
+]
+regexTarget = "secret"
+regexes = ['''^ADDITIONAL-MARKER-112$''']
+
+[[allowlists]]
+description = "Synthetic central-policy identity used only by the local joint smoke"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^bins/uob-sim/tests/native201_joint_smoke\.py$''']
+regexTarget = "secret"
+regexes = ['''^central-policy-112$''']

@@ -49,7 +49,6 @@ def hostile(client, mode):
 
 
 def gate(client, upstream, mode):
-    pending_commit = threading.Event()
     pending_insert = threading.Event()
     finished = threading.Event()
 
@@ -70,13 +69,11 @@ def gate(client, upstream, mode):
                     finished.set()
                     upstream.shutdown(socket.SHUT_RDWR)
                     break
-                if kind == b'Q' and message[5:] == b'COMMIT\0':
-                    if mode == 'before-commit-loss':
-                        print('commit_not_forwarded=1', flush=True)
-                        finished.set()
-                        upstream.shutdown(socket.SHUT_RDWR)
-                        break
-                    pending_commit.set()
+                if mode == 'before-commit-loss' and kind == b'Q' and message[5:] == b'COMMIT\0':
+                    print('commit_not_forwarded=1', flush=True)
+                    finished.set()
+                    upstream.shutdown(socket.SHUT_RDWR)
+                    break
                 upstream.sendall(message)
         except (EOFError, OSError, ValueError):
             finished.set()
@@ -87,10 +84,15 @@ def gate(client, upstream, mode):
 
     worker = threading.Thread(target=request, daemon=True)
     worker.start()
+    commit_completed = False
     try:
         while not finished.is_set():
             kind, message = frame(upstream)
-            if mode == 'commit-loss' and pending_commit.is_set():
+            # INSERT readiness can arrive after the frontend has already sent COMMIT.
+            # Suppress only the acknowledgement of an observed backend COMMIT.
+            if mode == 'commit-loss' and kind == b'C' and message[5:] == b'COMMIT\0':
+                commit_completed = True
+            if commit_completed:
                 if kind == b'Z':
                     print('commit_ack_suppressed=1', flush=True)
                     break

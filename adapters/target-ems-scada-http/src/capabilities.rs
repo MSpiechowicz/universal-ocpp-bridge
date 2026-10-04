@@ -85,6 +85,11 @@ pub(crate) const IMPLEMENTED_RESOURCES: &[IntegrationResource] = &[
         operations: &["read"],
     },
     IntegrationResource {
+        name: "schemas_v1_11",
+        path: "/bridge/v1/schemas/v1.11/{schema}",
+        operations: &["read"],
+    },
+    IntegrationResource {
         name: "stations",
         path: "/bridge/v1/stations",
         operations: &["read"],

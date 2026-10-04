@@ -13,25 +13,8 @@ pub(super) async fn send_outbound(
     queued: QueuedOutbound,
     configuration: CallSessionConfiguration,
 ) {
-    if queued
-        .send_before
-        .is_some_and(|deadline| Instant::now() >= deadline)
-    {
-        finish_not_transmitted(queued, "command expired before socket send");
-        return;
-    }
-    if state.pending.len() == configuration.pending_call_capacity {
-        finish_not_transmitted(queued, "pending call capacity exhausted");
-        return;
-    }
-    if state.pending.contains_key(&queued.request.message_id)
-        || state
-            .timed_out
-            .iter()
-            .any(|(id, _)| id == &queued.request.message_id)
-        || state.retired_outbound.contains(&queued.request.message_id)
-    {
-        finish_not_transmitted(queued, "duplicate or retired message ID");
+    if let Some(reason) = unavailable_before_send(state, &queued, configuration) {
+        finish_not_transmitted(queued, reason);
         return;
     }
     let trace = state.span(Some(queued.request.correlation_id.clone()));
@@ -55,6 +38,15 @@ pub(super) async fn send_outbound(
             return;
         };
         sent
+    } else if let QueuedWire::LocalAuthorization201(deferred) = &queued.wire {
+        let Some(sent) = deferred.send_at_boundary(connection, &message_id).await else {
+            finish_not_transmitted(
+                queued,
+                "protected local authorization authority unavailable before socket send",
+            );
+            return;
+        };
+        sent
     } else {
         // The existing 1.6 resolver remains synchronous immediately before initiating send.
         let deferred_encoded = match &queued.wire {
@@ -69,14 +61,18 @@ pub(super) async fn send_outbound(
                 };
                 Some(encoded)
             }
-            QueuedWire::Configuration201(_) | QueuedWire::LocalAuthorization16(_) => {
+            QueuedWire::Configuration201(_)
+            | QueuedWire::LocalAuthorization16(_)
+            | QueuedWire::LocalAuthorization201(_) => {
                 unreachable!("handled above")
             }
         };
         let encoded = match queued.wire {
             QueuedWire::Ready(encoded) => encoded,
             QueuedWire::Configuration(_) => deferred_encoded.expect("checked above"),
-            QueuedWire::Configuration201(_) | QueuedWire::LocalAuthorization16(_) => {
+            QueuedWire::Configuration201(_)
+            | QueuedWire::LocalAuthorization16(_)
+            | QueuedWire::LocalAuthorization201(_) => {
                 unreachable!("handled above")
             }
         };
@@ -111,4 +107,30 @@ pub(super) async fn send_outbound(
             response_reservation: queued.response_reservation,
         },
     );
+}
+
+fn unavailable_before_send(
+    state: &SessionState,
+    queued: &QueuedOutbound,
+    configuration: CallSessionConfiguration,
+) -> Option<&'static str> {
+    if queued
+        .send_before
+        .is_some_and(|deadline| Instant::now() >= deadline)
+    {
+        return Some("command expired before socket send");
+    }
+    if state.pending.len() == configuration.pending_call_capacity {
+        return Some("pending call capacity exhausted");
+    }
+    if state.pending.contains_key(&queued.request.message_id)
+        || state
+            .timed_out
+            .iter()
+            .any(|(id, _)| id == &queued.request.message_id)
+        || state.retired_outbound.contains(&queued.request.message_id)
+    {
+        return Some("duplicate or retired message ID");
+    }
+    None
 }

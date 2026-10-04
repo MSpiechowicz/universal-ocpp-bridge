@@ -5,10 +5,10 @@ use serde_json::{Value, json};
 use super::host::{Host, READER};
 
 const BASE: &str = "https://bridge.test";
-pub const RESULT: &str = "/bridge/v1/schemas/v1.9/command-result.schema.json";
+pub const RESULT: &str = "/bridge/v1/schemas/v1.10/command-result.schema.json";
 pub const HISTORICAL: &str = "/bridge/v1/schemas/v1.4/command-result.schema.json";
-pub const RECORD: &str = "/bridge/v1/schemas/v1.10/export-record.schema.json";
-pub const BATCH: &str = "/bridge/v1/schemas/v1.10/export-batch.schema.json";
+pub const RECORD: &str = "/bridge/v1/schemas/v1.11/export-record.schema.json";
+pub const BATCH: &str = "/bridge/v1/schemas/v1.11/export-batch.schema.json";
 
 pub struct Schemas {
     pub document: Value,
@@ -98,13 +98,6 @@ impl Schemas {
         self.validator(
             &self.document["paths"]["/bridge/v1/commands/{request_id}"]["get"]["responses"]["200"]
                 ["content"]["application/json"]["schema"],
-        )
-    }
-
-    pub fn admitted(&self) -> jsonschema::Validator {
-        self.validator(
-            &self.document["paths"]["/bridge/v1/commands"]["post"]["responses"]["202"]["content"]
-                ["application/json"]["schema"],
         )
     }
 }

@@ -44,6 +44,17 @@ impl CallSessionHandle {
             bytes
                 .checked_add(metadata)
                 .ok_or(SessionSubmitError::InvalidRequest)?
+        } else if let QueuedWire::LocalAuthorization201(deferred) = &wire {
+            let metadata = deferred
+                .metadata_size(
+                    &request.payload,
+                    &request.message_id,
+                    request.correlation_id.as_str(),
+                )
+                .ok_or(SessionSubmitError::InvalidRequest)?;
+            bytes
+                .checked_add(metadata)
+                .ok_or(SessionSubmitError::InvalidRequest)?
         } else {
             bytes
         };
@@ -91,6 +102,9 @@ impl CallSessionHandle {
                 "GetReport",
                 "SetVariables",
                 "SetNetworkProfile",
+                "SendLocalList",
+                "GetLocalListVersion",
+                "ClearCache",
             ]
             .contains(&request.action.as_str());
         if request.message_id.trim().is_empty()
@@ -116,6 +130,12 @@ impl CallSessionHandle {
                     .ok_or(SessionSubmitError::InvalidRequest)?;
                 (QueuedWire::LocalAuthorization16(deferred), bytes)
             }
+            Some(QueuedWire::LocalAuthorization201(deferred)) => {
+                let bytes = deferred
+                    .wire_size(&request.message_id)
+                    .ok_or(SessionSubmitError::InvalidRequest)?;
+                (QueuedWire::LocalAuthorization201(deferred), bytes)
+            }
             Some(QueuedWire::Ready(_)) => return Err(SessionSubmitError::InvalidRequest),
             None => {
                 if self.protocol == ProtocolEdition::Ocpp16j
@@ -125,7 +145,14 @@ impl CallSessionHandle {
                 }
                 // Native protected writes must never take the eager/raw-payload path.
                 if self.protocol == ProtocolEdition::Ocpp201
-                    && ["SetVariables", "SetNetworkProfile"].contains(&request.action.as_str())
+                    && [
+                        "SetVariables",
+                        "SetNetworkProfile",
+                        "SendLocalList",
+                        "GetLocalListVersion",
+                        "ClearCache",
+                    ]
+                    .contains(&request.action.as_str())
                 {
                     return Err(SessionSubmitError::InvalidRequest);
                 }

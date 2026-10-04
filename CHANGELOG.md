@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off privileged demo OCPP 2.0.1 `GetLocalListVersion`,
+  reference-only `SendLocalList` and `ClearCache` (#112). Route mixed-edition startup
+  material to exact station-bound separately typed providers; keep raw native tokens,
+  groups and personal/vendor metadata out of service persistence and public evidence.
+  Validate pinned schemas plus native identifierString, typed identity, language,
+  expiry and integer semantics. Recheck authority, reference expiry/revocation, current
+  socket generation and complete encoded limits before first send polling. Learn
+  exact LocalAuthListCtrlr request limits without confusing Entries Actual with capacity.
+  Preserve safe native Failed/VersionMismatch/Rejected and honest uncertainty, with
+  no automatic mutation replay or inferred installed-content ledger. Publish result
+  v1.10, nested export v1.11 and runtime export revision 10; retain historical schema
+  bytes and SQLite14 without a SQL migration. Add retained actual-daemon regressions
+  for native wire/results, authenticated admission, durable history, lost replies and
+  restart non-replay; verification is a separate integration step, not a hardware,
+  interoperability or OCA certification claim.
 - Add independently default-off privileged demo OCPP 1.6
   `GetLocalListVersion`, protected `SendLocalList` and `ClearCache` (#111).
   Keep station list/cache authority separate from the service's exact-byte SHA
@@ -232,6 +247,17 @@ All notable changes to this project will be documented in this file. See [conven
   privilege/upgrade safety.
 
 ### Bug Fixes
+- Anchor the PostgreSQL qualification lost-commit-ACK gate to the backend's
+  actual `COMMIT` response, not frontend request timing. Prevent a preceding
+  INSERT's readiness message from being mistaken for commit completion while
+  preserving adapter uncertainty and durable-marker assertions.
+- Release native simulator private-state locks when the last model owner drops,
+  even while an unrelated subprocess holds an inherited descriptor. Preserve
+  live-owner exclusion in both OCPP editions and prevent spurious recovery
+  failures after close-and-reopen.
+- Scope Gitleaks exceptions for the two synthetic OCPP 2.0.1 fixture identities
+  to their exact values, exact files and `generic-api-key` rule (#112), retaining
+  full-history scanning and detection of other secrets in those files.
 - Preserve browser command history, detail and pagination reads across same-station
   snapshot invalidation, with independent read/control generations and busy owners.
   Stale or hidden views still clear protected options, credentials and confirmation

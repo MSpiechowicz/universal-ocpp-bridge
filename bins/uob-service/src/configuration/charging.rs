@@ -295,11 +295,6 @@ fn validate_stations(
         {
             return Err(fail);
         }
-        if station.control.local_authorization_enabled()
-            && station.protocol != ProtocolEdition::Ocpp16j
-        {
-            return Err(fail);
-        }
         if station.control.get_composite_schedule.enabled()
             && station.protocol != ProtocolEdition::Ocpp16j
         {

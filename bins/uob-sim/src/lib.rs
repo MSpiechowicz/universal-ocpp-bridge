@@ -14,9 +14,11 @@ mod client_impl;
 pub use client_api::{ClientDiagnostics, ClientFuture, ProtocolClient};
 mod client_lifecycle16;
 mod client_observation16;
+mod client_reconnect201;
 mod client_runtime;
 mod client_runtime_201;
 pub mod local_authorization;
+pub mod local_authorization201;
 mod station_auth;
 mod trigger;
 mod trigger201;
@@ -261,6 +263,11 @@ struct Ocpp201State {
     meters: HashMap<u16, serde_json::Value>,
     boot: Option<serde_json::Value>,
     registered: bool,
+    local: Option<local_authorization201::LocalAuthorization201Handle>,
+    local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
+    socket_connected: bool,
+    socket_generation: u64,
+    reboot_count: u64,
 }
 
 impl TraceBuffer {
@@ -333,7 +340,11 @@ impl SimulatorProtocolClient {
                 (worker, emergency_client, Some(state), None)
             }
             OcppVersion::V2_0_1 => {
-                let state = Arc::new(Mutex::new(Ocpp201State::default()));
+                let local = open_native_state201(&config)?;
+                let state = Arc::new(Mutex::new(Ocpp201State {
+                    local: Some(local),
+                    ..Ocpp201State::default()
+                }));
                 let (client, barrier, jobs) = trigger_transport::connect_201(
                     &config.endpoint,
                     config.credentials_file.as_deref(),
@@ -366,7 +377,7 @@ impl SimulatorProtocolClient {
                     Arc::clone(&reply_delay),
                 )
                 .await;
-                client_runtime::register_2_0_1_reconnect(&client, &traces).await;
+                client_reconnect201::register(&client, Arc::clone(&state), traces.clone()).await;
                 traces.push(
                     TraceKind::Connected,
                     OcppVersion::V2_0_1.websocket_protocol(),
@@ -421,11 +432,9 @@ fn validate_client_config(config: &SimulatorClientConfig) -> Result<(), Simulato
     if config.trace_capacity == 0 {
         return Err(SimulatorClientError::InvalidCapacity("trace_capacity"));
     }
-    if config.version != OcppVersion::V1_6
-        && (config.local_authorization.is_some() || config.local_authorization_file.is_some())
-    {
+    if config.version != OcppVersion::V1_6 && config.local_authorization.is_some() {
         return Err(SimulatorClientError::Protocol(
-            "local authorization requires OCPP 1.6".to_owned(),
+            "OCPP 1.6 handle cannot attach to OCPP 2.0.1".to_owned(),
         ));
     }
     Ok(())
@@ -452,5 +461,19 @@ fn open_native_state(
         (None, None) => Ok(local_authorization::LocalAuthorizationHandle::unsupported(
             &config.endpoint,
         )),
+    }
+}
+
+fn open_native_state201(
+    config: &SimulatorClientConfig,
+) -> Result<local_authorization201::LocalAuthorization201Handle, SimulatorClientError> {
+    match &config.local_authorization_file {
+        Some((station, settings)) => {
+            local_authorization201::LocalAuthorization201Handle::open(station, settings)
+                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
+        }
+        None => {
+            Ok(local_authorization201::LocalAuthorization201Handle::unsupported(&config.endpoint))
+        }
     }
 }

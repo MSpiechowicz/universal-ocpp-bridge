@@ -151,19 +151,6 @@ pub(super) async fn register_1_6_handlers(
         .await;
 }
 
-pub(super) async fn register_2_0_1_reconnect(
-    client: &ocpp_client::ocpp_2_0_1::OCPP2_0_1Client,
-    traces: &TraceBuffer,
-) {
-    let traces = traces.clone();
-    client
-        .on_reconnect(move |_| {
-            traces.push(TraceKind::Reconnected, "ocpp2.0.1");
-            async {}
-        })
-        .await;
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_1_6(
     mut client: ocpp_client::ocpp_1_6::OCPP1_6Client,

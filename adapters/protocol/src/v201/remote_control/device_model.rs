@@ -433,6 +433,27 @@ pub(super) fn learn_durable(learned: &Mutex<LearnedLimits>, result: &CommandResu
         && let DeviceReportState201::Complete { items, .. } = &evidence.report
     {
         for item in items {
+            if super::local_authorization_limits::identity(&item.component, &item.variable)
+                == Some(2)
+                && let Some(max) = item
+                    .characteristics
+                    .as_ref()
+                    .filter(|c| c.data_type == uob_contracts::DeviceDataType201::Integer)
+                    .and_then(|c| c.max_limit.as_ref())
+                    .and_then(serde_json::Number::as_f64)
+                    .filter(|n| {
+                        n.is_finite() && *n >= 0.0 && *n <= f64::from(i32::MAX) && n.fract() == 0.0
+                    })
+                && let Ok(mut local) = learned.local.lock()
+            {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "Finite, integral maxLimit is proven in [0, i32::MAX] before this cast"
+                )]
+                let max = max as usize;
+                local.capacity = Some(max);
+            }
             for attribute in &item.attributes {
                 learned.learn(
                     &item.component,

@@ -29,6 +29,7 @@ pub struct StationState {
     command_deliveries: HashSet<String>,
     physical_effects: u64,
     pub(crate) local: Option<crate::local_authorization::LocalAuthorizationHandle>,
+    pub(crate) local201: Option<crate::local_authorization201::LocalAuthorization201Handle>,
     pub(crate) boot_payload: Option<serde_json::Value>,
     pub(crate) observed_reboots: u64,
 }
@@ -81,6 +82,7 @@ impl StationState {
             command_deliveries: HashSet::new(),
             physical_effects: 0,
             local: None,
+            local201: None,
             boot_payload: None,
             observed_reboots: 0,
         }

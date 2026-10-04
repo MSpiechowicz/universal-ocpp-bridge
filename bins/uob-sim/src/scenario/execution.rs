@@ -75,6 +75,7 @@ async fn connect(
     super::local_authorization::initialize(station, state)?;
     let mut configuration = station.client_config();
     configuration.local_authorization.clone_from(&state.local);
+    state.local201 = None;
     let connected = connector.connect(configuration).await.map_err(|_| {
         RunFailure::new(
             FailureCategory::Setup,
@@ -91,6 +92,10 @@ async fn connect(
             // Only a durable owner may be carried into another native connection.
             .filter(crate::local_authorization::LocalAuthorizationHandle::has_persistence);
     }
+    state.local201 = client
+        .as_deref()
+        .and_then(ProtocolClient::local_authorization201)
+        .filter(crate::local_authorization201::LocalAuthorization201Handle::has_persistence);
     state.awaited_remote_start_id = None;
     state.connected = true;
     state.observed_reboots = client.as_deref().map_or(0, ProtocolClient::reboot_count);
@@ -175,12 +180,7 @@ async fn charging_call(
     if action == SimulatorAction::BootNotification {
         state.boot_payload.clone_from(&step.payload);
     }
-    Ok(match state.version {
-        crate::OcppVersion::V1_6 => {
-            super::local_authorization::safe_response(&response).to_string()
-        }
-        crate::OcppVersion::V2_0_1 => response.to_string(),
-    })
+    Ok(super::local_authorization::safe_response(&response).to_string())
 }
 
 async fn remote_command(

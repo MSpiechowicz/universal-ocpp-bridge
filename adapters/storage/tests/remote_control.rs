@@ -100,6 +100,7 @@ async fn allocation_is_atomic_recoverable_nonreused_and_bound_to_command_retenti
         charging_profile_201: None,
         configuration_201: None,
         local_authorization_16: None,
+        local_authorization_201: None,
     };
     let mut write = AtomicStoreWrite::empty();
     write.command_result = Some(result);

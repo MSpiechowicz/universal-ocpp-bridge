@@ -12,10 +12,19 @@ mod device_model_collection;
 mod device_model_response;
 pub mod device_model_values;
 mod identity;
+mod local_authorization;
+mod local_authorization_language;
+mod local_authorization_limits;
+mod local_authorization_schema;
+pub mod local_authorization_values;
+pub(crate) mod local_authorization_wire;
 mod mapping;
 mod phase_capability;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
+pub use local_authorization_values::{
+    LocalAuthorizationUpdates201, ProtectedLocalListUpdate201, ProtectedLocalListValue201,
+};
 pub mod observation;
 
 use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
@@ -61,6 +70,8 @@ pub struct RemoteControlSession {
     configuration_201: Option<Arc<configuration201_values::LocalConfigurationValues201>>,
     configuration_limits: Arc<std::sync::Mutex<device_model_values::LearnedLimits>>,
     configuration_active: Arc<std::sync::Mutex<bool>>,
+    local_authorization_updates: Option<Arc<LocalAuthorizationUpdates201>>,
+    local_authorization_authority: [Arc<std::sync::Mutex<bool>>; 3],
 }
 
 impl RemoteControlSession {
@@ -76,6 +87,18 @@ impl RemoteControlSession {
     ) -> Result<Self, StationCommandError> {
         validate_snapshot(&handle, &snapshot)?;
         let phase = phase_capability::PhaseCapabilities::connected(&snapshot);
+        let registered = uob_application::registration::v201::accepted(&snapshot).is_ok();
+        let local_authorization_authority = std::array::from_fn(|index| {
+            let enabled = registered
+                && snapshot
+                    .capabilities
+                    .supports(&uob_contracts::Operation::ProtocolAction {
+                        protocol: ProtocolEdition::Ocpp201,
+                        action: crate::command_registry::local_authorization201::ACTIONS[index]
+                            .to_owned(),
+                    });
+            Arc::new(std::sync::Mutex::new(enabled))
+        });
         Ok(Self {
             handle,
             snapshot: RwLock::new(snapshot),
@@ -91,6 +114,8 @@ impl RemoteControlSession {
                 device_model_values::LearnedLimits::default(),
             )),
             configuration_active: Arc::new(std::sync::Mutex::new(true)),
+            local_authorization_updates: None,
+            local_authorization_authority,
         })
     }
 
@@ -130,6 +155,17 @@ impl RemoteControlSession {
             return Err(state_error());
         }
         self.learn_transactions(&current, &snapshot)?;
+        let registered = uob_application::registration::v201::accepted(&snapshot).is_ok();
+        for (index, authority) in self.local_authorization_authority.iter().enumerate() {
+            *authority.lock().map_err(|_| state_error())? = registered
+                && snapshot
+                    .capabilities
+                    .supports(&uob_contracts::Operation::ProtocolAction {
+                        protocol: ProtocolEdition::Ocpp201,
+                        action: crate::command_registry::local_authorization201::ACTIONS[index]
+                            .to_owned(),
+                    });
+        }
         *current = snapshot;
         self.pending_snapshot_commit
             .store(false, std::sync::atomic::Ordering::Release);
@@ -192,6 +228,11 @@ impl RemoteControlSession {
     ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
         Box::pin(async move {
             if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::local_authorization201::ACTIONS.contains(&operation.action.as_str()))
+            {
+                return Ok(self.dispatch_local_authorization(command).await);
+            }
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
                 if crate::command_registry::device_model201::ACTIONS.contains(&operation.action.as_str()))
             {
                 return Ok(self.dispatch_device(command).await);
@@ -201,20 +242,9 @@ impl RemoteControlSession {
             {
                 return Ok(self.dispatch_configuration_201(command).await);
             }
-            let remote_start_id = if matches!(
-                command.operation,
-                uob_contracts::CommandOperation::Start { .. }
-            ) {
-                match self
-                    .evidence
-                    .reserve_remote_start(command.request_id.clone())
-                    .await
-                {
-                    Ok(id) => Some(id),
-                    Err(_) => return Ok(mapping::not_sent(CommandErrorCode::PolicyRejected)),
-                }
-            } else {
-                None
+            let remote_start_id = match self.reserve_start_id(&command).await {
+                Ok(id) => id,
+                Err(code) => return Ok(mapping::not_sent(code)),
             };
             // Snapshot/phase locks linearize commit and capability revocation against bounded enqueue.
             let (action, profile, pending) = {
@@ -292,6 +322,23 @@ impl RemoteControlSession {
                 .receive_remote_response(&command.request_id, action, pending, profile)
                 .await)
         })
+    }
+
+    async fn reserve_start_id(
+        &self,
+        command: &Command<Value>,
+    ) -> Result<Option<i32>, CommandErrorCode> {
+        if !matches!(
+            command.operation,
+            uob_contracts::CommandOperation::Start { .. }
+        ) {
+            return Ok(None);
+        }
+        self.evidence
+            .reserve_remote_start(command.request_id.clone())
+            .await
+            .map(Some)
+            .map_err(|_| CommandErrorCode::PolicyRejected)
     }
 }
 
