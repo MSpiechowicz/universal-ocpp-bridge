@@ -162,7 +162,7 @@ Choose a future expiration and an available resource with the advertised operati
 must be nonblank, at most 256 UTF-8 bytes, and cannot be `.` or `..`. The returned `status_url`
 percent-encodes the ID as one path segment; clients should follow that URL rather than concatenate
 unescaped IDs. Request shapes use the canonical v1.0 ingress contract. Current
-CommandResult uses v1.7; current nested export-record/export-batch use v1.8.
+CommandResult uses v1.9; current nested export-record/export-batch use v1.10.
 The canonical snapshots live under `crates/contracts/schemas`; historical routes
 and released versions remain available.
 
@@ -190,11 +190,20 @@ safe reason codes appear; opaque additional information is omitted. Canonical
 the full native field. Neither native Accepted nor the local status response proves physical
 charging or profile enforcement. This is scoped result consumption only: native201 profile
 actions remain forbidden on the integration ingress, and no new export producer is enabled.
-The latest protected schema routes are `/bridge/v1/schemas/v1.7/command-result.schema.json`
-and `/bridge/v1/schemas/v1.8/{export-record,export-batch}.schema.json`; earlier routes retain
+The latest protected schema routes are `/bridge/v1/schemas/v1.9/command-result.schema.json`
+and `/bridge/v1/schemas/v1.10/{export-record,export-batch}.schema.json`; earlier routes retain
 their published bytes and authentication policy. Existing encoded response limits still apply
 to full profile evidence, including maximum-period requests: oversized results return the
 explicit `413` payload error without truncating schedules or substituting a success response.
+
+Optional `local_authorization_16` retains native OCPP 1.6 Get version, Send
+requested version/update type/status, or Clear status, with no native entries,
+parent identities or capabilities. Empty `0` and unsupported `-1` query results
+are not interchangeable. ACK, a later version query and actual offline use remain
+independent; lost/malformed/unpaired replies do not manufacture this field.
+Existing result-reader authority is unchanged: these privileged station actions
+are not enabled on the integration ingress, and no authoritative local-list
+projection or automatic global export producer is added.
 
 Command bodies and concurrent requests use the advertised listener bounds. Commands also hold
 an independent `maximum_in_flight_commands` permit. The composition root's `query_deadline`

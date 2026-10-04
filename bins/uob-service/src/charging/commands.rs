@@ -21,8 +21,9 @@ enum Session {
 
 impl Session {
     fn detach_device_model(&self) {
-        if let Self::V201(session) = self {
-            session.detach_device_model();
+        match self {
+            Self::V16(session) => session.detach_local_authorization(),
+            Self::V201(session) => session.detach_device_model(),
         }
     }
     fn update(&self, snapshot: StationSnapshot) -> Result<(), StationCommandError> {

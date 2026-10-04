@@ -2,17 +2,21 @@ pub mod control;
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 
+mod client_api;
+mod client_exchange16;
 mod client_impl;
+pub use client_api::{ClientDiagnostics, ClientFuture, ProtocolClient};
+mod client_lifecycle16;
+mod client_observation16;
 mod client_runtime;
 mod client_runtime_201;
+pub mod local_authorization;
 mod station_auth;
 mod trigger;
 mod trigger201;
@@ -96,6 +100,8 @@ pub struct SimulatorClientConfig {
     pub evse_connectors: Vec<(u16, u16)>,
     pub trigger_responses: TriggerResponses,
     pub trigger_observation: TriggerObservation,
+    pub local_authorization: Option<local_authorization::LocalAuthorizationHandle>,
+    pub local_authorization_file: Option<(String, local_authorization::LocalAuthorizationConfig)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -173,59 +179,6 @@ fn take_reply_delay(slot: &ReplyDelaySlot, kind: RemoteCommandKind) -> Option<Re
     }
 }
 
-pub type ClientFuture<'a, T> =
-    Pin<Box<dyn Future<Output = Result<T, SimulatorClientError>> + Send + 'a>>;
-
-pub trait ProtocolClient: Send + Sync {
-    fn version(&self) -> OcppVersion;
-    /// Live OCPP 1.6 registration, including an accepted triggered Boot.
-    /// Synthetic scenario clients use the scenario's own scripted state.
-    fn accepted_registration(&self) -> Option<bool> {
-        None
-    }
-    fn heartbeat(&self) -> ClientFuture<'_, String>;
-    fn call(&self, _call: SimulatorCall) -> ClientFuture<'_, serde_json::Value> {
-        Box::pin(async {
-            Err(SimulatorClientError::Protocol(
-                "charging calls are unsupported by this client".to_owned(),
-            ))
-        })
-    }
-    fn next_remote_command(&self) -> ClientFuture<'_, RemoteCommand> {
-        Box::pin(async {
-            Err(SimulatorClientError::Protocol(
-                "remote commands are unsupported by this client".to_owned(),
-            ))
-        })
-    }
-    /// Arms a single matching remote-command reply delay.
-    ///
-    /// # Errors
-    /// Returns an error when the client cannot reserve a reply delay.
-    fn arm_remote_reply_delay(
-        &self,
-        _kind: RemoteCommandKind,
-        _duration: Duration,
-    ) -> Result<ReplyDelayReceipt, SimulatorClientError> {
-        Err(SimulatorClientError::Protocol(
-            "remote reply delay is unsupported by this client".to_owned(),
-        ))
-    }
-    fn shutdown(&self) -> ClientFuture<'_, ()>;
-    fn force_shutdown(&self) -> ClientFuture<'_, ()>;
-    fn abort(&self);
-    fn traces(&self) -> Vec<TraceEvent>;
-    fn diagnostics(&self) -> ClientDiagnostics {
-        ClientDiagnostics::default()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ClientDiagnostics {
-    pub rejected_commands: u64,
-    pub dropped_traces: u64,
-}
-
 #[derive(Clone)]
 pub struct SimulatorProtocolClient {
     version: OcppVersion,
@@ -246,12 +199,13 @@ enum Command {
         oneshot::Sender<Result<serde_json::Value, SimulatorClientError>>,
     ),
     NextRemote(oneshot::Sender<Result<RemoteCommand, SimulatorClientError>>),
+    LocalListConflict,
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
 }
 
 #[derive(Clone)]
 enum EmergencyClient {
-    V1_6(ocpp_client::ocpp_1_6::OCPP1_6Client),
+    V1_6(Arc<tokio::sync::Mutex<ocpp_client::ocpp_1_6::OCPP1_6Client>>),
     V2_0_1(ocpp_client::ocpp_2_0_1::OCPP2_0_1Client),
 }
 
@@ -259,6 +213,8 @@ impl EmergencyClient {
     async fn disconnect(&self) -> Result<(), SimulatorClientError> {
         match self {
             Self::V1_6(client) => client
+                .lock()
+                .await
                 .disconnect()
                 .await
                 .map_err(|error| SimulatorClientError::Protocol(error.to_string())),
@@ -284,6 +240,17 @@ struct Ocpp16State {
     boot: Option<serde_json::Value>,
     status: HashMap<u16, serde_json::Value>,
     meters: HashMap<u16, serde_json::Value>,
+    local: Option<local_authorization::LocalAuthorizationHandle>,
+    local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
+    reset_reason: Option<ocpp_client::ocpp_types::v16::common::Reason>,
+    reboot_count: u64,
+    socket_connected: bool,
+    socket_generation: u64,
+    // Trigger eligibility is scoped to the socket that accepted the Boot,
+    // independently of ordinary reconnect's retained charging registration.
+    boot_accepted_generation: Option<u64>,
+    notifications: Option<mpsc::WeakSender<Command>>,
+    replay_requested: bool,
 }
 
 #[derive(Default)]
@@ -338,12 +305,7 @@ impl SimulatorProtocolClient {
     ///
     /// Returns an error when capacities are zero or WebSocket/OCPP negotiation fails.
     pub async fn connect(config: SimulatorClientConfig) -> Result<Self, SimulatorClientError> {
-        if config.command_capacity == 0 {
-            return Err(SimulatorClientError::InvalidCapacity("command_capacity"));
-        }
-        if config.trace_capacity == 0 {
-            return Err(SimulatorClientError::InvalidCapacity("trace_capacity"));
-        }
+        validate_client_config(&config)?;
 
         let traces = TraceBuffer::new(config.trace_capacity);
         let (commands, receiver) = mpsc::channel(config.command_capacity);
@@ -352,7 +314,12 @@ impl SimulatorProtocolClient {
         let rejected_commands = Arc::new(AtomicU64::new(0));
         let (worker, emergency_client, ocpp16_state, ocpp201_state) = match config.version {
             OcppVersion::V1_6 => {
-                let state = Arc::new(Mutex::new(Ocpp16State::default()));
+                let local = open_native_state(&config)?;
+                let state = Arc::new(Mutex::new(Ocpp16State {
+                    local: Some(local),
+                    notifications: Some(commands.downgrade()),
+                    ..Ocpp16State::default()
+                }));
                 let (worker, emergency_client) = client_runtime::connect_and_run_1_6(
                     &config,
                     &traces,
@@ -444,5 +411,46 @@ impl SimulatorProtocolClient {
             }
         })?;
         receiver.await.map_err(|_| SimulatorClientError::Stopped)?
+    }
+}
+
+fn validate_client_config(config: &SimulatorClientConfig) -> Result<(), SimulatorClientError> {
+    if config.command_capacity == 0 {
+        return Err(SimulatorClientError::InvalidCapacity("command_capacity"));
+    }
+    if config.trace_capacity == 0 {
+        return Err(SimulatorClientError::InvalidCapacity("trace_capacity"));
+    }
+    if config.version != OcppVersion::V1_6
+        && (config.local_authorization.is_some() || config.local_authorization_file.is_some())
+    {
+        return Err(SimulatorClientError::Protocol(
+            "local authorization requires OCPP 1.6".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn open_native_state(
+    config: &SimulatorClientConfig,
+) -> Result<local_authorization::LocalAuthorizationHandle, SimulatorClientError> {
+    match (
+        &config.local_authorization,
+        &config.local_authorization_file,
+    ) {
+        (Some(handle), _) if !handle.has_persistence() => Err(SimulatorClientError::Protocol(
+            "persistent native state required".to_owned(),
+        )),
+        (Some(handle), Some((station, _))) if !handle.station_matches(station) => Err(
+            SimulatorClientError::Protocol("private native state binding mismatch".to_owned()),
+        ),
+        (Some(handle), _) => Ok(handle.clone()),
+        (None, Some((station, settings))) => {
+            local_authorization::LocalAuthorizationHandle::open(station, settings)
+                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
+        }
+        (None, None) => Ok(local_authorization::LocalAuthorizationHandle::unsupported(
+            &config.endpoint,
+        )),
     }
 }

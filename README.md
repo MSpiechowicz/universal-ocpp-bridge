@@ -66,6 +66,14 @@ observed effects remain distinct; acceptance does not prove physical charging. T
 loopback plaintext listener and these local grants are **demo-only**, not production charging
 ingress or command exposure.
 
+The [protected OCPP 1.6 local-list/cache commands](docs/operations/headless-cli.md#protected-ocpp-16-station-authorization-list-and-cache)
+use independent default-off privileged options and reference-only provisioning.
+Native acknowledgements remain distinct from installed contents and offline use.
+The [independent simulator](docs/simulator/scenario-runner.md#native-ocpp-16-local-list-cache-and-real-offline-recovery)
+provides bounded owner-only persistence, genuine socket-offline authorization,
+transaction replay, actual native Reset and new-process recovery without changing
+the service's separate SHA allowlist or enabling production controls.
+
 The [Debug operational panels](docs/operations/debug-operational-panels.md) separate local persistence,
 resource pressure and remote export evidence with explicit unavailable observations.
 

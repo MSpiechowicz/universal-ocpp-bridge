@@ -1,0 +1,104 @@
+# Copy this scenario to a private 0600 file before replacing its synthetic token.
+# Configure station alpha with a canonical 0700 private state directory:
+# [stations.local_authorization]
+# private_state_file = "/absolute/private/simulator-state.json"
+# Run: uob-sim run --config private-config.toml --scenario private-scenario.toml --format jsonl
+# Independently use authenticated service management to send native Full version 1
+# with the wire.ocpp16.local-list-full fixture's synthetic token/parent.
+# The wait observes committed station state; it does not fabricate a remote CALL.
+# After reconnect, independently send Reset and observe actual disk recovery/Boot.
+schema_version = 1
+seed = 111
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "sim.ocpp16.boot.accepted"
+payload = { chargePointVendor = "UOB", chargePointModel = "Simulator" }
+
+[[steps]]
+id = "await-full"
+station = "alpha"
+action = "await_local_authorization"
+timeout_ms = 30000
+expect_response = { listVersion = 1, listEntries = 1, cacheEntries = 0 }
+
+[[steps]]
+id = "offline"
+station = "alpha"
+action = "csms_offline"
+timeout_ms = 5000
+expect_detail = "socket_closed"
+
+[[steps]]
+id = "offline-allowed"
+station = "alpha"
+action = "offline_start"
+timeout_ms = 5000
+payload = { connectorId = 1, idTag = "list-marker-111", meterStart = 1000, timestamp = "2026-10-04T00:00:01Z" }
+expect_response = { accepted = true }
+
+[[steps]]
+id = "offline-stop"
+station = "alpha"
+action = "offline_stop"
+timeout_ms = 5000
+payload = { connectorId = 1, meterStop = 1050, timestamp = "2026-10-04T00:00:02Z" }
+expect_response = { stopped = true }
+
+[[steps]]
+id = "offline-denied"
+station = "alpha"
+action = "offline_start"
+timeout_ms = 5000
+payload = { connectorId = 1, idTag = "private-unknown", meterStart = 1050, timestamp = "2026-10-04T00:00:03Z" }
+expect_response = { accepted = false }
+
+[[steps]]
+id = "assert-queued"
+station = "alpha"
+action = "assert_local_authorization"
+timeout_ms = 5000
+expect_response = { offlineRecords = 1, uncertainRecords = 0 }
+
+[[steps]]
+id = "reconnect-and-replay"
+station = "alpha"
+action = "csms_reconnect"
+timeout_ms = 10000
+expect_detail = "registered_and_replayed"
+
+[[steps]]
+id = "assert-replayed"
+station = "alpha"
+action = "assert_local_authorization"
+timeout_ms = 5000
+expect_response = { listVersion = 1, listEntries = 1, cacheEntries = 0, offlineRecords = 0, uncertainRecords = 0 }
+
+[[steps]]
+id = "await-real-reset"
+station = "alpha"
+action = "await_reboot"
+timeout_ms = 30000
+expect_detail = "disk_recovered_and_registered"
+
+[[steps]]
+id = "assert-post-reset"
+station = "alpha"
+action = "assert_local_authorization"
+timeout_ms = 5000
+expect_response = { listVersion = 1, listEntries = 1, cacheEntries = 0 }
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

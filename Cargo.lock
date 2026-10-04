@@ -3219,6 +3219,7 @@ dependencies = [
  "caseless",
  "futures",
  "jsonschema 0.52.1",
+ "parking_lot",
  "rcgen",
  "rust-ocpp",
  "rustls",
@@ -3307,18 +3308,23 @@ name = "uob-sim"
 version = "0.31.0"
 dependencies = [
  "axum",
+ "caseless",
  "futures",
  "libc",
  "ocpp-client",
+ "parking_lot",
  "serde",
  "serde_json",
+ "sha2",
  "subtle",
+ "time",
  "tokio",
  "tokio-tungstenite 0.30.0",
  "toml",
  "tower",
  "url",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

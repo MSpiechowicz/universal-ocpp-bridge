@@ -74,6 +74,7 @@ impl CommandAdmissionPort<Value> for CommandState {
                 charging_profile_16: None,
                 charging_profile_201: None,
                 configuration_201: None,
+                local_authorization_16: None,
             };
             *self.result.lock() = Some(result.clone());
             Ok(result)

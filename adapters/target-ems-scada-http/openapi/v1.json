@@ -7,7 +7,7 @@
             "type": "string"
           },
           "result": {
-            "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+            "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
           },
           "status_url": {
             "type": "string"
@@ -716,7 +716,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
                     }
                   ]
                 }
@@ -762,7 +762,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
                     }
                   ]
                 }
@@ -809,7 +809,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
                     }
                   ]
                 }
@@ -829,7 +829,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
                     }
                   ]
                 }
@@ -862,7 +862,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
                     }
                   ]
                 }
@@ -949,7 +949,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.8/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.9/command-result.schema.json"
                 }
               }
             },
@@ -2379,7 +2379,8 @@
                 "export-batch.schema.json",
                 "export-report.schema.json",
                 "set-variables-reference-201.schema.json",
-                "set-network-profile-reference-201.schema.json"
+                "set-network-profile-reference-201.schema.json",
+                "send-local-list-reference-16.schema.json"
               ],
               "type": "string"
             }
@@ -2505,7 +2506,8 @@
                 "export-batch.schema.json",
                 "export-report.schema.json",
                 "set-variables-reference-201.schema.json",
-                "set-network-profile-reference-201.schema.json"
+                "set-network-profile-reference-201.schema.json",
+                "send-local-list-reference-16.schema.json"
               ],
               "type": "string"
             }
@@ -2723,6 +2725,152 @@
             "description": "ems_scada_http.unknown_resource",
             "x-uob-error-codes": [
               "ems_scada_http.unknown_resource"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.10/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_10",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_10_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
             ]
           },
           "405": {
@@ -4057,7 +4205,8 @@
             "schema": {
               "enum": [
                 "export-record.schema.json",
-                "export-batch.schema.json"
+                "export-batch.schema.json",
+                "command-result.schema.json"
               ],
               "type": "string"
             }
@@ -4143,7 +4292,8 @@
             "schema": {
               "enum": [
                 "export-record.schema.json",
-                "export-batch.schema.json"
+                "export-batch.schema.json",
+                "command-result.schema.json"
               ],
               "type": "string"
             }

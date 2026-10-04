@@ -328,6 +328,7 @@ fn admitted<P>(command: &uob_contracts::ExternalCommand<P>) -> CommandResult {
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 

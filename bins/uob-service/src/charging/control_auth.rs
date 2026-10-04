@@ -92,6 +92,9 @@ impl ControlCredentials {
         roster: &[ResourceRef],
         inner: Arc<dyn CommandAdmissionPort<Value>>,
         protected: Option<Arc<LocalConfigurationValues201>>,
+        local_authorization: Option<
+            Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>,
+        >,
     ) -> Result<ManagementCommandConfiguration, &'static str> {
         let scopes = roster
             .iter()
@@ -122,7 +125,10 @@ impl ControlCredentials {
         Ok(ManagementCommandConfiguration {
             admission: Arc::new(ScopedCommandAdmissionPort::new(inner, policy)),
             authenticator: self,
-            privileged_payloads: Arc::new(PinnedPayloads { protected }),
+            privileged_payloads: Arc::new(PinnedPayloads {
+                protected,
+                local_authorization,
+            }),
         })
     }
 }
@@ -172,6 +178,8 @@ impl ManagementCommandAuthenticator for ControlCredentials {
 
 struct PinnedPayloads {
     protected: Option<Arc<LocalConfigurationValues201>>,
+    local_authorization:
+        Option<Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>>,
 }
 impl PrivilegedPayloadValidator for PinnedPayloads {
     fn validate(
@@ -210,6 +218,20 @@ impl PrivilegedPayloadValidator for PinnedPayloads {
             });
         if !offered {
             return false;
+        }
+        if operation.action.as_str() == "SendLocalList" {
+            return self.local_authorization.as_ref().is_some_and(|provider| {
+                serde_json::from_value::<uob_contracts::SendLocalListReference16>(
+                    operation.payload.clone(),
+                )
+                .is_ok_and(|request| {
+                    provider.authorized(
+                        resource,
+                        &request,
+                        uob_contracts::UtcTimestamp::new(time::OffsetDateTime::now_utc()),
+                    )
+                })
+            });
         }
         if matches!(
             operation.action.as_str(),

@@ -1,5 +1,6 @@
 use super::*;
 use std::fmt::Write as _;
+use uob_contracts::NativeProtocolReference;
 
 const BASE: &str =
     "[bridge]\nid='bridge-1'\nenvironment='demo'\n[management]\nlisten_addr='127.0.0.1:8080'\n";

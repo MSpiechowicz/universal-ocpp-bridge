@@ -331,6 +331,7 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     };
     submission
         .respond(Ok(result.clone()))

@@ -64,3 +64,22 @@ fence writes before the first send poll; after asynchronous transmission begins,
 the bridge cannot unsend bytes. Stop, rotate the private file with fresh independent
 capabilities, and restart to replace daemon provisioning; there is no hot reload or
 public secret/revocation endpoint.
+
+OCPP 1.6 station authorization-list updates also use protected startup content and
+reference-only durable envelopes. `list16:` capabilities, raw `idTag` and
+`parentIdTag` values are never safe diagnostic fields, public command parameters,
+typed `local_authorization_16` evidence, snapshots, SSE, capture or export payloads.
+The typed evidence carries only the action, requested version/update type, query
+version or exact native status. Native error text and malformed/unpaired reply
+content are not projected. The protected command envelope may retain a capability
+for durable deduplication; SQLite/WAL never retain raw list or parent identities.
+
+The independent actual-daemon smoke exercised Full/Differential/delete, all native
+Send statuses, signed version queries, delayed/lost/malformed/unpaired responses,
+enabled capture and restart/deduplication. Synthetic raw identities, parent tags and
+capabilities were absent from public history, snapshots, retained SSE and capture;
+raw identities and parents were also absent from SQLite/WAL and service logs.
+Bridge-owned provisioning and transient native buffers are wiped at their ownership
+boundaries, with the same allocator/third-party/operating-system limitations above.
+The simulator's separate owner-only recovery file necessarily retains native tags
+for genuine offline authorization and replay; its public progress and traces do not.

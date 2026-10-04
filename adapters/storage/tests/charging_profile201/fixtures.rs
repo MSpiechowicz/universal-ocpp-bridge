@@ -152,6 +152,7 @@ pub fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandR
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 pub async fn persist(store: &Store, result: CommandResult) {

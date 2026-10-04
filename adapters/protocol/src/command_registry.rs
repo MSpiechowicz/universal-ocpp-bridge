@@ -6,6 +6,7 @@ mod charging_profile201_schedule;
 pub(crate) mod composite_schedule16;
 pub(crate) mod configuration201;
 pub(crate) mod device_model201;
+pub(crate) mod local_authorization16;
 mod trigger201;
 use rust_ocpp::v1_6::messages::{
     change_availability::ChangeAvailabilityRequest, trigger_message::TriggerMessageRequest,
@@ -71,6 +72,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
     };
     if protocol == ProtocolEdition::Ocpp16j {
         descriptors.extend(charging_profile16::descriptors(snapshot));
+        descriptors.extend(local_authorization16::descriptors(snapshot));
         if snapshot.capabilities.supports(&trigger) && station_scope(&snapshot.station) {
             descriptors.push(trigger_descriptor(snapshot.station.clone()));
         }
@@ -302,6 +304,9 @@ pub fn validate_privileged_operation(
     operation: &PrivilegedOcppOperation<Value>,
 ) -> Result<(), CommandErrorCode> {
     use CommandErrorCode::{InvalidParameters, UnsupportedOperation};
+    if local_authorization16::ACTIONS.contains(&operation.action.as_str()) {
+        return local_authorization16::validate(resource, operation).map(|_| ());
+    }
     if configuration201::ACTIONS.contains(&operation.action.as_str()) {
         return configuration201::validate(resource, operation).map(|_| ());
     }

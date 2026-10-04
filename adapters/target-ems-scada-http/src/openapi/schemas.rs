@@ -23,7 +23,8 @@ canonical!(
     "export-batch",
     "export-report",
     "set-variables-reference-201",
-    "set-network-profile-reference-201"
+    "set-network-profile-reference-201",
+    "send-local-list-reference-16"
 );
 
 /// Only the changed result is published at v1.1; all v1.0 files remain byte-for-byte intact.
@@ -136,12 +137,27 @@ pub(super) const CANONICAL_V1_9: &[(&str, &str)] = &[
         "export-batch.schema.json",
         include_str!("../../../../crates/contracts/schemas/v1.9/export-batch.schema.json"),
     ),
+    (
+        "command-result.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.9/command-result.schema.json"),
+    ),
+];
+
+pub(super) const CANONICAL_V1_10: &[(&str, &str)] = &[
+    (
+        "export-record.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.10/export-record.schema.json"),
+    ),
+    (
+        "export-batch.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.10/export-batch.schema.json"),
+    ),
 ];
 
 pub(super) fn reference(name: &str) -> Value {
     let revision = match name {
-        "command-result" => "v1.8",
-        "export-record" | "export-batch" => "v1.9",
+        "command-result" => "v1.9",
+        "export-record" | "export-batch" => "v1.10",
         _ => "v1.0",
     };
     json!({"$ref": format!("/bridge/v1/schemas/{revision}/{name}.schema.json")})
@@ -159,6 +175,7 @@ pub(super) fn canonical(revision: &str) -> &'static [(&'static str, &'static str
         "v1.7" => CANONICAL_V1_7,
         "v1.8" => CANONICAL_V1_8,
         "v1.9" => CANONICAL_V1_9,
+        "v1.10" => CANONICAL_V1_10,
         _ => &[],
     }
 }
@@ -205,6 +222,7 @@ pub(super) fn add<T: JsonSchema>(components: &mut Map<String, Value>, name: &str
         ("v1.7", CANONICAL_V1_7),
         ("v1.8", CANONICAL_V1_8),
         ("v1.9", CANONICAL_V1_9),
+        ("v1.10", CANONICAL_V1_10),
     ] {
         for (file, source) in schemas {
             let schema: Value = serde_json::from_str(source).expect("canonical schema");

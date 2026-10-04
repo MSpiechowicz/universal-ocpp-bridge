@@ -49,6 +49,8 @@ fn config(listener: &TcpListener, reconnect: bool) -> SimulatorClientConfig {
         evse_connectors: vec![],
         trigger_responses: TriggerResponses::default(),
         trigger_observation: TriggerObservation::default(),
+        local_authorization: None,
+        local_authorization_file: None,
     }
 }
 

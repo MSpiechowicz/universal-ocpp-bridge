@@ -27,6 +27,8 @@ fn config(endpoint: String) -> SimulatorClientConfig {
         evse_connectors: vec![(1, 1), (2, 1), (2, 2)],
         trigger_responses: TriggerResponses::default(),
         trigger_observation: TriggerObservation::default(),
+        local_authorization: None,
+        local_authorization_file: None,
     }
 }
 

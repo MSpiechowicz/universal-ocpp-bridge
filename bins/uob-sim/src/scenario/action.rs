@@ -18,6 +18,15 @@ pub enum ActionKind {
     Heartbeat,
     Wait,
     Disconnect,
+    CsmsOffline,
+    CsmsReconnect,
+    OfflineStart,
+    OfflineStop,
+    AssertLocalAuthorization,
+    AwaitLocalAuthorization,
+    AwaitReboot,
+    DelayLocalReply,
+    DropLocalReply,
 }
 
 impl ActionKind {
@@ -39,6 +48,15 @@ impl ActionKind {
             Self::Heartbeat => "heartbeat",
             Self::Wait => "wait",
             Self::Disconnect => "disconnect",
+            Self::CsmsOffline => "csms_offline",
+            Self::CsmsReconnect => "csms_reconnect",
+            Self::OfflineStart => "offline_start",
+            Self::OfflineStop => "offline_stop",
+            Self::AssertLocalAuthorization => "assert_local_authorization",
+            Self::AwaitLocalAuthorization => "await_local_authorization",
+            Self::AwaitReboot => "await_reboot",
+            Self::DelayLocalReply => "delay_local_reply",
+            Self::DropLocalReply => "drop_local_reply",
         }
     }
 
@@ -60,6 +78,15 @@ impl ActionKind {
             Self::Heartbeat => "heartbeat_result",
             Self::Wait => "delay_elapsed",
             Self::Disconnect => "disconnected",
+            Self::CsmsOffline => "csms_disconnected",
+            Self::CsmsReconnect => "csms_reconnected",
+            Self::OfflineStart => "offline_start_result",
+            Self::OfflineStop => "offline_stop_result",
+            Self::AssertLocalAuthorization | Self::AwaitLocalAuthorization => {
+                "local_authorization_observed"
+            }
+            Self::AwaitReboot => "reboot_observed",
+            Self::DelayLocalReply | Self::DropLocalReply => "native_fault_armed",
         }
     }
 
@@ -80,6 +107,15 @@ impl ActionKind {
             | Self::TargetOnline
             | Self::ReconcileCommand
             | Self::Wait
+            | Self::CsmsOffline
+            | Self::CsmsReconnect
+            | Self::OfflineStart
+            | Self::OfflineStop
+            | Self::AssertLocalAuthorization
+            | Self::AwaitLocalAuthorization
+            | Self::AwaitReboot
+            | Self::DelayLocalReply
+            | Self::DropLocalReply
             | Self::Disconnect => None,
         }
     }

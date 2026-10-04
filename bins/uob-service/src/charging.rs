@@ -4,6 +4,7 @@ mod configuration201;
 mod control_auth;
 mod device_model;
 mod files;
+mod local_authorization16;
 mod profiles;
 mod provision;
 mod recovery;
@@ -50,6 +51,8 @@ pub(crate) struct ChargingState {
     commands: Arc<commands::LiveCommands>,
     credentials: Option<Arc<control_auth::ControlCredentials>>,
     protected_configuration: Option<Arc<LocalConfigurationValues201>>,
+    protected_local_authorization:
+        Option<Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>>,
     _directory: File,
     _lock: File,
 }
@@ -70,6 +73,8 @@ pub(super) struct StationSettings {
     start: Option<provision::StartIdentity>,
     control: StationControlOptions,
     configuration: Option<Arc<LocalConfigurationValues201>>,
+    local_authorization:
+        Option<Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>>,
 }
 
 impl StationSettings {
@@ -102,6 +107,7 @@ impl StationSettings {
                 action: "GetCompositeSchedule".to_owned(),
             });
         }
+        self.add_local_authorization_operations(&mut operations);
         snapshot.capabilities = ResourceCapabilities {
             operations: operations
                 .into_iter()
@@ -165,6 +171,23 @@ impl StationSettings {
         device_model::apply(snapshot, self.protocol, self.control);
         profiles::apply(snapshot, self.protocol, self.control);
     }
+    fn add_local_authorization_operations(&self, operations: &mut Vec<uob_contracts::Operation>) {
+        for (enabled, action) in [
+            (
+                self.control.get_local_list_version.enabled(),
+                "GetLocalListVersion",
+            ),
+            (self.control.send_local_list.enabled(), "SendLocalList"),
+            (self.control.clear_cache.enabled(), "ClearCache"),
+        ] {
+            if enabled && self.protocol == ProtocolEdition::Ocpp16j {
+                operations.push(uob_contracts::Operation::ProtocolAction {
+                    protocol: self.protocol,
+                    action: action.to_owned(),
+                });
+            }
+        }
+    }
 }
 
 impl ChargingState {
@@ -198,6 +221,7 @@ impl ChargingState {
                 &self.roster,
                 self.command_port(application),
                 self.protected_configuration.clone(),
+                self.protected_local_authorization.clone(),
             )
             .map(Some)
             .map_err(io::Error::other)
@@ -233,22 +257,21 @@ impl ChargingRuntime {
             &mut settings,
             &mut seen,
         )?;
+        let protected_local_authorization = local_authorization16::install(
+            config.local_authorization_updates_file.as_deref(),
+            &resources,
+            &mut settings,
+            &mut seen,
+        )?;
         let capacity = resources.len();
         let authenticator =
             StationAuthenticator::demo_with_protocols(registrations).map_err(io::Error::other)?;
-        let database = prepare_database(
+        let store = open_store(
             &config.state_directory,
             application.identity().bridge_id.as_str(),
             &directory,
-        )?;
-        let store: ChargingStore =
-            SqliteOperationalStore::open(&database, DEFAULT_WORK_QUEUE_CAPACITY)
-                .map_err(io::Error::other)?;
-        files::check_database_files(&config.state_directory).map_err(fail)?;
-        store
-            .interrupt_charging_profile_mutations()
-            .await
-            .map_err(io::Error::other)?;
+        )
+        .await?;
         let commands = Arc::new(commands::LiveCommands::new());
         recovery::recover(&store, commands.clone()).await?;
         let authorization = Arc::new(
@@ -295,6 +318,7 @@ impl ChargingRuntime {
                 commands,
                 credentials,
                 protected_configuration,
+                protected_local_authorization,
                 _directory: directory,
                 _lock: lock,
             },
@@ -314,6 +338,22 @@ impl ChargingRuntime {
     ) -> io::Result<()> {
         runtime::serve(self, application, stop).await
     }
+}
+
+async fn open_store(
+    state_directory: &std::path::Path,
+    bridge: &str,
+    directory: &File,
+) -> io::Result<ChargingStore> {
+    let database = prepare_database(state_directory, bridge, directory)?;
+    let store = SqliteOperationalStore::open(&database, DEFAULT_WORK_QUEUE_CAPACITY)
+        .map_err(io::Error::other)?;
+    files::check_database_files(state_directory).map_err(io::Error::other)?;
+    store
+        .interrupt_charging_profile_mutations()
+        .await
+        .map_err(io::Error::other)?;
+    Ok(store)
 }
 
 fn load_grants(

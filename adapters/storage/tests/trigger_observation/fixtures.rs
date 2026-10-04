@@ -81,6 +81,7 @@ pub(super) fn result(response: Option<TriggerNativeResponse>) -> CommandResult {
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 pub(super) fn event(

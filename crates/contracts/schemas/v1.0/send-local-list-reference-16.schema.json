@@ -1,0 +1,48 @@
+{
+  "$defs": {
+    "LocalListUpdateType16": {
+      "enum": [
+        "Full",
+        "Differential"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/send-local-list-reference-16.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "listVersion": {
+      "format": "int32",
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "not": {
+        "enum": [
+          -1,
+          0
+        ]
+      },
+      "type": "integer"
+    },
+    "updateReference": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^list16:[0-9a-fA-F]{64}$",
+      "type": "string"
+    },
+    "updateType": {
+      "$ref": "#/$defs/LocalListUpdateType16"
+    }
+  },
+  "required": [
+    "listVersion",
+    "updateType",
+    "updateReference"
+  ],
+  "title": "SendLocalListReference16",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

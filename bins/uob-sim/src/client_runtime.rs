@@ -1,13 +1,12 @@
 use std::sync::{Arc, Mutex};
 
+use crate::client_observation16::observe_local_authorization;
 use ocpp_client::ocpp_types::v16::common::{
-    RemoteStartTransactionResponseStatus, RemoteStopTransactionResponseStatus, ResetResponseStatus,
+    RemoteStartTransactionResponseStatus, RemoteStopTransactionResponseStatus,
 };
 use ocpp_client::ocpp_types::v16::{
-    AuthorizeRequest, BootNotificationRequest, HeartbeatRequest as HeartbeatRequest16,
-    MeterValuesRequest, RemoteStartTransactionResponse, RemoteStopTransactionResponse,
-    ResetResponse as ResetResponse16, StartTransactionRequest, StatusNotificationRequest,
-    StopTransactionRequest,
+    BootNotificationRequest, HeartbeatRequest as HeartbeatRequest16, MeterValuesRequest,
+    RemoteStartTransactionResponse, RemoteStopTransactionResponse, StatusNotificationRequest,
 };
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -28,41 +27,17 @@ pub(super) async fn connect_and_run_1_6(
     state: Arc<Mutex<Ocpp16State>>,
     reply_delay: ReplyDelaySlot,
 ) -> Result<(tokio::task::AbortHandle, EmergencyClient), SimulatorClientError> {
-    let (client, barrier, trigger_receiver) = super::trigger_transport::connect(
-        &config.endpoint,
-        config.credentials_file.as_deref(),
-        config.request_timeout,
-        config.reconnect,
-        config.command_capacity,
-        Arc::clone(&state),
-    )
-    .await
-    .map_err(|error| SimulatorClientError::Connection(error.to_string()))?;
-    register_1_6_handlers(
-        &client,
+    let client = super::client_lifecycle16::connect(
+        config,
         traces,
-        remote_commands,
-        config.connectors.clone(),
+        remote_commands.clone(),
         Arc::clone(&state),
-        reply_delay,
+        Arc::clone(&reply_delay),
     )
-    .await;
-    super::trigger::register(
-        &client,
-        barrier,
-        super::trigger::TriggerSettings {
-            connectors: config.connectors.clone(),
-            responses: config.trigger_responses.clone(),
-            observation: config.trigger_observation.clone(),
-        },
-        Arc::clone(&state),
-        traces.clone(),
-        trigger_receiver,
-    )
-    .await;
-    register_1_6_reconnect(&client, traces).await;
+    .await?;
     traces.push(TraceKind::Connected, OcppVersion::V1_6.websocket_protocol());
-    let emergency_client = EmergencyClient::V1_6(client.clone());
+    let live_client = Arc::new(tokio::sync::Mutex::new(client.clone()));
+    let emergency_client = EmergencyClient::V1_6(Arc::clone(&live_client));
     let worker = tokio::spawn(run_1_6(
         client,
         commands,
@@ -70,6 +45,10 @@ pub(super) async fn connect_and_run_1_6(
         config.command_capacity,
         remote_receiver,
         state,
+        config.clone(),
+        remote_commands,
+        reply_delay,
+        live_client,
     ))
     .abort_handle();
     Ok((worker, emergency_client))
@@ -83,18 +62,6 @@ pub(super) async fn register_1_6_handlers(
     state: Arc<Mutex<Ocpp16State>>,
     reply_delay: ReplyDelaySlot,
 ) {
-    let reset_traces = traces.clone();
-    client
-        .on_reset(move |_request, _client| {
-            reset_traces.push(TraceKind::ResetReceived, "accepted");
-            async move {
-                Ok(ResetResponse16 {
-                    status: ResetResponseStatus::Accepted,
-                })
-            }
-        })
-        .await;
-
     let start_traces = traces.clone();
     let commands = remote_commands.clone();
     let start_state = Arc::clone(&state);
@@ -105,13 +72,16 @@ pub(super) async fn register_1_6_handlers(
                 .connector_id
                 .and_then(|value| u16::try_from(value).ok());
             let accepted = connector.is_none_or(|value| {
+                let state = start_state.lock().expect("OCPP 1.6 state lock poisoned");
                 connectors.contains(&value)
-                    && !start_state
-                        .lock()
-                        .expect("OCPP 1.6 state lock poisoned")
+                    && !state
                         .active_transactions
                         .values()
                         .any(|active| *active == value)
+                    && !state
+                        .local
+                        .as_ref()
+                        .is_some_and(|local| local.connector_busy(value))
             });
             start_traces.push(
                 TraceKind::RemoteStartReceived,
@@ -144,11 +114,15 @@ pub(super) async fn register_1_6_handlers(
     let stop_delay = reply_delay;
     client
         .on_remote_stop_transaction(move |request, _client| {
+            let state = state.lock().expect("OCPP 1.6 state lock poisoned");
             let accepted = state
-                .lock()
-                .expect("OCPP 1.6 state lock poisoned")
                 .active_transactions
-                .contains_key(&request.transaction_id);
+                .contains_key(&request.transaction_id)
+                || state
+                    .local
+                    .as_ref()
+                    .is_some_and(|local| local.active_connector(request.transaction_id).is_some());
+            drop(state);
             stop_traces.push(
                 TraceKind::RemoteStopReceived,
                 if accepted { "accepted" } else { "rejected" },
@@ -177,19 +151,6 @@ pub(super) async fn register_1_6_handlers(
         .await;
 }
 
-pub(super) async fn register_1_6_reconnect(
-    client: &ocpp_client::ocpp_1_6::OCPP1_6Client,
-    traces: &TraceBuffer,
-) {
-    let traces = traces.clone();
-    client
-        .on_reconnect(move |_| {
-            traces.push(TraceKind::Reconnected, "ocpp1.6");
-            async {}
-        })
-        .await;
-}
-
 pub(super) async fn register_2_0_1_reconnect(
     client: &ocpp_client::ocpp_2_0_1::OCPP2_0_1Client,
     traces: &TraceBuffer,
@@ -203,17 +164,42 @@ pub(super) async fn register_2_0_1_reconnect(
         .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn run_1_6(
-    client: ocpp_client::ocpp_1_6::OCPP1_6Client,
+    mut client: ocpp_client::ocpp_1_6::OCPP1_6Client,
     mut commands: mpsc::Receiver<Command>,
     traces: TraceBuffer,
     outstanding_capacity: usize,
-    mut remote_commands: mpsc::Receiver<RemoteCommand>,
+    remote_commands: mpsc::Receiver<RemoteCommand>,
     state: Arc<Mutex<Ocpp16State>>,
+    config: SimulatorClientConfig,
+    remote_sender: mpsc::Sender<RemoteCommand>,
+    reply_delay: ReplyDelaySlot,
+    live_client: Arc<tokio::sync::Mutex<ocpp_client::ocpp_1_6::OCPP1_6Client>>,
 ) {
     let mut requests = JoinSet::new();
+    let mut replay = JoinSet::new();
+    let remote_commands = Arc::new(tokio::sync::Mutex::new(remote_commands));
+    let mut reset_poll = tokio::time::interval(std::time::Duration::from_millis(20));
     loop {
         tokio::select! {
+            _ = reset_poll.tick() => {
+                let reset = state.lock().expect("OCPP 1.6 state lock").reset_reason.is_some();
+                if reset {
+                    requests.shutdown().await;
+                    replay.shutdown().await;
+                    if let Ok(recovered) = super::client_lifecycle16::reboot(&client, &config, &traces,
+                        remote_sender.clone(), Arc::clone(&state), Arc::clone(&reply_delay)).await {
+                        *live_client.lock().await = recovered.clone();
+                        client = recovered;
+                    } else {
+                        traces.push(TraceKind::Failed, "native reset recovery failed");
+                        break;
+                    }
+                }
+                schedule_replay(&mut replay, &client, &state, &traces);
+            }
+            _ = replay.join_next(), if !replay.is_empty() => {}
             _ = requests.join_next(), if !requests.is_empty() => {}
             command = commands.recv(), if requests.len() < outstanding_capacity => match command {
                 Some(Command::Heartbeat(result)) => {
@@ -234,31 +220,45 @@ pub(super) async fn run_1_6(
                     let state = Arc::clone(&state);
                     requests.spawn(async move {
                         traces.push(TraceKind::ChargingCallSent, call.action.name());
-                        let response = send_1_6_call(&client, &call).await;
-                        if let Ok(value) = &response { update_ocpp16_state(&state, &call, value); }
+                        let exchange = crate::client_exchange16::NativeExchange::capture(&state, &call);
+                        let response = exchange.send(&client, &call).await;
+                        let response = finish_call(&state, &call, response, &traces, exchange);
                         traces.push(if response.is_ok() { TraceKind::ChargingCallResult } else { TraceKind::Failed }, call.action.name());
                         let _ = result.send(response);
                     });
                 }
                 Some(Command::NextRemote(result)) => {
-                    let response = remote_commands.recv().await.ok_or(SimulatorClientError::Stopped);
-                    let _ = result.send(response);
+                    let remote_commands = Arc::clone(&remote_commands);
+                    requests.spawn(async move {
+                        let response = remote_commands.lock().await.recv().await.ok_or(SimulatorClientError::Stopped);
+                        let _ = result.send(response);
+                    });
+                }
+                Some(Command::LocalListConflict) => {
+                    let client = client.clone();
+                    let traces = traces.clone();
+                    requests.spawn(async move {
+                        crate::client_observation16::notify_conflict(&client, &traces).await;
+                    });
                 }
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
+                    replay.shutdown().await;
                     let response = client.disconnect().await
                         .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
                     traces.push(TraceKind::Stopped, "client disconnected");
+                    state.lock().expect("OCPP 1.6 state lock").local = None;
                     let _ = result.send(response);
                     break;
                 }
-                None => { requests.shutdown().await; break; }
+                None => { requests.shutdown().await; replay.shutdown().await; break; }
             }
         }
     }
+    state.lock().expect("OCPP 1.6 state lock").local = None;
 }
 
-async fn send_1_6_call(
+pub(crate) async fn send_1_6_call(
     client: &ocpp_client::ocpp_1_6::OCPP1_6Client,
     call: &SimulatorCall,
 ) -> Result<serde_json::Value, SimulatorClientError> {
@@ -278,31 +278,60 @@ async fn send_1_6_call(
         SimulatorAction::BootNotification => {
             exchange!(BootNotificationRequest, send_boot_notification)
         }
-        SimulatorAction::Authorize => exchange!(AuthorizeRequest, send_authorize),
+        SimulatorAction::Authorize
+        | SimulatorAction::StartTransaction
+        | SimulatorAction::StopTransaction => {
+            crate::local_authorization::wire::call(client, call.action, &call.payload).await
+        }
         SimulatorAction::StatusNotification => {
             exchange!(StatusNotificationRequest, send_status_notification)
         }
-        SimulatorAction::StartTransaction => {
-            exchange!(StartTransactionRequest, send_start_transaction)
-        }
         SimulatorAction::MeterValues => exchange!(MeterValuesRequest, send_meter_values),
-        SimulatorAction::StopTransaction => {
-            exchange!(StopTransactionRequest, send_stop_transaction)
-        }
     }
 }
 
-fn update_ocpp16_state(
+pub(crate) fn finish_call(
+    state: &Arc<Mutex<Ocpp16State>>,
+    call: &SimulatorCall,
+    response: Result<serde_json::Value, SimulatorClientError>,
+    traces: &TraceBuffer,
+    exchange: crate::client_exchange16::NativeExchange,
+) -> Result<serde_json::Value, SimulatorClientError> {
+    match response {
+        Ok(value) => {
+            observe_local_authorization(state, call, &value, traces)?;
+            update_ocpp16_state(state, call, &value, exchange, true)?;
+            Ok(value)
+        }
+        Err(_) => Err(SimulatorClientError::Protocol(
+            "native exchange failed".to_owned(),
+        )),
+    }
+}
+
+pub(crate) fn update_ocpp16_state(
     state: &Arc<Mutex<Ocpp16State>>,
     call: &SimulatorCall,
     response: &serde_json::Value,
-) {
+    exchange: crate::client_exchange16::NativeExchange,
+    request_replay: bool,
+) -> Result<(), SimulatorClientError> {
     let mut state = state.lock().expect("OCPP 1.6 state lock poisoned");
+    if state.socket_generation != exchange.generation {
+        return Err(crate::client_exchange16::stale_exchange());
+    }
     match call.action {
         SimulatorAction::BootNotification => {
-            state.boot = Some(call.payload.clone());
-            state.registered =
+            let accepted =
                 response.get("status").and_then(serde_json::Value::as_str) == Some("Accepted");
+            if !state.socket_connected
+                || state.boot_accepted_generation != accepted.then_some(exchange.generation)
+            {
+                return Err(crate::client_exchange16::stale_exchange());
+            }
+            state.boot = Some(call.payload.clone());
+            state.registered = accepted;
+            state.replay_requested = accepted && request_replay;
         }
         SimulatorAction::StatusNotification | SimulatorAction::MeterValues => {
             if let Some(id) = call
@@ -348,11 +377,49 @@ fn update_ocpp16_state(
     {
         state.active_transactions.remove(&transaction_id);
     }
+    Ok(())
 }
 
 fn record_result(traces: &TraceBuffer, response: &Result<String, SimulatorClientError>) {
     match response {
         Ok(timestamp) => traces.push(TraceKind::HeartbeatResult, timestamp),
         Err(error) => traces.push(TraceKind::Failed, error.to_string()),
+    }
+}
+
+pub(crate) fn schedule_replay(
+    replay: &mut JoinSet<()>,
+    client: &ocpp_client::ocpp_1_6::OCPP1_6Client,
+    state: &Arc<Mutex<Ocpp16State>>,
+    traces: &TraceBuffer,
+) {
+    if replay.is_empty() {
+        let generation = {
+            let mut state = state.lock().expect("OCPP 1.6 state lock");
+            let requested = std::mem::take(&mut state.replay_requested);
+            (requested
+                && state.registered
+                && state.socket_connected
+                && state.boot_accepted_generation == Some(state.socket_generation))
+            .then_some(state.socket_generation)
+        };
+        if let Some(generation) = generation {
+            let client = client.clone();
+            let state = Arc::clone(state);
+            let traces = traces.clone();
+            replay.spawn(async move {
+                if super::client_lifecycle16::replay_pending(
+                    client,
+                    state,
+                    traces.clone(),
+                    generation,
+                )
+                .await
+                .is_err()
+                {
+                    traces.push(TraceKind::Failed, "offline_replay_uncertain");
+                }
+            });
+        }
     }
 }

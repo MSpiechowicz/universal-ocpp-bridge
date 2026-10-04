@@ -8,6 +8,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+caseless = "=0.2.2"
+time.workspace = true
+sha2.workspace = true
+parking_lot = "=0.12.5"
+zeroize = "=1.9.0"
 uuid.workspace = true
 axum.workspace = true
 subtle.workspace = true

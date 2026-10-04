@@ -43,6 +43,7 @@ pub struct StationDefinition {
     pub trigger_responses: TriggerResponses,
     #[serde(default)]
     pub trigger_observation: TriggerObservation,
+    pub local_authorization: Option<crate::local_authorization::LocalAuthorizationConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -84,6 +85,11 @@ impl StationDefinition {
             evse_connectors: self.evse_connectors(),
             trigger_responses: self.trigger_responses.clone(),
             trigger_observation: self.trigger_observation.clone(),
+            local_authorization: None,
+            local_authorization_file: self
+                .local_authorization
+                .as_ref()
+                .map(|settings| (self.id.clone(), settings.clone())),
         }
     }
 
@@ -295,6 +301,14 @@ fn validate_configuration(configuration: &SimulatorConfiguration) -> Result<(), 
             return Err(setup_failure(
                 "invalid_trigger_observation_delay",
                 "trigger observation delay must not exceed 30000 milliseconds",
+            ));
+        }
+        if station.local_authorization.is_some()
+            && station.ocpp_version != ConfiguredOcppVersion::V1_6
+        {
+            return Err(setup_failure(
+                "wrong_local_authorization_protocol",
+                "local authorization state requires OCPP 1.6",
             ));
         }
         validate_station_topology(station)?;

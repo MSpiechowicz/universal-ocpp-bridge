@@ -1,17 +1,16 @@
 //! Opt-in demo-only station roster and native-to-canonical charging topology.
 //! Secrets and persistent-state directory contents are resolved and protected by the runtime.
+mod topology;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     net::SocketAddr,
     path::{Path, PathBuf},
 };
+use topology::validate_resources;
 
 use serde::Deserialize;
 use uob_application::{CredentialReference, DEFAULT_MAX_CONNECTED_STATIONS};
-use uob_contracts::{
-    BridgeId, CanonicalConnectorId, CanonicalEvseId, CanonicalResource, Environment,
-    NativeProtocolReference, ProtocolEdition, ResourceRef, StationId,
-};
+use uob_contracts::{BridgeId, Environment, ProtocolEdition, ResourceRef, StationId};
 
 use super::ConfigurationLoadError;
 
@@ -31,6 +30,7 @@ pub(crate) struct Configuration {
     privileged_grant_file: Option<String>,
     #[serde(rename = "configuration_values_file")]
     values_file: Option<String>,
+    local_authorization_updates_file: Option<String>,
     stations: Vec<StationConfiguration>,
 }
 
@@ -48,6 +48,9 @@ pub(crate) struct StationControlOptions {
     pub get_report: StationActionOption,
     pub set_variables: StationActionOption,
     pub set_network_profile: StationActionOption,
+    pub get_local_list_version: StationActionOption,
+    pub send_local_list: StationActionOption,
+    pub clear_cache: StationActionOption,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
 }
@@ -86,6 +89,11 @@ impl StationControlOptions {
     pub fn configuration_enabled(self) -> bool {
         self.set_variables.enabled() || self.set_network_profile.enabled()
     }
+    pub fn local_authorization_enabled(self) -> bool {
+        self.get_local_list_version.enabled()
+            || self.send_local_list.enabled()
+            || self.clear_cache.enabled()
+    }
     fn requires_privileged_grant(self) -> bool {
         self.change_availability
             || self.trigger_message.enabled()
@@ -93,6 +101,7 @@ impl StationControlOptions {
             || self.charging_profiles_enabled()
             || self.device_model_enabled()
             || self.configuration_enabled()
+            || self.local_authorization_enabled()
     }
 }
 
@@ -132,6 +141,7 @@ pub(crate) struct ValidatedChargingConfiguration {
     pub control_grant_file: Option<CredentialReference>,
     pub privileged_grant_file: Option<CredentialReference>,
     pub configuration_values_file: Option<PathBuf>,
+    pub local_authorization_updates_file: Option<PathBuf>,
 }
 
 pub(crate) struct ValidatedChargingStation {
@@ -154,18 +164,8 @@ impl Configuration {
     ) -> Result<Option<ValidatedChargingConfiguration>, ConfigurationLoadError> {
         let fail = ConfigurationLoadError::InvalidCharging;
         if !self.enabled {
-            return if self.listen_addr.is_none()
-                && self.state_directory.is_none()
-                && self.read_grant_file.is_none()
-                && self.control_grant_file.is_none()
-                && self.privileged_grant_file.is_none()
-                && self.values_file.is_none()
-                && self.stations.is_empty()
-            {
-                Ok(None)
-            } else {
-                Err(fail)
-            };
+            self.validate_disabled()?;
+            return Ok(None);
         }
         if environment != Environment::Demo {
             return Err(fail);
@@ -226,6 +226,16 @@ impl Configuration {
         let privileged_grant_file = credential(self.privileged_grant_file)?;
         let configuration_values_file =
             credential(self.values_file)?.map(|file| PathBuf::from(file.as_str()));
+        let local_authorization_updates_file = credential(self.local_authorization_updates_file)?
+            .map(|file| PathBuf::from(file.as_str()));
+        if self
+            .stations
+            .iter()
+            .any(|station| station.control.send_local_list.enabled())
+            && local_authorization_updates_file.is_none()
+        {
+            return Err(fail);
+        }
         if self
             .stations
             .iter()
@@ -243,7 +253,24 @@ impl Configuration {
             control_grant_file,
             privileged_grant_file,
             configuration_values_file,
+            local_authorization_updates_file,
         }))
+    }
+
+    fn validate_disabled(&self) -> Result<(), ConfigurationLoadError> {
+        if self.listen_addr.is_none()
+            && self.state_directory.is_none()
+            && self.read_grant_file.is_none()
+            && self.control_grant_file.is_none()
+            && self.privileged_grant_file.is_none()
+            && self.values_file.is_none()
+            && self.local_authorization_updates_file.is_none()
+            && self.stations.is_empty()
+        {
+            Ok(())
+        } else {
+            Err(ConfigurationLoadError::InvalidCharging)
+        }
     }
 }
 
@@ -265,6 +292,11 @@ fn validate_stations(
     for station in entries {
         if (station.control.device_model_enabled() || station.control.configuration_enabled())
             && station.protocol != ProtocolEdition::Ocpp201
+        {
+            return Err(fail);
+        }
+        if station.control.local_authorization_enabled()
+            && station.protocol != ProtocolEdition::Ocpp16j
         {
             return Err(fail);
         }
@@ -332,103 +364,6 @@ fn validate_stations(
         });
     }
     Ok(stations)
-}
-
-fn validate_resources(
-    entries: Vec<ResourceConfiguration>,
-    protocol: ProtocolEdition,
-    bridge_id: &BridgeId,
-    station_id: &StationId,
-) -> Result<Vec<ResourceRef>, ConfigurationLoadError> {
-    let fail = ConfigurationLoadError::InvalidCharging;
-    let mut native_addresses = BTreeSet::new();
-    let mut native_evse_map = BTreeMap::new();
-    let mut canonical_evse_map = BTreeMap::new();
-    let mut canonical_addresses = BTreeSet::new();
-    let mut resources = Vec::with_capacity(entries.len() + 1);
-    resources.push(ResourceRef {
-        bridge_id: bridge_id.clone(),
-        station_id: station_id.clone(),
-        resource: None,
-        native_protocol_reference: None,
-    });
-    for resource in entries {
-        let (canonical, native, canonical_key, native_key) = match protocol {
-            ProtocolEdition::Ocpp16j => {
-                if resource.evse.is_some() || resource.native_evse.is_some() {
-                    return Err(fail);
-                }
-                let connector = CanonicalConnectorId::new(valid_resource_name(
-                    resource.connector.ok_or(fail)?,
-                )?)
-                .map_err(|_| fail)?;
-                let number = resource.native_connector.filter(|id| *id > 0).ok_or(fail)?;
-                let canonical_key = (None, Some(connector.as_str().to_owned()));
-                (
-                    CanonicalResource::Connector {
-                        connector_id: connector,
-                    },
-                    NativeProtocolReference::Ocpp16 {
-                        connector_id: number,
-                    },
-                    canonical_key,
-                    (number, None),
-                )
-            }
-            ProtocolEdition::Ocpp201 => {
-                let evse = CanonicalEvseId::new(valid_resource_name(resource.evse.ok_or(fail)?)?)
-                    .map_err(|_| fail)?;
-                let native_evse = resource.native_evse.filter(|id| *id > 0).ok_or(fail)?;
-                if native_evse_map
-                    .insert(native_evse, evse.as_str().to_owned())
-                    .is_some_and(|previous| previous != evse.as_str())
-                    || canonical_evse_map
-                        .insert(evse.as_str().to_owned(), native_evse)
-                        .is_some_and(|previous| previous != native_evse)
-                {
-                    return Err(fail);
-                }
-                let connector = resource
-                    .connector
-                    .map(valid_resource_name)
-                    .transpose()?
-                    .map(CanonicalConnectorId::new)
-                    .transpose()
-                    .map_err(|_| fail)?;
-                let native_connector = resource.native_connector;
-                if connector.is_some() != native_connector.is_some() || native_connector == Some(0)
-                {
-                    return Err(fail);
-                }
-                let canonical_key = (
-                    Some(evse.as_str().to_owned()),
-                    connector.as_ref().map(|c| c.as_str().to_owned()),
-                );
-                (
-                    CanonicalResource::Evse {
-                        evse_id: evse,
-                        connector_id: connector,
-                    },
-                    NativeProtocolReference::Ocpp201 {
-                        evse_id: native_evse,
-                        connector_id: native_connector,
-                    },
-                    canonical_key,
-                    (native_evse, native_connector),
-                )
-            }
-        };
-        if !native_addresses.insert(native_key) || !canonical_addresses.insert(canonical_key) {
-            return Err(fail);
-        }
-        resources.push(ResourceRef {
-            bridge_id: bridge_id.clone(),
-            station_id: station_id.clone(),
-            resource: Some(canonical),
-            native_protocol_reference: Some(native),
-        });
-    }
-    Ok(resources)
 }
 
 /// Checks syntax only. The runtime must verify ownership, privacy, symlinks and existence

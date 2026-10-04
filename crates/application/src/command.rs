@@ -3,6 +3,7 @@ mod configuration;
 pub mod device_model201;
 mod errors;
 mod finalization;
+mod local_authorization16;
 mod recovery;
 mod results;
 use results::{command_result, rejected_external, validation_rejection};
@@ -79,6 +80,8 @@ pub enum CommandDispatchOutcome {
     ChargingProfileResponse201(uob_contracts::ChargingProfileResult201),
     /// Value-free native configuration write acknowledgement.
     ConfigurationResponse201(uob_contracts::ConfigurationResult201),
+    /// Exact native station list/cache response without private authorization material.
+    LocalAuthorizationResponse16(uob_contracts::LocalAuthorizationResult16),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -279,6 +282,14 @@ where
                 .await
                 .map_err(|error| map_storage_error(&error))?
                 .ok_or_else(|| integrity_error("admitted command has no durable result"));
+        }
+        if local_authorization16::invalid(&external.request.resource, &external.request.operation) {
+            return Ok(rejected_external(
+                &external,
+                CommandErrorCode::InvalidParameters,
+                "invalid protected local authorization request",
+                now,
+            ));
         }
         if let uob_contracts::CommandOperation::Ocpp(operation) = &external.request.operation {
             if operation.protocol == uob_contracts::ProtocolEdition::Ocpp16j

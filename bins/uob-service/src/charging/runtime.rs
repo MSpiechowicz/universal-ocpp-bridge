@@ -345,6 +345,17 @@ async fn dispatch_call(
             status::complete_status(incoming.call, snapshot, &services, protocol, &mut commits)
                 .await?
         }
+        (ProtocolEdition::Ocpp16j, "Authorize") => {
+            v16::complete_authorization(
+                incoming.call,
+                &snapshot.station,
+                services.authorization,
+                &LocalAuthorizationProvider,
+                &Clock,
+                Duration::from_secs(2),
+            )
+            .await
+        }
         (ProtocolEdition::Ocpp16j, "StartTransaction" | "StopTransaction") => {
             let context = context(
                 services.store,

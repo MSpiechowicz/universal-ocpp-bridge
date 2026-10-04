@@ -46,6 +46,15 @@ pub(super) async fn send_outbound(
             return;
         };
         sent
+    } else if let QueuedWire::LocalAuthorization16(deferred) = &queued.wire {
+        let Some(sent) = deferred.send_at_boundary(connection, &message_id).await else {
+            finish_not_transmitted(
+                queued,
+                "protected local authorization reference unavailable before socket send",
+            );
+            return;
+        };
+        sent
     } else {
         // The existing 1.6 resolver remains synchronous immediately before initiating send.
         let deferred_encoded = match &queued.wire {
@@ -60,12 +69,16 @@ pub(super) async fn send_outbound(
                 };
                 Some(encoded)
             }
-            QueuedWire::Configuration201(_) => unreachable!("handled above"),
+            QueuedWire::Configuration201(_) | QueuedWire::LocalAuthorization16(_) => {
+                unreachable!("handled above")
+            }
         };
         let encoded = match queued.wire {
             QueuedWire::Ready(encoded) => encoded,
             QueuedWire::Configuration(_) => deferred_encoded.expect("checked above"),
-            QueuedWire::Configuration201(_) => unreachable!("handled above"),
+            QueuedWire::Configuration201(_) | QueuedWire::LocalAuthorization16(_) => {
+                unreachable!("handled above")
+            }
         };
         if let Some(dispatched) = queued.dispatched {
             let _ = dispatched.send(Instant::now());

@@ -16,6 +16,8 @@ mod configuration;
 pub(crate) mod configuration201;
 #[path = "codec_helpers.rs"]
 mod helpers;
+#[path = "codec_local_authorization16.rs"]
+pub(crate) mod local_authorization16;
 use helpers::{
     corrupt, decode_durability, durability, durability_or_state, from_json, integrity, json,
     retention_boundary, signed, unsigned,
@@ -149,6 +151,7 @@ where
         .command_result
         .map(|value| {
             configuration201::validate_result(&value)?;
+            local_authorization16::validate_result(&value)?;
             Ok(EncodedCommandResult {
                 request_id: value.return_route.request_id.as_str().to_owned(),
                 payload: json(&value)?,
@@ -218,6 +221,7 @@ pub(crate) fn encode_command<P: Serialize>(
 ) -> Result<EncodedCommand, StorageError> {
     configuration::validate_command(value)?;
     configuration201::validate_command(value)?;
+    local_authorization16::validate_command(value)?;
     let admitted_at = value.admitted_at.into_inner().unix_timestamp();
     let retain_until = admitted_at
         .checked_add(COMMAND_DEDUPLICATION_RETENTION_SECONDS)
@@ -408,12 +412,14 @@ pub(crate) fn decode_event<E: DeserializeOwned>(
 pub(crate) fn decode_command<C: DeserializeOwned>(value: &str) -> Result<Command<C>, StorageError> {
     let envelope: Command<serde_json::Value> = from_json(value)?;
     configuration201::validate_command(&envelope)?;
+    local_authorization16::validate_command(&envelope)?;
     from_json(value)
 }
 
 pub(crate) fn decode_result(value: &str) -> Result<CommandResult, StorageError> {
     let result: CommandResult = from_json(value)?;
     configuration201::validate_result(&result)?;
+    local_authorization16::validate_result(&result)?;
     Ok(result)
 }
 
@@ -427,6 +433,7 @@ pub(crate) fn decode_stored_result(
         return Err(corrupt("stored command result request identity changed"));
     }
     configuration201::validate_stored(connection, &result)?;
+    local_authorization16::validate_stored(connection, &result)?;
     Ok(result)
 }
 

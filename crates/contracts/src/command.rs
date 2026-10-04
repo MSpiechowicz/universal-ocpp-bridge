@@ -423,6 +423,9 @@ pub struct CommandResult {
     /// Value-free native configuration write acknowledgement.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub configuration_201: Option<crate::ConfigurationResult201>,
+    /// Value-free native station list/cache acknowledgement; never offline-use proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_authorization_16: Option<crate::LocalAuthorizationResult16>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

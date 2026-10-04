@@ -25,6 +25,7 @@ pub(super) fn command_result<P>(
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 
@@ -59,6 +60,7 @@ pub(super) fn rejected_external<P>(
         charging_profile_16: None,
         charging_profile_201: None,
         configuration_201: None,
+        local_authorization_16: None,
     }
 }
 
