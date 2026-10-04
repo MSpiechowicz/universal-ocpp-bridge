@@ -21,6 +21,7 @@ fn supported_result_version(version: ContractVersion) -> bool {
         || version == ContractVersion::V1_CHARGING_PROFILE_201
         || version == ContractVersion::V1_CONFIGURATION_201
         || version == ContractVersion::V1_LOCAL_AUTHORIZATION_16
+        || version == ContractVersion::V1_LOCAL_AUTHORIZATION_201
 }
 
 /// Trusted, versioned MQTT namespace shared by every outbound mapping.

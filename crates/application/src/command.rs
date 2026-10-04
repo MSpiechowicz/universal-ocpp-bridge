@@ -4,6 +4,7 @@ pub mod device_model201;
 mod errors;
 mod finalization;
 mod local_authorization16;
+mod local_authorization201;
 mod recovery;
 mod results;
 use results::{command_result, rejected_external, validation_rejection};
@@ -82,6 +83,7 @@ pub enum CommandDispatchOutcome {
     ConfigurationResponse201(uob_contracts::ConfigurationResult201),
     /// Exact native station list/cache response without private authorization material.
     LocalAuthorizationResponse16(uob_contracts::LocalAuthorizationResult16),
+    LocalAuthorizationResponse201(uob_contracts::LocalAuthorizationResult201),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -283,7 +285,21 @@ where
                 .map_err(|error| map_storage_error(&error))?
                 .ok_or_else(|| integrity_error("admitted command has no durable result"));
         }
-        if local_authorization16::invalid(&external.request.resource, &external.request.operation) {
+        let invalid_local = match &external.request.operation {
+            uob_contracts::CommandOperation::Ocpp(operation)
+                if operation.protocol == uob_contracts::ProtocolEdition::Ocpp201 =>
+            {
+                local_authorization201::invalid(
+                    &external.request.resource,
+                    &external.request.operation,
+                )
+            }
+            _ => local_authorization16::invalid(
+                &external.request.resource,
+                &external.request.operation,
+            ),
+        };
+        if invalid_local {
             return Ok(rejected_external(
                 &external,
                 CommandErrorCode::InvalidParameters,

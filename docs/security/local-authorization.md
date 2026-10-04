@@ -88,3 +88,49 @@ Reconnect/restart never replay an uncertain update or convert Differential to
 Full. After Failed, VersionMismatch or uncertainty, reconcile explicitly and issue
 a fresh authorized Full if resynchronization is intended; a version alone cannot
 prove retained contents. `ClearCache` does not clear the list or service allowlist.
+
+## Station-side OCPP 2.0.1 list and cache
+
+The same independently default-off privileged demo controls also support exact
+`ocpp201` roster stations. Provisioning routes the distinct `list201:` namespace
+to a separately typed immutable provider. A mixed roster never attaches a 1.6
+provider to a 201 station or accepts cross-edition command/result evidence.
+Native values remain only in bounded protected startup memory and actual station
+traffic, never service SQLite/WAL, results, history, diagnostics or public transports.
+The 1.6 provider retains its historical version and Unicode behavior.
+
+Native 201 primary, group and additional identifiers obey the OCPP identifierString
+ASCII alphabet: letters, digits and `* - _ = : + | @ .`, at most 36 characters.
+NoAuthorization requires an empty primary token; other types do not acquire an
+invented nonempty rule. Identity compares the exact type and case-insensitive token,
+not additionalInfo, and preserves original spelling. Valid personal messages,
+languages, priorities, EVSE scope and nested vendor metadata stay private and inert;
+these controls implement neither tariffs nor station display behavior.
+Language tags follow bounded RFC5646 syntax; language2 requires a different language1.
+Expiry timestamps have at most three fractional digits.
+
+Send versions are positive i32. Full may replace a higher positive installed version;
+Differential versions must advance at the station. Omitted Full clears installed
+contents while retaining the submitted positive version; omitted Differential
+changes only the version. Explicit empty arrays violate the pinned schema and are
+not rewritten into omissions. Every Full entry requires idTokenInfo; its absence
+is a deletion only in Differential. Upsert/delete behavior is station-owned, and
+an ACK does not create a service-side installed-list ledger. Query zero means no installed
+list, disabled or uninitialized, never the 1.6 unsupported -1 sentinel.
+
+The shared 128-capability/256-entry/64KiB-complete-CALL/1MiB-retained/2MiB-file caps
+apply without widening. Only correlated current-generation explicit device-model
+facts learn LocalAuthListCtrlr ItemsPerMessage, BytesPerMessage, Entries, Enabled,
+Available and SupportsExpiryDateTime, without component/variable instances.
+Entries Actual is a count, including zero; integer maxLimit is separate capacity.
+Full entry counts and Differential unique upsert counts must fit known capacity.
+Differential deletions do not consume capacity; all entries still count toward
+ItemsPerMessage and complete-CALL BytesPerMessage limits. No final installed
+cardinality is inferred from counts, updates or ACKs.
+AuthCacheCtrlr Enabled is separate. Reconnect starts these facts unknown.
+ClearCache affects only the station cache, never the local list or service allowlist.
+Safe native Send statuses are Accepted/Failed/VersionMismatch; Clear is
+Accepted/Rejected. statusInfo and customData are omitted from public evidence.
+Lost, malformed and unpaired responses remain uncertain without automatic retries,
+Full resynchronization or replay. Explicit fresh authorized commands remain possible.
+

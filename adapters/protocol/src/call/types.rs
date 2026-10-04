@@ -185,6 +185,9 @@ pub(super) enum QueuedWire {
         crate::v201::remote_control::configuration201_wire::DeferredConfigurationCall201,
     ),
     LocalAuthorization16(crate::v16::remote_control::DeferredLocalAuthorizationCall16),
+    LocalAuthorization201(
+        crate::v201::remote_control::local_authorization_wire::DeferredLocalAuthorizationCall201,
+    ),
 }
 
 pub(super) struct QueuedOutbound {
@@ -266,6 +269,18 @@ impl CallSessionHandle {
             request,
             Some(deadline),
             Some(QueuedWire::LocalAuthorization16(deferred)),
+        )
+    }
+    pub(crate) fn try_local_authorization_201_call_before(
+        &self,
+        request: OutboundCall,
+        deadline: Instant,
+        deferred: crate::v201::remote_control::local_authorization_wire::DeferredLocalAuthorizationCall201,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        self.enqueue(
+            request,
+            Some(deadline),
+            Some(QueuedWire::LocalAuthorization201(deferred)),
         )
     }
 

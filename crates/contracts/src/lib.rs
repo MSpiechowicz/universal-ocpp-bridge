@@ -24,6 +24,8 @@ pub use transaction16::Ocpp16TransactionEvidence;
 mod local_authorization16;
 mod trace;
 pub use local_authorization16::*;
+mod local_authorization201;
+pub use local_authorization201::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -145,6 +147,11 @@ impl ContractVersion {
     pub const V1_LOCAL_AUTHORIZATION_16: Self = Self {
         major: 1,
         revision: 9,
+    };
+    /// Additive value-free OCPP 2.0.1 local authorization evidence.
+    pub const V1_LOCAL_AUTHORIZATION_201: Self = Self {
+        major: 1,
+        revision: 10,
     };
 }
 

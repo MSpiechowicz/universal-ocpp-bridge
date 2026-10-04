@@ -303,14 +303,6 @@ fn validate_configuration(configuration: &SimulatorConfiguration) -> Result<(), 
                 "trigger observation delay must not exceed 30000 milliseconds",
             ));
         }
-        if station.local_authorization.is_some()
-            && station.ocpp_version != ConfiguredOcppVersion::V1_6
-        {
-            return Err(setup_failure(
-                "wrong_local_authorization_protocol",
-                "local authorization state requires OCPP 1.6",
-            ));
-        }
         validate_station_topology(station)?;
     }
     Ok(())

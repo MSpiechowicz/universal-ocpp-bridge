@@ -63,6 +63,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
             update_type: LocalListUpdateType16::Full,
             status: SendLocalListStatus16::Accepted,
         }),
+        local_authorization_201: None,
     }
 }
 async fn admit(

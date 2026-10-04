@@ -423,3 +423,44 @@ The narrow `ocpp201.smart-charging.profiles` corpus row is verified; the broad
 smart-charging row remains planned. Peer state and protocol ACKs do not establish
 physical charging effects, hardware enforcement, certification, full
 smart-charging coverage or product-simulator functionality.
+
+## OCPP 2.0.1 native local authorization
+
+The corpus imports the six unmodified SendLocalList/GetLocalListVersion/ClearCache
+request/response schemas from the existing OCA Edition 4 archive pin. Fourteen
+independent golden wire fixtures cover native Full, Differential upsert/delete,
+omitted contents, zero/positive query versions and exact native response statuses.
+`local-authorization201-requirements.json` binds Part 2 D01/D02/C10/C11 semantics,
+the primitive/conditional-field tables and independent assertion sources to the
+archive/schema ZIP hashes. The native authorization coverage rows remain **planned**
+until the integration owner observes their checks; fixture presence is not verification.
+
+The independent negative corpus separates JSON-schema validity from station semantic
+acceptance: empty arrays, nulls, integer bounds, duplicate typed identity, limits,
+metadata, native ASCII primitives and NoAuthorization conditional empty identity.
+The Full-only required information property is checked separately because the pinned
+schema leaves that property optional. No fixture rewrites explicit empty arrays into
+omission or borrows 1.6 NotSupported/-1 semantics.
+
+An additional independently authored native NotifyReport fixture distinguishes
+LocalAuthListCtrlr.Entries Actual count (`1`) from variableCharacteristics.maxLimit
+capacity (`256`). The compiled simulator process regression sends real native
+GetBaseReport/GetReport requests, observes actual ACK/NotifyReport pairs before
+and after installation, acknowledges reports, and checks caseless root identities.
+The joint smoke Authorize helper reuses independently authored
+`wire.ocpp201.authorization.valid` (Local token), never bypassing fixture binding.
+
+Authored independent simulator tests cover atomic/private persistence, native typed
+list priority, latest nonaccepted cache refresh, cache eviction and explicit expiry,
+actual WebSocket delayed/dropped ACKs, process death/denied Boot recovery and uncertain
+original TransactionEvent retention without automatic retry. The opt-in
+`bins/uob-sim/tests/native201_joint_smoke.py` runs actual separate daemon/simulator
+processes, real authorization-backed cache population, cache-only clearing, delayed/
+dropped mutating ACK, actual service restart/no native mutation replay, killed simulator
+list/cache recovery, fresh native query and actual SQLite/WAL/output privacy checks.
+Its transparent TCP observer never supplies fake replies or seeds station state.
+
+Use the [runnable commands and software-boundary limitations](../simulator/local-authorization201.md).
+Authored assertions, source inspection and pins are not charger hardware qualification,
+OCA certification, full local-authorization conformance or evidence of executed tests.
+

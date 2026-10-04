@@ -104,6 +104,7 @@ pub(crate) fn write_result_value(
         retire_trigger_201 = crate::trigger201::merge(&previous, &mut incoming)?;
         crate::device_model201::merge(&mut previous, &mut incoming)?;
         codec::local_authorization16::merge(&previous, &mut incoming)?;
+        codec::local_authorization201::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -145,6 +146,7 @@ pub(crate) fn write_result_value(
             incoming.charging_profile_201 = previous.charging_profile_201;
             incoming.configuration_201 = previous.configuration_201;
             incoming.local_authorization_16 = previous.local_authorization_16;
+            incoming.local_authorization_201 = previous.local_authorization_201;
         }
         for observation in previous.configuration_observations {
             if !incoming
@@ -168,6 +170,7 @@ pub(crate) fn write_result_value(
     crate::charging_profile201::finish(transaction, &incoming)?;
     codec::configuration201::validate_stored(transaction, &incoming)?;
     codec::local_authorization16::validate_stored(transaction, &incoming)?;
+    codec::local_authorization201::validate_stored(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 

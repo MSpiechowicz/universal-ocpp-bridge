@@ -132,8 +132,32 @@ pub(super) async fn run(
     state: Arc<Mutex<Ocpp201State>>,
 ) {
     let mut requests = JoinSet::new();
+    let mut replay = JoinSet::new();
+    let mut replay_generation = None;
+    let mut housekeeping = tokio::time::interval(std::time::Duration::from_millis(50));
     loop {
         tokio::select! {
+            _ = housekeeping.tick(), if replay.is_empty() => {
+                let candidate = {
+                    let current = state.lock().expect("native state lock");
+                    (current.registered && current.socket_connected && replay_generation != Some(current.socket_generation))
+                        .then(|| (current.socket_generation, current.local.clone()))
+                };
+                if let Some((generation, local)) = candidate {
+                    replay_generation = Some(generation);
+                    if let Some(local) = local.filter(crate::local_authorization201::LocalAuthorization201Handle::has_persistence) {
+                        let client = client.clone();
+                        let state = Arc::clone(&state);
+                        let traces = traces.clone();
+                        replay.spawn(async move {
+                            if local.replay_native(&client, &state, generation).await.is_err() {
+                                traces.push(TraceKind::Failed, "native offline replay unavailable or uncertain");
+                            }
+                        });
+                    }
+                }
+            }
+            _ = replay.join_next(), if !replay.is_empty() => {}
             _ = requests.join_next(), if !requests.is_empty() => {}
             command = commands.recv(), if requests.len() < outstanding_capacity => match command {
                 Some(Command::Heartbeat(result)) => {
@@ -143,7 +167,7 @@ pub(super) async fn run(
                         traces.push(TraceKind::HeartbeatSent, "Heartbeat");
                         let response = client.send_heartbeat(HeartbeatRequest { custom_data: None }).await
                             .map(|response| response.current_time.to_string())
-                            .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
+                            .map_err(|_| SimulatorClientError::Protocol("native heartbeat failed".to_owned()));
                         record_result(&traces, &response);
                         let _ = result.send(response);
                     });
@@ -155,8 +179,16 @@ pub(super) async fn run(
                     requests.spawn(async move {
                         let wire_name = call.action.wire_name(OcppVersion::V2_0_1);
                         traces.push(TraceKind::ChargingCallSent, wire_name);
-                        let response = Box::pin(send_call(&client, &call)).await;
-                        if let Ok(value) = &response { update_state(&state, &call, value); }
+                        let generation = state.lock().expect("native state lock").socket_generation;
+                        let response = crate::local_authorization201::transport::on_generation(
+                            generation,
+                            (call.payload.get("eventType").is_some()).then(|| call.payload.clone()),
+                            Box::pin(send_call(&client, &call)),
+                        ).await;
+                        let current_generation = state.lock().expect("native state lock").socket_generation == generation;
+                        if let Ok(value) = &response && current_generation {
+                            update_state(&state, &call, value);
+                        }
                         traces.push(if response.is_ok() { TraceKind::ChargingCallResult } else { TraceKind::Failed }, wire_name);
                         let _ = result.send(response);
                     });
@@ -168,13 +200,15 @@ pub(super) async fn run(
                 Some(Command::LocalListConflict) => unreachable!("native notification sender exists only for OCPP 1.6"),
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
+                    replay.shutdown().await;
                     let response = client.disconnect().await
-                        .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
+                        .map_err(|_| SimulatorClientError::Protocol("native disconnect failed".to_owned()));
+                    state.lock().expect("native state lock").local = None;
                     traces.push(TraceKind::Stopped, "client disconnected");
                     let _ = result.send(response);
                     break;
                 }
-                None => { requests.shutdown().await; break; }
+                None => { requests.shutdown().await; replay.shutdown().await; break; }
             }
         }
     }
@@ -187,13 +221,13 @@ async fn send_call(
     macro_rules! exchange {
         ($request:ty, $method:ident) => {{
             let request: $request = serde_json::from_value(call.payload.clone())
-                .map_err(|error| SimulatorClientError::Protocol(error.to_string()))?;
+                .map_err(|_| SimulatorClientError::Protocol("invalid native request".to_owned()))?;
             let response = client
                 .$method(request)
                 .await
-                .map_err(|error| SimulatorClientError::Protocol(error.to_string()))?;
+                .map_err(|_| SimulatorClientError::Protocol("native exchange failed".to_owned()))?;
             serde_json::to_value(response)
-                .map_err(|error| SimulatorClientError::Protocol(error.to_string()))
+                .map_err(|_| SimulatorClientError::Protocol("invalid native response".to_owned()))
         }};
     }
     match call.action {
@@ -224,8 +258,8 @@ fn update_state(
     match call.action {
         SimulatorAction::BootNotification => {
             state.boot = Some(call.payload.clone());
-            state.registered =
-                response.get("status").and_then(serde_json::Value::as_str) == Some("Accepted");
+            // Registration is set only by a correlated current-socket Boot reply
+            // in the owned native transport, never by a late worker result.
         }
         SimulatorAction::StatusNotification => {
             if let (Some(evse), Some(connector)) = (
@@ -333,7 +367,7 @@ fn unsigned_id(payload: &serde_json::Value, pointer: &str) -> Option<u16> {
 fn record_result(traces: &TraceBuffer, response: &Result<String, SimulatorClientError>) {
     match response {
         Ok(timestamp) => traces.push(TraceKind::HeartbeatResult, timestamp),
-        Err(error) => traces.push(TraceKind::Failed, error.to_string()),
+        Err(_) => traces.push(TraceKind::Failed, "native heartbeat failed"),
     }
 }
 

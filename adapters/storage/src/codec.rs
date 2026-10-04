@@ -18,6 +18,8 @@ pub(crate) mod configuration201;
 mod helpers;
 #[path = "codec_local_authorization16.rs"]
 pub(crate) mod local_authorization16;
+#[path = "codec_local_authorization201.rs"]
+pub(crate) mod local_authorization201;
 use helpers::{
     corrupt, decode_durability, durability, durability_or_state, from_json, integrity, json,
     retention_boundary, signed, unsigned,
@@ -152,6 +154,7 @@ where
         .map(|value| {
             configuration201::validate_result(&value)?;
             local_authorization16::validate_result(&value)?;
+            local_authorization201::validate_result(&value)?;
             Ok(EncodedCommandResult {
                 request_id: value.return_route.request_id.as_str().to_owned(),
                 payload: json(&value)?,
@@ -420,6 +423,7 @@ pub(crate) fn decode_result(value: &str) -> Result<CommandResult, StorageError> 
     let result: CommandResult = from_json(value)?;
     configuration201::validate_result(&result)?;
     local_authorization16::validate_result(&result)?;
+    local_authorization201::validate_result(&result)?;
     Ok(result)
 }
 
@@ -434,6 +438,7 @@ pub(crate) fn decode_stored_result(
     }
     configuration201::validate_stored(connection, &result)?;
     local_authorization16::validate_stored(connection, &result)?;
+    local_authorization201::validate_stored(connection, &result)?;
     Ok(result)
 }
 

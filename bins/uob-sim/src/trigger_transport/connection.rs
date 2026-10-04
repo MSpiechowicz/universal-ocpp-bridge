@@ -43,6 +43,13 @@ impl Reconnector for TriggerReconnector {
             .await?;
             let (sink, stream) = if let Some(state) = &self.barrier.state {
                 crate::local_authorization::transport::wrap(sink, stream, Arc::clone(state))
+            } else if let Some(state) = &self.barrier.state_201 {
+                crate::local_authorization201::transport::wrap(
+                    sink,
+                    stream,
+                    Arc::clone(state),
+                    self.barrier.timeout,
+                )
             } else {
                 (sink, stream)
             };
@@ -110,9 +117,11 @@ pub(crate) async fn connect_201(
     TransportError,
 > {
     let (delivered, receiver) = mpsc::unbounded_channel();
-    let barrier = TriggerBarrier::new_201(capacity, delivered, state, timeout);
+    let barrier = TriggerBarrier::new_201(capacity, delivered, Arc::clone(&state), timeout);
     let (sink, stream) =
         crate::station_auth::connect(endpoint, barrier.version, credentials_file).await?;
+    let (sink, stream) =
+        crate::local_authorization201::transport::wrap(sink, stream, state, timeout);
     let (sink, stream) = barrier.wrap(sink, stream);
     let mut config = ClientConfig::new(timeout);
     if reconnect {

@@ -91,7 +91,10 @@ fn disclose(
                         && value
                             .parse::<u32>()
                             .is_ok_and(|n| n > 0 && i32::try_from(n).is_ok())
-                })));
+                }))
+            || value.is_some_and(|value| {
+                super::local_authorization_limits::safe_value(component, variable, value)
+            }));
     DeviceValue201 {
         present: value.is_some(),
         redacted: value.is_some() && !safe,
@@ -241,6 +244,8 @@ pub fn report_items(payload: &Value, resource: &ResourceRef) -> Option<Vec<Devic
 #[derive(Default)]
 pub(crate) struct LearnedLimits {
     pub values: [[Option<usize>; 2]; 3],
+    pub local:
+        std::sync::Arc<std::sync::Mutex<super::local_authorization_limits::LocalListLimits201>>,
 }
 impl LearnedLimits {
     pub fn learn(
@@ -252,6 +257,9 @@ impl LearnedLimits {
     ) {
         if attribute != DeviceAttributeType201::Actual {
             return;
+        }
+        if let Ok(mut local) = self.local.lock() {
+            local.learn(component, variable, attribute, value);
         }
         if let Some((action, bytes)) = limit_identity(component, variable)
             && let Some(number) = value

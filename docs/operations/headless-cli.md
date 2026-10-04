@@ -834,6 +834,111 @@ See [authorization boundaries](../security/local-authorization.md) and the
 [independent simulator scenarios](../simulator/scenario-runner.md) for actual offline,
 disk recovery and native Reset verification.
 
+### Protected OCPP 2.0.1 station authorization list and cache
+
+Use the same charging settings and independently default-off station options as
+above, but select `protocol = "ocpp201"` for that exact roster station. Keep
+separate reader/control/privileged grants and the existing protected directories.
+An enabled 1.6 station and enabled 201 station may share this startup file, but their
+native entries and capability prefixes route to separately typed providers.
+
+The owner-only file uses the unchanged entry shape, for example:
+
+```json
+{
+  "updates": [{
+    "station_id": "demo-201",
+    "update_reference": "list201:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expires_at": "2099-01-01T00:00:00Z",
+    "request": {
+      "versionNumber": 7,
+      "updateType": "Full",
+      "localAuthorizationList": [{
+        "idToken": {"idToken": "native-demo", "type": "Central"},
+        "idTokenInfo": {
+          "status": "Accepted",
+          "cacheExpiryDateTime": "2099-01-01T00:00:00.123Z",
+          "chargingPriority": 0,
+          "language1": "en",
+          "evseId": [1]
+        }
+      }]
+    }
+  }]
+}
+```
+
+Generate independent random capabilities rather than reuse this example.
+The public privileged envelope has `protocol:"ocpp201"`, action SendLocalList,
+`payload_schema:"urn:uob:ocpp201:SendLocalListReference:1"` and only
+`{"versionNumber":7,"updateType":"Full","updateReference":"list201:…"}`
+at the exact station root. Query/Clear use native
+`urn:OCPP:Cp:2:2020:3:GetLocalListVersionRequest` and
+`urn:OCPP:Cp:2:2020:3:ClearCacheRequest` with `{}` payloads.
+Raw entries, group/additional identifiers, personal messages and vendor metadata
+belong only in the private file and native wire traffic.
+
+201 update versions are positive i32; query is nonnegative i32 with zero for no
+installed list, disabled or uninitialized state. Full can replace a higher version;
+Differential must advance at the station. Omitted Full contents empty the list but
+retain the submitted positive version, and omitted Differential contents leave
+contents unchanged while advancing version. Explicit `[]` is invalid and is not
+normalized to omission. Entry without idTokenInfo represents deletion.
+ClearCache removes only station authorization cache, not the list or CSMS allowlist.
+Accepted ACK and later query do not establish installed contents or actual offline use.
+
+Metadata validation includes native identifierString ASCII spelling (letters,
+digits and `* - _ = : + | @ .`, up to36), exact token type, all ten authorization
+statuses, chargingPriority[-9,9], positive-i32 EVSE scope, bounded RFC5646
+language tags and RFC3339 expiry with at most three fractional digits.
+NoAuthorization requires an empty token; other types have no invented nonempty rule.
+Valid generic UTF-8 metadata remains inert/private. The service does not implement
+tariffs, display messages or an installed-list ledger.
+Full entries require idTokenInfo. Only Differential omission of idTokenInfo is a
+deletion; omitted whole Full lists still clear while retaining the positive version.
+
+All previous protected caps remain:128 capabilities,256 entries,64KiB **complete
+encoded CALL**,1MiB retained native material plus metadata and2MiB startup file.
+Explicit current-generation device-model results may reduce limits using exact
+LocalAuthListCtrlr ItemsPerMessage/BytesPerMessage/Entries/Enabled/Available/
+SupportsExpiryDateTime without instances. Entries Actual is a count, including0;
+Integer maxLimit separately bounds Full entries and Differential unique upserts.
+Differential deletions do not consume that capacity, but still count toward
+ItemsPerMessage and the complete-CALL byte limit. No final list size is inferred.
+AuthCacheCtrlr Enabled is separate. Reconnect discards learned facts; no automatic
+probing or retry occurs.
+
+Safe result v1.10 local_authorization_201 carries query version or requested Send
+version/type and Accepted/Failed/VersionMismatch, or Clear Accepted/Rejected.
+Native statusInfo and customData never become public evidence. Lost/malformed/
+unpaired replies are uncertain and never automatically replayed or replaced by Full.
+Restart uses the existing durable command recovery and historical duplicate result.
+SQLite remains v14; new nested public export schemas are v1.11 and runtime revision10.
+These are software behavior boundaries, not hardware or certification evidence.
+
+Executable daemon smoke (after the integrated tree is built):
+
+```text
+cargo test --locked -p uob-service --test local_authorization201 -- --nocapture
+cargo test --locked -p uob-service --test local_authorization16 -- --nocapture
+```
+
+The retained 201 suite creates synthetic mode0600 provisioning and starts the actual
+daemon for authenticated admission, native wire/results, SQLite/history and
+disconnect/restart non-replay. For an independent native station, copy
+`bins/uob-sim/examples/local-authorization-2.0.1-config.toml` to a private directory,
+configure its real service endpoint and credential file, and run:
+
+```text
+target/debug/uob-sim run --config /absolute/private/sim.toml --scenario bins/uob-sim/examples/local-authorization-2.0.1.toml --format jsonl
+```
+
+Its management windows require explicit authorized Full/Differential/Clear commands
+using protected provider contents that match the scenario's native fixtures.
+Joint native station/offline assertions are separate from daemon ACK/result assertions.
+These are commands to execute during integration, not claims of completed checks.
+
+
 The console requires a fresh destination/station confirmation and the appropriate independent
 credential for every command submission. Expired, malformed, out-of-scope and unsupported
 requests are rejected. An HTTP 202 records admission, not native acceptance or physical effect.

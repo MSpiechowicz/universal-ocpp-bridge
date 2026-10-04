@@ -1,4 +1,6 @@
 //! Test-only authoritative Target-origin results exercise actual scoped EMS reads, not native ingress grants.
+#[path = "device_model201_results/admission_schema.rs"]
+mod admission_schema;
 #[allow(dead_code)]
 #[path = "device_model201_results/fixtures.rs"]
 mod fixtures;

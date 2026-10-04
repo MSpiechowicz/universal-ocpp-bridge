@@ -206,3 +206,27 @@ safe counters/statuses only. Raw tags/parents necessarily remain in the separate
 owner-only recovery file and native traffic. Kill/new-process recovery and native
 Reset are different exercised boundaries; neither implies physical charger behavior,
 OCA certification or exactly-once network execution.
+
+## Native OCPP 2.0.1 local list and authorization cache
+
+An explicitly configured `[stations.local_authorization]` also enables the
+separately typed native 2.0.1 model. Use the
+[native configuration, semantics and actual joint smoke](local-authorization201.md)
+and `bins/uob-sim/examples/local-authorization-2.0.1*.toml`. Do not reuse a 1.6
+private state file, signed list version, tag shape or returned numeric transaction ID.
+
+The existing local actions dispatch by edition. Native `offline_start`/`offline_stop`
+take original Started/Ended TransactionEvent payloads, with native transactionId,
+EVSE/connector, seqNo, timestamp and typed IdToken. Safe assertions accept only
+availability and list/cache/offline/uncertainty counters. Delayed/dropped management
+replies occur after durable native mutation. Real reconnection/Reset requires a fresh
+current-socket Accepted Boot before delivering original pending facts; a killed
+Sending record becomes Uncertain and is not automatically retried.
+
+Full omission and Differential omission differ; explicit empty arrays remain invalid.
+Full entries require information; Differential omission of entry information deletes
+the typed identity. Empty installed lists keep a positive version, whereas a disabled
+or uninitialized native list queries zero. Actual native CSMS information refreshes
+cache entries even when denied or list-known; enabled list membership still has
+priority. Cache-only clearing cannot grant or revoke separate central policy.
+

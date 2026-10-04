@@ -29,23 +29,52 @@ impl ProtocolClient for SimulatorProtocolClient {
             .as_ref()
             .and_then(|state| state.lock().expect("OCPP 1.6 state lock").local.clone())
     }
+    fn local_authorization201(
+        &self,
+    ) -> Option<crate::local_authorization201::LocalAuthorization201Handle> {
+        self.ocpp201_state
+            .as_ref()
+            .and_then(|state| state.lock().expect("native state lock").local.clone())
+    }
 
     fn reboot_count(&self) -> u64 {
-        self.ocpp16_state.as_ref().map_or(0, |state| {
-            state.lock().expect("OCPP 1.6 state lock").reboot_count
-        })
+        self.ocpp16_state.as_ref().map_or_else(
+            || {
+                self.ocpp201_state.as_ref().map_or(0, |state| {
+                    state.lock().expect("native state lock").reboot_count
+                })
+            },
+            |state| state.lock().expect("OCPP 1.6 state lock").reboot_count,
+        )
     }
 
     fn socket_connected(&self) -> Option<bool> {
         self.ocpp16_state
             .as_ref()
             .map(|state| state.lock().expect("OCPP 1.6 state lock").socket_connected)
+            .or_else(|| {
+                self.ocpp201_state
+                    .as_ref()
+                    .map(|state| state.lock().expect("native state lock").socket_connected)
+            })
     }
 
     fn arm_local_reply_fault(
         &self,
         fault: crate::local_authorization::transport::NativeReplyFault,
     ) -> Result<(), SimulatorClientError> {
+        if let Some(state) = &self.ocpp201_state {
+            let mut state = state.lock().expect("native state lock");
+            if state.local_reply_fault.is_some()
+                || matches!(fault, crate::local_authorization::transport::NativeReplyFault::Delay(duration) if duration.is_zero() || duration > Duration::from_secs(30))
+            {
+                return Err(SimulatorClientError::Protocol(
+                    "native reply fault unavailable".to_owned(),
+                ));
+            }
+            state.local_reply_fault = Some(fault);
+            return Ok(());
+        }
         let state = self
             .ocpp16_state
             .as_ref()
@@ -116,6 +145,9 @@ impl ProtocolClient for SimulatorProtocolClient {
             if let Some(state) = &self.ocpp16_state {
                 state.lock().expect("OCPP 1.6 state lock").local = None;
             }
+            if let Some(state) = &self.ocpp201_state {
+                state.lock().expect("native state lock").local = None;
+            }
             response
         })
     }
@@ -126,6 +158,9 @@ impl ProtocolClient for SimulatorProtocolClient {
         self.worker.abort();
         if let Some(state) = &self.ocpp16_state {
             state.lock().expect("OCPP 1.6 state lock").local = None;
+        }
+        if let Some(state) = &self.ocpp201_state {
+            state.lock().expect("native state lock").local = None;
         }
     }
 

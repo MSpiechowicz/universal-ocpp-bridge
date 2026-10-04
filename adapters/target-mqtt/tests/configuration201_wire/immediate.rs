@@ -89,7 +89,7 @@ async fn immediate_configuration_foreign_future_and_oversized_results_do_not_pub
             "future" => {
                 result.schema_version = ContractVersion {
                     major: 1,
-                    revision: ContractVersion::V1_LOCAL_AUTHORIZATION_16.revision + 1,
+                    revision: ContractVersion::V1_LOCAL_AUTHORIZATION_201.revision + 1,
                 }
             }
             "management" => {

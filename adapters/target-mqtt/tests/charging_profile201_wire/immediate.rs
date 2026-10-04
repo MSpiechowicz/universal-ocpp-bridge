@@ -96,7 +96,7 @@ async fn immediate_future_foreign_origin_and_oversized_native_result_degrade_wit
             "future" => {
                 result.schema_version = ContractVersion {
                     major: 1,
-                    revision: ContractVersion::V1_LOCAL_AUTHORIZATION_16.revision + 1,
+                    revision: ContractVersion::V1_LOCAL_AUTHORIZATION_201.revision + 1,
                 }
             }
             "management" => {

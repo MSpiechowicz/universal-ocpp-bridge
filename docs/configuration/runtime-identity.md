@@ -48,3 +48,20 @@ digest = "sha256:<local-build-digest>"
 Startup rejects a target selection whose bridge or environment differs from the service identity.
 Every process invocation generates a new UUID process identity; bridge, environment, and release
 identity remain stable until their trusted configuration or installed artifact changes.
+
+## Demo native local authorization provisioning
+
+Independent station options get_local_list_version/send_local_list/clear_cache support
+exact ocpp16j and ocpp201 roster editions, still default-off and demo-only behind
+separate privileged grants. The existing charging.local_authorization_updates_file
+is an owner-only startup file, not an inline configuration list or public API.
+Its station_id/update_reference/expires_at/request entries route list16 capabilities
+only to native16 providers and list201 capabilities only to native201 providers.
+Exact station-root scope, version, update type and expiry must match the requested
+envelope; station editions cannot share an undifferentiated provider.
+
+No environment, target or configured enabled flag implies permission, supported
+hardware, learned device facts or installed contents. Production remains rejected.
+See [the full operator example](../operations/headless-cli.md#protected-ocpp-201-station-authorization-list-and-cache)
+and [native security boundaries](../security/local-authorization.md#station-side-ocpp-201-list-and-cache).
+

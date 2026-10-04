@@ -13,6 +13,9 @@ pub(super) fn initialize(
     station: &StationDefinition,
     state: &mut StationState,
 ) -> Result<(), RunFailure> {
+    if state.version == OcppVersion::V2_0_1 {
+        return Ok(());
+    }
     if state.local.is_none()
         && let Some(config) = &station.local_authorization
     {
@@ -32,10 +35,8 @@ pub(super) async fn execute(
     state: &mut StationState,
 ) -> Result<String, RunFailure> {
     if state.version != OcppVersion::V1_6 {
-        return Err(failure(
-            "wrong_local_authorization_protocol",
-            "native local authorization requires OCPP 1.6",
-        ));
+        return super::local_authorization201::execute(connector, station, step, client, state)
+            .await;
     }
     initialize(station, state)?;
     let local = state.local.clone().ok_or_else(|| {
@@ -162,6 +163,12 @@ pub(super) fn safe_response(response: &serde_json::Value) -> serde_json::Value {
     }
     if let Some(status) = response.pointer("/idTagInfo/status") {
         safe.insert("idTagInfo".to_owned(), serde_json::json!({"status":status}));
+    }
+    if let Some(status) = response.pointer("/idTokenInfo/status") {
+        safe.insert(
+            "idTokenInfo".to_owned(),
+            serde_json::json!({"status":status}),
+        );
     }
     serde_json::Value::Object(safe)
 }
@@ -341,6 +348,10 @@ pub(super) async fn await_boot_replay(
     action: SimulatorAction,
     response: &serde_json::Value,
 ) -> Result<(), RunFailure> {
+    if state.version == OcppVersion::V2_0_1 {
+        return super::local_authorization201::await_boot_replay(state, client, action, response)
+            .await;
+    }
     if state.version != OcppVersion::V1_6
         || action != SimulatorAction::BootNotification
         || response.get("status").and_then(serde_json::Value::as_str) != Some("Accepted")

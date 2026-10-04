@@ -6,12 +6,12 @@ models, query parameters, error mapping and resource inventory. The listener ser
 artifact without per-request schema generation.
 
 Canonical objects reference each contract's current versioned schema on the same listener:
-command-result uses `/bridge/v1/schemas/v1.9/command-result.schema.json`, and nested
-export-record/export-batch use `/bridge/v1/schemas/v1.10/{schema}`. Other unchanged
+command-result uses `/bridge/v1/schemas/v1.10/command-result.schema.json`, and nested
+export-record/export-batch use `/bridge/v1/schemas/v1.11/{schema}`. Other unchanged
 contracts retain their existing versioned paths. Responses contain the unmodified files
 from `crates/contracts/schemas`, including their canonical `$id` and Draft 2020-12
-definitions. Released command-result schemas through v1.8 and export schemas through
-v1.9 remain available byte-identical; old result JSON remains readable.
+definitions. Released command-result schemas through v1.9 and export schemas through
+v1.10 remain available byte-identical; old result JSON remains readable.
 
 The initial protected request envelopes are served at
 `/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json` and
@@ -26,6 +26,15 @@ The protected OCPP 1.6 list envelope is served at
 `/bridge/v1/schemas/v1.0/send-local-list-reference-16.schema.json`, payload identity
 `urn:uob:ocpp16:SendLocalListReference:1`. It carries version, update type and a
 station-bound opaque capability, never inline native entries or parent identities.
+
+The protected 201 envelope uses
+`/bridge/v1/schemas/v1.0/send-local-list-reference-201.schema.json`,
+`urn:uob:ocpp201:SendLocalListReference:1`, positive versionNumber/updateType and
+an exact station-bound list201 capability. Optional result v1.10
+`local_authorization_201` contains only nonnegative query version, requested Send
+version/type/status, or Clear status. Native statusInfo, entries, token/group metadata,
+personal messages and capabilities are omitted. Public nested export v1.11 and
+separately named runtime revision10 retain stored historical record versions.
 
 Clients can resolve the contract without contacting a schema registry. Configure
 resolvers with the document's retrieval URL as their base and supply the integration
@@ -60,8 +69,8 @@ Native acceptance, reboot staging, HTTP exposure and independently observed effe
 remain separate facts.
 
 The configuration-evidence addition used public nested export v1.9 and separately
-named runtime envelope revision 8. Current local-list evidence advances these to
-public v1.10/runtime revision 9, without a SQL migration; SQLite remains v14.
+named runtime envelope revision 8. The 1.6 list addition used public v1.10/runtime
+revision9; native 201 now uses public v1.11/runtime revision10, without a SQL migration.
 The existing exact-origin/principal/resource status checks, configured authentication
 policy and encoded-payload caps are unchanged. Ordinary target credentials cannot submit
 these privileged writes, and oversized results fail explicitly without truncated success.
@@ -87,9 +96,9 @@ The direct HTTP/SSE listener and its broker-free acceptance below remain unchang
 one target does not implicitly start the other. Neither target's transport acknowledgement proves
 EMS consumption or electrical energy delivery.
 
-MQTT explicitly accepts named command-result v1.0/v1.1/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9
+MQTT explicitly accepts named command-result v1.0/v1.1/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10
 on existing topics. Historically unsupported v1.2/v1.3 remain unsupported, and future
-revision 10 is rejected before publication. Immediate and durable results retain
+revision11 is rejected before publication. Immediate and durable results retain
 packet-specific PUBACK correlation and existing encoded-message caps; oversized
 results fail without truncated evidence. Broker receipt is not native acceptance,
 installed list contents, offline authorization or physical effects. Result compatibility

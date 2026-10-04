@@ -17,6 +17,11 @@ pub trait ProtocolClient: Send + Sync {
     fn local_authorization(&self) -> Option<local_authorization::LocalAuthorizationHandle> {
         None
     }
+    fn local_authorization201(
+        &self,
+    ) -> Option<crate::local_authorization201::LocalAuthorization201Handle> {
+        None
+    }
     fn reboot_count(&self) -> u64 {
         0
     }

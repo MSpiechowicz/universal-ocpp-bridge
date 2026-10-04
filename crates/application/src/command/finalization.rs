@@ -35,6 +35,7 @@ where
         let mut charging_profile_201 = None;
         let mut configuration_201 = None;
         let mut local_authorization_16 = None;
+        let mut local_authorization_201 = None;
         let outcome = if let Some(reservation) = profile {
             self.stations
                 .dispatch_reserved_profile(command.clone(), generation, *reservation)
@@ -216,6 +217,20 @@ where
                 local_authorization_16 = Some(response);
                 CommandLifecycle::ProtocolResponse { accepted, error }
             }
+            CommandDispatchOutcome::LocalAuthorizationResponse201(response) => {
+                if !super::local_authorization201::valid_evidence(&command, &response) {
+                    return Err(integrity_error(
+                        "local authorization response has no matching request",
+                    ));
+                }
+                let accepted = response.accepted();
+                let error = (!accepted).then_some(CommandError {
+                    code: CommandErrorCode::ProtocolRejected,
+                    detail: None,
+                });
+                local_authorization_201 = Some(response);
+                CommandLifecycle::ProtocolResponse { accepted, error }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -257,6 +272,10 @@ where
         if let Some(evidence) = local_authorization_16 {
             result.schema_version = ContractVersion::V1_LOCAL_AUTHORIZATION_16;
             result.local_authorization_16 = Some(evidence);
+        }
+        if let Some(evidence) = local_authorization_201 {
+            result.schema_version = ContractVersion::V1_LOCAL_AUTHORIZATION_201;
+            result.local_authorization_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

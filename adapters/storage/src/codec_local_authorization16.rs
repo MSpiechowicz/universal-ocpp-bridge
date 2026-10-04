@@ -22,6 +22,9 @@ pub(crate) fn validate_command<P: Serialize>(command: &Command<P>) -> Result<(),
     {
         return Ok(());
     }
+    if operation.protocol == ProtocolEdition::Ocpp201 {
+        return super::local_authorization201::validate_command(command);
+    }
     if operation.protocol != ProtocolEdition::Ocpp16j
         || command.resource.resource.is_some()
         || !matches!(
@@ -65,6 +68,7 @@ pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError
         || result.device_model_201.is_some()
         || result.trigger_observation.is_some()
         || result.trigger_observation_201.is_some()
+        || result.local_authorization_201.is_some()
     {
         return Err(invalid());
     }

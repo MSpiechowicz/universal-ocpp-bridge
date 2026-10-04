@@ -218,6 +218,20 @@ Actual-daemon software-peer tests and an independent redacted-capture smoke exer
 these boundaries; they do not establish hardware interoperability, OCA certification,
 production charging or a new browser configuration editor.
 
+OCPP 2.0.1 `GetLocalListVersion`, protected `SendLocalList` and `ClearCache` are
+independently default-off privileged demo station controls. The existing owner-only
+startup file routes `list16:` and `list201:` capabilities to separately typed providers
+for the exact configured station edition. Native 201 token/group/additional identifiers
+retain original ASCII identifierString spelling and typed case-insensitive identity;
+UTF-8 private messages and vendor metadata remain private and inert. OCPP 1.6 retains
+its own historical Unicode and signed-version semantics. Native 201 updates require
+positive i32 versions; explicit empty arrays are invalid, unlike omitted contents.
+Value-free result v1.10, nested public export v1.11 and separately named runtime export
+revision 10 preserve released schemas and SQLite14. No automatic mutation replay,
+list ledger, production control, new browser editor or certification is implied.
+See [native 201 boundaries](docs/architecture/ocpp201-remote-control.md#protected-native-local-authorization-list-and-cache)
+and [private provisioning](docs/operations/headless-cli.md#protected-ocpp-201-station-authorization-list-and-cache).
+
 OCPP 1.6 availability commands retain scheduled intent separately from committed connector and
 station observations. See [OCPP 1.6 availability](docs/architecture/ocpp16-availability.md) for
 scoped control, transaction completion, durable evidence, and reconnect behavior.

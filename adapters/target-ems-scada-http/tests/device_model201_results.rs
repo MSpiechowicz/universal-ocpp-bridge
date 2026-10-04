@@ -3,6 +3,8 @@
 //! do not dispatch privileged queries through production EMS credentials or relabel management
 //! results; the privileged-ingress test instead proves those credentials remain unable to dispatch.
 
+#[path = "device_model201_results/admission_schema.rs"]
+mod admission_schema;
 #[path = "device_model201_results/fixtures.rs"]
 mod fixtures;
 #[path = "device_model201_results/host.rs"]
