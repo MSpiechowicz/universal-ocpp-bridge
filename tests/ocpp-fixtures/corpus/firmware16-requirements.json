@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "protocol": "1.6",
+  "sources": [
+    {
+      "title": "OCPP 1.6 Edition 2 with errata 2025-04-29",
+      "archive_sha256": "2a1d80284ca60449e85951fc55bc0538b5d45bd6f97c6d9228745acacb52c11b",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "4.5",
+        "5.19",
+        "6.19",
+        "6.20",
+        "6.55",
+        "6.56",
+        "7.25",
+        "8.1",
+        "errata 3.12",
+        "errata 3.47",
+        "errata 3.48",
+        "errata 3.49",
+        "OCPP-J errata 2.5"
+      ]
+    },
+    {
+      "title": "Improved security for OCPP 1.6-J, Edition 4 (2026-02-05)",
+      "archive_sha256": "158b883e8ee712fd80fad3610b69fad355f7831d7a0ccdd996ce6b5452ce6859",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "L01",
+        "5.19",
+        "5.20",
+        "5.21",
+        "5.22",
+        "6.8",
+        "6.9",
+        "6.18",
+        "A00.FR.706"
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "requirements": [
+        "6.55 UpdateFirmware fields",
+        "6.56 empty conf",
+        "5.19 retrieve-date and retries",
+        "OCPP-J errata 2.5"
+      ],
+      "assertion": "Protected reference-only UpdateFirmware sends the provider location with the caller's retrieveDate, retries and retryInterval; the empty conf is acknowledgement only and never proof of installation.",
+      "evidence": "wire/1.6/firmware-update.json;wire/1.6/firmware-update-acknowledged.json;../../../bins/uob-service/tests/firmware16.rs"
+    },
+    {
+      "requirements": [
+        "4.5",
+        "5.19",
+        "7.25",
+        "errata 3.12",
+        "errata 3.47"
+      ],
+      "assertion": "Every legacy FirmwareStatusNotification is committed before its empty reply and advances the newest unresolved legacy job phase-monotonically; Idle is a triggered not-busy report that resolves the job without claiming success.",
+      "evidence": "wire/1.6/firmware-status-idle.json;../../../crates/application/src/firmware16/tests.rs;../../../bins/uob-service/tests/firmware16/recovery.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.11",
+        "L01.FR.12",
+        "L01.FR.04",
+        "A00.FR.706"
+      ],
+      "assertion": "SignedUpdateFirmware always carries the provider's signing certificate and signature; the bridge verifies the certificate chain under the manufacturer root before sending, and an independent station verifies RSA-PSS SHA-256 over the whole image.",
+      "evidence": "wire/1.6/signed-firmware-update.json;../../../bins/uob-service/tests/firmware16/signed.rs;../../../bins/uob-sim/tests/firmware16_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "L01.FR.10",
+        "L01.FR.21",
+        "6.8"
+      ],
+      "assertion": "Signed notifications advance only the job with their exact requestId; a missing requestId is accepted only for Idle; all fourteen statuses decode and regressions are counted, not applied.",
+      "evidence": "wire/1.6/signed-firmware-status-installed.json;wire/1.6/firmware-negative-cases.json;../../../adapters/protocol/tests/ocpp16_firmware_decode.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.20",
+        "L01.FR.24",
+        "L01.FR.25",
+        "6.18"
+      ],
+      "assertion": "Each station has exactly one firmware family; NotSupported CALLERROR, Rejected, InvalidCertificate and RevokedCertificate are preserved as native refusals that release the drain.",
+      "evidence": "wire/1.6/signed-firmware-update-invalid-certificate.json;../../../adapters/storage/tests/firmware16.rs;../../../bins/uob-sim/tests/firmware16_independence.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.26",
+        "L01.FR.27"
+      ],
+      "assertion": "AcceptedCanceled cancels the previous unresolved signed job; Rejected keeps it; later reports for a cancelled job never revive it.",
+      "evidence": "wire/1.6/signed-firmware-update-accepted-canceled.json;../../../bins/uob-service/tests/firmware16/signed.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.13",
+        "L01.FR.15",
+        "L01.FR.16",
+        "L01.FR.34"
+      ],
+      "assertion": "Delayed download/installation and reboot statuses are reported against the trusted job deadline; a deadline only times the job out and never resolves the release drain.",
+      "evidence": "wire/1.6/signed-firmware-status-download-scheduled.json;wire/1.6/signed-firmware-status-install-rebooting.json;../../../adapters/storage/tests/firmware16/recovery.rs"
+    },
+    {
+      "requirements": [
+        "5.19 reboot",
+        "errata 3.47 automatic reboot",
+        "release drain"
+      ],
+      "assertion": "Lost replies stay uncertain and are never replayed after restart or reconnect; later native reports still resolve the job, and only resolved jobs release the drain.",
+      "evidence": "../../../bins/uob-service/tests/firmware16/recovery.rs;../../../adapters/storage/tests/firmware16/recovery.rs;../../../bins/uob-sim/tests/firmware16_joint_smoke.py"
+    }
+  ],
+  "not_covered": [
+    "SecurityEventNotification for InvalidFirmwareSigningCertificate, InvalidFirmwareSignature and FirmwareUpdated (L01.FR.02/03/33, issue #127)",
+    "ExtendedTriggerMessage (L01.FR.28/29)",
+    "certificate revocation checking",
+    "physical hardware, production PKI or OCA certification"
+  ],
+  "execution_status": "Contract, application, storage, protocol, actual-daemon and simulator tests plus an opt-in separate-process joint smoke executed in isolated software verification; not hardware or OCA certification."
+}

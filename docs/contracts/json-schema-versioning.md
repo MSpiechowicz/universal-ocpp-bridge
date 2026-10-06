@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.12 and serves
-the current v1.13 command-result; OpenAPI command result responses reference v1.13.
-Current nested export-record and export-batch references use v1.14, while released
-export schemas through v1.13 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.13 and serves
+the current v1.14 command-result; OpenAPI command result responses reference v1.14.
+Current nested export-record and export-batch references use v1.15, while released
+export schemas through v1.14 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -324,3 +324,27 @@ separately to revision 13. SQLite is unchanged: pending reports reuse the existi
 revision 13 while future revision 14 is rejected before publication. Older result JSON
 decodes with both fields absent. These additive response versions do not relax strict
 privileged ingress, calculate or enforce schedules locally, or adopt reported profiles.
+
+OCPP 1.6J firmware updates add the optional `firmware_16` field in command-result v1.14
+(`ContractVersion` revision 14, `V1_FIRMWARE_16`). It is tagged by `action`:
+`UpdateFirmware` or `SignedUpdateFirmware` (the latter with its signed i32 `request_id`).
+It carries the sent `artifact` (`artifact_reference`, lowercase hex `sha256`, `size_bytes`,
+`signed` and `test_only`), the exact native `reply` (`acknowledged` for the empty legacy
+conf, `status` with one of the five Security Whitepaper statuses, or a sanitized
+`call_error` code such as `NotSupported`), and a durable `job`
+`{revision,state,deadline,observed_at,last_status?,last_status_at?,notifications,rejected_transitions}`.
+Job states are snake_case; `installed`, the failure end states, `rejected`, `not_sent`,
+`cancelled`, `superseded` and `station_idle` are resolved, while `timed_out` still blocks
+release drain. No station location, signing certificate, signature or raw payload
+appears in this evidence.
+
+Two new initial envelopes accept only references: `v1.0/update-firmware-reference-16.schema.json`
+(`urn:uob:ocpp16:UpdateFirmwareReference:1`, `artifactReference`/`retrieveDate`/`retries?`/
+`retryInterval?`) and `v1.0/signed-update-firmware-reference-16.schema.json`
+(`urn:uob:ocpp16:SignedUpdateFirmwareReference:1`, adding `requestId` and
+`retrieveDateTime`/`installDateTime?`). Counts are 0 to 2147483647, and an explicit `null`
+is an absent count. An installation time before retrieval is refused by the contract
+decoder, which a JSON Schema cannot express. Nested public exports advance to v1.15;
+runtime ExportRecord/ExportBatch advance separately to revision 14. SQLite advances
+additively to v18 with a `firmware16_jobs` owner table. MQTT explicitly supports result
+revision 14 while future revision 15 is rejected before publication.

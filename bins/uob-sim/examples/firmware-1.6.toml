@@ -13,7 +13,7 @@ station = "alpha"
 action = "boot"
 timeout_ms = 5000
 fixture_id = "wire.ocpp16.boot.valid"
-payload = { chargePointVendor = "UOB", chargePointModel = "Independent Firmware Station", firmwareVersion = "sim-1.0.0" }
+payload = { chargePointVendor = "UOB", chargePointModel = "FirmwareStation", firmwareVersion = "sim-1.0.0" }
 
 # The CSMS sends UpdateFirmware; the station downloads, installs, reboots and reports Installed.
 [[steps]]

@@ -13,7 +13,7 @@ station = "alpha"
 action = "boot"
 timeout_ms = 5000
 fixture_id = "wire.ocpp16.boot.valid"
-payload = { chargePointVendor = "UOB", chargePointModel = "Independent Signed Firmware Station", firmwareVersion = "sim-1.0.0" }
+payload = { chargePointVendor = "UOB", chargePointModel = "SignedFwStation", firmwareVersion = "sim-1.0.0" }
 
 # The CSMS sends SignedUpdateFirmware; every SignedFirmwareStatusNotification carries its requestId.
 [[steps]]

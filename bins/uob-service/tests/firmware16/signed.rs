@@ -54,47 +54,7 @@ async fn actual_daemon_sends_verifiable_signed_firmware_and_matches_request_ids(
     }
     download(&location, &evidence["artifact"], &image(2)).await;
 
-    // Another update's identity never advances this job (L01.FR.10).
-    notify(
-        &mut socket,
-        "foreign",
-        "SignedFirmwareStatusNotification",
-        json!({"status":"InvalidSignature","requestId":7}),
-    )
-    .await;
-    assert_eq!(job_state(&client, &fixture, "signed-1").await, "accepted");
-    let sequence = [
-        "DownloadScheduled",
-        "Downloading",
-        "Downloaded",
-        "SignatureVerified",
-        "InstallScheduled",
-        "InstallRebooting",
-    ];
-    for (index, status) in sequence.into_iter().enumerate() {
-        notify(
-            &mut socket,
-            &format!("signed-status-{index}"),
-            "SignedFirmwareStatusNotification",
-            json!({"status":status,"requestId":4242}),
-        )
-        .await;
-    }
-    assert_eq!(
-        job_state(&client, &fixture, "signed-1").await,
-        "install_rebooting"
-    );
-    // A regression is counted and ignored.
-    notify(
-        &mut socket,
-        "regression",
-        "SignedFirmwareStatusNotification",
-        json!({"status":"Downloading","requestId":4242}),
-    )
-    .await;
-    let current = result(&client, &fixture, "signed-1").await;
-    assert_eq!(current["firmware_16"]["job"]["state"], "install_rebooting");
-    assert_eq!(current["firmware_16"]["job"]["rejected_transitions"], 1);
+    report_until_reboot(&mut socket, &client, &fixture).await;
     // L01.FR.21: requestId may be omitted only for Idle.
     send(
         &mut socket,
@@ -113,7 +73,17 @@ async fn actual_daemon_sends_verifiable_signed_firmware_and_matches_request_ids(
     )
     .await;
     assert_eq!(job_state(&client, &fixture, "signed-1").await, "installed");
+}
 
+#[tokio::test]
+async fn refused_certificates_and_reused_request_ids_never_progress() {
+    let (fixture, _) = fixture(true, false);
+    let mut process = fixture.start();
+    fixture.ready(&mut process).await;
+    let client = client();
+    let mut socket = fixture.station("station-a").await;
+    boot(&mut socket).await;
+    fixture.connected(&client, "station-a").await;
     // A refused certificate is native evidence and releases nothing physical.
     let submission = begin(
         &client,
@@ -126,14 +96,14 @@ async fn actual_daemon_sends_verifiable_signed_firmware_and_matches_request_ids(
         json!([3, call[1], {"status":"InvalidCertificate"}]),
     )
     .await;
-    let refused = completed(submission).await;
-    assert_eq!(refused["lifecycle"]["accepted"], false);
-    assert_eq!(refused["firmware_16"]["job"]["state"], "rejected");
+    let refusal = completed(submission).await;
+    assert_eq!(refusal["lifecycle"]["accepted"], false);
+    assert_eq!(refusal["firmware_16"]["job"]["state"], "rejected");
     // Reusing a retained requestId is refused before transmission.
     let (http, reused) = submit_refused(
         &client,
         &fixture,
-        signed_command("signed-3", 4242, SIGNED_IMAGE),
+        signed_command("signed-3", 4243, SIGNED_IMAGE),
     )
     .await;
     assert_eq!(http, 400);
@@ -171,4 +141,49 @@ async fn accepted_canceled_ends_the_previous_signed_job() {
     )
     .await;
     assert_eq!(job_state(&client, &fixture, "first").await, "cancelled");
+}
+
+/// Native progress for request 4242 up to the reboot, with foreign and regressing reports.
+async fn report_until_reboot(socket: &mut Socket, client: &reqwest::Client, fixture: &Fixture) {
+    // Another update's identity never advances this job (L01.FR.10).
+    notify(
+        socket,
+        "foreign",
+        "SignedFirmwareStatusNotification",
+        json!({"status":"InvalidSignature","requestId":7}),
+    )
+    .await;
+    assert_eq!(job_state(client, fixture, "signed-1").await, "accepted");
+    let sequence = [
+        "DownloadScheduled",
+        "Downloading",
+        "Downloaded",
+        "SignatureVerified",
+        "InstallScheduled",
+        "InstallRebooting",
+    ];
+    for (index, status) in sequence.into_iter().enumerate() {
+        notify(
+            socket,
+            &format!("signed-status-{index}"),
+            "SignedFirmwareStatusNotification",
+            json!({"status":status,"requestId":4242}),
+        )
+        .await;
+    }
+    assert_eq!(
+        job_state(client, fixture, "signed-1").await,
+        "install_rebooting"
+    );
+    // A regression is counted and ignored.
+    notify(
+        socket,
+        "regression",
+        "SignedFirmwareStatusNotification",
+        json!({"status":"Downloading","requestId":4242}),
+    )
+    .await;
+    let current = result(client, fixture, "signed-1").await;
+    assert_eq!(current["firmware_16"]["job"]["state"], "install_rebooting");
+    assert_eq!(current["firmware_16"]["job"]["rejected_transitions"], 1);
 }

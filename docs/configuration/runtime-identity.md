@@ -75,3 +75,10 @@ demo-only, reserve_now needs a reservation201_file, and unspecified-EVSE reserva
 additionally need reserve_non_evse_specific_supported; see
 [the 2.0.1 operator example](../operations/headless-cli.md#protected-ocpp-201-reservations).
 
+Independent station options update_firmware/signed_update_firmware are default-off and
+demo-only for exact ocpp16j stations, mutually exclusive per station, and need a bounded
+firmware_job_timeout_seconds. Either one requires a [charging.firmware] section whose
+owner-only catalog_file and private spool_directory feed a loopback test artifact service
+and a freshly generated TEST ONLY PKI; nothing in it is production artifact storage. See
+[the operator example](../operations/headless-cli.md#protected-ocpp-16-firmware-updates).
+

@@ -129,8 +129,13 @@ signatures or digests. See `bins/uob-sim/examples/firmware-1.6*.toml` and
 
 ```text
 cargo test --locked -p uob-sim --test firmware16_model --test firmware16_wire \
-  --test firmware16_process --test firmware16_scenario
+  --test firmware16_process --test firmware16_scenario --test firmware16_independence
 ```
+
+`firmware16_independence` drives the model with the hand-authored corpus fixtures in
+`tests/ocpp-fixtures/corpus/wire/1.6`. Corpus requests produce the corpus replies, and no
+negative case starts a native process. The opt-in `firmware16_joint_smoke.py` runs this model
+against a real `uob` daemon; see [OCPP 1.6 firmware](../architecture/ocpp16-firmware.md).
 
 The model tests cover every native sequence, retries, cancel policies, verification and install
 failures, durable resume and redaction. The wire tests use a real OCPP-J socket and a local HTTP

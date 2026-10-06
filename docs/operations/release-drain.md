@@ -35,7 +35,11 @@ it only on confirmed resolution. `release_jobs` is an additive SQLite schema-v6 
 survive process restarts; neither command acceptance, disconnect, timeout, nor drain expiry
 finishes a job. Late/recovered job registration is accepted during drain and invalidates idle.
 Future firmware/certificate workflow implementations must use this port across their full
-stateful lifetime. A previous binary must explicitly qualify schema-v6 compatibility before
+stateful lifetime. The OCPP 1.6J firmware workflow writes its `firmware16/<sha256>` entry in
+the same transaction that admits the command and creates its `firmware16_jobs` row, and
+deletes it in the transaction that records a resolved job state. A deadline marks a job
+`timed_out` without removing the entry; startup recovery restores a missing entry for any
+unresolved job. A previous binary must explicitly qualify schema-v6 compatibility before
 normal rollback; this change does not claim that an arbitrary older binary is eligible.
 
 ## Supervisor sequence and race handling

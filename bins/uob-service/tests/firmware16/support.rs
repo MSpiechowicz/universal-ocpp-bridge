@@ -6,7 +6,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use rustls_pki_types::{CertificateDer, UnixTime, pem::PemObject};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+use std::{fmt::Write, fs, os::unix::fs::PermissionsExt, path::Path};
 use webpki::{EndEntityCert, KeyUsage};
 
 /// DER content of the id-kp-codeSigning OID 1.3.6.1.5.5.7.3.3.
@@ -67,13 +67,14 @@ pub fn fixture(signed: bool, trigger: bool) -> (Fixture, u16) {
     let mut config = fs::read_to_string(&path)
         .unwrap()
         .replace("get_composite_schedule=true", &options);
-    config.push_str(&format!(
+    let _ = write!(
+        config,
         "[charging.firmware]\nlisten_addr='127.0.0.1:{port}'\nspool_directory='{}'\n\
          catalog_file='{}'\nmanufacturer_root_file='{}'\n",
         spool.display(),
         fixture.root.join("catalog.json").display(),
         fixture.root.join("manufacturer-root.pem").display(),
-    ));
+    );
     fs::write(path, config).unwrap();
     (fixture, port)
 }
@@ -112,8 +113,10 @@ pub async fn download(location: &str, artifact: &Value, expected: &[u8]) {
     assert_eq!(bytes.as_ref(), expected);
     let digest = Sha256::digest(&bytes)
         .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+        .fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
     assert_eq!(artifact["sha256"], digest);
     assert_eq!(artifact["size_bytes"], expected.len());
     assert_eq!(artifact["test_only"], true);

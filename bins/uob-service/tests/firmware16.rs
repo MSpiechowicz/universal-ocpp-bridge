@@ -165,6 +165,17 @@ async fn refusals_never_reach_the_station_and_callerror_is_native_evidence() {
             assert_eq!(job_state(&client, &fixture, id).await, "not_sent");
         }
     }
+}
+
+#[tokio::test]
+async fn native_callerror_active_jobs_and_unenabled_signed_reports_stay_explicit() {
+    let (fixture, _) = fixture(false, false);
+    let mut process = fixture.start();
+    fixture.ready(&mut process).await;
+    let client = client();
+    let mut socket = fixture.station("station-a").await;
+    boot(&mut socket).await;
+    fixture.connected(&client, "station-a").await;
     // L01.FR.20: a signed-only station answers the original message with NotSupported.
     let submission = begin(
         &client,
