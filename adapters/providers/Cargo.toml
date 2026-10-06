@@ -8,13 +8,24 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aws-lc-rs.workspace = true
+axum.workspace = true
+base64.workspace = true
+futures-util.workspace = true
+rcgen = { workspace = true, features = ["x509-parser"] }
+rustls-pki-types.workspace = true
+rustls-webpki.workspace = true
 sha2.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "rt", "time"] }
+time.workspace = true
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "time"] }
 uuid.workspace = true
+x509-parser.workspace = true
 uob-application = { path = "../../crates/application" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["net", "sync", "test-util"] }
+uob-contracts = { path = "../../crates/contracts" }
+uob-sim = { path = "../../bins/uob-sim" }
 
 [lints]
 workspace = true

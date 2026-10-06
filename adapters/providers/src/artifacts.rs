@@ -67,6 +67,29 @@ impl ArtifactTransfers {
         Ok(Self { budget, limits })
     }
 
+    /// Configured per-transfer policy.
+    #[must_use]
+    pub const fn limits(&self) -> TransferLimits {
+        self.limits
+    }
+
+    /// Same admission authority with a whole-artifact cap that never exceeds this one.
+    ///
+    /// # Errors
+    /// Returns `InvalidLimits` for a zero cap.
+    pub fn with_maximum_artifact_bytes(&self, maximum: u64) -> Result<Self, TransferError> {
+        if maximum == 0 {
+            return Err(TransferError::InvalidLimits);
+        }
+        Ok(Self {
+            budget: self.budget.clone(),
+            limits: TransferLimits {
+                maximum_artifact_bytes: maximum.min(self.limits.maximum_artifact_bytes),
+                ..self.limits
+            },
+        })
+    }
+
     fn reserve(&self) -> Result<Buffer, TransferError> {
         let reservation = self
             .budget
