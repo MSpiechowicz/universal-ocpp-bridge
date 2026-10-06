@@ -5,6 +5,8 @@ mod admission;
 mod authorization;
 pub mod capture;
 pub mod charging_identity;
+pub mod charging_negotiation201;
+pub use charging_negotiation201::*;
 mod command;
 pub use command::charging_profiles201::ChargingProfileReportStore201;
 pub use command::device_model201::DeviceModelStore201;
@@ -119,11 +121,12 @@ pub use storage::{
     DeliveryId, Durability, EXPORT_RECORD_CHUNK_BYTES, MAX_PROFILE_FOOTPRINTS_201,
     OPERATIONAL_HISTORY_RETENTION_SECONDS, OperationalStore, Page, PageLimit, PageLimitError,
     PendingDelivery, PendingDeliveryQuery, ProfileFootprint201, ProfileMutation201,
-    ProfileOwnership201, ProfileReservation201, RETAINED_EVENT_CURSOR_PREFIX,
-    RecordedDeliveryAttempt, RecoveryBatch, RecoveryQuery, RetainedEventCursor, RetainedEventPage,
-    RetainedEventQuery, ScheduledDelivery, SnapshotCursor, SnapshotQuery, StorageAdmissionState,
-    StorageError, StorageErrorCode, StorageFuture, StorageRetentionStatus, StorageWritePurpose,
-    TargetDeliveryStore, baseline_purpose, purpose_index,
+    ProfileOwner201, ProfileOwners201, ProfileOwnership201, ProfileOwnershipState201,
+    ProfileReservation201, RETAINED_EVENT_CURSOR_PREFIX, RecordedDeliveryAttempt, RecoveryBatch,
+    RecoveryQuery, RetainedEventCursor, RetainedEventPage, RetainedEventQuery, ScheduledDelivery,
+    SnapshotCursor, SnapshotQuery, StorageAdmissionState, StorageError, StorageErrorCode,
+    StorageFuture, StorageRetentionStatus, StorageWritePurpose, TargetDeliveryStore,
+    baseline_purpose, purpose_index,
 };
 pub use target::{
     AcknowledgementScope, BridgeTarget, BridgeTargetFactory, ConfigurationError,

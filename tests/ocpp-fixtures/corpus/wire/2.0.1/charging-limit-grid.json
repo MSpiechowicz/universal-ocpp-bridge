@@ -1,0 +1,1 @@
+[2,"independent-limit-121-grid","NotifyChargingLimit",{"chargingLimit":{"chargingLimitSource":"SO","isGridCritical":true},"chargingSchedule":[{"id":-121,"startSchedule":"2026-10-06T17:00:00Z","duration":3600,"chargingRateUnit":"W","chargingSchedulePeriod":[{"startPeriod":0,"limit":11000.0},{"startPeriod":900,"limit":7400.5},{"startPeriod":2700,"limit":0}]}]}]

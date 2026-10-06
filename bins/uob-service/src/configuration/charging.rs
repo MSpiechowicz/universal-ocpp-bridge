@@ -60,6 +60,9 @@ pub(crate) struct StationControlOptions {
     pub reserve_non_evse_specific_supported: bool,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
+    /// OCPP 2.0.1 only: answer charging needs with `Processing` because the operator's EMS
+    /// sends a `TxProfile` through this bridge (K15.FR.05/07/08). Default `Rejected`.
+    pub ev_charging_needs_processing: bool,
 }
 
 #[derive(Clone, Copy, Default, Deserialize)]
@@ -332,6 +335,14 @@ fn validate_stations(
         }
         if station.control.get_charging_profiles.enabled()
             && station.protocol != ProtocolEdition::Ocpp201
+        {
+            return Err(fail);
+        }
+        // Processing obliges a later TxProfile: require a path that can send one.
+        if station.control.ev_charging_needs_processing
+            && (station.protocol != ProtocolEdition::Ocpp201
+                || !(station.control.allow_charging_limit
+                    || station.control.set_charging_profile.enabled()))
         {
             return Err(fail);
         }

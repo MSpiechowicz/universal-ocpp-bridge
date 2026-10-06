@@ -501,3 +501,51 @@ K09.FR.01-06 to these fixtures and tests, citing the Edition 4 Part 2 specificat
 (K08.FR.02/04/06) remains the charger's obligation; the mapping covers only CSMS-side
 behavior and is not OCA certification or hardware interoperability.
 
+
+## OCPP 2.0.1 charging-needs and external-limit fixtures
+
+Two narrow bidirectional rows are `verified`:
+
+- `ocpp201.smart-charging.external-limits` covers K11–K14.
+- `ocpp201.smart-charging.ev-negotiation` covers charging needs and EV schedules in K15–K17.
+
+The broad `ocpp201.smart-charging` row stays `planned`. For example, charging profiles
+embedded in a remote start (K05) are still unsupported. `scenario_ids` is empty because
+there is no checked scenario registry yet.
+
+The eight files below are byte-for-byte copies of the matching members under
+`OCPP-2.0.1_part3_JSON_schemas/` in the pinned Part 3 schema ZIP. They keep the OCA
+copyright and CC BY-ND 4.0 attribution. `provenance.json` already pins both archives.
+
+| Schema under `schemas/2.0.1/` | Original-byte SHA-256 |
+| --- | --- |
+| `NotifyEVChargingNeedsRequest.json` | `9084c8d497ce67d7b23d929a5656810e0e6c7ecde61414ba4c3ee1def02bf5e6` |
+| `NotifyEVChargingNeedsResponse.json` | `835923db28d011b189e0a4b28bbfeb142f81bd09e712646dc9de9f133283fafa` |
+| `NotifyEVChargingScheduleRequest.json` | `29f99ee6b94da9137c3af11d2dae9dd2b80b158d0fa7b682eef74af6299bf885` |
+| `NotifyEVChargingScheduleResponse.json` | `864a530bc32e7c695773f854c832a5ec5ce688a5f277afba1d6463cf9088eb15` |
+| `NotifyChargingLimitRequest.json` | `577073990a9d07051df73c473671428ed6f4a1ff300b93af2b9d2a46d01115cb` |
+| `NotifyChargingLimitResponse.json` | `617c45cdf576e0aab55d9cb7631862b5367e41139718d71faaa5a41748364b9c` |
+| `ClearedChargingLimitRequest.json` | `88ebc9a55eb308de3cf1dd2c664faecaca8fa24737a9c18765d20da5f4d42738` |
+| `ClearedChargingLimitResponse.json` | `6ed44859833ecf021146ffee90400e8d3ee28d2b5868233c5242474e5334dccf` |
+
+Thirteen independently authored wire fixtures cover:
+
+- AC three-phase and DC charging needs, with the `Processing` answer and the `Rejected`
+  answer with `NotEnabled`.
+- An ampere EV schedule with exact tenths and a genuine zero, with its `Accepted` answer
+  and its `Rejected` answer with `ValueTooHigh`.
+- A grid-critical `SO` limit at the grid connection with a watt schedule, and an
+  `EMS` limit on EVSE 1 without schedules.
+- Grid and EVSE releases, and the empty acknowledgements.
+
+`charging-negotiation-negative-cases.json` records 19 more CALLs that native semantics
+refuse. Most of them pass the pinned schema floor, for example a CSO-sourced limit, a zero
+EVSE, a mismatched or missing parameter set, unordered periods and two fractional digits.
+`uob-ocpp-fixtures` checks each recorded `schema_valid` flag against the pinned schema, and
+the protocol adapter refuses every case.
+
+`smart-charging201-requirements.json` maps the CSMS-side K11–K17 requirements to these
+fixtures and to the protocol, storage and actual-daemon tests. Station and
+local-controller obligations, and the profile the operator's EMS must send, are named as
+outside the bridge's own behavior. The June 2026 errata has no K11–K17 items. This is
+software evidence only, not ISO 15118, hardware interoperability or OCA certification.

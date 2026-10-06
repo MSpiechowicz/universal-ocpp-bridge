@@ -1,5 +1,7 @@
 #![doc = "Dependency-light shared contracts for Universal OCPP Bridge."]
 
+mod charging_negotiation201;
+pub use charging_negotiation201::*;
 mod charging_profile16;
 mod charging_profile201;
 pub use charging_profile201::*;

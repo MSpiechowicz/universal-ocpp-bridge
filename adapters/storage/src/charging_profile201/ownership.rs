@@ -2,10 +2,11 @@ use super::metadata::{decode_footprint, encode_footprint, encode_mutation};
 use crate::{codec, configuration::unavailable};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uob_application::{
-    MAX_PROFILE_FOOTPRINTS_201, ProfileFootprint201, ProfileMutation201, ProfileOwnership201,
-    ProfileReservation201, StorageError, StorageErrorCode,
+    MAX_PROFILE_FOOTPRINTS_201, ProfileFootprint201, ProfileMutation201, ProfileOwner201,
+    ProfileOwners201, ProfileOwnership201, ProfileOwnershipState201, ProfileReservation201,
+    StorageError, StorageErrorCode,
 };
-use uob_contracts::ResourceRef;
+use uob_contracts::{RequestId, ResourceRef};
 
 pub(super) fn station_key(station: &ResourceRef) -> Result<String, StorageError> {
     if station.resource.is_some() || station.native_protocol_reference.is_some() {
@@ -52,19 +53,79 @@ pub(crate) fn read(
         .into_iter()
         .map(|(_, footprint)| footprint)
         .collect();
-    let busy = connection
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM charging_profile201_mutations WHERE station=?1)",
-            [&key],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(unavailable)?;
     Ok(ProfileOwnership201 {
         baseline,
         footprints,
-        busy,
+        busy: busy(connection, &key)?,
     })
 }
+pub(crate) fn owners(
+    connection: &Connection,
+    station: &ResourceRef,
+) -> Result<ProfileOwners201, StorageError> {
+    let key = station_key(station)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT owner, state, payload FROM charging_profile201_footprints
+             WHERE station=?1 ORDER BY rowid LIMIT 129",
+        )
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map([&key], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(unavailable)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(unavailable)?;
+    if rows.len() > MAX_PROFILE_FOOTPRINTS_201 {
+        return Err(StorageError::new(
+            StorageErrorCode::IntegrityFailure,
+            "profile ownership exceeds bound",
+        ));
+    }
+    let owners = rows
+        .into_iter()
+        .map(|(owner, state, payload)| {
+            let state = match state {
+                0 => ProfileOwnershipState201::Reserved,
+                1 => ProfileOwnershipState201::Owned,
+                2 => ProfileOwnershipState201::Uncertain,
+                _ => {
+                    return Err(StorageError::new(
+                        StorageErrorCode::IntegrityFailure,
+                        "profile ownership state invalid",
+                    ));
+                }
+            };
+            Ok(ProfileOwner201 {
+                request_id: RequestId::new(owner).map_err(|_| {
+                    StorageError::new(StorageErrorCode::IntegrityFailure, "profile owner invalid")
+                })?,
+                state,
+                footprint: decode_footprint(&payload)?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ProfileOwners201 {
+        owners,
+        busy: busy(connection, &key)?,
+    })
+}
+
+fn busy(connection: &Connection, station: &str) -> Result<bool, StorageError> {
+    connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM charging_profile201_mutations WHERE station=?1)",
+            [station],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(unavailable)
+}
+
 fn baseline(connection: &Connection, station: &str) -> Result<[bool; 3], StorageError> {
     connection.query_row("SELECT max_known, default_known, tx_known FROM charging_profile201_baseline WHERE station=?1",
         [station], |row| Ok([row.get(0)?, row.get(1)?, row.get(2)?])).optional().map_err(unavailable)

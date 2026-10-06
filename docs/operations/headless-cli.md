@@ -256,6 +256,31 @@ detail until it is `complete`, `incomplete` (with a reason such as `correlation`
 `requestId` stays retired on that connection. Reported profiles describe the charger's
 state at report time; they are not installed or enforced by the bridge.
 
+### OCPP 2.0.1 charging needs and external limits
+
+OCPP 2.0.1 stations always get answers to `NotifyEVChargingNeeds`,
+`NotifyEVChargingSchedule`, `NotifyChargingLimit` and `ClearedChargingLimit`, and the answer
+needs no command. By default, charging needs are answered `Rejected` with `NotEnabled`.
+
+Setting `ev_charging_needs_processing = true` on a 2.0.1 station answers `Processing`
+instead. The station must also set `allow_charging_limit` or `set_charging_profile`, and
+commands must be enabled. Only set it when your EMS reacts to the needs by sending a
+`TxProfile` through this bridge, either a canonical `set_charging_limit` on the EVSE or a
+native `SetChargingProfile`. The bridge never sends one itself.
+
+Read the outcome from the station snapshot:
+
+- The EVSE resource carries the `ocpp201/evse-{n}/ev-charging-needs/*` and
+  `ocpp201/evse-{n}/ev-charging-schedule/*` points.
+- Limits appear under `ocpp201/charging-limit/{source}/*` on the station, or under
+  `ocpp201/evse-{n}/charging-limit/{source}/*` on the EVSE.
+- The exact needs and schedules are in the `station.*.201` journal events.
+
+A rejected EV schedule means it exceeds the bridge's own installed limit
+(`basis = exceeds_csms_schedule`), or that the bridge could not check it exactly
+(`unverifiable`). Renegotiating is your decision: send a new limit or profile. See
+[charging needs and external limits](../architecture/ocpp201-charging-negotiation.md).
+
 ### Full native OCPP 1.6J Set/Clear charging profiles
 
 `set_charging_profile` and `clear_charging_profile` are independent, **default-off** station

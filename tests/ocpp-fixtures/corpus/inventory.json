@@ -46,6 +46,8 @@
     {"id":"ocpp201.smart-charging.profiles","feature":"smart_charging.profiles","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.smart-charging.composite-schedule","feature":"smart_charging.composite_schedule","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.smart-charging.profile-reports","feature":"smart_charging.profile_reports","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
+    {"id":"ocpp201.smart-charging.external-limits","feature":"smart_charging.external_limits","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
+    {"id":"ocpp201.smart-charging.ev-negotiation","feature":"smart_charging.ev_negotiation","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.certificates-iso15118","feature":"certificates_iso15118","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.tariff-display","feature":"tariff_display","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp201.data-transfer","feature":"data_transfer","protocol_version":"2.0.1","direction":"bidirectional","required":true,"applicable":true},

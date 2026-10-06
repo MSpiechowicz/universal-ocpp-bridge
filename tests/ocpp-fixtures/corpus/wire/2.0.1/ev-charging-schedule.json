@@ -1,0 +1,1 @@
+[2,"independent-ev-schedule-121","NotifyEVChargingSchedule",{"timeBase":"2026-10-06T17:00:00Z","evseId":1,"chargingSchedule":{"id":7,"chargingRateUnit":"A","chargingSchedulePeriod":[{"startPeriod":0,"limit":16.0,"numberPhases":3},{"startPeriod":1800,"limit":10.5,"numberPhases":3},{"startPeriod":3600,"limit":0}],"duration":7200}}]

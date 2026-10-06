@@ -15,8 +15,8 @@ mod metadata;
 mod ownership;
 mod schema;
 pub(crate) use fence::recover;
-pub(crate) use ownership::read;
 pub(crate) use ownership::reserve;
+pub(crate) use ownership::{owners, read};
 pub(crate) use schema::create;
 
 impl<C, E, D, R> ChargingProfileStore201 for SqliteOperationalStore<C, E, D, R>
@@ -31,6 +31,12 @@ where
         station: ResourceRef,
     ) -> StorageFuture<'_, ProfileOwnership201> {
         self.request(|reply| Request::ChargingProfileOwnership(station, reply))
+    }
+    fn charging_profile_owners(
+        &self,
+        station: ResourceRef,
+    ) -> StorageFuture<'_, uob_application::ProfileOwners201> {
+        self.request(|reply| Request::ChargingProfileOwners(station, reply))
     }
     fn interrupt_charging_profile_mutations(&self) -> StorageFuture<'_, ()> {
         self.request(Request::InterruptChargingProfiles)

@@ -1,0 +1,407 @@
+{
+  "cases": [
+    {
+      "id": "needs-evse-zero",
+      "wire": [
+        2,
+        "needs-evse-zero",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 0,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "AC_three_phase",
+            "acChargingParameters": {
+              "energyAmount": 22000,
+              "evMinCurrent": 6,
+              "evMaxCurrent": 32,
+              "evMaxVoltage": 400
+            }
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-without-parameters",
+      "wire": [
+        2,
+        "needs-without-parameters",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "DC"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-both-parameters",
+      "wire": [
+        2,
+        "needs-both-parameters",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "DC",
+            "acChargingParameters": {
+              "energyAmount": 22000,
+              "evMinCurrent": 6,
+              "evMaxCurrent": 32,
+              "evMaxVoltage": 400
+            },
+            "dcChargingParameters": {
+              "evMaxCurrent": 200,
+              "evMaxVoltage": 800
+            }
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-mode-mismatch",
+      "wire": [
+        2,
+        "needs-mode-mismatch",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "DC",
+            "acChargingParameters": {
+              "energyAmount": 22000,
+              "evMinCurrent": 6,
+              "evMaxCurrent": 32,
+              "evMaxVoltage": 400
+            }
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-negative-energy",
+      "wire": [
+        2,
+        "needs-negative-energy",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "AC_single_phase",
+            "acChargingParameters": {
+              "energyAmount": -1,
+              "evMinCurrent": 6,
+              "evMaxCurrent": 32,
+              "evMaxVoltage": 400
+            }
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-min-above-max-current",
+      "wire": [
+        2,
+        "needs-min-above-max-current",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "AC_two_phase",
+            "acChargingParameters": {
+              "energyAmount": 22000,
+              "evMinCurrent": 40,
+              "evMaxCurrent": 32,
+              "evMaxVoltage": 400
+            }
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-zero-schedule-tuples",
+      "wire": [
+        2,
+        "needs-zero-schedule-tuples",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "maxScheduleTuples": 0,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "DC",
+            "dcChargingParameters": {
+              "evMaxCurrent": 200,
+              "evMaxVoltage": 800
+            }
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "needs-soc-over-100",
+      "wire": [
+        2,
+        "needs-soc-over-100",
+        "NotifyEVChargingNeeds",
+        {
+          "evseId": 1,
+          "chargingNeeds": {
+            "requestedEnergyTransfer": "DC",
+            "dcChargingParameters": {
+              "evMaxCurrent": 200,
+              "evMaxVoltage": 800,
+              "stateOfCharge": 101
+            }
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "schedule-evse-zero",
+      "wire": [
+        2,
+        "schedule-evse-zero",
+        "NotifyEVChargingSchedule",
+        {
+          "timeBase": "2026-10-06T17:00:00Z",
+          "evseId": 0,
+          "chargingSchedule": {
+            "id": 1,
+            "chargingRateUnit": "A",
+            "chargingSchedulePeriod": [
+              {
+                "startPeriod": 0,
+                "limit": 16
+              }
+            ]
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "schedule-two-fraction-digits",
+      "wire": [
+        2,
+        "schedule-two-fraction-digits",
+        "NotifyEVChargingSchedule",
+        {
+          "timeBase": "2026-10-06T17:00:00Z",
+          "evseId": 1,
+          "chargingSchedule": {
+            "id": 1,
+            "chargingRateUnit": "A",
+            "chargingSchedulePeriod": [
+              {
+                "startPeriod": 0,
+                "limit": 16.05
+              }
+            ]
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "schedule-unordered-periods",
+      "wire": [
+        2,
+        "schedule-unordered-periods",
+        "NotifyEVChargingSchedule",
+        {
+          "timeBase": "2026-10-06T17:00:00Z",
+          "evseId": 1,
+          "chargingSchedule": {
+            "id": 1,
+            "chargingRateUnit": "A",
+            "chargingSchedulePeriod": [
+              {
+                "startPeriod": 0,
+                "limit": 16
+              },
+              {
+                "startPeriod": 900,
+                "limit": 10
+              },
+              {
+                "startPeriod": 600,
+                "limit": 8
+              }
+            ]
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "schedule-late-first-period",
+      "wire": [
+        2,
+        "schedule-late-first-period",
+        "NotifyEVChargingSchedule",
+        {
+          "timeBase": "2026-10-06T17:00:00Z",
+          "evseId": 1,
+          "chargingSchedule": {
+            "id": 1,
+            "chargingRateUnit": "A",
+            "chargingSchedulePeriod": [
+              {
+                "startPeriod": 60,
+                "limit": 16
+              }
+            ]
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "schedule-negative-limit",
+      "wire": [
+        2,
+        "schedule-negative-limit",
+        "NotifyEVChargingSchedule",
+        {
+          "timeBase": "2026-10-06T17:00:00Z",
+          "evseId": 1,
+          "chargingSchedule": {
+            "id": 1,
+            "chargingRateUnit": "A",
+            "chargingSchedulePeriod": [
+              {
+                "startPeriod": 0,
+                "limit": -1
+              }
+            ]
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "limit-cso-source",
+      "wire": [
+        2,
+        "limit-cso-source",
+        "NotifyChargingLimit",
+        {
+          "chargingLimit": {
+            "chargingLimitSource": "CSO"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "limit-evse-zero",
+      "wire": [
+        2,
+        "limit-evse-zero",
+        "NotifyChargingLimit",
+        {
+          "evseId": 0,
+          "chargingLimit": {
+            "chargingLimitSource": "SO"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "limit-phase-to-use-three-phases",
+      "wire": [
+        2,
+        "limit-phase-to-use-three-phases",
+        "NotifyChargingLimit",
+        {
+          "chargingLimit": {
+            "chargingLimitSource": "EMS"
+          },
+          "chargingSchedule": [
+            {
+              "id": 1,
+              "chargingRateUnit": "A",
+              "chargingSchedulePeriod": [
+                {
+                  "startPeriod": 0,
+                  "limit": 16,
+                  "numberPhases": 3,
+                  "phaseToUse": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "limit-empty-schedule-list",
+      "wire": [
+        2,
+        "limit-empty-schedule-list",
+        "NotifyChargingLimit",
+        {
+          "chargingLimit": {
+            "chargingLimitSource": "EMS"
+          },
+          "chargingSchedule": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "cleared-evse-negative",
+      "wire": [
+        2,
+        "cleared-evse-negative",
+        "ClearedChargingLimit",
+        {
+          "chargingLimitSource": "SO",
+          "evseId": -1
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "cleared-unknown-source",
+      "wire": [
+        2,
+        "cleared-unknown-source",
+        "ClearedChargingLimit",
+        {
+          "chargingLimitSource": "DSO"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    }
+  ]
+}

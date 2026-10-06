@@ -1,6 +1,7 @@
 //! OCPP 2.0.1 model isolation and charger-to-application mappings.
 
 pub mod availability;
+pub mod charging_negotiation;
 pub mod data_transfer;
 pub mod remote_control;
 mod trigger;
@@ -86,6 +87,10 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
             transaction_event(request)?
         }
         "ReservationStatusUpdate" => reservation_status_update(&payload)?,
+        "NotifyEVChargingNeeds"
+        | "NotifyEVChargingSchedule"
+        | "NotifyChargingLimit"
+        | "ClearedChargingLimit" => charging_negotiation::observation(&action, &payload)?,
         _ => {
             return Err(DecodeError::new(
                 PROTOCOL,

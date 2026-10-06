@@ -2,7 +2,7 @@
   "schema_version": 1,
   "protocol": "2.0.1",
   "source": {
-    "title": "OCPP 2.0.1 Edition 4, December 2025 (Part 2 section K: K08 and K09), June 2026 errata (no K08/K09 items), Appendices v1.5 (reason codes)",
+    "title": "OCPP 2.0.1 Edition 4, December 2025 (Part 2 section K: K08, K09 and K11-K17), June 2026 errata (no K08/K09/K11-K17 items), Appendices v1.5 (reason codes)",
     "url": "https://openchargealliance.org/download/caaab79c63336ff203104d9940c8eba29adb7d324c384e0578f7f3b7265e03ac",
     "archive_sha256": "192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a",
     "schema_zip_sha256": "6279c40b74929cce7fca439622194a8890a0d250de5665f3e4d80ef8529c51ce",
@@ -10,7 +10,7 @@
     "errata_sha256": "7f6daf092ddb9cd888dc787032395f0243c5135dd29c4b6c36bf77ae59dda4ee",
     "appendices_sha256": "3a8a97133ed904047b128a9bbb906e110f899d42b9f99423c2df27e0327338b3",
     "license": "CC BY-ND 4.0; Copyright Open Charge Alliance",
-    "interpretation": "Part 3 JSON validation is a floor, not a substitute for Part 2 semantics. These assertions are independently authored source mappings for the CSMS side only; charger-side calculation (K08.FR.02/04/06) is the charger's obligation and is never computed or enforced by the bridge."
+    "interpretation": "Part 3 JSON validation is a floor, not a substitute for Part 2 semantics. These assertions are independently authored source mappings for the CSMS side only; charger-side calculation (K08.FR.02/04/06) is the charger's obligation and is never computed or enforced by the bridge. Likewise K11.FR.01/04/06, K12.FR.01/05, K13.FR.01/03, K14.FR.01/04-06, K15.FR.09/14-22, K16.FR.01-04/09-11/13 and K17.FR.09/14-17 bind the charging station or a local controller; K15.FR.07/08, K16.FR.12 and the renegotiations of K15.FR.13, K16.FR.08 and K17.FR.13 are fulfilled by the operator's EMS through the existing protected profile commands."
   },
   "assertions": [
     {
@@ -68,7 +68,95 @@
       ],
       "assertion": "NoProfiles is a terminal native answer with no expected report; later fragments for that requestId are acknowledged on the wire but never retained.",
       "evidence": "wire/2.0.1/charging-profiles-201-no-profiles.json;../../../adapters/protocol/tests/ocpp201_schedules/reports.rs"
+    },
+    {
+      "requirements": [
+        "K15.FR.01",
+        "K15.FR.02",
+        "K15.FR.06",
+        "K17.FR.01",
+        "K17.FR.02",
+        "K17.FR.06"
+      ],
+      "assertion": "Every NotifyEVChargingNeedsRequest from a current accepted registration is answered only after its exact needs, the bridge's answer and the linked transaction are durably committed. Exactly one parameter set matching requestedEnergyTransfer and a positive evseId are required; otherwise a CALLERROR is returned and nothing is recorded. customData is not retained.",
+      "evidence": "wire/2.0.1/ev-charging-needs-ac.json;wire/2.0.1/ev-charging-needs-dc.json;wire/2.0.1/charging-negotiation-negative-cases.json;../../../adapters/protocol/tests/ocpp201_charging_negotiation.rs;../../../adapters/storage/tests/charging_negotiation201.rs;../../../bins/uob-service/tests/charging_negotiation201/needs.rs"
+    },
+    {
+      "requirements": [
+        "K15.FR.03",
+        "K15.FR.04",
+        "K15.FR.05",
+        "K17.FR.03",
+        "K17.FR.04",
+        "K17.FR.05"
+      ],
+      "assertion": "The bridge computes no schedule and never answers Accepted. It answers Rejected with NotEnabled by default; Processing only for an operator-asserted EMS on a station whose canonical limit or native profile command path can send the TxProfile; and Rejected with UnknownEvse or TxNotFound without a configured EVSE or exactly one current OCPP 2.0.1 transaction on it.",
+      "evidence": "wire/2.0.1/ev-charging-needs-processing.json;wire/2.0.1/ev-charging-needs-rejected.json;../../../crates/application/tests/charging_negotiation201.rs;../../../bins/uob-service/tests/charging_negotiation201/needs.rs;../../../bins/uob-service/src/configuration/charging/tests.rs"
+    },
+    {
+      "requirements": [
+        "K15.FR.10",
+        "K15.FR.11",
+        "K15.FR.12",
+        "K16.FR.05",
+        "K16.FR.06",
+        "K16.FR.07",
+        "K17.FR.10",
+        "K17.FR.11",
+        "K17.FR.12"
+      ],
+      "assertion": "An EV charging schedule is checked against the TxProfiles this bridge itself installed for the EVSE's transaction, rebuilt from their retained requests: Accepted when there are none or every interval stays within the highest-stack bridge limit, Rejected with ValueTooHigh when any interval exceeds it, and Rejected with Unspecified when the limits cannot be placed exactly (in-flight or uncertain ownership, an unretained request, another unit, recurrence, or relative timing with more than one period).",
+      "evidence": "wire/2.0.1/ev-charging-schedule.json;wire/2.0.1/ev-charging-schedule-accepted.json;wire/2.0.1/ev-charging-schedule-rejected.json;../../../crates/application/tests/charging_negotiation201.rs;../../../adapters/storage/tests/charging_profile201/owners.rs;../../../bins/uob-service/tests/charging_negotiation201/needs.rs"
+    },
+    {
+      "requirements": [
+        "K15.FR.07",
+        "K15.FR.08",
+        "K15.FR.13",
+        "K16.FR.08",
+        "K16.FR.12",
+        "K17.FR.07",
+        "K17.FR.08",
+        "K17.FR.13"
+      ],
+      "assertion": "The bridge sends no SetChargingProfile on its own: after charging needs or a rejected EV schedule no CALL reaches the station, so renegotiation stays an explicit operator decision through the protected command path.",
+      "evidence": "../../../bins/uob-service/tests/charging_negotiation201/needs.rs"
+    },
+    {
+      "requirements": [
+        "K11.FR.02",
+        "K11.FR.03",
+        "K12.FR.02",
+        "K12.FR.03",
+        "K14.FR.02"
+      ],
+      "assertion": "NotifyChargingLimit is answered with an empty response only after the source, grid criticality and exact schedules are committed. An absent evseId addresses the grid connection and a positive one an exact configured EVSE; an unconfigured EVSE is a CALLERROR. Schedules beyond the evidence bound are omitted from the journal but counted.",
+      "evidence": "wire/2.0.1/charging-limit-grid.json;wire/2.0.1/charging-limit-evse.json;wire/2.0.1/charging-limit-ack.json;../../../adapters/protocol/tests/ocpp201_charging_negotiation.rs;../../../adapters/storage/tests/charging_negotiation201.rs;../../../bins/uob-service/tests/charging_negotiation201/limits.rs"
+    },
+    {
+      "requirements": [
+        "K11.FR.05",
+        "K12.FR.04"
+      ],
+      "assertion": "A CSO-sourced external limit or a zero evseId is refused with a CALLERROR and changes no state.",
+      "evidence": "wire/2.0.1/charging-negotiation-negative-cases.json;../../../adapters/protocol/tests/ocpp201_charging_negotiation.rs;../../../bins/uob-service/tests/charging_negotiation201/limits.rs"
+    },
+    {
+      "requirements": [
+        "K13.FR.02",
+        "K14.FR.03"
+      ],
+      "assertion": "ClearedChargingLimit is answered with an empty response after the matching source and scope is marked inactive and whether a limit was active is journaled; other sources and scopes stay active, and the state survives a restart.",
+      "evidence": "wire/2.0.1/cleared-charging-limit-grid.json;wire/2.0.1/cleared-charging-limit-evse.json;wire/2.0.1/cleared-charging-limit-ack.json;../../../adapters/storage/tests/charging_negotiation201.rs;../../../bins/uob-service/tests/charging_negotiation201/limits.rs"
+    },
+    {
+      "requirements": [
+        "K11 postcondition: CSMS informed",
+        "K12 postcondition: CSMS informed"
+      ],
+      "assertion": "External limits and EV needs are observed state only: repeated notifications create no command, no observed command effect and no CALL to the station.",
+      "evidence": "../../../bins/uob-service/tests/charging_negotiation201/limits.rs;../../../bins/uob-service/src/charging/runtime/effects.rs"
     }
   ],
-  "execution_status": "Native wire, socket, storage and actual-daemon process tests executed in isolated software verification; not hardware or OCA certification."
+  "execution_status": "Native wire, socket, storage and actual-daemon process tests executed in isolated software verification; not hardware, ISO 15118 or OCA certification."
 }

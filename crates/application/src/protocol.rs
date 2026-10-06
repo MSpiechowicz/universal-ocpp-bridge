@@ -54,6 +54,8 @@ pub enum ChargerObservation {
     TransactionStopped(crate::transaction16::StopObservation),
     /// An OCPP 2.0.1 transaction lifecycle event.
     TransactionEvent(TransactionEventObservation),
+    /// Native OCPP 2.0.1 charging needs, EV schedule or external limit notification (K11-K17).
+    ChargingNegotiation201(crate::charging_negotiation201::NegotiationObservation201),
     /// Native OCPP 2.0.1 `ReservationStatusUpdate`; reservationId is a station-local identity.
     ReservationStatusUpdate201 {
         reservation_id: i32,

@@ -242,7 +242,10 @@ pub(super) async fn event_identity(
     Ok((sequence, event_id))
 }
 
-fn commit_error(protocol: ProtocolEdition, error: &ObservationCommitError) -> OcppCallError {
+pub(super) fn commit_error(
+    protocol: ProtocolEdition,
+    error: &ObservationCommitError,
+) -> OcppCallError {
     let code = if matches!(error, ObservationCommitError::Storage(_)) {
         OcppErrorCode::InternalError
     } else {

@@ -387,3 +387,46 @@ fn composite_schedule_requires_privileged_grants_and_representable_topology() {
         }),
     );
 }
+
+#[test]
+fn processing_charging_needs_requires_ocpp201_and_a_path_that_can_send_a_tx_profile() {
+    let control = CHARGING.replace(
+        "read_grant_file='/run/uob-demo/read-grant'",
+        "read_grant_file='/run/uob-demo/read-grant'\ncontrol_grant_file='/run/uob-demo/control'",
+    );
+    let ocpp201 = |options: &str| {
+        control
+            .replace("protocol='ocpp16j'", "protocol='ocpp201'")
+            .replace(
+                "credential_file='/run/uob-demo/station-a'",
+                &format!("credential_file='/run/uob-demo/station-a'\n{options}"),
+            )
+            .replace(
+                "connector_id='connector-1'\nnative_connector_id=1",
+                "evse_id='evse-1'\nnative_evse_id=1",
+            )
+    };
+    let canonical = ocpp201("allow_charging_limit=true\nev_charging_needs_processing=true");
+    let configured = validate_document(&format!("{BASE}{canonical}"))
+        .unwrap()
+        .unwrap();
+    assert!(configured.stations[0].control.ev_charging_needs_processing);
+    let default = validate_document(&format!("{BASE}{}", ocpp201("allow_charging_limit=true")))
+        .unwrap()
+        .unwrap();
+    assert!(!default.stations[0].control.ev_charging_needs_processing);
+    for invalid in [
+        // Processing promises a TxProfile that nothing could send.
+        ocpp201("ev_charging_needs_processing=true"),
+        // OCPP 1.6 has no charging-needs notification.
+        control.replace(
+            "credential_file='/run/uob-demo/station-a'",
+            "credential_file='/run/uob-demo/station-a'\nallow_charging_limit=true\nev_charging_needs_processing=true",
+        ),
+    ] {
+        assert_eq!(
+            validate_document(&format!("{BASE}{invalid}")).err(),
+            Some(ConfigurationLoadError::InvalidCharging),
+        );
+    }
+}

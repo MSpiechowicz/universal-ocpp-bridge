@@ -25,7 +25,7 @@ mod mapping;
 mod phase_capability;
 mod reservation;
 mod reservation_values;
-mod schedule_values;
+pub(crate) mod schedule_values;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub use local_authorization_values::{

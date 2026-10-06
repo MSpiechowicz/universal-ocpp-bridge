@@ -1,6 +1,7 @@
 mod calls;
 mod dispatch;
 mod effects;
+mod negotiation201;
 mod session;
 mod state;
 mod status;
@@ -60,6 +61,7 @@ struct CallContext<'a> {
     trigger_enabled: bool,
     reservations: Option<&'a uob_protocol_adapter::v16::remote_control::ReservationValues16>,
     reservations_201: Option<&'a uob_protocol_adapter::v201::remote_control::ReservationValues201>,
+    negotiation: uob_application::NegotiationPolicy201,
 }
 
 #[derive(Default)]
@@ -256,6 +258,11 @@ fn call_context<'a>(
             && context.commands_enabled,
         reservations: configuration.reservations.as_deref(),
         reservations_201: configuration.reservations_201.as_deref(),
+        // Processing promises a later TxProfile, which only an enabled command path can send.
+        negotiation: uob_application::NegotiationPolicy201 {
+            charging_needs_processing: configuration.control.ev_charging_needs_processing
+                && context.commands_enabled,
+        },
     }
 }
 

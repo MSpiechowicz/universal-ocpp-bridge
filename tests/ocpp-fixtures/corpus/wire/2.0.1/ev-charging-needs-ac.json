@@ -1,0 +1,1 @@
+[2,"independent-needs-121-ac","NotifyEVChargingNeeds",{"evseId":1,"maxScheduleTuples":3,"chargingNeeds":{"requestedEnergyTransfer":"AC_three_phase","departureTime":"2026-10-06T18:30:00Z","acChargingParameters":{"energyAmount":22000,"evMinCurrent":6,"evMaxCurrent":32,"evMaxVoltage":400}}}]
