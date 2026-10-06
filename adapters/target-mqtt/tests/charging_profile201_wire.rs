@@ -81,7 +81,7 @@ async fn future_revision_foreign_origins_and_maximum_period_payload_fail_without
             "future" => {
                 result.schema_version = ContractVersion {
                     major: 1,
-                    revision: ContractVersion::V1_LOCAL_AUTHORIZATION_201.revision + 1,
+                    revision: ContractVersion::V1_RESERVATION_16.revision + 1,
                 }
             }
             "management" => {

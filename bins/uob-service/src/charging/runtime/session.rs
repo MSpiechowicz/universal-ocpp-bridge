@@ -43,6 +43,15 @@ pub(super) async fn attach(
                 Some(provider) => session.with_local_authorization_updates(provider.clone()),
                 None => session,
             };
+            let session = if let Some(credentials) = &context.credentials {
+                session.with_reservations_16(
+                    configuration.reservations.clone(),
+                    configuration.control.reserve_connector_zero_supported,
+                    credentials.reservation_grant(),
+                )
+            } else {
+                session
+            };
             let session = Arc::new(session);
             context.commands.attach_16(station.clone(), session)
         }

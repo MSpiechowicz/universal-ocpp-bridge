@@ -28,6 +28,7 @@ fn persisted_result(command: &Command<Value>, lifecycle: CommandLifecycle) -> Co
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     }
 }
 
@@ -37,13 +38,13 @@ async fn recovery_pages_past_retained_states_without_dispatch_and_preserves_pair
     let database = Database::new();
     let store = database.open();
     let binding = entry("Pending", 1);
-    let (snapshot, _, port, _) = configured(
+    let (snapshot, _, port, _) = Box::pin(configured(
         &store,
         &running,
         vec![(binding.clone(), "RECOVERY_SECRET".into())],
         None,
         Arc::new(Clock),
-    )
+    ))
     .await;
     let expected = seed_retained_commands(&store, &snapshot, &binding).await;
     assert_first_storage_page(&store, &expected).await;

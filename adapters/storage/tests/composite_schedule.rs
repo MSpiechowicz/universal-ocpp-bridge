@@ -63,6 +63,7 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     }
 }
 fn evidence(limit: ExactDecimal) -> CompositeScheduleResult16 {

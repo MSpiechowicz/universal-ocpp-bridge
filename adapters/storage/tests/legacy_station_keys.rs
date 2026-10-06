@@ -222,7 +222,7 @@ async fn version_eight_native_child_events_replay_in_canonical_stream_with_stabl
         connection
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
             .unwrap(),
-        14
+        15
     );
     drop(connection);
     let _ = std::fs::remove_file(file);

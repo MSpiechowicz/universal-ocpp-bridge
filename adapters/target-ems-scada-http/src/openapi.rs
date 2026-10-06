@@ -167,6 +167,13 @@ pub(crate) async fn schema_v1_11(
 ) -> Response {
     serve_schema(&state, &headers, path, "v1.11")
 }
+pub(crate) async fn schema_v1_12(
+    State(state): State<IntegrationState>,
+    headers: HeaderMap,
+    path: Result<Path<String>, axum::extract::rejection::PathRejection>,
+) -> Response {
+    serve_schema(&state, &headers, path, "v1.12")
+}
 
 fn serve_schema(
     state: &IntegrationState,

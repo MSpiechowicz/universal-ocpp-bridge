@@ -73,6 +73,7 @@ pub(crate) fn write_result(
     write_result_value(transaction, incoming, &encoded.request_id)
 }
 
+#[allow(clippy::too_many_lines)] // Every family validates against the same transaction before persisting.
 pub(crate) fn write_result_value(
     transaction: &Transaction<'_>,
     mut incoming: uob_contracts::CommandResult,
@@ -90,6 +91,7 @@ pub(crate) fn write_result_value(
         .map_err(unavailable)?
         .map(|payload| codec::decode_stored_result(transaction, &payload, request))
         .transpose()?;
+    crate::reservation16::finish(transaction, &mut incoming)?;
 
     let mut retire_trigger_201 = false;
     if let Some(mut previous) = previous {
@@ -105,6 +107,7 @@ pub(crate) fn write_result_value(
         crate::device_model201::merge(&mut previous, &mut incoming)?;
         codec::local_authorization16::merge(&previous, &mut incoming)?;
         codec::local_authorization201::merge(&previous, &mut incoming)?;
+        crate::reservation16::validation::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -133,7 +136,13 @@ pub(crate) fn write_result_value(
                 && incoming
                     .trigger_observation_201
                     .as_ref()
-                    .is_some_and(|observation| observation.native_response.is_some())));
+                    .is_some_and(|observation| observation.native_response.is_some()))
+            || incoming.reservation_16.as_ref().is_some_and(|e| match e {
+                uob_contracts::ReservationResult16::ReserveNow { status, .. } => status.is_some(),
+                uob_contracts::ReservationResult16::CancelReservation { status, .. } => {
+                    status.is_some()
+                }
+            }));
         if previous_rank > incoming_rank
             || (previous_rank == 2 && incoming_rank == 2 && !correlated_trigger_reply)
         {
@@ -147,6 +156,9 @@ pub(crate) fn write_result_value(
             incoming.configuration_201 = previous.configuration_201;
             incoming.local_authorization_16 = previous.local_authorization_16;
             incoming.local_authorization_201 = previous.local_authorization_201;
+            if incoming.reservation_16.is_none() {
+                incoming.reservation_16 = previous.reservation_16;
+            }
         }
         for observation in previous.configuration_observations {
             if !incoming
@@ -171,6 +183,7 @@ pub(crate) fn write_result_value(
     codec::configuration201::validate_stored(transaction, &incoming)?;
     codec::local_authorization16::validate_stored(transaction, &incoming)?;
     codec::local_authorization201::validate_stored(transaction, &incoming)?;
+    crate::reservation16::codec_validation::validate_stored(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 

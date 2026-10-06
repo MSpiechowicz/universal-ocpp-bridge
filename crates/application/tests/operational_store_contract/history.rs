@@ -181,6 +181,8 @@ fn write_history_command(
 ) {
     block_on(store.write_atomic(AtomicStoreWrite {
         charging_profile_201: None,
+        reservation_16: None,
+        reservation_observations_16: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -245,6 +247,7 @@ fn write_command(
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     });
     write_history_command(store, command, command_result);
 }

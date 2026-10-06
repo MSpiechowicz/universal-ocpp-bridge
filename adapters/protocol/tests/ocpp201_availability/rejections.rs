@@ -10,7 +10,7 @@ async fn invalid_unsupported_unprivileged_and_expired_requests_never_reach_wire(
     let mut running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = open(&database);
-    let (snapshot, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (snapshot, port, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     for (index, payload) in [
         json!({"evse":{"id":0,"connectorId":1},"operationalStatus":"Inoperative"}),
         json!({"evse":{"id":1,"connectorId":2},"operationalStatus":"Inoperative"}),
@@ -81,7 +81,7 @@ async fn status_failure_is_atomic_and_source_time_cannot_confirm_an_old_observat
     let running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = open(&database);
-    let (mut snapshot, _, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let before = snapshot.clone();
     let invalid = json!([2,"invalid","StatusNotification",{"evseId":1,"connectorId":99,"connectorStatus":"Unavailable","timestamp":"2026-09-01T02:00:00Z"}]);
     let evidence_context = context(&snapshot, 1);

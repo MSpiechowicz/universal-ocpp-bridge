@@ -181,6 +181,17 @@ impl StationState {
         true
     }
 
+    /// Returns the transaction identifier only when exactly one resource has one open.
+    #[must_use]
+    pub fn single_active_transaction(&self) -> Option<&str> {
+        let mut active = self
+            .resources
+            .values()
+            .filter_map(|state| state.transaction_id.as_deref());
+        let first = active.next()?;
+        active.next().is_none().then_some(first)
+    }
+
     #[must_use]
     pub fn resource_for_transaction(&self, transaction_id: &str) -> Option<StationResource> {
         self.resources.iter().find_map(|(resource, state)| {

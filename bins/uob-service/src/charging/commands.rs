@@ -188,6 +188,28 @@ impl LiveCommands {
 }
 
 impl StationCommandPort<Value> for LiveCommands {
+    fn reservation_expectation_16(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: uob_contracts::UtcTimestamp,
+    ) -> Result<Option<uob_application::ReservationMutation16>, uob_contracts::CommandErrorCode>
+    {
+        let sessions = self
+            .sessions
+            .read()
+            .map_err(|_| uob_contracts::CommandErrorCode::PolicyRejected)?;
+        let (current, session) = sessions
+            .get(&command.resource.station_id)
+            .ok_or(uob_contracts::CommandErrorCode::StationDisconnected)?;
+        if Some(*current) != generation {
+            return Err(uob_contracts::CommandErrorCode::StationDisconnected);
+        }
+        match session.as_ref() {
+            Session::V16(port) => port.reservation_expectation_16(command, generation, now),
+            Session::V201(_) => Ok(None),
+        }
+    }
     fn charging_profile_expectation(
         &self,
         command: &Command<Value>,

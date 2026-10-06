@@ -3,6 +3,7 @@
 pub mod backup;
 mod charging_profile201;
 mod codec;
+mod codec_reservation16;
 mod command;
 mod command_history;
 mod configuration;
@@ -12,6 +13,7 @@ mod drain;
 mod lifecycle;
 mod recovery;
 mod remote_control;
+mod reservation16;
 mod retention;
 mod schema;
 mod snapshots;

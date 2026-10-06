@@ -15,16 +15,22 @@ pub(crate) struct NativeExchange {
 
 impl NativeExchange {
     pub(crate) fn capture(state: &Mutex<Ocpp16State>, call: &SimulatorCall) -> Self {
-        let (generation, local) = {
+        let (generation, local, reservations) = {
             let state = state.lock().expect("OCPP 1.6 state lock");
             let local = (call.action != crate::SimulatorAction::BootNotification)
                 .then(|| state.local.clone())
                 .flatten();
-            (state.socket_generation, local)
+            (
+                state.socket_generation,
+                local,
+                state.reservation16.is_some()
+                    && call.action != crate::SimulatorAction::BootNotification,
+            )
         };
         // Durable models must also fence explicit scenario/API replay calls;
         // ordinary stations without a model retain their existing registration.
-        let require_current_boot = local.is_some_and(|handle| handle.has_persistence());
+        let require_current_boot =
+            reservations || local.is_some_and(|handle| handle.has_persistence());
         Self {
             generation,
             require_current_boot,

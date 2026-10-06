@@ -10,7 +10,7 @@ async fn evse_scope_preserves_connector_states_and_never_controls_another_evse()
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (mut snapshot, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, port, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let mut external = command(&snapshot, "evse", 1, "Inoperative");
     external.request.resource = snapshot.resources[3].resource.clone();
     external.request.operation = protocol(
@@ -87,7 +87,7 @@ async fn nested_scope_null_zero_unknown_and_cross_evse_requests_are_rejected() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (snapshot, _, coordinator) = setup(&store, running.handle.clone()).await;
+    let (snapshot, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     for (i, evse) in [
         json!(null),
         json!({"id":1}),

@@ -956,6 +956,80 @@ after later station reports, not merely because the protocol replied `Accepted`.
 The optional plaintext demo listener and its local grants do **not** expose charging ingress
 or command authority in production.
 
+### Protected OCPP 1.6 reservations
+
+`reserve_now` and `cancel_reservation` are independent, default-off, privileged
+**demo-only** station options for `protocol = "ocpp16j"`. `reserve_now` also requires a
+per-station `reservation16_file`; `reserve_connector_zero_supported` separately offers
+`ReserveNow` on connector `0` (any connector) and is never inferred from the station.
+None of these options is accepted for an OCPP 2.0.1 station.
+
+```toml
+[[charging.stations]]
+id = "demo-1"
+protocol = "ocpp16j"
+credential_file = "/srv/uob-demo/private/demo-1.credential"
+reservation16_file = "/srv/uob-demo/private/demo-1-reservations.json"
+reserve_now = true
+cancel_reservation = true
+reserve_connector_zero_supported = false
+```
+
+The startup-only provider file is service-owned mode `0600`, under a protected
+owner-only directory, at most 64 KiB, and holds at most 256 reservation and identity
+entries combined. Unknown fields, duplicate references and duplicate identities are
+rejected without echoing their contents. Its exact shape is:
+
+```json
+{
+  "reservations": [{
+    "reference": "reserve16:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "request": {
+      "connectorId": 1,
+      "expiryDate": "2099-01-01T00:00:00Z",
+      "idTag": "demo-native-tag",
+      "parentIdTag": "demo-native-group",
+      "reservationId": -113
+    },
+    "expires_at": "2099-01-01T00:00:00Z",
+    "revoked": false
+  }],
+  "identities": [{
+    "idTag": "demo-member-tag",
+    "parentIdTag": "demo-native-group",
+    "authorize": true,
+    "policy_revision": 1
+  }]
+}
+```
+
+Generate an independent random 64-hex reference per provisioned reservation. Raw
+`idTag`/`parentIdTag` values (at most 20 Unicode characters) belong only in this file
+and native station traffic; matching uses one-way case-folded keys. Public `ReserveNow`
+uses `payload_schema = "urn:uob:ocpp16:ReserveNowReference:1"` and only
+`{"connectorId":1,"expiryDate":"…","reservationId":-113,"reservationReference":"reserve16:…"}`
+through the existing authenticated `POST /api/v1/commands` envelope. A positive
+connector must target that exact connector resource with its OCPP 1.6
+`native_protocol_reference`; connector `0` targets the station root. `CancelReservation`
+uses the unchanged OCPP 1.6 request URN with only `{"reservationId":…}` and always
+targets the station root.
+
+Reservation IDs keep the full signed native `i32` range. A same-ID `ReserveNow`
+replaces the previous reservation only once the station accepts it; a rejection keeps
+the previous owner. Identity entries are native group facts: `parentIdTag` is returned
+on an accepted `Authorize` and lets a member's real `StartTransaction` consume a
+reservation made for the same parent. A parent tag never authorizes as a token, and
+`authorize`/`policy_revision` stay separate central policy, so a later revocation
+denies the start while still recording that it consumed the reservation.
+
+Durable reservation state reconciles native statuses with independent station
+facts: inclusive expiry (also enforced while the station is offline), Faulted or
+Unavailable status, accepted cancellation and a real matching start each terminate
+it. Lost, malformed or late replies stay uncertain and are never replayed after
+restart; a late `Accepted` reply is kept as evidence but never revives an expired or
+superseded reservation. This is software boundary evidence, not hardware
+interoperability or OCA certification.
+
 ## Commands and exit codes
 
 Validate without binding a socket, resolving DNS, reading credentials, or starting adapters:

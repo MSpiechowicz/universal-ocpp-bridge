@@ -263,6 +263,8 @@ async fn real_provisional_ingestion_transfer_does_not_terminate_scheduler() {
     source
         .write_atomic(AtomicStoreWrite {
             charging_profile_201: None,
+            reservation_16: None,
+            reservation_observations_16: Vec::new(),
             purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: vec![],

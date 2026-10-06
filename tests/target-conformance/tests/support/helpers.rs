@@ -47,5 +47,6 @@ pub(crate) fn result_for(command: &ExternalCommand<()>) -> CommandResult {
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     }
 }

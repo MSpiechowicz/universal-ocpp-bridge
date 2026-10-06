@@ -12,7 +12,29 @@ impl RemoteControlSession {
         deadline: Instant,
         resource: &ResourceRef,
         expires_at: UtcTimestamp,
+        command: &Command<Value>,
     ) -> Result<PendingCall, SessionSubmitError> {
+        if crate::command_registry::reservation16::ACTIONS.contains(&action) {
+            let uob_contracts::CommandOperation::Ocpp(operation) = &command.operation else {
+                return Err(SessionSubmitError::InvalidRequest);
+            };
+            let request =
+                crate::command_registry::reservation16::validate(&command.resource, operation)
+                    .map_err(|_| SessionSubmitError::InvalidRequest)?;
+            let deferred = super::DeferredReservationCall16 {
+                command: command.clone(),
+                request,
+                snapshot: self.snapshot.clone(),
+                provider: self.reservation_values.clone(),
+                grant: self.reservation_grant.clone(),
+                active: self.reservation_active.clone(),
+                zero: self.reserve_zero,
+                clock: self.clock.clone(),
+            };
+            return self
+                .handle
+                .try_reservation_call_before(call, deadline, deferred);
+        }
         if action == "SendLocalList" {
             let request = serde_json::from_value(call.payload.clone())
                 .map_err(|_| SessionSubmitError::InvalidRequest)?;
@@ -86,6 +108,7 @@ impl RemoteControlSession {
             deadline,
             &command.resource,
             command.expires_at,
+            command,
         )
         .map_err(|error| match error {
             SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,

@@ -64,6 +64,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
             status: SendLocalListStatus16::Accepted,
         }),
         local_authorization_201: None,
+        reservation_16: None,
     }
 }
 async fn admit(

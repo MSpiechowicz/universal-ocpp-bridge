@@ -65,3 +65,9 @@ hardware, learned device facts or installed contents. Production remains rejecte
 See [the full operator example](../operations/headless-cli.md#protected-ocpp-201-station-authorization-list-and-cache)
 and [native security boundaries](../security/local-authorization.md#station-side-ocpp-201-list-and-cache).
 
+Independent station options reserve_now/cancel_reservation (plus the separate
+reserve_connector_zero_supported) are likewise default-off and demo-only for exact
+ocpp16j stations. reserve_now additionally needs a per-station owner-only
+reservation16_file of protected reservation references and native group facts; see
+[the operator example](../operations/headless-cli.md#protected-ocpp-16-reservations).
+

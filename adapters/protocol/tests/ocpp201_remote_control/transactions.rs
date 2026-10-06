@@ -12,7 +12,8 @@ async fn committed_transactions_link_remote_id_and_stop_native_id_across_restart
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     let commands = Arc::new(scoped(
         coordinator.clone(),
         &snapshot,
@@ -114,7 +115,7 @@ async fn committed_transactions_link_remote_id_and_stop_native_id_across_restart
     store.shutdown(Duration::from_secs(1)).await.unwrap();
     let store = database.open();
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
-    let (_, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (_, _, port, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     // Restore the committed transaction as the station owner would on reconnect.
     port.update_committed(snapshot.clone()).unwrap();
     assert_eq!(
@@ -210,7 +211,7 @@ async fn native_evse_change_and_sequence_gap_cannot_rewrite_committed_transactio
     let running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, _, _) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, _, _) = Box::pin(setup(&store, running.handle.clone())).await;
     add_second_evse(&mut snapshot);
     let mut frame = fixture("transaction-started");
     frame[3]["timestamp"] = json!("2026-09-01T02:00:00Z");

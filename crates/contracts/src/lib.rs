@@ -26,6 +26,8 @@ mod trace;
 pub use local_authorization16::*;
 mod local_authorization201;
 pub use local_authorization201::*;
+mod reservation16;
+pub use reservation16::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -152,6 +154,11 @@ impl ContractVersion {
     pub const V1_LOCAL_AUTHORIZATION_201: Self = Self {
         major: 1,
         revision: 10,
+    };
+    /// Additive value-free OCPP 1.6 reservation evidence.
+    pub const V1_RESERVATION_16: Self = Self {
+        major: 1,
+        revision: 11,
     };
 }
 

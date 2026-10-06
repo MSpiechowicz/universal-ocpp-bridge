@@ -18,12 +18,14 @@ mod query;
 pub mod registration;
 pub mod release_drain;
 pub mod remote_control;
+pub mod reservation16;
 mod resource;
 mod security;
 mod station;
 mod storage;
 mod target;
 pub mod transaction16;
+pub use reservation16::*;
 
 pub use access::{
     AccessGrant, AccessPermission, AccessPolicy, AccessPolicyError, AccessResourceScope,

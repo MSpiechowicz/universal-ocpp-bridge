@@ -1,0 +1,17 @@
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "1.6"
+request_timeout_ms = 5000
+reconnect = true
+connectors = [1, 2]
+
+[stations.local_authorization]
+private_state_file = "/tmp/uob-sim-reservations-113/identity.json"
+
+[stations.reservation16]
+private_state_file = "/tmp/uob-sim-reservations-113/reservations.json"
+enabled = true
+reserve_connector_zero_supported = true

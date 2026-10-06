@@ -12,7 +12,7 @@ async fn restart_retains_scheduled_intent_and_reconciles_without_replay() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (snapshot, _, coordinator) = setup(&store, running.handle.clone()).await;
+    let (snapshot, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let external = command(&snapshot, "restart", 1, "Inoperative");
     let result = exchange(
         &mut running,
@@ -103,7 +103,7 @@ async fn missing_malformed_late_and_callerror_responses_never_invent_availabilit
         let mut running = session("ocpp2.0.1", Duration::from_millis(100)).await;
         let database = Database::new();
         let store = open(&database);
-        let (snapshot, _, coordinator) = setup(&store, running.handle.clone()).await;
+        let (snapshot, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
         let external = command(&snapshot, mode, 1, "Inoperative");
         let submit = {
             let coordinator = coordinator.clone();
@@ -154,7 +154,7 @@ async fn missing_malformed_late_and_callerror_responses_never_invent_availabilit
         store.shutdown(Duration::from_secs(1)).await.unwrap();
         let store = open(&database);
         let mut next = session("ocpp2.0.1", Duration::from_secs(1)).await;
-        let (_, _, coordinator) = setup(&store, next.handle.clone()).await;
+        let (_, _, coordinator) = Box::pin(setup(&store, next.handle.clone())).await;
         let recovered = coordinator
             .recover_unresolved(None, PageLimit::new(100).unwrap())
             .await

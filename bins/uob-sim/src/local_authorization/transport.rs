@@ -226,7 +226,12 @@ impl TransportStream for Stream {
                 };
                 if !matches!(
                     action,
-                    "GetLocalListVersion" | "SendLocalList" | "ClearCache" | "Reset"
+                    "GetLocalListVersion"
+                        | "SendLocalList"
+                        | "ClearCache"
+                        | "Reset"
+                        | "ReserveNow"
+                        | "CancelReservation"
                 ) {
                     return Ok(event);
                 }
@@ -260,7 +265,11 @@ impl TransportStream for Stream {
                         serde_json::json!({"callError":true})
                     }
                 } else {
-                    let reply = native_reply(action, payload, &local, text.len());
+                    let reply = if matches!(action, "ReserveNow" | "CancelReservation") {
+                        crate::reservation16::transport::reply(action, payload, &self.state)
+                    } else {
+                        native_reply(action, payload, &local, text.len())
+                    };
                     if self.replies.len() == 128 {
                         self.replies.pop_front();
                     }
@@ -304,6 +313,15 @@ impl Stream {
         if matches!(fault, Some(NativeReplyFault::DropConnection)) {
             self.sink.lock().await.close().await?;
             return Ok(true);
+        }
+        if self
+            .state
+            .lock()
+            .expect("native state lock")
+            .socket_generation
+            != self.generation
+        {
+            return Err("native reservation reply generation unavailable".into());
         }
         let response = if reply.get("callError").is_some() {
             let code = reply

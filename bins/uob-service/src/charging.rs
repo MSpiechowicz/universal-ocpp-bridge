@@ -8,6 +8,7 @@ mod local_authorization;
 mod profiles;
 mod provision;
 mod recovery;
+mod reservations;
 mod roster;
 mod runtime;
 
@@ -76,6 +77,7 @@ pub(super) struct StationSettings {
         Option<Arc<uob_protocol_adapter::v16::remote_control::LocalAuthorizationUpdates16>>,
     local_authorization_201:
         Option<Arc<uob_protocol_adapter::v201::remote_control::LocalAuthorizationUpdates201>>,
+    reservations: Option<Arc<uob_protocol_adapter::v16::remote_control::ReservationValues16>>,
 }
 
 impl StationSettings {
@@ -171,6 +173,7 @@ impl StationSettings {
         }
         device_model::apply(snapshot, self.protocol, self.control);
         profiles::apply(snapshot, self.protocol, self.control);
+        reservations::apply_capabilities(snapshot, self);
     }
     fn add_local_authorization_operations(&self, operations: &mut Vec<uob_contracts::Operation>) {
         for (enabled, action) in [
@@ -283,6 +286,7 @@ impl ChargingRuntime {
             .await
             .map_err(io::Error::other)?,
         );
+        reservations::provision_policy(&authorization, &settings, &resources).await?;
         let mut start_refs = BTreeMap::new();
         for (station, identity) in provision::provision(&authorization, &tokens).await? {
             start_refs.insert(station.clone(), identity.reference.clone());

@@ -224,6 +224,24 @@ pub async fn commit<
     context: TransactionContext,
     now: UtcTimestamp,
 ) -> Result<(), TransactionError> {
+    commit_with_reservations(store, snapshot, transaction, context, now, Vec::new()).await
+}
+
+/// Commits real observed transaction and reservation attribution in the same transaction.
+/// # Errors
+/// Leaves the caller's snapshot untouched on any failed commit or invalid trusted context.
+pub async fn commit_with_reservations<
+    C: Send + 'static,
+    E: From<StationSnapshot> + From<TransactionSnapshot> + Send + 'static,
+    R: Send + 'static,
+>(
+    store: &dyn OperationalStore<C, E, TransactionSnapshot, R>,
+    snapshot: &mut StationSnapshot,
+    transaction: TransactionSnapshot,
+    context: TransactionContext,
+    now: UtcTimestamp,
+    reservation_observations: Vec<crate::ReservationObservation16>,
+) -> Result<(), TransactionError> {
     if context.sequence == 0
         || context.identity.bridge_id != snapshot.station.bridge_id
         || context.identity.selected_target_id != context.target.as_ref().map(|t| t.0.clone())
@@ -264,6 +282,7 @@ pub async fn commit<
         payload: E::from(transaction.clone()),
     };
     let mut write = AtomicStoreWrite::empty();
+    write.reservation_observations_16 = reservation_observations;
     write.purpose = if ended {
         StorageWritePurpose::ActiveSessionCompletion
     } else {

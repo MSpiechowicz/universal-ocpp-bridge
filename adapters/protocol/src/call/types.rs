@@ -185,6 +185,7 @@ pub(super) enum QueuedWire {
         crate::v201::remote_control::configuration201_wire::DeferredConfigurationCall201,
     ),
     LocalAuthorization16(crate::v16::remote_control::DeferredLocalAuthorizationCall16),
+    Reservation16(Box<crate::v16::remote_control::DeferredReservationCall16>),
     LocalAuthorization201(
         crate::v201::remote_control::local_authorization_wire::DeferredLocalAuthorizationCall201,
     ),
@@ -269,6 +270,18 @@ impl CallSessionHandle {
             request,
             Some(deadline),
             Some(QueuedWire::LocalAuthorization16(deferred)),
+        )
+    }
+    pub(crate) fn try_reservation_call_before(
+        &self,
+        request: OutboundCall,
+        deadline: Instant,
+        deferred: crate::v16::remote_control::DeferredReservationCall16,
+    ) -> Result<PendingCall, SessionSubmitError> {
+        self.enqueue(
+            request,
+            Some(deadline),
+            Some(QueuedWire::Reservation16(Box::new(deferred))),
         )
     }
     pub(crate) fn try_local_authorization_201_call_before(
@@ -434,6 +447,13 @@ pub enum CallSessionDiagnostic {
         message_id: String,
         correlation_id: CorrelationId,
     },
+    /// Validated native late reservation ACK; no arbitrary peer payload survives.
+    LateReservationResponse16 {
+        message_id: String,
+        correlation_id: CorrelationId,
+        action: &'static str,
+        status: uob_contracts::ReserveNowStatus16,
+    },
 }
 
 /// Bounded application and diagnostic consumers for one session.
@@ -455,4 +475,5 @@ pub(super) struct PendingEntry {
     pub deadline: Instant,
     pub _reservation: RuntimeReservation,
     pub response_reservation: Option<oneshot::Sender<RuntimeReservation>>,
+    pub reservation_action: Option<&'static str>,
 }

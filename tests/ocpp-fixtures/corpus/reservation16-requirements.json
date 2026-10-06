@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "protocol": "1.6",
+  "source": {
+    "archive_sha256": "2a1d80284ca60449e85951fc55bc0538b5d45bd6f97c6d9228745acacb52c11b",
+    "license": "CC BY-ND 4.0",
+    "url": "https://openchargealliance.org/wp-content/uploads/2025/04/OCPP_1.6_documentation.zip"
+  },
+  "assertions": [
+    {
+      "requirements": [
+        "5.13 same ID replacement",
+        "6.37 native fields",
+        "6.38 statuses",
+        "5.1 cancellation"
+      ],
+      "assertion": "All signed i32 identifiers, no raw public identity, all five create statuses and both cancel statuses; invalid boundaries are not semantic acceptance.",
+      "evidence": "wire/1.6/reservation-negative-cases.json;../../../bins/uob-sim/tests/reservation16_model.rs"
+    },
+    {
+      "requirements": [
+        "5.13 matching and termination",
+        "9.3.1 ReserveConnectorZeroSupported",
+        "3.10 authorization"
+      ],
+      "assertion": "Any capacity stays unbound. Group matching is parent-to-parent from actual list/cache/Authorize facts; group linkage alone never authorizes. Exact expiry, fault, unavailable, cancellation and matching start terminate.",
+      "evidence": "../../../bins/uob-sim/tests/reservation16_model.rs;../../../bins/uob-sim/tests/reservation16_joint_smoke.py"
+    }
+  ],
+  "execution_status": "Native model, wire, process and storage tests and actual separate-process bridge/simulator smoke executed in isolated software verification; not hardware or OCA certification."
+}

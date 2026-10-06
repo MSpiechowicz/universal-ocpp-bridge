@@ -216,7 +216,8 @@ async fn ocpp201_tx_profile_targets_pending_or_active_native_transaction_and_rej
     let mut running = support201::session("ocpp2.0.1", Duration::from_secs(2)).await;
     let db = support201::Database::new();
     let store = db.open();
-    let (mut snapshot, _, port, _) = support201::setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, _) =
+        Box::pin(support201::setup(&store, running.handle.clone())).await;
     let resource = snapshot.resources[0].resource.clone();
     let transaction: TransactionSnapshot = serde_json::from_value(json!({
         "transaction_id":"tx-active", "resource":resource, "state":"active",

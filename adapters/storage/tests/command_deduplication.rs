@@ -384,6 +384,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle, hour: i64) -> 
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     }
 }
 
