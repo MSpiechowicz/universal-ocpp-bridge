@@ -334,6 +334,7 @@ fn admitted<P>(command: &uob_contracts::ExternalCommand<P>) -> CommandResult {
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 

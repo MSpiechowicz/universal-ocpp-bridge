@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/signed-update-firmware-reference-16.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Security Whitepaper Ed. 4 `SignedUpdateFirmware` (§5.21) without location or signature.",
+  "properties": {
+    "artifactReference": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+      "type": "string"
+    },
+    "installDateTime": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requestId": {
+      "format": "int32",
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "type": "integer"
+    },
+    "retries": {
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "retrieveDateTime": {
+      "$ref": "#/$defs/UtcTimestamp"
+    },
+    "retryInterval": {
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "requestId",
+    "artifactReference",
+    "retrieveDateTime"
+  ],
+  "title": "SignedUpdateFirmwareReference16",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

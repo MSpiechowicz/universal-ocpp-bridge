@@ -68,6 +68,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 async fn admit(

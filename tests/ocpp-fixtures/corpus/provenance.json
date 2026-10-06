@@ -16,6 +16,15 @@
       "schema_bundle_sha256": "6279c40b74929cce7fca439622194a8890a0d250de5665f3e4d80ef8529c51ce",
       "schema_draft": "draft6",
       "license": "CC BY-ND 4.0; Copyright Open Charge Alliance"
+    },
+    {
+      "protocol_version": "1.6-security-whitepaper",
+      "revision": "Improved security for OCPP 1.6-J (Security Whitepaper) Edition 4, 2026-02-05, with its JSON_schemas.zip",
+      "download_url": "https://openchargealliance.org/download/cd0eabc67e9b6ef5b6df2367f94bb3dd88b4898c5a2b90de5a1f794e077eaac9",
+      "archive_sha256": "158b883e8ee712fd80fad3610b69fad355f7831d7a0ccdd996ce6b5452ce6859",
+      "schema_bundle_sha256": "5c69b84a5b4efe99d90a6c432034f726894c51a02203c274c00c361caf15a889",
+      "schema_draft": "draft6",
+      "license": "CC BY-ND 4.0; Copyright Open Charge Alliance"
     }
   ]
 }

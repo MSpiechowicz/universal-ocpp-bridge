@@ -65,3 +65,24 @@ pub(super) fn firmware(payload: Value) -> Result<ChargerObservation, DecodeError
         status: status.to_owned(),
     })
 }
+
+/// Security Whitepaper Ed. 4 §5.19. Exact fields only; the request identity is mandatory
+/// unless the station reports `Idle` (L01.FR.21).
+pub(super) fn signed_firmware(payload: Value) -> Result<ChargerObservation, DecodeError> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Request {
+        status: uob_contracts::FirmwareStatus16,
+        #[serde(default)]
+        request_id: Option<i32>,
+    }
+    let invalid = || DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload);
+    let request: Request = serde_json::from_value(payload).map_err(|_| invalid())?;
+    if request.request_id.is_none() && request.status != uob_contracts::FirmwareStatus16::Idle {
+        return Err(invalid());
+    }
+    Ok(ChargerObservation::SignedFirmwareStatus16 {
+        status: request.status,
+        request_id: request.request_id,
+    })
+}

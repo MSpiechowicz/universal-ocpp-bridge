@@ -7,6 +7,7 @@ mod configuration;
 mod configuration_values;
 mod enqueue;
 pub(crate) mod exact_rate;
+mod firmware;
 mod identity;
 mod local_authorization;
 mod local_authorization_values;
@@ -18,6 +19,7 @@ pub(crate) use configuration_values::DeferredConfigurationCall;
 pub use configuration_values::{
     LocalConfigurationValues, ProtectedConfigurationText, ProtectedConfigurationValue,
 };
+pub use firmware::FirmwareSettings16;
 pub use identity::LocalRemoteStartIdentity;
 pub(crate) use local_authorization::DeferredLocalAuthorizationCall16;
 pub use local_authorization_values::{
@@ -72,6 +74,7 @@ pub struct RemoteControlSession {
     reservation_grant: Option<Arc<ReservationGrant16>>,
     reserve_zero: bool,
     reservation_active: Arc<std::sync::Mutex<bool>>,
+    firmware: Option<Arc<FirmwareSettings16>>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
 }
@@ -105,7 +108,14 @@ impl RemoteControlSession {
             reservation_grant: None,
             reserve_zero: false,
             reservation_active: Arc::new(std::sync::Mutex::new(true)),
+            firmware: None,
         })
+    }
+    /// Enables exactly one native firmware family for this authenticated socket.
+    #[must_use]
+    pub fn with_firmware_16(mut self, settings: Arc<FirmwareSettings16>) -> Self {
+        self.firmware = Some(settings);
+        self
     }
     /// Installs locally provisioned station/key-bound values for this authenticated socket only.
     #[must_use]
@@ -228,6 +238,14 @@ impl StationCommandPort<Value> for RemoteControlSession {
     ) -> Result<Option<uob_application::ReservationMutation16>, CommandErrorCode> {
         self.reservation_context(command, generation, now)
     }
+    fn firmware_expectation_16(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::FirmwareJobMutation16>, CommandErrorCode> {
+        self.firmware_context(command, generation, now)
+    }
     fn charging_profile_expectation(
         &self,
         command: &Command<Value>,
@@ -278,6 +296,11 @@ impl StationCommandPort<Value> for RemoteControlSession {
         command: Command<Value>,
     ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
         Box::pin(async move {
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::firmware16::ACTIONS.contains(&operation.action.as_str()))
+            {
+                return self.dispatch_firmware(&command).await;
+            }
             let (action, unqueued_payload, profile_request, ready_pending) = {
                 let snapshot = self.snapshot.read().map_err(|_| state_error())?;
                 let mut profile_request = None;

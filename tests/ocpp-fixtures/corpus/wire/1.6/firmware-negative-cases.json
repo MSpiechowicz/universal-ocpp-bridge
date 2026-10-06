@@ -1,0 +1,230 @@
+{
+  "cases": [
+    {
+      "id": "signed-status-installed-without-request",
+      "wire": [
+        2,
+        "neg-1",
+        "SignedFirmwareStatusNotification",
+        {
+          "status": "Installed"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "L01.FR.21 requestId is mandatory unless Idle"
+    },
+    {
+      "id": "signed-status-removed-certificate-status",
+      "wire": [
+        2,
+        "neg-2",
+        "SignedFirmwareStatusNotification",
+        {
+          "status": "InvalidCertificate",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "Edition 4 changelog removed InvalidCertificate from FirmwareStatusEnumType"
+    },
+    {
+      "id": "signed-status-extra-field",
+      "wire": [
+        2,
+        "neg-3",
+        "SignedFirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": 1,
+          "firmwareVersion": "2.0"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties"
+    },
+    {
+      "id": "signed-status-request-overflow",
+      "wire": [
+        2,
+        "neg-4",
+        "SignedFirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": 2147483648
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "OCPP integer is a signed 32-bit identity"
+    },
+    {
+      "id": "signed-status-null-request",
+      "wire": [
+        2,
+        "neg-5",
+        "SignedFirmwareStatusNotification",
+        {
+          "status": "Downloading",
+          "requestId": null
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "null is not an integer"
+    },
+    {
+      "id": "legacy-status-signed-only-value",
+      "wire": [
+        2,
+        "neg-6",
+        "FirmwareStatusNotification",
+        {
+          "status": "SignatureVerified"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "1.6 section 7.25 defines seven values"
+    },
+    {
+      "id": "legacy-status-request-identity",
+      "wire": [
+        2,
+        "neg-7",
+        "FirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "legacy notification has no identity"
+    },
+    {
+      "id": "legacy-status-lowercase",
+      "wire": [
+        2,
+        "neg-8",
+        "FirmwareStatusNotification",
+        {
+          "status": "installed"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "update-firmware-missing-retrieve-date",
+      "wire": [
+        2,
+        "neg-9",
+        "UpdateFirmware",
+        {
+          "location": "https://artifacts.demo.invalid/fw.bin"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "retrieveDate is required"
+    },
+    {
+      "id": "update-firmware-negative-retries",
+      "wire": [
+        2,
+        "neg-10",
+        "UpdateFirmware",
+        {
+          "location": "https://artifacts.demo.invalid/fw.bin",
+          "retrieveDate": "2026-10-06T12:00:00Z",
+          "retries": -1
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "the bridge never sends a negative count"
+    },
+    {
+      "id": "signed-update-location-too-long",
+      "wire": [
+        2,
+        "neg-11",
+        "SignedUpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "https://artifacts.demo.invalid/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "retrieveDateTime": "2026-10-06T12:00:00Z",
+            "signingCertificate": "-----BEGIN CERTIFICATE-----\nTEST-ONLY\n-----END CERTIFICATE-----\n",
+            "signature": "c2lnbmF0dXJl"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "location is string[0..512]"
+    },
+    {
+      "id": "signed-update-signature-too-long",
+      "wire": [
+        2,
+        "neg-12",
+        "SignedUpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "https://artifacts.demo.invalid/fw.bin",
+            "retrieveDateTime": "2026-10-06T12:00:00Z",
+            "signingCertificate": "-----BEGIN CERTIFICATE-----\nTEST-ONLY\n-----END CERTIFICATE-----\n",
+            "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "signature is string[0..800]"
+    },
+    {
+      "id": "signed-update-missing-certificate",
+      "wire": [
+        2,
+        "neg-13",
+        "SignedUpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "https://artifacts.demo.invalid/fw.bin",
+            "retrieveDateTime": "2026-10-06T12:00:00Z",
+            "signature": "c2lnbmF0dXJl"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "L01.FR.11 the signing certificate is required"
+    },
+    {
+      "id": "signed-update-missing-request",
+      "wire": [
+        2,
+        "neg-14",
+        "SignedUpdateFirmware",
+        {
+          "firmware": {
+            "location": "https://artifacts.demo.invalid/fw.bin",
+            "retrieveDateTime": "2026-10-06T12:00:00Z",
+            "signingCertificate": "-----BEGIN CERTIFICATE-----\nTEST-ONLY\n-----END CERTIFICATE-----\n",
+            "signature": "c2lnbmF0dXJl"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestId is required"
+    }
+  ]
+}

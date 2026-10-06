@@ -647,6 +647,348 @@
         ],
         "type": "object"
       },
+      "FirmwareArtifact16": {
+        "additionalProperties": false,
+        "description": "Public facts about the artifact sent; never the location, certificate or signature.",
+        "properties": {
+          "artifact_reference": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "signed": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "test_only": {
+            "description": "Provider material is test-only; production composition refuses it.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "artifact_reference",
+          "sha256",
+          "size_bytes",
+          "signed",
+          "test_only"
+        ],
+        "type": "object"
+      },
+      "FirmwareCallError16": {
+        "description": "Sanitized OCPP-J error code returned instead of a native result.",
+        "enum": [
+          "FormationViolation",
+          "GenericError",
+          "InternalError",
+          "NotImplemented",
+          "NotSupported",
+          "OccurrenceConstraintViolation",
+          "PropertyConstraintViolation",
+          "ProtocolError",
+          "SecurityError",
+          "TypeConstraintViolation"
+        ],
+        "type": "string"
+      },
+      "FirmwareJob16": {
+        "additionalProperties": false,
+        "description": "Durable job state, refreshed in the command result as native facts arrive.",
+        "properties": {
+          "deadline": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp",
+            "description": "Bridge deadline after which an unresolved job becomes `timed_out`."
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FirmwareStatus16"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_status_at": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notifications": {
+            "description": "Native notifications attributed to this job.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "observed_at": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+          },
+          "rejected_transitions": {
+            "description": "Attributed notifications that would regress or contradict the job; state unchanged.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "revision": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/FirmwareJobState16"
+          }
+        },
+        "required": [
+          "revision",
+          "state",
+          "deadline",
+          "observed_at",
+          "notifications",
+          "rejected_transitions"
+        ],
+        "type": "object"
+      },
+      "FirmwareJobState16": {
+        "description": "Bridge-side lifecycle of one firmware job. Only resolved states release the drain.",
+        "oneOf": [
+          {
+            "enum": [
+              "download_scheduled",
+              "downloading",
+              "download_paused",
+              "downloaded",
+              "signature_verified",
+              "install_scheduled",
+              "install_rebooting",
+              "installing",
+              "installed",
+              "download_failed",
+              "installation_failed",
+              "install_verification_failed",
+              "invalid_signature"
+            ],
+            "type": "string"
+          },
+          {
+            "const": "pending",
+            "description": "Durably admitted; no correlated reply yet.",
+            "type": "string"
+          },
+          {
+            "const": "uncertain",
+            "description": "Possibly delivered without a correlated reply; never replayed.",
+            "type": "string"
+          },
+          {
+            "const": "accepted",
+            "description": "Station acknowledged or accepted; no progress reported yet.",
+            "type": "string"
+          },
+          {
+            "const": "timed_out",
+            "description": "Deadline elapsed without a terminal station fact; still blocks release drain.",
+            "type": "string"
+          },
+          {
+            "const": "rejected",
+            "description": "Station refused the request (native status or CALLERROR).",
+            "type": "string"
+          },
+          {
+            "const": "not_sent",
+            "description": "Definitely never transmitted.",
+            "type": "string"
+          },
+          {
+            "const": "cancelled",
+            "description": "The station cancelled this job for a newer signed request (L01.FR.26).",
+            "type": "string"
+          },
+          {
+            "const": "superseded",
+            "description": "A newer request was accepted while this job was unresolved.",
+            "type": "string"
+          },
+          {
+            "const": "station_idle",
+            "description": "A triggered `Idle` report: no firmware work in progress, outcome not reported.",
+            "type": "string"
+          }
+        ]
+      },
+      "FirmwareReply16": {
+        "description": "Correlated native reply to the firmware request, never proof of installation.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "description": "Empty legacy `UpdateFirmware.conf`; 1.6 defines no rejection status.",
+            "properties": {
+              "kind": {
+                "const": "acknowledged",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Native `SignedUpdateFirmware.conf` status.",
+            "properties": {
+              "kind": {
+                "const": "status",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SignedUpdateFirmwareStatus16"
+              }
+            },
+            "required": [
+              "kind",
+              "status"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Native CALLERROR, such as `NotSupported` from a signed-only station (L01.FR.20).",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/FirmwareCallError16"
+              },
+              "kind": {
+                "const": "call_error",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "code"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "FirmwareResult16": {
+        "description": "Does not carry the station location, certificate, signature or raw payload.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "UpdateFirmware",
+                "type": "string"
+              },
+              "artifact": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FirmwareArtifact16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "job": {
+                "$ref": "#/components/schemas/FirmwareJob16"
+              },
+              "reply": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FirmwareReply16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "job"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "SignedUpdateFirmware",
+                "type": "string"
+              },
+              "artifact": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FirmwareArtifact16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "job": {
+                "$ref": "#/components/schemas/FirmwareJob16"
+              },
+              "reply": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/FirmwareReply16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "request_id": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "action",
+              "request_id",
+              "job"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "FirmwareStatus16": {
+        "description": "Native station status from either 1.6 notification. Legacy stations use only seven.",
+        "enum": [
+          "Downloaded",
+          "DownloadFailed",
+          "Downloading",
+          "DownloadScheduled",
+          "DownloadPaused",
+          "Idle",
+          "InstallationFailed",
+          "Installing",
+          "Installed",
+          "InstallRebooting",
+          "InstallScheduled",
+          "InstallVerificationFailed",
+          "InvalidSignature",
+          "SignatureVerified"
+        ],
+        "type": "string"
+      },
       "IntegrationError": {
         "properties": {
           "error": {
@@ -1118,6 +1460,17 @@
           }
         ]
       },
+      "SignedUpdateFirmwareStatus16": {
+        "description": "`SignedUpdateFirmware.conf` status (Whitepaper §6.18).",
+        "enum": [
+          "Accepted",
+          "Rejected",
+          "AcceptedCanceled",
+          "InvalidCertificate",
+          "RevokedCertificate"
+        ],
+        "type": "string"
+      },
       "SmartChargingReason201": {
         "description": "Narrow standardized, case-insensitively matched reason codes. Opaque `additionalInfo`,\n`customData` and unlisted codes are excluded.",
         "enum": [
@@ -1370,7 +1723,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.14/command-result.schema.json"
                     }
                   ]
                 }
@@ -1416,7 +1769,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.14/command-result.schema.json"
                     }
                   ]
                 }
@@ -1463,7 +1816,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.14/command-result.schema.json"
                     }
                   ]
                 }
@@ -1483,7 +1836,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.14/command-result.schema.json"
                     }
                   ]
                 }
@@ -1516,7 +1869,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.14/command-result.schema.json"
                     }
                   ]
                 }
@@ -1603,7 +1956,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.14/command-result.schema.json"
                 }
               }
             },
@@ -4012,6 +4365,7 @@
             "required": true,
             "schema": {
               "enum": [
+                "command-result.schema.json",
                 "export-record.schema.json",
                 "export-batch.schema.json"
               ],
@@ -4091,6 +4445,153 @@
       "head": {
         "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
         "operationId": "schemas_v1_14_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "command-result.schema.json",
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.15/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_15",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_15_head",
         "parameters": [
           {
             "in": "path",

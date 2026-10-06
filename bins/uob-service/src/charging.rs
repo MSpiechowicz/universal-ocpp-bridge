@@ -4,6 +4,7 @@ mod configuration201;
 mod control_auth;
 mod device_model;
 mod files;
+mod firmware;
 mod local_authorization;
 mod profiles;
 mod provision;
@@ -65,6 +66,7 @@ pub(crate) struct ChargingRuntime {
     resources: BTreeMap<StationId, Vec<ResourceRef>>,
     settings: BTreeMap<StationId, StationSettings>,
     target: Option<(TargetInstanceId, u64)>,
+    artifact_server: Option<firmware::ArtifactServer>,
 }
 
 #[derive(Clone)]
@@ -79,6 +81,8 @@ pub(super) struct StationSettings {
         Option<Arc<uob_protocol_adapter::v201::remote_control::LocalAuthorizationUpdates201>>,
     reservations: Option<Arc<uob_protocol_adapter::v16::remote_control::ReservationValues16>>,
     reservations_201: Option<Arc<uob_protocol_adapter::v201::remote_control::ReservationValues201>>,
+    firmware: Option<crate::configuration::charging::StationFirmware>,
+    firmware_providers: Option<Arc<firmware::Providers>>,
 }
 
 impl StationSettings {
@@ -173,6 +177,10 @@ impl StationSettings {
         device_model::apply(snapshot, self.protocol, self.control);
         profiles::apply(snapshot, self.protocol, self.control);
         reservations::apply_capabilities(snapshot, self);
+        firmware::apply_capabilities(
+            snapshot,
+            self.firmware.filter(|_| self.firmware_providers.is_some()),
+        );
     }
     fn add_local_authorization_operations(&self, operations: &mut Vec<uob_contracts::Operation>) {
         for (enabled, action) in [
@@ -232,6 +240,7 @@ impl ChargingState {
 }
 
 impl ChargingRuntime {
+    #[allow(clippy::too_many_lines)] // Startup checks and composition stay in one ordered sequence.
     pub(crate) async fn open(
         config: ValidatedChargingConfiguration,
         application: &Application,
@@ -266,6 +275,8 @@ impl ChargingRuntime {
             &mut settings,
             &mut seen,
         )?;
+        let artifact_server =
+            firmware::install(config.firmware, application, &mut seen, &mut settings).await?;
         let capacity = resources.len();
         let authenticator =
             StationAuthenticator::demo_with_protocols(registrations).map_err(io::Error::other)?;
@@ -332,6 +343,7 @@ impl ChargingRuntime {
             resources,
             settings,
             target,
+            artifact_server,
         })
     }
 

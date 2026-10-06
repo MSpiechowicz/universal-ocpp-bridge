@@ -18,6 +18,12 @@ pub(super) async fn recover(store: &ChargingStore, commands: Arc<LiveCommands>) 
     )
     .await
     .map_err(io::Error::other)?;
+    uob_application::FirmwareStore16::recover_firmware_jobs_16(
+        store,
+        uob_application::CommandClock::now(&Clock),
+    )
+    .await
+    .map_err(io::Error::other)?;
     let coordinator = CommandCoordinator::new(Arc::new(store.clone()), commands, Arc::new(Clock));
     let limit = PageLimit::new(100).map_err(io::Error::other)?;
     let mut after = None;

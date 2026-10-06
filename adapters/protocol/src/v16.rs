@@ -65,6 +65,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         }
         "DiagnosticsStatusNotification" => trigger::diagnostics(payload)?,
         "FirmwareStatusNotification" => trigger::firmware(payload)?,
+        "SignedFirmwareStatusNotification" => trigger::signed_firmware(payload)?,
         "MeterValues" => measurements(payload_as(payload)?)?,
         "DataTransfer" => ChargerObservation::DataTransfer16(data_transfer::observation(payload)?),
         "StartTransaction" => {

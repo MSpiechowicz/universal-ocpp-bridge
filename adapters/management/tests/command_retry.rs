@@ -82,6 +82,7 @@ impl CommandAdmissionPort<Value> for State {
                 reservation_201: None,
                 composite_schedule_201: None,
                 charging_profiles_201: None,
+                firmware_16: None,
             };
             *existing = Some((command, result.clone()));
             Ok(result)

@@ -16,6 +16,7 @@ pub mod data_transfer;
 pub mod data_transfer201;
 mod database;
 mod diagnostic;
+pub mod firmware16;
 mod health;
 mod payment;
 mod protocol;
@@ -32,6 +33,11 @@ mod storage;
 mod target;
 pub mod target_disposition;
 pub mod transaction16;
+pub use firmware16::{
+    FirmwareJobMutation16, FirmwareJobRecord16, FirmwareObservation16, FirmwareObservationKind16,
+    FirmwareStore16, FirmwareTransition16, FirmwareVariant16, MAX_FIRMWARE_JOBS_16,
+    apply_firmware_status_16, firmware_state_16,
+};
 pub use reservation16::*;
 pub use reservation201::*;
 pub use target_disposition::*;

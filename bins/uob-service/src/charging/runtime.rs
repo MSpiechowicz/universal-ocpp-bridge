@@ -1,6 +1,7 @@
 mod calls;
 mod dispatch;
 mod effects;
+mod firmware;
 mod negotiation201;
 mod session;
 mod state;
@@ -62,6 +63,8 @@ struct CallContext<'a> {
     reservations: Option<&'a uob_protocol_adapter::v16::remote_control::ReservationValues16>,
     reservations_201: Option<&'a uob_protocol_adapter::v201::remote_control::ReservationValues201>,
     negotiation: uob_application::NegotiationPolicy201,
+    /// Native firmware family whose notifications reconcile durable jobs.
+    firmware: Option<crate::configuration::charging::StationFirmware>,
 }
 
 #[derive(Default)]
@@ -83,6 +86,7 @@ pub(super) async fn serve(
         resources,
         settings,
         target,
+        artifact_server,
     } = runtime;
     let context = StationContext {
         store: state.store.clone(),
@@ -96,6 +100,13 @@ pub(super) async fn serve(
     };
     let (shutdown, _) = watch::channel(false);
     let mut tasks = JoinSet::new();
+    if let Some(server) = artifact_server {
+        tasks.spawn(super::firmware::ArtifactServer::serve(
+            server.providers,
+            server.listener,
+            shutdown.subscribe(),
+        ));
+    }
     let mut trigger_cursor = None;
     let mut trigger_timer = tokio::time::interval(Duration::from_secs(1));
     let result = {
@@ -115,6 +126,7 @@ pub(super) async fn serve(
                     }
                     if uob_application::ReservationStore16::expire_reservations_16(&context.store, Clock.now()).await.is_err()
                         || uob_application::ReservationStore201::expire_reservations_201(&context.store, Clock.now()).await.is_err()
+                        || uob_application::FirmwareStore16::expire_firmware_jobs_16(&context.store, Clock.now()).await.is_err()
                     {
                         break Err(unavailable());
                     }
@@ -263,6 +275,9 @@ fn call_context<'a>(
             charging_needs_processing: configuration.control.ev_charging_needs_processing
                 && context.commands_enabled,
         },
+        firmware: configuration
+            .firmware
+            .filter(|_| configuration.firmware_providers.is_some()),
     }
 }
 

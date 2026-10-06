@@ -9,7 +9,7 @@ use std::{
 use rustix::fs::OFlags;
 
 const INVALID: &str = "charging private state or credential unavailable";
-const NOFOLLOW: i32 = OFlags::NOFOLLOW.bits().cast_signed();
+pub(super) const NOFOLLOW: i32 = OFlags::NOFOLLOW.bits().cast_signed();
 
 pub(super) struct PrivateBytes(pub(super) Vec<u8>);
 

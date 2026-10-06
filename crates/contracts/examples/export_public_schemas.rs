@@ -7,13 +7,14 @@ use uob_contracts::{
     EventEnvelope, ExportBatch, ExportRecord, ExportReport, ReserveNowReference16,
     ReserveNowReference201, ResourceCapabilities, ResourceRef, RuntimeIdentity,
     SendLocalListReference16, SendLocalListReference201, ServiceIdentity,
-    SetNetworkProfileReference201, SetVariablesReference201, StationSnapshot, TraceRecord,
+    SetNetworkProfileReference201, SetVariablesReference201, SignedUpdateFirmwareReference16,
+    StationSnapshot, TraceRecord, UpdateFirmwareReference16,
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let revision = match name {
-        "export-record" | "export-batch" => 14,
-        "command-result" => 13,
+        "export-record" | "export-batch" => 15,
+        "command-result" => 14,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
@@ -73,6 +74,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     publish::<SendLocalListReference201>(output, "send-local-list-reference-201")?;
     publish::<ReserveNowReference16>(output, "reserve-now-reference-16")?;
     publish::<ReserveNowReference201>(output, "reserve-now-reference-201")?;
+    publish::<UpdateFirmwareReference16>(output, "update-firmware-reference-16")?;
+    publish::<SignedUpdateFirmwareReference16>(output, "signed-update-firmware-reference-16")?;
     publish::<EventEnvelope<Value>>(output, "event-envelope")?;
     publish::<TraceRecord>(output, "trace-record")?;
     publish::<ExportRecord>(output, "export-record")?;

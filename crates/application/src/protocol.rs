@@ -39,6 +39,12 @@ pub enum ChargerObservation {
         class: uob_contracts::TriggerMessageClass,
         status: String,
     },
+    /// Security Whitepaper `SignedFirmwareStatusNotification`; `request_id` is absent only for
+    /// a station-wide `Idle` (L01.FR.21).
+    SignedFirmwareStatus16 {
+        status: uob_contracts::FirmwareStatus16,
+        request_id: Option<i32>,
+    },
     /// Native OCPP 2.0.1 log, firmware or publication status.
     TriggerStatus201 {
         class: uob_contracts::TriggerMessageClass201,

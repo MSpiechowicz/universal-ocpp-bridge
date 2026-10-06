@@ -8,6 +8,7 @@ pub(crate) mod composite_schedule16;
 pub(crate) mod composite_schedule201;
 pub(crate) mod configuration201;
 pub(crate) mod device_model201;
+pub(crate) mod firmware16;
 pub(crate) mod local_authorization16;
 pub(crate) mod local_authorization201;
 pub(crate) mod reservation16;
@@ -79,6 +80,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         descriptors.extend(charging_profile16::descriptors(snapshot));
         descriptors.extend(local_authorization16::descriptors(snapshot));
         descriptors.extend(reservation16::descriptors(snapshot));
+        descriptors.extend(firmware16::descriptors(snapshot));
         if snapshot.capabilities.supports(&trigger) && station_scope(&snapshot.station) {
             descriptors.push(trigger_descriptor(snapshot.station.clone()));
         }
@@ -319,6 +321,9 @@ pub fn validate_privileged_operation(
             ProtocolEdition::Ocpp16j => reservation16::validate(resource, operation).map(|_| ()),
             ProtocolEdition::Ocpp201 => reservation201::validate(resource, operation).map(|_| ()),
         };
+    }
+    if firmware16::ACTIONS.contains(&operation.action.as_str()) {
+        return firmware16::validate(resource, operation).map(|_| ());
     }
     if local_authorization16::ACTIONS.contains(&operation.action.as_str()) {
         return match operation.protocol {
