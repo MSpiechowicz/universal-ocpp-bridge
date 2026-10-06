@@ -33,7 +33,10 @@ impl<'de> Visitor<'de> for Probe {
         let id = sequence.next_element::<&RawValue>()?;
         let third = sequence.next_element::<&RawValue>()?;
         let report = kind.is_some_and(|kind| kind.get() == "2")
-            && text(third).as_deref() == Some("NotifyReport");
+            && text(third)
+                .as_deref()
+                .and_then(super::reports::ReportKind::from_action)
+                .is_some();
         let response_id = if kind.is_some_and(|kind| matches!(kind.get(), "3" | "4")) {
             text(id)
         } else {

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off privileged demo OCPP 2.0.1 `GetCompositeSchedule` (K08)
+  and `GetChargingProfiles` with `ReportChargingProfiles` collection (K09) (#120).
+  Composite queries address the grid connection from station scope or an exact EVSE and
+  keep the charger's schedule with exact limits, phases and standardized reasons;
+  inconsistent replies stay uncertain. Installed-profile queries record the native
+  Accepted/NoProfiles acknowledgement durably before the outcome, then collect fragments
+  in their own per-connection report namespace within the shared multipart bounds, checked
+  against the exact EVSE, source and criteria. Typed profiles keep EVSE, limit source,
+  purpose, validity and schedules; `customData` is dropped and `salesTariff` flagged.
+  Restart interrupts a pending report and nothing is replayed. Publish result v1.13,
+  nested export v1.14 and runtime export revision 13; add pinned schemas, independent wire
+  fixtures and a K08/K09 requirements mapping. Software verification only, not hardware
+  interoperability, local schedule calculation or OCA certification.
 - Add independently default-off privileged demo OCPP 2.0.1 `ReserveNow` and
   `CancelReservation` (#114). Public requests carry only
   `urn:uob:ocpp201:ReserveNowReference:1` (signed `id`, expiry, optional exact `evseId`

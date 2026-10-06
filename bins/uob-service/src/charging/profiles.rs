@@ -9,11 +9,21 @@ pub(super) fn apply(
     protocol: ProtocolEdition,
     options: StationControlOptions,
 ) {
+    let edition201 = protocol == ProtocolEdition::Ocpp201;
     for (enabled, action) in [
         (options.set_charging_profile.enabled(), "SetChargingProfile"),
         (
             options.clear_charging_profile.enabled(),
             "ClearChargingProfile",
+        ),
+        // The station-level 2.0.1 composite schedule is advertised with the other station actions.
+        (
+            options.get_composite_schedule.enabled() && edition201,
+            "GetCompositeSchedule",
+        ),
+        (
+            options.get_charging_profiles.enabled() && edition201,
+            "GetChargingProfiles",
         ),
     ] {
         if !enabled {
@@ -26,7 +36,9 @@ pub(super) fn apply(
             },
             parameters: vec![],
         };
-        snapshot.capabilities.operations.push(operation.clone());
+        if action != "GetCompositeSchedule" {
+            snapshot.capabilities.operations.push(operation.clone());
+        }
         for entry in &mut snapshot.resources {
             let supported = match (protocol, entry.resource.native_protocol_reference) {
                 (

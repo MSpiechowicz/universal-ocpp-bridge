@@ -249,6 +249,7 @@ async fn canonical_events_and_the_retained_catalog_survive_broker_state_loss() {
 }
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)] // One broker session covers admission, correlation and retention.
 async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
     let broker = TestBroker::bind().await;
     let mut target = start_ems_scada_target(
@@ -335,6 +336,8 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         local_authorization_201: None,
         reservation_16: None,
         reservation_201: None,
+        composite_schedule_201: None,
+        charging_profiles_201: None,
     };
     submission
         .respond(Ok(result.clone()))

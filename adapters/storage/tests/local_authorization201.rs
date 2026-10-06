@@ -66,6 +66,8 @@ fn accepted(command: &Command<Value>) -> CommandResult {
         reservation_16: None,
         reservation_201: None,
         local_authorization_16: None,
+        composite_schedule_201: None,
+        charging_profiles_201: None,
     }
 }
 async fn admit(

@@ -191,11 +191,14 @@ pub(crate) fn interrupt(connection: &Connection) -> Result<(), StorageError> {
         let transaction = connection.unchecked_transaction().map_err(unavailable)?;
         for (id, payload) in rows {
             let mut result = codec::decode_result(&payload)?;
-            let evidence = result.device_model_201.as_mut().ok_or_else(integrity)?;
-            evidence.report = DeviceReportState201::Incomplete {
-                reason: DeviceReportFailure201::Interrupted,
-                progress: None,
-            };
+            if let Some(evidence) = result.device_model_201.as_mut() {
+                evidence.report = DeviceReportState201::Incomplete {
+                    reason: DeviceReportFailure201::Interrupted,
+                    progress: None,
+                };
+            } else {
+                crate::charging_profiles201::interrupt(&mut result)?;
+            }
             let payload = serde_json::to_string(&result).map_err(|_| integrity())?;
             transaction.execute("UPDATE command_results SET payload = ?2, report_pending = 0 WHERE request_id = ?1 AND report_pending = 1", params![id, payload]).map_err(unavailable)?;
             transaction

@@ -6,6 +6,7 @@ use super::{
 };
 
 pub(super) async fn report(
+    kind: crate::call::reports::ReportKind,
     message_id: String,
     payload: serde_json::Value,
     bytes: usize,
@@ -28,7 +29,7 @@ pub(super) async fn report(
         return;
     }
     let valid = if state.protocol == ProtocolEdition::Ocpp201 {
-        crate::call::reports::route(&state.reports, &payload, bytes, budget)
+        crate::call::reports::route(&state.reports, kind, &payload, bytes, budget)
     } else {
         None
     };

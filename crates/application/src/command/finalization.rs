@@ -38,6 +38,8 @@ where
         let mut local_authorization_201 = None;
         let mut reservation_16 = None;
         let mut reservation_201 = None;
+        let mut composite_schedule_201 = None;
+        let mut installed_profiles_201 = None;
         let outcome = if let Some(reservation) = profile {
             self.stations
                 .dispatch_reserved_profile(command.clone(), generation, *reservation)
@@ -255,6 +257,42 @@ where
                     }),
                 }
             }
+            CommandDispatchOutcome::CompositeScheduleResponse201(response) => {
+                let accepted =
+                    response.status == uob_contracts::CompositeScheduleStatus201::Accepted;
+                let error = (!accepted).then(|| CommandError {
+                    code: CommandErrorCode::ProtocolRejected,
+                    detail: Some("Rejected".to_owned()),
+                });
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                composite_schedule_201 = Some(response);
+                CommandLifecycle::ProtocolResponse { accepted, error }
+            }
+            CommandDispatchOutcome::ChargingProfilesResponse201(evidence) => {
+                // NoProfiles is a valid native answer, not a protocol error.
+                let accepted =
+                    evidence.status == uob_contracts::ChargingProfilesStatus201::Accepted;
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                installed_profiles_201 = Some(evidence);
+                CommandLifecycle::ProtocolResponse {
+                    accepted,
+                    error: None,
+                }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -308,6 +346,14 @@ where
         if let Some(evidence) = reservation_201 {
             result.schema_version = ContractVersion::V1_RESERVATION_201;
             result.reservation_201 = Some(evidence);
+        }
+        if let Some(evidence) = composite_schedule_201 {
+            result.schema_version = ContractVersion::V1_SCHEDULES_201;
+            result.composite_schedule_201 = Some(evidence);
+        }
+        if let Some(evidence) = installed_profiles_201 {
+            result.schema_version = ContractVersion::V1_SCHEDULES_201;
+            result.charging_profiles_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

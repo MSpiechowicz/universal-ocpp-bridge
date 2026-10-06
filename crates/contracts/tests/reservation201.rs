@@ -117,7 +117,7 @@ fn old_results_remain_readable_and_every_native_status_survives_nested_exports()
                 batch.records()[0].metadata().clone(),
                 ExportPayload::CommandResult(result.clone()),
             );
-            assert_eq!(record.metadata().schema_version.revision, 12);
+            assert_eq!(record.metadata().schema_version.revision, 13);
             assert!(export_validator.is_valid(&serde_json::to_value(record).unwrap()));
         }
     }

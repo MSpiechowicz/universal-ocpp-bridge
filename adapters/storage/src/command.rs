@@ -106,6 +106,7 @@ pub(crate) fn write_result_value(
         crate::trigger::merge(&previous, &mut incoming)?;
         retire_trigger_201 = crate::trigger201::merge(&previous, &mut incoming)?;
         crate::device_model201::merge(&mut previous, &mut incoming)?;
+        crate::charging_profiles201::merge(&previous, &mut incoming)?;
         codec::local_authorization16::merge(&previous, &mut incoming)?;
         codec::local_authorization201::merge(&previous, &mut incoming)?;
         crate::reservation16::validation::merge(&previous, &mut incoming)?;
@@ -157,6 +158,7 @@ pub(crate) fn write_result_value(
             incoming.schema_version = previous.schema_version;
             incoming.configuration = previous.configuration;
             incoming.composite_schedule_16 = previous.composite_schedule_16;
+            incoming.composite_schedule_201 = previous.composite_schedule_201;
             incoming.charging_profile_16 = previous.charging_profile_16;
             incoming.charging_profile_201 = previous.charging_profile_201;
             incoming.configuration_201 = previous.configuration_201;
@@ -188,6 +190,8 @@ pub(crate) fn write_result_value(
     }
     crate::device_model201::finalize_lifecycle(&mut incoming);
     crate::device_model201::bound_output(&mut incoming)?;
+    crate::charging_profiles201::bound_output(&mut incoming);
+    crate::charging_profiles201::validate_stored(&incoming)?;
     crate::charging_profile201::finish(transaction, &incoming)?;
     codec::configuration201::validate_stored(transaction, &incoming)?;
     codec::local_authorization16::validate_stored(transaction, &incoming)?;
@@ -222,7 +226,8 @@ fn persist_result(
              report_pending = excluded.report_pending,
              trigger_reconcile_active = MIN(command_results.trigger_reconcile_active, excluded.trigger_reconcile_active)",
             params![request, payload, i64::from(!retire_trigger_201),
-                i64::from(incoming.device_model_201.as_ref().is_some_and(|e| e.report.pending()))],
+                i64::from(incoming.device_model_201.as_ref().is_some_and(|e| e.report.pending())
+                    || crate::charging_profiles201::pending(incoming))],
         )
         .map_err(unavailable)?;
     transaction

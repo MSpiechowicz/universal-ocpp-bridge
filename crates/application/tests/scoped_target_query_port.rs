@@ -428,6 +428,8 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         local_authorization_201: None,
         reservation_16: None,
         reservation_201: None,
+        composite_schedule_201: None,
+        charging_profiles_201: None,
     }
 }
 fn request_id() -> RequestId {

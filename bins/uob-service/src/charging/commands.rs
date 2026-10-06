@@ -102,7 +102,11 @@ impl LiveCommands {
         store: super::ChargingStore,
     ) -> u64 {
         let generation = self.next.fetch_add(1, Ordering::Relaxed);
-        let session = Arc::new(session.with_device_model(Arc::new(store), generation));
+        let session = Arc::new(
+            session
+                .with_charging_profile_reports(Arc::new(store.clone()))
+                .with_device_model(Arc::new(store), generation),
+        );
         if let Some((_, old)) = self
             .sessions
             .write()

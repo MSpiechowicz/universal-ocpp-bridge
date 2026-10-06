@@ -2,6 +2,9 @@
 use crate::remote_constraints as constraints;
 mod charging_limit;
 mod charging_profile201;
+mod charging_profiles;
+pub(crate) mod charging_profiles_report;
+mod composite_schedule;
 mod configuration201;
 pub(crate) mod configuration201_profile_parse;
 mod configuration201_response;
@@ -22,6 +25,7 @@ mod mapping;
 mod phase_capability;
 mod reservation;
 mod reservation_values;
+mod schedule_values;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub use local_authorization_values::{
@@ -82,6 +86,7 @@ pub struct RemoteControlSession {
     reservation_values: Option<Arc<reservation_values::ReservationValues201>>,
     reservation_grant: Option<Arc<ReservationGrant201>>,
     reserve_non_evse_specific: bool,
+    profile_reports: Option<Arc<dyn uob_application::ChargingProfileReportStore201>>,
 }
 
 impl RemoteControlSession {
@@ -129,6 +134,7 @@ impl RemoteControlSession {
             reservation_values: None,
             reservation_grant: None,
             reserve_non_evse_specific: false,
+            profile_reports: None,
         })
     }
 
@@ -191,10 +197,13 @@ impl RemoteControlSession {
         action: &str,
         pending: PendingCall,
         profile: Option<crate::command_registry::charging_profile201::Request>,
+        schedule: Option<uob_contracts::CompositeScheduleRequest201>,
     ) -> CommandDispatchOutcome {
         match pending.receive().await {
             SessionCallOutcome::Result { payload, .. } => {
-                let outcome = if let Some(request) = profile {
+                let outcome = if let Some(request) = schedule {
+                    composite_schedule::response(request, &payload)
+                } else if let Some(request) = profile {
                     charging_profile201::response(request, &payload)
                 } else {
                     mapping::response(action, &payload)
@@ -234,6 +243,7 @@ impl RemoteControlSession {
             | SessionCallOutcome::TransmissionUncertain { .. } => mapping::uncertain(),
         }
     }
+    #[allow(clippy::too_many_lines)] // Owned families branch first; the shared path stays linear.
     pub(super) fn dispatch_profile(
         &self,
         command: Command<Value>,
@@ -260,6 +270,15 @@ impl RemoteControlSession {
             {
                 return Ok(self.dispatch_configuration_201(command).await);
             }
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if operation.action.as_str() == crate::command_registry::charging_profiles201::ACTION)
+            {
+                return Ok(self.dispatch_charging_profiles(command).await);
+            }
+            let schedule = match composite_schedule::request_context(&command) {
+                Ok(schedule) => schedule,
+                Err(code) => return Ok(mapping::not_sent(code)),
+            };
             let remote_start_id = match self.reserve_start_id(&command).await {
                 Ok(id) => id,
                 Err(code) => return Ok(mapping::not_sent(code)),
@@ -337,7 +356,7 @@ impl RemoteControlSession {
                 (action, profile, pending)
             };
             Ok(self
-                .receive_remote_response(&command.request_id, action, pending, profile)
+                .receive_remote_response(&command.request_id, action, pending, profile, schedule)
                 .await)
         })
     }

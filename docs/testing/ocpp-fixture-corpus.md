@@ -464,3 +464,40 @@ Use the [runnable commands and software-boundary limitations](../simulator/local
 Authored assertions, source inspection and pins are not charger hardware qualification,
 OCA certification, full local-authorization conformance or evidence of executed tests.
 
+## OCPP 2.0.1 composite schedule and installed-profile report fixtures
+
+The narrow bidirectional `ocpp201.smart-charging.composite-schedule` (K08) and
+`ocpp201.smart-charging.profile-reports` (K09) rows are `verified`; the broad
+`ocpp201.smart-charging` row remains `planned`. `scenario_ids` is empty because no checked
+scenario registry exists. Static fixtures contain only valid CALL/CALLRESULT envelopes;
+malformed replies, out-of-query fragments and CALLERRORs are behavioral test inputs.
+
+The six files below are byte-for-byte copies of the exact members under
+`OCPP-2.0.1_part3_JSON_schemas/` in the pinned Part 3 schema ZIP, retaining original CRLF
+bytes and OCA copyright/CC BY-ND 4.0 attribution. The outer archive SHA-256 is
+`192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a`; the schema ZIP SHA-256 is
+`6279c40b74929cce7fca439622194a8890a0d250de5665f3e4d80ef8529c51ce`. The existing
+`provenance.json` source entry already pins both archives.
+
+| Schema under `schemas/2.0.1/` | Original-byte SHA-256 |
+| --- | --- |
+| `GetCompositeScheduleRequest.json` | `1b8343197505b1ae3d78b2006d709d5784840ccaa39cb1e5ebcd26a37afaad4c` |
+| `GetCompositeScheduleResponse.json` | `1167b0875328eef0b02567c86c51778992acf698b4f6669e5d07a3b26b1961c2` |
+| `GetChargingProfilesRequest.json` | `a08efa0af98bd85b7b172295d79d59d3a7b19c3e258b04c00985c0ce5d899921` |
+| `GetChargingProfilesResponse.json` | `2ccb8d6f82f99a7885982cb3609abb8050c021d2713fd62ce9045e758a2506a2` |
+| `ReportChargingProfilesRequest.json` | `4b0e2cb832c04e1e293a1d5fe979c968c2f00298f0675868795da3cbe678d110` |
+| `ReportChargingProfilesResponse.json` | `f2b14ea0ccce131f0aef3e53cd3a2996b68494cf7cade5c1d83564d5ad66ded6` |
+
+Twelve independently authored wire fixtures cover the grid and EVSE composite requests,
+an Accepted grid schedule with exact tenths and zero, an offset-timestamped single-phase
+EVSE schedule with `phaseToUse`, Rejected with `UnsupportedRateUnit`, ID-list and
+source/purpose GetChargingProfiles requests, Accepted and NoProfiles replies, a station
+fragment with `tbc`, a final EVSE fragment with two schedules and a `salesTariff`, and the
+empty report acknowledgement. `ocpp201_schedules::fixtures` replays each one over an
+actual authenticated socket. `smart-charging201-requirements.json` maps K08.FR.01-07 and
+K09.FR.01-06 to these fixtures and tests, citing the Edition 4 Part 2 specification
+(SHA-256 `2bd854c01abdf20290d016e05779f952655177f09fedff2149126921dd5557e2`), the June
+2026 errata (no K08/K09 items) and Appendices v1.5 reason codes. Charger-side calculation
+(K08.FR.02/04/06) remains the charger's obligation; the mapping covers only CSMS-side
+behavior and is not OCA certification or hardware interoperability.
+

@@ -64,6 +64,8 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         local_authorization_201: None,
         reservation_16: None,
         reservation_201: None,
+        composite_schedule_201: None,
+        charging_profiles_201: None,
     }
 }
 fn clear(id: i32, status: ClearChargingProfileStatus16) -> ChargingProfileResult16 {

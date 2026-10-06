@@ -1,5 +1,7 @@
 use super::*;
+use crate::call::types::SessionSubmitError;
 use uob_application::RuntimeResourceLimits;
+use uob_contracts::CorrelationId;
 use uob_contracts::{BridgeId, ProtocolActionName, ProtocolEdition, StationId};
 
 fn key(request_id: i32) -> ReportKey {
@@ -32,7 +34,7 @@ fn attempt(
         budget,
     )
     .unwrap();
-    register(registry, key, resource(), admission).map(|(route, _)| route)
+    register(registry, key, resource(), RouteContext::Device, admission).map(|(route, _)| route)
 }
 
 #[test]

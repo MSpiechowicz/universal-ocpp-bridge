@@ -2,6 +2,7 @@
 
 pub mod backup;
 mod charging_profile201;
+mod charging_profiles201;
 mod codec;
 mod codec_reservation16;
 mod codec_reservation201;

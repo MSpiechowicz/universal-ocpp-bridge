@@ -80,6 +80,8 @@ impl CommandAdmissionPort<Value> for State {
                 local_authorization_201: None,
                 reservation_16: None,
                 reservation_201: None,
+                composite_schedule_201: None,
+                charging_profiles_201: None,
             };
             *existing = Some((command, result.clone()));
             Ok(result)

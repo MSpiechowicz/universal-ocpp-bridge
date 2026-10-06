@@ -111,6 +111,13 @@ pub(super) fn prepare(
                 };
                 return Ok((action, operation.payload.clone()));
             }
+            if operation.action.as_str() == crate::command_registry::composite_schedule201::ACTION {
+                crate::command_registry::composite_schedule201::validate(
+                    &command.resource,
+                    operation,
+                )?;
+                return Ok(("GetCompositeSchedule", operation.payload.clone()));
+            }
             privileged(operation, &command.resource, &snapshot.station, native)
         }
         CommandOperation::Ocpp(_) => Err(UnsupportedOperation),

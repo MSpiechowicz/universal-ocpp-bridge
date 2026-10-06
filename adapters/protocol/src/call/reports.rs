@@ -1,5 +1,7 @@
-//! One connection's shared `NotifyReport` namespace; no independent socket reader.
-use super::types::{CallSessionHandle, OutboundCall, PendingCall, SessionSubmitError};
+//! One connection's shared native report namespaces; no independent socket reader.
+//! `NotifyReport` and `ReportChargingProfiles` request IDs are separate native namespaces that
+//! share the bounded route slots, retired-ID capacity and the socket owner's budget.
+mod session;
 use crate::multipart::{ReportFailure, ReportFragment, ReportKey};
 use crate::v201::remote_control::device_model::{SanitizedNotification, notification};
 use std::{
@@ -9,13 +11,50 @@ use std::{
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Instant;
 use uob_application::{RuntimeReservation, RuntimeResourceBudget, WorkClass};
-use uob_contracts::CorrelationId;
-use uob_contracts::{DeviceReportFragment201, ResourceRef};
+use uob_contracts::{
+    ChargingProfileReportFragment201, ChargingProfilesQuery201, DeviceReportFragment201,
+    ResourceRef,
+};
+
+/// Native charger-to-CSMS report action routed by the socket owner.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) enum ReportKind {
+    Device,
+    ChargingProfiles,
+}
+impl ReportKind {
+    pub(crate) fn from_action(action: &str) -> Option<Self> {
+        match action {
+            "NotifyReport" => Some(Self::Device),
+            "ReportChargingProfiles" => Some(Self::ChargingProfiles),
+            _ => None,
+        }
+    }
+    const fn index(self) -> usize {
+        match self {
+            Self::Device => 0,
+            Self::ChargingProfiles => 1,
+        }
+    }
+}
+/// Immutable request context a fragment must match before it is accepted.
+pub(crate) enum RouteContext {
+    Device,
+    ChargingProfiles(ChargingProfilesQuery201),
+}
+impl RouteContext {
+    const fn kind(&self) -> ReportKind {
+        match self {
+            Self::Device => ReportKind::Device,
+            Self::ChargingProfiles(_) => ReportKind::ChargingProfiles,
+        }
+    }
+}
 
 pub(crate) struct Registry {
-    routes: BTreeMap<i32, Entry>,
-    used: HashSet<i32>,
-    enabled: bool,
+    routes: BTreeMap<(ReportKind, i32), Entry>,
+    used: HashSet<(ReportKind, i32)>,
+    enabled: [bool; 2],
     closed: bool,
     budget: RuntimeResourceBudget,
     reservation: Option<RuntimeReservation>,
@@ -23,19 +62,26 @@ pub(crate) struct Registry {
 struct Entry {
     key: ReportKey,
     resource: ResourceRef,
+    context: RouteContext,
+    /// Arrival position for actions without a native sequence number.
+    next_sequence: u32,
     sender: mpsc::Sender<Ingress>,
     failure: watch::Sender<Option<ReportFailure>>,
 }
 pub(crate) type SharedReports = Arc<Mutex<Registry>>;
+pub(crate) enum FragmentMetadata {
+    Device(DeviceReportFragment201),
+    ChargingProfiles(ChargingProfileReportFragment201),
+}
 pub(crate) struct Ingress {
     pub fragment: ReportFragment,
-    pub metadata: DeviceReportFragment201,
+    pub metadata: FragmentMetadata,
     pub(crate) reservation: RuntimeReservation,
 }
 /// A registered route unregisters on every collector exit. IDs remain retired until teardown.
 pub(crate) struct ReportRoute {
     registry: SharedReports,
-    request: i32,
+    request: (ReportKind, i32),
     admission: Option<crate::multipart::CollectedReport>,
     receiver: mpsc::Receiver<Ingress>,
     failure: watch::Receiver<Option<ReportFailure>>,
@@ -79,7 +125,7 @@ pub(crate) fn registry(budget: &RuntimeResourceBudget) -> SharedReports {
     Arc::new(Mutex::new(Registry {
         routes: BTreeMap::new(),
         used: HashSet::new(),
-        enabled: false,
+        enabled: [false; 2],
         closed: false,
         budget: budget.clone(),
         reservation: None,
@@ -89,8 +135,13 @@ pub(crate) fn register(
     registry: &SharedReports,
     key: ReportKey,
     resource: ResourceRef,
+    context: RouteContext,
     admission: crate::multipart::CollectedReport,
 ) -> Result<(ReportRoute, oneshot::Sender<Instant>), crate::SessionSubmitError> {
+    let kind = context.kind();
+    if ReportKind::from_action(key.action.as_str()) != Some(kind) {
+        return Err(crate::SessionSubmitError::InvalidRequest);
+    }
     let mut current = registry
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -105,14 +156,11 @@ pub(crate) fn register(
         current.used = HashSet::with_capacity(4096);
         current.reservation = Some(reservation);
     }
-    if current.used.len() == 4096
-        || current.used.contains(&key.request_id)
-        || current.routes.len() == 4
-    {
+    let request = (kind, key.request_id);
+    if current.used.len() == 4096 || current.used.contains(&request) || current.routes.len() == 4 {
         return Err(crate::SessionSubmitError::Full);
     }
-    current.enabled = true;
-    let request = key.request_id;
+    current.enabled[kind.index()] = true;
     let (sender, receiver) = mpsc::channel(4);
     let (failure, failed) = watch::channel(None);
     let (started, start) = oneshot::channel();
@@ -122,6 +170,8 @@ pub(crate) fn register(
         Entry {
             key,
             resource,
+            context,
+            next_sequence: 0,
             sender,
             failure,
         },
@@ -150,20 +200,21 @@ pub(crate) fn disconnect(registry: &SharedReports) {
     current.used = HashSet::new();
     current.reservation = None;
     current.closed = true;
-    current.enabled = false;
+    current.enabled = [false; 2];
 }
-pub(crate) fn enable(registry: &SharedReports) {
+pub(crate) fn enable(registry: &SharedReports, kind: ReportKind) {
     let mut current = registry
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if !current.closed {
-        current.enabled = true;
+        current.enabled[kind.index()] = true;
     }
 }
 
 /// Returns None when default-off; wire acknowledgement is never durable completion.
 pub(crate) fn route(
     registry: &SharedReports,
+    kind: ReportKind,
     payload: &serde_json::Value,
     bytes: usize,
     budget: &RuntimeResourceBudget,
@@ -171,9 +222,12 @@ pub(crate) fn route(
     if !registry
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .enabled
+        .enabled[kind.index()]
     {
         return None;
+    }
+    if kind == ReportKind::ChargingProfiles {
+        return Some(route_profiles(registry, payload, bytes, budget));
     }
     let valid = crate::command_registry::device_model201::valid_schema(6, payload)
         && payload["requestId"]
@@ -188,7 +242,7 @@ pub(crate) fn route(
     let mut current = registry
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let Some(entry) = request.and_then(|request| current.routes.get_mut(&request)) else {
+    let Some(entry) = request.and_then(|request| current.routes.get_mut(&(kind, request))) else {
         return Some(valid);
     };
     if !valid {
@@ -247,16 +301,89 @@ pub(crate) fn route(
             more,
             items,
         },
-        metadata: DeviceReportFragment201 {
+        metadata: FragmentMetadata::Device(DeviceReportFragment201 {
             generated_at,
             sequence,
             more,
             items: count,
-        },
+        }),
         reservation,
     };
     enqueue_fragment(entry, ingress);
     Some(true)
+}
+
+/// Fragments carry no sequence number; the socket owner's arrival order assigns one.
+fn route_profiles(
+    registry: &SharedReports,
+    payload: &serde_json::Value,
+    bytes: usize,
+    budget: &RuntimeResourceBudget,
+) -> bool {
+    use crate::command_registry::charging_profiles201 as profiles;
+    let valid = profiles::valid_schema(profiles::REPORT, payload);
+    let request = payload["requestId"]
+        .as_i64()
+        .and_then(|id| i32::try_from(id).ok());
+    let mut current = registry
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let Some(entry) = request.and_then(|request| {
+        current
+            .routes
+            .get_mut(&(ReportKind::ChargingProfiles, request))
+    }) else {
+        return valid;
+    };
+    if !valid {
+        entry
+            .failure
+            .send_replace(Some(ReportFailure::InvalidFragment));
+        return false;
+    }
+    let RouteContext::ChargingProfiles(query) = &entry.context else {
+        entry
+            .failure
+            .send_replace(Some(ReportFailure::CorrelationMismatch));
+        return true;
+    };
+    let reservation = match budget.try_reserve(
+        WorkClass::PendingRequest,
+        bytes.saturating_mul(8).saturating_add(4096),
+    ) {
+        Ok(reservation) => reservation,
+        Err(error) => {
+            entry
+                .failure
+                .send_replace(Some(ReportFailure::Capacity(error)));
+            return true;
+        }
+    };
+    let fragment = match crate::v201::remote_control::charging_profiles_report::fragment(
+        payload,
+        query,
+        entry.next_sequence,
+    ) {
+        Ok(fragment) => fragment,
+        Err(reason) => {
+            entry.failure.send_replace(Some(reason));
+            return reason != ReportFailure::InvalidFragment;
+        }
+    };
+    let sequence = entry.next_sequence;
+    entry.next_sequence = entry.next_sequence.saturating_add(1);
+    let ingress = Ingress {
+        fragment: ReportFragment {
+            key: entry.key.clone(),
+            sequence,
+            more: fragment.metadata.more,
+            items: fragment.items,
+        },
+        metadata: FragmentMetadata::ChargingProfiles(fragment.metadata),
+        reservation,
+    };
+    enqueue_fragment(entry, ingress);
+    true
 }
 
 fn enqueue_fragment(entry: &Entry, ingress: Ingress) {
@@ -276,65 +403,6 @@ fn enqueue_fragment(entry: &Entry, ingress: Ingress) {
                 .failure
                 .send_replace(Some(ReportFailure::Disconnected));
         }
-    }
-}
-
-impl CallSessionHandle {
-    pub(crate) fn enable_notify_reports(&self) {
-        enable(&self.reports);
-    }
-    pub(crate) fn report_store_failed(&self, correlation: CorrelationId) {
-        self.diagnostics
-            .span(Some(correlation), Some(self.station_id.clone()), None)
-            .emit(
-                uob_application::FlowStage::DurableCommit,
-                uob_application::FlowEvidence::Failed,
-            );
-    }
-    pub(crate) fn disconnect_reports(&self) {
-        disconnect(&self.reports);
-    }
-    /// Registers the shared native report route before enqueuing its CALL.
-    pub(crate) fn try_report_call_before(
-        &self,
-        request: OutboundCall,
-        deadline: Instant,
-        key: crate::multipart::ReportKey,
-        resource: uob_contracts::ResourceRef,
-    ) -> Result<(PendingCall, super::reports::ReportRoute), SessionSubmitError> {
-        if self.is_closed() {
-            return Err(SessionSubmitError::Closed);
-        }
-        if key.station != self.station_id
-            || resource.station_id != self.station_id
-            || key.connection != self.connection_id
-            || key.protocol != uob_contracts::ProtocolEdition::Ocpp201
-            || self.protocol != key.protocol
-            || key.action.as_str() != "NotifyReport"
-            || key.correlation != request.correlation_id
-            || !["GetBaseReport", "GetReport"].contains(&request.action.as_str())
-            || request.payload["requestId"].as_i64() != Some(i64::from(key.request_id))
-        {
-            return Err(SessionSubmitError::InvalidRequest);
-        }
-        let admission = crate::multipart::reserve_report(
-            key.clone(),
-            crate::multipart::ReportLimits::default(),
-            &self.budget,
-        )
-        .map_err(|_| SessionSubmitError::Full)?;
-        let (route, started) = super::reports::register(&self.reports, key, resource, admission)?;
-        let pending = self.enqueue_observed(request, Some(deadline), None, Some(started))?;
-        Ok((pending, route))
-    }
-
-    /// Budget used by the single socket owner, shared with report collection.
-    pub(crate) fn resource_budget(&self) -> uob_application::RuntimeResourceBudget {
-        self.budget.clone()
-    }
-    /// Opaque identity of the authenticated connection, never shared across reconnects.
-    pub(crate) fn connection_id(&self) -> CorrelationId {
-        self.connection_id.clone()
     }
 }
 

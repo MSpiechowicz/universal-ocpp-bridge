@@ -164,9 +164,17 @@ OCPP 1.6J `GetCompositeSchedule` is a default-off, privileged demo query for gri
 aggregation or an exact configured connector. Its durable typed result preserves
 exact rates, optional native metadata and genuine zero separately from Rejected;
 restart/reconnect never automatically replays the query. It does not calculate
-or enforce a local schedule, install profiles or implement OCPP 2.0.1 schedules.
+or enforce a local schedule or install profiles.
 See [OCPP 1.6 remote control](docs/architecture/ocpp16-remote-control.md#opt-in-getcompositeschedule)
 for opt-in, strict native validation and independently observed evidence.
+
+OCPP 2.0.1 `GetCompositeSchedule` (K08) and `GetChargingProfiles` (K09) are separately
+default-off, privileged demo queries for the grid connection or an exact configured EVSE.
+Composite results keep exact limits, phases and standardized reasons. Installed-profile
+queries record the native acknowledgement first, then collect `ReportChargingProfiles`
+fragments within shared bounds into typed profiles with their EVSE and limit source;
+restart interrupts a pending report and nothing is replayed. Reported profiles never
+become local policy. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md#opt-in-composite-schedules-and-installed-profile-reports).
 
 Full native OCPP 2.0.1 SetChargingProfile/ClearChargingProfile is independently default-off,
 privileged and demo-only, with exact station/EVSE scope, native schedule/transaction/phase
