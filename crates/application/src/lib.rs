@@ -2,8 +2,10 @@
 
 mod access;
 mod admission;
+pub mod artifact_provider;
 mod authorization;
 pub mod capture;
+pub mod certificate_provider;
 pub mod charging_identity;
 pub mod charging_negotiation201;
 pub use charging_negotiation201::*;

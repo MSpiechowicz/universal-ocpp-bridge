@@ -32,6 +32,7 @@ repository = "https://github.com/MSpiechowicz/universal-ocpp-bridge"
 rust-version = "1.98"
 
 [workspace.dependencies]
+aws-lc-rs = { version = "=1.18.1", default-features = false, features = ["aws-lc-sys", "prebuilt-nasm"] }
 axum = { version = "=0.8.9", features = ["ws"] }
 base64 = "=0.22.1"
 futures-util = "=0.3.34"
@@ -43,6 +44,8 @@ rumqttc = { package = "rumqttc-v4-next", version = "=0.34.0", default-features =
 rcgen = "=0.14.5"
 rust-ocpp = { version = "=3.0.4", default-features = false, features = ["v1_6", "v2_0_1"] }
 rustls = "=0.23.45"
+rustls-pki-types = { version = "=1.15.1", features = ["std"] }
+rustls-webpki = { version = "=0.103.15", default-features = false, features = ["aws-lc-rs", "std"] }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 schemars = "=1.2.2"
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -58,6 +61,7 @@ toml = "=1.1.4"
 url = "=2.5.8"
 uuid = { version = "=1.26.0", features = ["v4"] }
 validator = { version = "=0.20.0", default-features = false }
+x509-parser = "=0.18.1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

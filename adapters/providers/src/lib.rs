@@ -3,6 +3,11 @@
 pub mod artifacts;
 mod charging_identity;
 pub use charging_identity::LocalChargingIdentityProvider;
+#[cfg(unix)]
+pub mod test_artifacts;
+pub mod test_ca;
+mod test_provider;
+pub use test_provider::TestProviderError;
 
 use sha2::{Digest, Sha256};
 use uob_application::{

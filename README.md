@@ -265,6 +265,8 @@ for correlated ordered fragments, shared memory admission, cancellation, and abs
 
 Firmware and diagnostic providers can use [bounded artifact streaming](docs/architecture/artifact-streaming.md)
 for byte transport and private temporary spooling with shared admission and cancellation.
+Their [artifact and PKI provider ports](docs/architecture/artifact-pki-providers.md) come with
+production-refused local test providers and fault controls.
 
 Future industrial drivers remain behind the target registry and canonical data/command ports. See
 the [industrial adapter extension boundary](docs/architecture/industrial-adapter-extension.md) for
