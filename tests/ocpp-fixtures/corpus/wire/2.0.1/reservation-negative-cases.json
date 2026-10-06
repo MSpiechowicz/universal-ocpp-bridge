@@ -1,0 +1,304 @@
+{
+  "cases": [
+    {
+      "id": "evse-zero",
+      "wire": [
+        2,
+        "evse-zero",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 0,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "evse-negative",
+      "wire": [
+        2,
+        "evse-negative",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": -1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "evse-i32-overflow",
+      "wire": [
+        2,
+        "evse-i32-overflow",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 2147483648,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "id-i32-overflow",
+      "wire": [
+        2,
+        "id-i32-overflow",
+        "ReserveNow",
+        {
+          "id": 2147483648,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "id-i32-underflow",
+      "wire": [
+        2,
+        "id-i32-underflow",
+        "ReserveNow",
+        {
+          "id": -2147483649,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "vendor-custom-data",
+      "wire": [
+        2,
+        "vendor-custom-data",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          },
+          "customData": {
+            "vendorId": "vendor-marker-114"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "no-authorization-token",
+      "wire": [
+        2,
+        "no-authorization-token",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "",
+            "type": "NoAuthorization"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "missing-id-token",
+      "wire": [
+        2,
+        "missing-id-token",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "token-over-36",
+      "wire": [
+        2,
+        "token-over-36",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "ttttttttttttttttttttttttttttttttttttt",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "unknown-token-type",
+      "wire": [
+        2,
+        "unknown-token-type",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "Badge"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "unknown-connector-type",
+      "wire": [
+        2,
+        "unknown-connector-type",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          },
+          "connectorType": "cType9"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "unknown-field",
+      "wire": [
+        2,
+        "unknown-field",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "2099-01-01T00:00:00Z",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          },
+          "connectorId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "relative-expiry",
+      "wire": [
+        2,
+        "relative-expiry",
+        "ReserveNow",
+        {
+          "id": -114,
+          "expiryDateTime": "tomorrow",
+          "evseId": 1,
+          "idToken": {
+            "idToken": "token-marker-114",
+            "type": "ISO14443"
+          },
+          "groupIdToken": {
+            "idToken": "group-marker-114",
+            "type": "Central"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    }
+  ]
+}

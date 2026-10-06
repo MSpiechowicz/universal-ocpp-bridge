@@ -174,7 +174,7 @@ async fn populated_v14_upgrade_preserves_policy_dedup_transactions_journal_outbo
         connection
             .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        15
+        16
     );
     assert_eq!(
         connection

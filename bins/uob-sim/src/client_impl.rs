@@ -46,6 +46,16 @@ impl ProtocolClient for SimulatorProtocolClient {
         })
     }
 
+    fn reservation201(&self) -> Option<crate::reservation201::Reservation201Handle> {
+        self.ocpp201_state.as_ref().and_then(|state| {
+            state
+                .lock()
+                .expect("native state lock")
+                .reservation201
+                .clone()
+        })
+    }
+
     fn reboot_count(&self) -> u64 {
         self.ocpp16_state.as_ref().map_or_else(
             || {
@@ -156,7 +166,9 @@ impl ProtocolClient for SimulatorProtocolClient {
                 state.lock().expect("native state lock").reservation16 = None;
             }
             if let Some(state) = &self.ocpp201_state {
-                state.lock().expect("native state lock").local = None;
+                let mut state = state.lock().expect("native state lock");
+                state.local = None;
+                state.reservation201 = None;
             }
             response
         })
@@ -171,7 +183,9 @@ impl ProtocolClient for SimulatorProtocolClient {
             state.lock().expect("native state lock").reservation16 = None;
         }
         if let Some(state) = &self.ocpp201_state {
-            state.lock().expect("native state lock").local = None;
+            let mut state = state.lock().expect("native state lock");
+            state.local = None;
+            state.reservation201 = None;
         }
     }
 

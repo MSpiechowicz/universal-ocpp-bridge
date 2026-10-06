@@ -217,21 +217,21 @@ pub async fn setup(
     Arc<RemoteControlSession>,
     Arc<Coordinator>,
 ) {
-    setup_enabled(store, handle, false).await
+    Box::pin(setup_enabled(store, handle, false)).await
 }
+pub type Harness = (
+    StationSnapshot,
+    Arc<Auth>,
+    Arc<RemoteControlSession>,
+    Arc<Coordinator>,
+);
 #[allow(dead_code)] // Independently compiled roots share this opt-in socket harness.
 pub fn setup_device(
     store: &Store,
     handle: CallSessionHandle,
-) -> impl Future<
-    Output = (
-        StationSnapshot,
-        Arc<Auth>,
-        Arc<RemoteControlSession>,
-        Arc<Coordinator>,
-    ),
-> {
-    setup_enabled(store, handle, true)
+) -> std::pin::Pin<Box<impl Future<Output = Harness>>> {
+    // The harness future is large; callers await one boxed allocation instead.
+    Box::pin(setup_enabled(store, handle, true))
 }
 async fn setup_enabled(
     store: &Store,

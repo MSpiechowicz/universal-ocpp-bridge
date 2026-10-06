@@ -144,6 +144,8 @@ fn event_write(
         charging_profile_201: None,
         reservation_16: None,
         reservation_observations_16: Vec::new(),
+        reservation_201: None,
+        reservation_observations_201: Vec::new(),
         purpose: StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),

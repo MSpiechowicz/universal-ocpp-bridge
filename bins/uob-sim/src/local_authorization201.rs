@@ -7,7 +7,7 @@ use private_state::{Delivery, OfflineRecord, PrivateState, clear_entries, valida
 mod device_model;
 mod offline;
 pub(crate) mod transport;
-mod validation;
+pub(crate) mod validation;
 use crate::local_authorization::LocalAuthorizationConfig;
 pub use native::{AuthorizationStatus, Entry, IdToken, IdTokenInfo, TokenType, Update, UpdateType};
 use parking_lot::Mutex;
@@ -214,6 +214,36 @@ impl LocalAuthorization201Handle {
         }
         native::allowed(info, evse, now)
     }
+    /// Actual native list information first, then unexpired cache (H03.FR.07).
+    pub(crate) fn identity_info(
+        &self,
+        token: &IdToken,
+        now: OffsetDateTime,
+    ) -> Option<IdTokenInfo> {
+        let model = self.0.lock();
+        if model.unavailable {
+            return None;
+        }
+        let key = Zeroizing::new(identity(token));
+        if model.list_enabled
+            && let Some(entry) = model.state.list.get(key.as_str())
+        {
+            return entry.id_token_info.clone();
+        }
+        if !model.cache_enabled {
+            return None;
+        }
+        model
+            .state
+            .cache
+            .get(key.as_str())
+            .and_then(|cached| cached.entry.id_token_info.clone())
+            .filter(|info| !cache::expired(info, now))
+    }
+    /// No intercepted native request is between commit and its correlated reply.
+    pub(crate) fn reply_idle(&self) -> bool {
+        self.0.lock().reply_pending == 0
+    }
     pub(crate) fn reload(&self) -> Result<(), &'static str> {
         let mut model = self.0.lock();
         let storage = model
@@ -248,6 +278,14 @@ impl Model {
         self.state = next;
         Ok(())
     }
+}
+/// Zeroize private native JSON owned by another independent 2.0.1 model.
+pub(crate) fn wipe_json(value: &mut Value) {
+    native::wipe(value);
+}
+/// Native acceptance of actual information for this EVSE at this time.
+pub(crate) fn allows(info: &IdTokenInfo, evse: i32, now: OffsetDateTime) -> bool {
+    native::allowed(info, evse, now)
 }
 fn identity(token: &IdToken) -> String {
     let kind = match token.token_type {

@@ -96,6 +96,8 @@ impl TransportStream for Stream {
                         | "GetBaseReport"
                         | "GetReport"
                         | "Reset"
+                        | "ReserveNow"
+                        | "CancelReservation"
                 ) {
                     return Ok(event);
                 }
@@ -229,6 +231,8 @@ impl Stream {
                     report = notification;
                     response
                 }
+            } else if matches!(action, "ReserveNow" | "CancelReservation") {
+                crate::reservation201::transport::reply(action, payload, &self.state)
             } else {
                 native_reply(action, payload, &local)
             };
@@ -264,7 +268,11 @@ impl Stream {
         let reset = action == "Reset" && reply["status"] == "Accepted";
         let fault = if matches!(
             action,
-            "SendLocalList" | "ClearCache" | "GetLocalListVersion"
+            "SendLocalList"
+                | "ClearCache"
+                | "GetLocalListVersion"
+                | "ReserveNow"
+                | "CancelReservation"
         ) {
             self.state
                 .lock()

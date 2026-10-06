@@ -205,7 +205,7 @@ fn message_name(message: &Requested) -> &'static str {
     }
 }
 
-fn now() -> String {
+pub(crate) fn now() -> String {
     let elapsed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();

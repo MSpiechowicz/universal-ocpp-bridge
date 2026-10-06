@@ -59,6 +59,7 @@ struct CallContext<'a> {
     target: Option<(TargetInstanceId, u64)>,
     trigger_enabled: bool,
     reservations: Option<&'a uob_protocol_adapter::v16::remote_control::ReservationValues16>,
+    reservations_201: Option<&'a uob_protocol_adapter::v201::remote_control::ReservationValues201>,
 }
 
 #[derive(Default)]
@@ -110,7 +111,9 @@ pub(super) async fn serve(
                     {
                         break Err(error);
                     }
-                    if uob_application::ReservationStore16::expire_reservations_16(&context.store, Clock.now()).await.is_err() {
+                    if uob_application::ReservationStore16::expire_reservations_16(&context.store, Clock.now()).await.is_err()
+                        || uob_application::ReservationStore201::expire_reservations_201(&context.store, Clock.now()).await.is_err()
+                    {
                         break Err(unavailable());
                     }
                 },
@@ -154,11 +157,9 @@ async fn station(
     let station = connection.station().clone();
     let StationContext {
         store,
-        authorization,
         commands,
         application,
         identity,
-        target,
         ..
     } = &context;
     let mut snapshot = state::connected_snapshot(
@@ -215,17 +216,7 @@ async fn station(
                         break;
                     }
                 } else { None };
-                let call_context = CallContext {
-                    store,
-                    authorization,
-                    commands,
-                    identity,
-                    target: target.clone(),
-                    trigger_enabled: configuration.control.trigger_message.enabled()
-                        && context.commands_enabled,
-                    reservations: configuration.reservations.as_deref(),
-                };
-                if let Err(failure) = handle_call(call, &mut snapshot, call_context).await {
+                if let Err(failure) = handle_call(call, &mut snapshot, call_context(&context, &configuration)).await {
                     error = Some(failure); break;
                 }
                 if generation.is_some_and(|generation| commands.update(&station.station_id, generation, snapshot.clone()).is_err()) {
@@ -249,6 +240,23 @@ async fn station(
         error = Some(unavailable());
     }
     error.map_or(Ok(()), Err)
+}
+
+fn call_context<'a>(
+    context: &'a StationContext,
+    configuration: &'a StationSettings,
+) -> CallContext<'a> {
+    CallContext {
+        store: &context.store,
+        authorization: &context.authorization,
+        commands: &context.commands,
+        identity: &context.identity,
+        target: context.target.clone(),
+        trigger_enabled: configuration.control.trigger_message.enabled()
+            && context.commands_enabled,
+        reservations: configuration.reservations.as_deref(),
+        reservations_201: configuration.reservations_201.as_deref(),
+    }
 }
 
 async fn handle_call(

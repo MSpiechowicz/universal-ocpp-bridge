@@ -1,5 +1,6 @@
 //! Default-off reservation capabilities and independently explicit authorization provisioning.
 mod late;
+mod v201;
 use super::{ChargingAuthorization, StationSettings};
 pub(super) use late::late_response;
 use std::{collections::BTreeMap, io};
@@ -12,7 +13,8 @@ pub(super) fn apply_capabilities(
     snapshot: &mut uob_contracts::StationSnapshot,
     settings: &StationSettings,
 ) {
-    if settings.protocol != ProtocolEdition::Ocpp16j {
+    if settings.protocol == ProtocolEdition::Ocpp201 {
+        v201::apply_capabilities(snapshot, settings);
         return;
     }
     let operation = |action: &str| SupportedOperation {
@@ -80,5 +82,5 @@ pub(super) async fn provision_policy(
                 .map_err(|_| io::Error::other("reservation policy provisioning unavailable"))?;
         }
     }
-    Ok(())
+    v201::provision_policy(authorization, settings, resources).await
 }

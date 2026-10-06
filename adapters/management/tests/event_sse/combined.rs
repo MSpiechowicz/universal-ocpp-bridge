@@ -150,6 +150,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             local_authorization_16: None,
             local_authorization_201: None,
             reservation_16: None,
+            reservation_201: None,
         }),
         ..EventSource::default()
     });

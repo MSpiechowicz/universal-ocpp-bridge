@@ -45,6 +45,11 @@ pub(crate) enum Request<C, E, D> {
         Reply<Vec<uob_application::ReservationRecord16>>,
     ),
     MaintainReservations16(UtcTimestamp, bool, Reply<()>),
+    Reservations201(
+        ResourceRef,
+        Reply<Vec<uob_application::ReservationRecord201>>,
+    ),
+    MaintainReservations201(UtcTimestamp, bool, Reply<()>),
     TransactionId(Reply<i32>),
     EventSequence(Reply<u64>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -165,6 +170,16 @@ fn handle_request<C, E, D>(
                 .check_completion_write()
                 .and_then(|()| drain.changed())
                 .and_then(|()| crate::reservation16::maintain(connection, now, startup)),
+        ),
+        Request::Reservations201(station, reply) => {
+            respond(reply, crate::reservation201::read(connection, &station));
+        }
+        Request::MaintainReservations201(now, startup, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| crate::reservation201::maintain(connection, now, startup)),
         ),
         Request::ChargingProfileOwnership(station, reply) => {
             respond(

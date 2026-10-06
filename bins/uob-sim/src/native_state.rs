@@ -1,5 +1,6 @@
 use crate::{
     SimulatorClientConfig, SimulatorClientError, local_authorization, local_authorization201,
+    reservation201,
 };
 
 pub(crate) fn open_native_state(
@@ -38,4 +39,17 @@ pub(crate) fn open_native_state201(
             Ok(local_authorization201::LocalAuthorization201Handle::unsupported(&config.endpoint))
         }
     }
+}
+
+pub(crate) fn open_reservation201(
+    config: &SimulatorClientConfig,
+) -> Result<Option<reservation201::Reservation201Handle>, SimulatorClientError> {
+    config
+        .reservation201
+        .as_ref()
+        .map(|(station, options)| {
+            reservation201::Reservation201Handle::open(station, &config.evse_connectors, options)
+                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
+        })
+        .transpose()
 }

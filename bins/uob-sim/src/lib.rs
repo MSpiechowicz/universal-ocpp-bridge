@@ -21,7 +21,8 @@ pub mod local_authorization;
 pub mod local_authorization201;
 mod native_state;
 pub mod reservation16;
-use native_state::{open_native_state, open_native_state201};
+pub mod reservation201;
+use native_state::{open_native_state, open_native_state201, open_reservation201};
 mod station_auth;
 mod trigger;
 mod trigger201;
@@ -108,6 +109,7 @@ pub struct SimulatorClientConfig {
     pub local_authorization: Option<local_authorization::LocalAuthorizationHandle>,
     pub local_authorization_file: Option<(String, local_authorization::LocalAuthorizationConfig)>,
     pub reservation16: Option<(String, reservation16::ReservationConfig)>,
+    pub reservation201: Option<(String, reservation201::Reservation201Config)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -272,6 +274,9 @@ struct Ocpp201State {
     registered: bool,
     local: Option<local_authorization201::LocalAuthorization201Handle>,
     local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
+    reservation201: Option<reservation201::Reservation201Handle>,
+    reservation_retry_at: Option<std::time::Instant>,
+    reservation_holds: usize,
     socket_connected: bool,
     socket_generation: u64,
     reboot_count: u64,
@@ -363,6 +368,7 @@ impl SimulatorProtocolClient {
                 let local = open_native_state201(&config)?;
                 let state = Arc::new(Mutex::new(Ocpp201State {
                     local: Some(local),
+                    reservation201: open_reservation201(&config)?,
                     ..Ocpp201State::default()
                 }));
                 let (client, barrier, jobs) = trigger_transport::connect_201(
@@ -460,6 +466,11 @@ fn validate_client_config(config: &SimulatorClientConfig) -> Result<(), Simulato
     if config.version != OcppVersion::V1_6 && config.reservation16.is_some() {
         return Err(SimulatorClientError::Protocol(
             "OCPP 1.6 reservations cannot attach to OCPP 2.0.1".to_owned(),
+        ));
+    }
+    if config.version != OcppVersion::V2_0_1 && config.reservation201.is_some() {
+        return Err(SimulatorClientError::Protocol(
+            "OCPP 2.0.1 reservations cannot attach to OCPP 1.6".to_owned(),
         ));
     }
     Ok(())

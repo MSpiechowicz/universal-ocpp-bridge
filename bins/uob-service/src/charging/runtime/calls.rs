@@ -50,13 +50,21 @@ pub(super) async fn apply_observation(
             if protocol == ProtocolEdition::Ocpp201 =>
         {
             let triggered = marker.is_some();
-            let outcome = uob_application::record_transaction_event_with_trigger(
+            // Group membership comes only from the owner's provisioned identity list.
+            let group = services.reservations_201.and_then(|provider| {
+                observation
+                    .reservation_token_key
+                    .as_ref()
+                    .and_then(|key| provider.group_key(key))
+            });
+            let outcome = uob_application::record_transaction_event_with_reservation(
                 services.store,
                 snapshot,
                 observation,
                 context,
                 now,
                 marker,
+                group,
             )
             .await
             .map_err(|error| commit_error(protocol, &error))?;
@@ -89,6 +97,32 @@ pub(super) async fn apply_observation(
         _ => return Err(call_error(protocol, OcppErrorCode::NotImplemented)),
     };
     Ok(json!([3, incoming.call.message_id, reply]))
+}
+
+/// Commits the station's explicit reservation termination before acknowledging it.
+pub(super) async fn reservation_status_update(
+    incoming: &IncomingCall,
+    snapshot: &StationSnapshot,
+    services: &CallContext<'_>,
+) -> Result<serde_json::Value, OcppCallError> {
+    let protocol = ProtocolEdition::Ocpp201;
+    let ChargerObservation::ReservationStatusUpdate201 {
+        reservation_id,
+        status,
+    } = &incoming.call.observation
+    else {
+        return Err(call_error(protocol, OcppErrorCode::ProtocolError));
+    };
+    uob_application::record_reservation_status_201(
+        services.store,
+        snapshot,
+        *reservation_id,
+        *status,
+        Clock.now(),
+    )
+    .await
+    .map_err(|error| commit_error(protocol, &error))?;
+    Ok(json!([3, incoming.call.message_id, {}]))
 }
 
 async fn observation_marker(

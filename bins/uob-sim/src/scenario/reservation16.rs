@@ -17,7 +17,11 @@ pub(super) async fn observe(
             && fields.keys().all(|key| {
                 matches!(
                     key.as_str(),
-                    "stateAvailable" | "activeReservations" | "revision" | "reservations"
+                    "stateAvailable"
+                        | "activeReservations"
+                        | "revision"
+                        | "reservations"
+                        | "pendingUpdates"
                 )
             })
     }) {
@@ -26,16 +30,20 @@ pub(super) async fn observe(
             "reservation assertion accepts only safe workflow metadata",
         ));
     }
-    let handle = client
-        .and_then(ProtocolClient::reservation16)
-        .ok_or_else(|| {
-            failure(
+    // Each edition owns an independent model; only its safe snapshot is compared.
+    let snapshot: Box<dyn Fn() -> serde_json::Value + Send> =
+        if let Some(handle) = client.and_then(ProtocolClient::reservation16) {
+            Box::new(move || handle.snapshot())
+        } else if let Some(handle) = client.and_then(ProtocolClient::reservation201) {
+            Box::new(move || handle.snapshot())
+        } else {
+            return Err(failure(
                 "reservation_state_missing",
                 "durable native reservation state is unavailable",
-            )
-        })?;
+            ));
+        };
     loop {
-        let actual = handle.snapshot();
+        let actual = snapshot();
         if expected
             .as_object()
             .expect("validated fields")

@@ -57,6 +57,15 @@ pub(super) async fn send_outbound(
             return;
         };
         sent
+    } else if let QueuedWire::Reservation201(deferred) = &queued.wire {
+        let Some(sent) = deferred.send_at_boundary(connection, &message_id).await else {
+            finish_not_transmitted(
+                queued,
+                "protected reservation authority unavailable before socket send",
+            );
+            return;
+        };
+        sent
     } else {
         // The existing 1.6 resolver remains synchronous immediately before initiating send.
         let deferred_encoded = match &queued.wire {
@@ -74,6 +83,7 @@ pub(super) async fn send_outbound(
             QueuedWire::Configuration201(_)
             | QueuedWire::LocalAuthorization16(_)
             | QueuedWire::Reservation16(_)
+            | QueuedWire::Reservation201(_)
             | QueuedWire::LocalAuthorization201(_) => {
                 unreachable!("handled above")
             }
@@ -84,6 +94,7 @@ pub(super) async fn send_outbound(
             QueuedWire::Configuration201(_)
             | QueuedWire::LocalAuthorization16(_)
             | QueuedWire::Reservation16(_)
+            | QueuedWire::Reservation201(_)
             | QueuedWire::LocalAuthorization201(_) => {
                 unreachable!("handled above")
             }
@@ -117,14 +128,11 @@ pub(super) async fn send_outbound(
             deadline: Instant::now() + configuration.response_timeout,
             _reservation: queued.reservation,
             response_reservation: queued.response_reservation,
-            reservation_action: if state.protocol == uob_contracts::ProtocolEdition::Ocpp16j {
-                match queued.request.action.as_str() {
-                    "ReserveNow" => Some("ReserveNow"),
-                    "CancelReservation" => Some("CancelReservation"),
-                    _ => None,
-                }
-            } else {
-                None
+            // Both editions keep reservation IDs after timeout so a valid late ACK can resolve.
+            reservation_action: match queued.request.action.as_str() {
+                "ReserveNow" => Some("ReserveNow"),
+                "CancelReservation" => Some("CancelReservation"),
+                _ => None,
             },
         },
     );

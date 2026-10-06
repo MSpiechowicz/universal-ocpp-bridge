@@ -29,6 +29,7 @@ fn persisted_result(command: &Command<Value>, lifecycle: CommandLifecycle) -> Co
         local_authorization_16: None,
         local_authorization_201: None,
         reservation_16: None,
+        reservation_201: None,
     }
 }
 

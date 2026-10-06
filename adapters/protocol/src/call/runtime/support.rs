@@ -46,7 +46,7 @@ pub(super) fn finish_response(
         }
         let result = outcome(entry.correlation_id);
         if let Some(action) = entry.reservation_action
-            && reservation_status(action, &result).is_none()
+            && !reservation_status(state.protocol, action, &result)
         {
             if state.timed_out.len() == state.history_capacity {
                 state.timed_out.pop_front();
@@ -86,17 +86,15 @@ pub(super) fn finish_response(
             .span(Some(correlation_id.clone()))
             .emit(FlowStage::OcppReceive, FlowEvidence::Stale);
         if let Some(action) = reservation_action {
-            if let Some(status) = reservation_status(action, &outcome(correlation_id.clone())) {
+            if let Some(diagnostic) = late_reservation(
+                state.protocol,
+                action,
+                &outcome(correlation_id.clone()),
+                &message_id,
+                &correlation_id,
+            ) {
                 let _ = state.timed_out.remove(index);
-                emit(
-                    diagnostics,
-                    CallSessionDiagnostic::LateReservationResponse16 {
-                        message_id,
-                        correlation_id,
-                        action,
-                        status,
-                    },
-                );
+                emit(diagnostics, diagnostic);
                 return;
             }
         } else {
@@ -121,6 +119,54 @@ pub(super) fn finish_response(
 }
 
 fn reservation_status(
+    protocol: uob_contracts::ProtocolEdition,
+    action: &str,
+    outcome: &SessionCallOutcome,
+) -> bool {
+    match protocol {
+        uob_contracts::ProtocolEdition::Ocpp16j => reservation_status_16(action, outcome).is_some(),
+        uob_contracts::ProtocolEdition::Ocpp201 => {
+            reservation_status_201(action, outcome).is_some()
+        }
+    }
+}
+fn late_reservation(
+    protocol: uob_contracts::ProtocolEdition,
+    action: &'static str,
+    outcome: &SessionCallOutcome,
+    message_id: &str,
+    correlation_id: &CorrelationId,
+) -> Option<CallSessionDiagnostic> {
+    let (message_id, correlation_id) = (message_id.to_owned(), correlation_id.clone());
+    Some(match protocol {
+        uob_contracts::ProtocolEdition::Ocpp16j => {
+            CallSessionDiagnostic::LateReservationResponse16 {
+                message_id,
+                correlation_id,
+                action,
+                status: reservation_status_16(action, outcome)?,
+            }
+        }
+        uob_contracts::ProtocolEdition::Ocpp201 => {
+            CallSessionDiagnostic::LateReservationResponse201 {
+                message_id,
+                correlation_id,
+                action,
+                status: reservation_status_201(action, outcome)?,
+            }
+        }
+    })
+}
+fn reservation_status_201(
+    action: &str,
+    outcome: &SessionCallOutcome,
+) -> Option<uob_contracts::ReserveNowStatus201> {
+    let SessionCallOutcome::Result { payload, .. } = outcome else {
+        return None;
+    };
+    crate::v201::remote_control::reservation_native_status_201(action, payload)
+}
+fn reservation_status_16(
     action: &str,
     outcome: &SessionCallOutcome,
 ) -> Option<uob_contracts::ReserveNowStatus16> {

@@ -133,11 +133,13 @@ pub(super) async fn run(
 ) {
     let mut requests = JoinSet::new();
     let mut replay = JoinSet::new();
+    let mut reservations = JoinSet::new();
     let mut replay_generation = None;
     let mut housekeeping = tokio::time::interval(std::time::Duration::from_millis(50));
     loop {
         tokio::select! {
             _ = housekeeping.tick(), if replay.is_empty() => {
+                crate::reservation201::transport::tick(&client, &state, &mut reservations, &traces);
                 let candidate = {
                     let current = state.lock().expect("native state lock");
                     (current.registered && current.socket_connected && replay_generation != Some(current.socket_generation))
@@ -158,6 +160,7 @@ pub(super) async fn run(
                 }
             }
             _ = replay.join_next(), if !replay.is_empty() => {}
+            _ = reservations.join_next(), if !reservations.is_empty() => {}
             _ = requests.join_next(), if !requests.is_empty() => {}
             command = commands.recv(), if requests.len() < outstanding_capacity => match command {
                 Some(Command::Heartbeat(result)) => {
@@ -172,14 +175,21 @@ pub(super) async fn run(
                         let _ = result.send(response);
                     });
                 }
-                Some(Command::Call(call, result)) => {
+                Some(Command::Call(mut call, result)) => {
                     let client = client.clone();
                     let traces = traces.clone();
                     let state = Arc::clone(&state);
                     requests.spawn(async move {
                         let wire_name = call.action.wire_name(OcppVersion::V2_0_1);
                         traces.push(TraceKind::ChargingCallSent, wire_name);
+                        let _hold = crate::reservation201::transport::OutboundHold::new(&state);
                         let generation = state.lock().expect("native state lock").socket_generation;
+                        // Actual reservation facts bind before the exact original event is captured.
+                        if let Err(error) = Box::pin(crate::reservation201::transport::prepare(&client, &state, &mut call, generation)).await {
+                            traces.push(TraceKind::Failed, wire_name);
+                            let _ = result.send(Err(error));
+                            return;
+                        }
                         let response = crate::local_authorization201::transport::on_generation(
                             generation,
                             (call.payload.get("eventType").is_some()).then(|| call.payload.clone()),
@@ -202,17 +212,20 @@ pub(super) async fn run(
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
                     replay.shutdown().await;
+                    reservations.shutdown().await;
                     let response = client.disconnect().await
                         .map_err(|_| SimulatorClientError::Protocol("native disconnect failed".to_owned()));
                     state.lock().expect("native state lock").local = None;
+                    state.lock().expect("native state lock").reservation201 = None;
                     traces.push(TraceKind::Stopped, "client disconnected");
                     let _ = result.send(response);
                     break;
                 }
-                None => { requests.shutdown().await; replay.shutdown().await; break; }
+                None => { requests.shutdown().await; replay.shutdown().await; reservations.shutdown().await; break; }
             }
         }
     }
+    state.lock().expect("native state lock").reservation201 = None;
 }
 
 async fn send_call(

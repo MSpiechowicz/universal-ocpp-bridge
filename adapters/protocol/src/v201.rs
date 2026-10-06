@@ -85,6 +85,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
             let request: TransactionEventRequest = payload_as(payload)?;
             transaction_event(request)?
         }
+        "ReservationStatusUpdate" => reservation_status_update(&payload)?,
         _ => {
             return Err(DecodeError::new(
                 PROTOCOL,
@@ -139,6 +140,14 @@ fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservat
         _ => return Err(DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload)),
     };
     let id_token_present = request.id_token.is_some();
+    // Only a one-way key of the presented identity survives decoding.
+    let reservation_token_key = request
+        .id_token
+        .as_ref()
+        .and_then(|token| serde_json::to_value(token).ok())
+        .and_then(|token| {
+            remote_control::reservation_key_201(token["type"].as_str()?, token["idToken"].as_str()?)
+        });
     let native_transaction_id = request.transaction_info.transaction_id;
     let sequence_number = request.seq_no.cast_unsigned();
     let meter_observation = request
@@ -179,8 +188,33 @@ fn transaction_event(request: TransactionEventRequest) -> Result<ChargerObservat
             occurred_at: timestamp(request.timestamp)?,
             measurements: meter_observation,
             payload_fingerprint,
+            reservation_id: request.reservation_id,
+            reservation_token_key,
         },
     ))
+}
+
+/// The pinned native request; `customData` is rejected rather than silently discarded.
+fn reservation_status_update(payload: &Value) -> Result<ChargerObservation, DecodeError> {
+    let invalid = || DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload);
+    if !crate::command_registry::reservation201::valid_native(4, payload)
+        || payload.get("customData").is_some()
+    {
+        return Err(invalid());
+    }
+    let reservation_id = payload["reservationId"]
+        .as_i64()
+        .and_then(|id| i32::try_from(id).ok())
+        .ok_or_else(invalid)?;
+    let status = match payload["reservationUpdateStatus"].as_str() {
+        Some("Expired") => uob_application::ReservationUpdateStatus201::Expired,
+        Some("Removed") => uob_application::ReservationUpdateStatus201::Removed,
+        _ => return Err(invalid()),
+    };
+    Ok(ChargerObservation::ReservationStatusUpdate201 {
+        reservation_id,
+        status,
+    })
 }
 
 fn hex_digest(bytes: &[u8]) -> String {

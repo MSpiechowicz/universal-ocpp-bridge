@@ -84,6 +84,7 @@ pub(super) fn result(response: Option<TriggerNativeResponse>) -> CommandResult {
         local_authorization_16: None,
         local_authorization_201: None,
         reservation_16: None,
+        reservation_201: None,
     }
 }
 pub(super) fn event(

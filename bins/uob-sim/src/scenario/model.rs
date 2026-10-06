@@ -45,6 +45,7 @@ pub struct StationDefinition {
     pub trigger_observation: TriggerObservation,
     pub local_authorization: Option<crate::local_authorization::LocalAuthorizationConfig>,
     pub reservation16: Option<crate::reservation16::ReservationConfig>,
+    pub reservation201: Option<crate::reservation201::Reservation201Config>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -93,6 +94,10 @@ impl StationDefinition {
                 .map(|settings| (self.id.clone(), settings.clone())),
             reservation16: self
                 .reservation16
+                .as_ref()
+                .map(|options| (self.id.clone(), options.clone())),
+            reservation201: self
+                .reservation201
                 .as_ref()
                 .map(|options| (self.id.clone(), options.clone())),
         }
@@ -346,6 +351,15 @@ pub(super) fn validate_scenario(scenario: &ScenarioDefinition) -> Result<(), Run
 }
 
 fn validate_station_topology(station: &StationDefinition) -> Result<(), RunFailure> {
+    if (station.ocpp_version == ConfiguredOcppVersion::V1_6 && station.reservation201.is_some())
+        || (station.ocpp_version == ConfiguredOcppVersion::V2_0_1
+            && station.reservation16.is_some())
+    {
+        return Err(setup_failure(
+            "invalid_reservation_edition",
+            "native reservation state must match the station OCPP edition",
+        ));
+    }
     match station.ocpp_version {
         ConfiguredOcppVersion::V1_6 if !station.evses.is_empty() => Err(setup_failure(
             "invalid_station_topology",

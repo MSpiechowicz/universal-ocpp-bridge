@@ -86,6 +86,7 @@ pub enum CommandDispatchOutcome {
     LocalAuthorizationResponse16(uob_contracts::LocalAuthorizationResult16),
     LocalAuthorizationResponse201(uob_contracts::LocalAuthorizationResult201),
     ReservationResponse16(uob_contracts::ReservationResult16),
+    ReservationResponse201(uob_contracts::ReservationResult201),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -163,6 +164,18 @@ pub trait StationCommandPort<P>: Send + Sync {
         _generation: Option<u64>,
         _now: UtcTimestamp,
     ) -> Result<Option<crate::ReservationMutation16>, CommandErrorCode> {
+        Ok(None)
+    }
+    /// Captures protected native201 mutations; unrelated operations return None.
+    ///
+    /// # Errors
+    /// Rejects invalid, unprivileged or unavailable reservation context before admission.
+    fn reservation_expectation_201(
+        &self,
+        _command: &Command<P>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<crate::ReservationMutation201>, CommandErrorCode> {
         Ok(None)
     }
     /// Dispatches a durably reserved profile against the captured generation.

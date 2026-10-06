@@ -76,6 +76,9 @@ pub(super) async fn dispatch_call(
             )
             .await
         }
+        (ProtocolEdition::Ocpp201, "ReservationStatusUpdate") => {
+            super::calls::reservation_status_update(&incoming, snapshot, &services).await
+        }
         (ProtocolEdition::Ocpp201, "TransactionEvent") | (_, "MeterValues") => {
             complete_observation(&incoming, snapshot, &mut services, protocol, &mut commits).await
         }

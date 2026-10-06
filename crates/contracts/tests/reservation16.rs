@@ -87,7 +87,7 @@ fn old_results_remain_readable_and_all_native_statuses_survive_nested_exports() 
             batch.records()[0].metadata().clone(),
             ExportPayload::CommandResult(result.clone()),
         );
-        assert_eq!(record.metadata().schema_version.revision, 11);
+        assert_eq!(record.metadata().schema_version.revision, 12);
         assert!(export_validator.is_valid(&serde_json::to_value(record).unwrap()));
     }
     for status in [

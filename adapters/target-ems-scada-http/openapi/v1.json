@@ -43,6 +43,13 @@
         ],
         "type": "object"
       },
+      "CancelReservationStatus201": {
+        "enum": [
+          "Accepted",
+          "Rejected"
+        ],
+        "type": "string"
+      },
       "CapabilityDocument": {
         "description": "Versioned description of the integration surface, generated from the target descriptor.",
         "properties": {
@@ -396,6 +403,146 @@
         "title": "PointView",
         "type": "object"
       },
+      "ReservationReconciliation201": {
+        "additionalProperties": false,
+        "properties": {
+          "observed_at": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+          },
+          "revision": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source_time": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ReservationState201"
+          }
+        },
+        "required": [
+          "revision",
+          "state",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "ReservationResult201": {
+        "description": "Does not carry identities, groups, matching keys, protected references or native statusInfo.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "ReserveNow",
+                "type": "string"
+              },
+              "evse_id": {
+                "format": "uint32",
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "reconciliation": {
+                "$ref": "#/components/schemas/ReservationReconciliation201"
+              },
+              "reservation_id": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReserveNowStatus201"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "reservation_id",
+              "reconciliation"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "CancelReservation",
+                "type": "string"
+              },
+              "reconciliation": {
+                "$ref": "#/components/schemas/ReservationReconciliation201"
+              },
+              "reservation_id": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CancelReservationStatus201"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "reservation_id",
+              "reconciliation"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ReservationState201": {
+        "description": "`Removed` is the station's explicit `ReservationStatusUpdate`, never an inferred status.",
+        "enum": [
+          "pending",
+          "active",
+          "uncertain",
+          "rejected",
+          "consumed",
+          "cancelled",
+          "expired",
+          "removed",
+          "superseded",
+          "ambiguous"
+        ],
+        "type": "string"
+      },
+      "ReserveNowStatus201": {
+        "enum": [
+          "Accepted",
+          "Faulted",
+          "Occupied",
+          "Rejected",
+          "Unavailable"
+        ],
+        "type": "string"
+      },
       "ResourceView": {
         "properties": {
           "name": {
@@ -716,7 +863,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.11/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
                     }
                   ]
                 }
@@ -762,7 +909,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.11/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
                     }
                   ]
                 }
@@ -809,7 +956,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.11/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
                     }
                   ]
                 }
@@ -829,7 +976,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.11/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
                     }
                   ]
                 }
@@ -862,7 +1009,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.11/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
                     }
                   ]
                 }
@@ -949,7 +1096,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.11/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
                 }
               }
             },
@@ -1247,7 +1394,7 @@
             }
           },
           {
-            "description": "Comma-separated exact event types: at most 8 entries of 1\u2013128 bytes, at most 1031 bytes total.",
+            "description": "Comma-separated exact event types: at most 8 entries of 1–128 bytes, at most 1031 bytes total.",
             "in": "query",
             "name": "types",
             "required": false,
@@ -1477,7 +1624,7 @@
             }
           },
           {
-            "description": "Comma-separated exact event types: at most 8 entries of 1\u2013128 bytes, at most 1031 bytes total.",
+            "description": "Comma-separated exact event types: at most 8 entries of 1–128 bytes, at most 1031 bytes total.",
             "in": "query",
             "name": "types",
             "required": false,
@@ -2382,7 +2529,8 @@
                 "set-network-profile-reference-201.schema.json",
                 "send-local-list-reference-16.schema.json",
                 "send-local-list-reference-201.schema.json",
-                "reserve-now-reference-16.schema.json"
+                "reserve-now-reference-16.schema.json",
+                "reserve-now-reference-201.schema.json"
               ],
               "type": "string"
             }
@@ -2511,7 +2659,8 @@
                 "set-network-profile-reference-201.schema.json",
                 "send-local-list-reference-16.schema.json",
                 "send-local-list-reference-201.schema.json",
-                "reserve-now-reference-16.schema.json"
+                "reserve-now-reference-16.schema.json",
+                "reserve-now-reference-201.schema.json"
               ],
               "type": "string"
             }
@@ -3061,7 +3210,8 @@
             "schema": {
               "enum": [
                 "export-record.schema.json",
-                "export-batch.schema.json"
+                "export-batch.schema.json",
+                "command-result.schema.json"
               ],
               "type": "string"
             }
@@ -3139,6 +3289,153 @@
       "head": {
         "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
         "operationId": "schemas_v1_12_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json",
+                "command-result.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.13/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_13",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_13_head",
         "parameters": [
           {
             "in": "path",

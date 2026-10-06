@@ -84,6 +84,15 @@ pub(super) async fn attach(
                 Some(provider) => session.with_local_authorization_updates(provider.clone()),
                 None => session,
             };
+            let session = if let Some(credentials) = &context.credentials {
+                session.with_reservations_201(
+                    configuration.reservations_201.clone(),
+                    configuration.control.reserve_non_evse_specific_supported,
+                    credentials.reservation_grant(),
+                )
+            } else {
+                session
+            };
             context
                 .commands
                 .attach_201(station.clone(), session, context.store.clone())

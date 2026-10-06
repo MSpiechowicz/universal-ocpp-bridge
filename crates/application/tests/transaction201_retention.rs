@@ -37,6 +37,8 @@ fn event(id: usize, event: TransactionEventKind, day: i64) -> TransactionEventOb
         occurred_at: at(day),
         measurements: None,
         payload_fingerprint: format!("fingerprint-{id}-{event:?}"),
+        reservation_id: None,
+        reservation_token_key: None,
     }
 }
 

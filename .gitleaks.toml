@@ -29,3 +29,14 @@ condition = "AND"
 paths = ['''^bins/uob-sim/tests/native201_joint_smoke\.py$''']
 regexTarget = "secret"
 regexes = ['''^central-policy-112$''']
+
+[[allowlists]]
+description = "Synthetic OCPP 2.0.1 reservation owner idToken used by simulator wire/process tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^bins/uob-sim/tests/reservation201_wire\.rs$''',
+  '''^bins/uob-sim/tests/reservation201_process\.rs$''',
+]
+regexTarget = "secret"
+regexes = ['''^private-owner-114$''']

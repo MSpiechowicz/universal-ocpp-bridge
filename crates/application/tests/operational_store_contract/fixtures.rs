@@ -74,6 +74,8 @@ pub(super) fn populated_write()
         charging_profile_201: None,
         reservation_16: None,
         reservation_observations_16: Vec::new(),
+        reservation_201: None,
+        reservation_observations_201: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: Some(snapshot()),
         authorization_changes: vec![AuthorizationChange {

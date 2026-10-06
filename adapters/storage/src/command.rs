@@ -92,6 +92,7 @@ pub(crate) fn write_result_value(
         .map(|payload| codec::decode_stored_result(transaction, &payload, request))
         .transpose()?;
     crate::reservation16::finish(transaction, &mut incoming)?;
+    crate::reservation201::finish(transaction, &mut incoming)?;
 
     let mut retire_trigger_201 = false;
     if let Some(mut previous) = previous {
@@ -108,6 +109,7 @@ pub(crate) fn write_result_value(
         codec::local_authorization16::merge(&previous, &mut incoming)?;
         codec::local_authorization201::merge(&previous, &mut incoming)?;
         crate::reservation16::validation::merge(&previous, &mut incoming)?;
+        crate::reservation201::validation::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -142,7 +144,11 @@ pub(crate) fn write_result_value(
                 uob_contracts::ReservationResult16::CancelReservation { status, .. } => {
                     status.is_some()
                 }
-            }));
+            })
+            || incoming
+                .reservation_201
+                .as_ref()
+                .is_some_and(uob_contracts::ReservationResult201::has_native_status));
         if previous_rank > incoming_rank
             || (previous_rank == 2 && incoming_rank == 2 && !correlated_trigger_reply)
         {
@@ -158,6 +164,9 @@ pub(crate) fn write_result_value(
             incoming.local_authorization_201 = previous.local_authorization_201;
             if incoming.reservation_16.is_none() {
                 incoming.reservation_16 = previous.reservation_16;
+            }
+            if incoming.reservation_201.is_none() {
+                incoming.reservation_201 = previous.reservation_201;
             }
         }
         for observation in previous.configuration_observations {
@@ -184,6 +193,7 @@ pub(crate) fn write_result_value(
     codec::local_authorization16::validate_stored(transaction, &incoming)?;
     codec::local_authorization201::validate_stored(transaction, &incoming)?;
     crate::reservation16::codec_validation::validate_stored(transaction, &incoming)?;
+    crate::reservation201::codec_validation::validate_stored(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 
