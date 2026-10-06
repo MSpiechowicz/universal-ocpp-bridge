@@ -153,6 +153,13 @@ pub enum StationEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         status: Option<String>,
     },
+    /// Charger-initiated OCPP 2.0.1 negotiation evidence (K11-K17). Readers without this
+    /// variant decode it as an `Invalidation` marker, so it must stay before that variant.
+    ChargingNegotiation201 {
+        station_snapshot_invalidated: StationId,
+        /// Distinct property prevents deserializing this as any other station marker.
+        charging_negotiation_201: crate::ChargingNegotiation201,
+    },
     /// Small, explicitly incomplete station change marker. Fetch the authoritative snapshot.
     Invalidation {
         /// Station whose authoritative snapshot changed.

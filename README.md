@@ -176,6 +176,14 @@ fragments within shared bounds into typed profiles with their EVSE and limit sou
 restart interrupts a pending report and nothing is replayed. Reported profiles never
 become local policy. See [OCPP 2.0.1 remote control](docs/architecture/ocpp201-remote-control.md#opt-in-composite-schedules-and-installed-profile-reports).
 
+OCPP 2.0.1 charging needs, EV charging schedules and external charging limits (K11–K17) are
+recorded and answered within the bridge's own authority. Charging needs get `Rejected` with
+`NotEnabled` by default, or `Processing` when an operator's EMS sends the `TxProfile` through
+this bridge. EV schedules are checked exactly against the bridge's own installed TxProfiles.
+External limits and their releases become observed snapshot state and typed journal events.
+CSO-sourced limits are refused, and nothing is calculated, enforced or turned into a command.
+See [OCPP 2.0.1 charging needs and external limits](docs/architecture/ocpp201-charging-negotiation.md).
+
 Full native OCPP 2.0.1 SetChargingProfile/ClearChargingProfile is independently default-off,
 privileged and demo-only, with exact station/EVSE scope, native schedule/transaction/phase
 evidence and no automatic replay. Enabling full Set also blocks canonical charging limits

@@ -1,0 +1,1 @@
+[2,"independent-needs-121-dc","NotifyEVChargingNeeds",{"evseId":1,"chargingNeeds":{"requestedEnergyTransfer":"DC","dcChargingParameters":{"evMaxCurrent":200,"evMaxVoltage":800,"energyAmount":45000,"evMaxPower":150000,"stateOfCharge":35,"evEnergyCapacity":77000,"fullSoC":95,"bulkSoC":80}}}]

@@ -64,7 +64,7 @@ pub(super) fn periods(raw: &Value, horizon: Option<i32>) -> Option<Vec<ChargingS
 }
 
 /// One native `ChargingScheduleType`. Returns whether an ISO 15118 `salesTariff` was omitted.
-pub(super) fn schedule(raw: &Value) -> Option<(ChargingSchedule201, bool)> {
+pub(crate) fn schedule(raw: &Value) -> Option<(ChargingSchedule201, bool)> {
     let duration = optional_integer(raw.get("duration")).ok()?;
     if duration.is_some_and(|seconds| seconds < 0) {
         return None;

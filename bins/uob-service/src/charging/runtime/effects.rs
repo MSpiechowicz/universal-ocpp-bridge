@@ -80,9 +80,11 @@ pub(super) async fn reconcile(
                         ),
                     }
                 }
+                // Charger-reported limits and needs are never evidence of a command's effect.
                 StationEvent::Invalidation { .. }
                 | StationEvent::TriggerNotification { .. }
-                | StationEvent::TriggerNotification201 { .. } => None,
+                | StationEvent::TriggerNotification201 { .. }
+                | StationEvent::ChargingNegotiation201 { .. } => None,
             };
             if let Some(effect) = effect {
                 coordinator

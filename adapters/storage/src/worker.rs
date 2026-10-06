@@ -39,6 +39,7 @@ pub(crate) enum Request<C, E, D> {
     ),
     Probe(Reply<()>),
     ChargingProfileOwnership(ResourceRef, Reply<uob_application::ProfileOwnership201>),
+    ChargingProfileOwners(ResourceRef, Reply<uob_application::ProfileOwners201>),
     InterruptChargingProfiles(Reply<()>),
     Reservations16(
         ResourceRef,
@@ -192,6 +193,12 @@ fn handle_request<C, E, D>(
             respond(
                 reply,
                 crate::charging_profile201::read(connection, &station),
+            );
+        }
+        Request::ChargingProfileOwners(station, reply) => {
+            respond(
+                reply,
+                crate::charging_profile201::owners(connection, &station),
             );
         }
         Request::InterruptChargingProfiles(reply) => {

@@ -2,6 +2,8 @@
 mod authority_and_ids;
 #[path = "charging_profile201/fixtures.rs"]
 mod fixtures;
+#[path = "charging_profile201/owners.rs"]
+mod owners;
 #[path = "charging_profile201/recovery.rs"]
 mod recovery;
 use fixtures::*;

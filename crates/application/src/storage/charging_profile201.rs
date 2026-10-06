@@ -106,12 +106,41 @@ pub struct ProfileOwnership201 {
     pub busy: bool,
 }
 
+/// Durable ledger state of one footprint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProfileOwnershipState201 {
+    /// Admitted and possibly in flight; no native answer is recorded yet.
+    Reserved,
+    /// The station accepted the owner's request.
+    Owned,
+    /// The outcome is unknown and awaits explicit reconciliation.
+    Uncertain,
+}
+
+/// One footprint with the request that owns it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileOwner201 {
+    pub request_id: RequestId,
+    pub state: ProfileOwnershipState201,
+    pub footprint: ProfileFootprint201,
+}
+
+/// Owner-attributed ledger view for exact checks; it is not a discovered station inventory.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileOwners201 {
+    pub owners: Vec<ProfileOwner201>,
+    /// A station mutation is admitted and not yet finished.
+    pub busy: bool,
+}
+
 /// Implemented on the same bounded storage worker as atomic writes. No default/no-op adapter.
 pub trait ChargingProfileStore201: Send + Sync {
     fn charging_profile_ownership(
         &self,
         station: ResourceRef,
     ) -> StorageFuture<'_, ProfileOwnership201>;
+    /// The same bounded ledger with each footprint's owner request and state.
+    fn charging_profile_owners(&self, station: ResourceRef) -> StorageFuture<'_, ProfileOwners201>;
     /// Composition startup only, while holding exclusive ownership of the operational state.
     fn interrupt_charging_profile_mutations(&self) -> StorageFuture<'_, ()>;
 }

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Record and answer OCPP 2.0.1 charging needs, EV charging schedules and external
+  charging limits (K11–K17) (#121).
+  - Charging needs are answered `Rejected` with `NotEnabled` by default. The new 2.0.1-only
+    `ev_charging_needs_processing` station option answers `Processing` when an operator's
+    EMS sends the TxProfile through a canonical limit or native profile path. The bridge
+    answers `UnknownEvse` or `TxNotFound` without a configured EVSE or a single current
+    transaction, and never answers `Accepted`.
+  - EV schedules are checked against the TxProfiles the bridge itself installed for the
+    transaction, rebuilt from their retained requests. The answer is `Accepted`, `Rejected`
+    with `ValueTooHigh`, or `Rejected` with `Unspecified` when the limits cannot be placed
+    exactly.
+  - External limits and releases are committed before the empty acknowledgement, as
+    station or EVSE snapshot points and a bounded typed journal event. CSO-sourced and
+    malformed notifications are refused.
+  - Nothing becomes a command, an observed command effect or a CALL to the station.
+  - Add a backward-readable `ChargingNegotiation201` station event, with no SQL migration
+    or published schema revision.
+  - Add eight pinned schemas, thirteen independent wire fixtures, nineteen negative cases,
+    a K11–K17 requirements mapping and two verified coverage rows.
+  - Software verification only, not ISO 15118, hardware interoperability or OCA
+    certification.
 - Add independently default-off privileged demo OCPP 2.0.1 `GetCompositeSchedule` (K08)
   and `GetChargingProfiles` with `ReportChargingProfiles` collection (K09) (#120).
   Composite queries address the grid connection from station scope or an exact EVSE and
