@@ -97,6 +97,8 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::AwaitLocalAuthorization
                 | ActionKind::AssertReservation
                 | ActionKind::AwaitReservation
+                | ActionKind::AssertFirmware
+                | ActionKind::AwaitFirmware
         )
     {
         return Err(setup_failure(

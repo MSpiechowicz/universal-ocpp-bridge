@@ -151,7 +151,7 @@ pub(super) async fn register_1_6_handlers(
         .await;
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)] // One select loop owns every worker command.
 pub(super) async fn run_1_6(
     mut client: ocpp_client::ocpp_1_6::OCPP1_6Client,
     mut commands: mpsc::Receiver<Command>,
@@ -172,6 +172,7 @@ pub(super) async fn run_1_6(
         tokio::select! {
             _ = reset_poll.tick() => {
                 crate::reservation16::transport::expire(&state);
+                crate::firmware16::transport::poll(&state, &traces);
                 let reset = state.lock().expect("OCPP 1.6 state lock").reset_reason.is_some();
                 if reset {
                     requests.shutdown().await;
@@ -244,6 +245,10 @@ pub(super) async fn run_1_6(
                         }
                     });
                 }
+                Some(Command::FirmwareStatus(status, generation)) => {
+                    requests.spawn(crate::firmware16::transport::send(client.clone(),
+                        Arc::clone(&state), traces.clone(), status, generation));
+                }
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
                     replay.shutdown().await;
@@ -252,6 +257,7 @@ pub(super) async fn run_1_6(
                     traces.push(TraceKind::Stopped, "client disconnected");
                     state.lock().expect("OCPP 1.6 state lock").local = None;
                     state.lock().expect("native state lock").reservation16 = None;
+                    state.lock().expect("native state lock").firmware16 = None;
                     let _ = result.send(response);
                     break;
                 }
@@ -261,6 +267,7 @@ pub(super) async fn run_1_6(
     }
     state.lock().expect("OCPP 1.6 state lock").local = None;
     state.lock().expect("native state lock").reservation16 = None;
+    state.lock().expect("native state lock").firmware16 = None;
 }
 
 pub(crate) async fn send_1_6_call(

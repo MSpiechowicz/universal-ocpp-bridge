@@ -46,6 +46,12 @@ impl ProtocolClient for SimulatorProtocolClient {
         })
     }
 
+    fn firmware16(&self) -> Option<crate::firmware16::FirmwareHandle> {
+        self.ocpp16_state
+            .as_ref()
+            .and_then(|state| state.lock().expect("native state lock").firmware16.clone())
+    }
+
     fn reservation201(&self) -> Option<crate::reservation201::Reservation201Handle> {
         self.ocpp201_state.as_ref().and_then(|state| {
             state
@@ -164,6 +170,7 @@ impl ProtocolClient for SimulatorProtocolClient {
             if let Some(state) = &self.ocpp16_state {
                 state.lock().expect("OCPP 1.6 state lock").local = None;
                 state.lock().expect("native state lock").reservation16 = None;
+                state.lock().expect("native state lock").firmware16 = None;
             }
             if let Some(state) = &self.ocpp201_state {
                 let mut state = state.lock().expect("native state lock");
@@ -181,6 +188,7 @@ impl ProtocolClient for SimulatorProtocolClient {
         if let Some(state) = &self.ocpp16_state {
             state.lock().expect("OCPP 1.6 state lock").local = None;
             state.lock().expect("native state lock").reservation16 = None;
+            state.lock().expect("native state lock").firmware16 = None;
         }
         if let Some(state) = &self.ocpp201_state {
             let mut state = state.lock().expect("native state lock");

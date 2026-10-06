@@ -3409,14 +3409,19 @@ dependencies = [
 name = "uob-sim"
 version = "0.31.0"
 dependencies = [
+ "aws-lc-rs",
  "axum",
+ "base64",
  "caseless",
  "futures",
  "libc",
  "ocpp-client",
  "parking_lot",
+ "rcgen",
  "reqwest",
  "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
  "serde",
  "serde_json",
  "sha2",

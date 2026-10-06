@@ -31,6 +31,7 @@ pub(crate) fn config(endpoint: String) -> SimulatorClientConfig {
         local_authorization_file: None,
         reservation16: None,
         reservation201: None,
+        firmware16: None,
     }
 }
 

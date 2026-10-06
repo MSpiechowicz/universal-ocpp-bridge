@@ -232,7 +232,8 @@ impl TransportStream for Stream {
                         | "Reset"
                         | "ReserveNow"
                         | "CancelReservation"
-                ) {
+                ) && !crate::firmware16::transport::intercepts(action, &self.state)
+                {
                     return Ok(event);
                 }
                 let Some(local) = self
@@ -267,6 +268,8 @@ impl TransportStream for Stream {
                 } else {
                     let reply = if matches!(action, "ReserveNow" | "CancelReservation") {
                         crate::reservation16::transport::reply(action, payload, &self.state)
+                    } else if matches!(action, "UpdateFirmware" | "SignedUpdateFirmware") {
+                        crate::firmware16::transport::reply(action, payload, &self.state)
                     } else {
                         native_reply(action, payload, &local, text.len())
                     };

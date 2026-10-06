@@ -18,12 +18,13 @@ mod client_observation16;
 mod client_reconnect201;
 mod client_runtime;
 mod client_runtime_201;
+pub mod firmware16;
 pub mod local_authorization;
 pub mod local_authorization201;
 mod native_state;
 pub mod reservation16;
 pub mod reservation201;
-use native_state::{open_native_state, open_native_state201, open_reservation201};
+use native_state::{open_firmware16, open_native_state, open_native_state201, open_reservation201};
 mod station_auth;
 mod trigger;
 mod trigger201;
@@ -111,6 +112,7 @@ pub struct SimulatorClientConfig {
     pub local_authorization_file: Option<(String, local_authorization::LocalAuthorizationConfig)>,
     pub reservation16: Option<(String, reservation16::ReservationConfig)>,
     pub reservation201: Option<(String, reservation201::Reservation201Config)>,
+    pub firmware16: Option<(String, firmware16::FirmwareConfig)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -210,6 +212,7 @@ enum Command {
     NextRemote(oneshot::Sender<Result<RemoteCommand, SimulatorClientError>>),
     LocalListConflict,
     ReservationStatus(u32, &'static str),
+    FirmwareStatus(firmware16::FirmwareStatus, u64),
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
 }
 
@@ -252,6 +255,7 @@ struct Ocpp16State {
     meters: HashMap<u16, serde_json::Value>,
     local: Option<local_authorization::LocalAuthorizationHandle>,
     reservation16: Option<reservation16::ReservationHandle>,
+    firmware16: Option<firmware16::FirmwareHandle>,
     reservation_notifications: Vec<(u32, &'static str)>,
     local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
     reset_reason: Option<ocpp_client::ocpp_types::v16::common::Reason>,
@@ -350,6 +354,7 @@ impl SimulatorProtocolClient {
                             .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
                         })
                         .transpose()?,
+                    firmware16: open_firmware16(&config)?,
                     notifications: Some(commands.downgrade()),
                     ..Ocpp16State::default()
                 }));
@@ -467,6 +472,11 @@ fn validate_client_config(config: &SimulatorClientConfig) -> Result<(), Simulato
     if config.version != OcppVersion::V1_6 && config.reservation16.is_some() {
         return Err(SimulatorClientError::Protocol(
             "OCPP 1.6 reservations cannot attach to OCPP 2.0.1".to_owned(),
+        ));
+    }
+    if config.version != OcppVersion::V1_6 && config.firmware16.is_some() {
+        return Err(SimulatorClientError::Protocol(
+            "OCPP 1.6 firmware cannot attach to OCPP 2.0.1".to_owned(),
         ));
     }
     if config.version != OcppVersion::V2_0_1 && config.reservation201.is_some() {

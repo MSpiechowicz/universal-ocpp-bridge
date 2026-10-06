@@ -46,6 +46,7 @@ pub struct StationDefinition {
     pub local_authorization: Option<crate::local_authorization::LocalAuthorizationConfig>,
     pub reservation16: Option<crate::reservation16::ReservationConfig>,
     pub reservation201: Option<crate::reservation201::Reservation201Config>,
+    pub firmware16: Option<crate::firmware16::FirmwareConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -98,6 +99,10 @@ impl StationDefinition {
                 .map(|options| (self.id.clone(), options.clone())),
             reservation201: self
                 .reservation201
+                .as_ref()
+                .map(|options| (self.id.clone(), options.clone())),
+            firmware16: self
+                .firmware16
                 .as_ref()
                 .map(|options| (self.id.clone(), options.clone())),
         }
@@ -358,6 +363,14 @@ fn validate_station_topology(station: &StationDefinition) -> Result<(), RunFailu
         return Err(setup_failure(
             "invalid_reservation_edition",
             "native reservation state must match the station OCPP edition",
+        ));
+    }
+    if let Some(firmware) = &station.firmware16
+        && (station.ocpp_version != ConfiguredOcppVersion::V1_6 || firmware.validate().is_err())
+    {
+        return Err(setup_failure(
+            "invalid_firmware_configuration",
+            "native firmware state requires a valid OCPP 1.6 station configuration",
         ));
     }
     match station.ocpp_version {
