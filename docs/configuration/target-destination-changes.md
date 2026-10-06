@@ -18,6 +18,12 @@ event for every exact old owner. Extra, duplicate, missing, or revision-mismatch
 closed. The caller must apply those audited dispositions before consuming the preview as restart
 configuration.
 
+The service implements both steps through the management API. An authorized principal records an
+archive or discard authorization for one exact old instance and revision, and its audit event ID
+becomes the proof the preview accepts. The next service start executes the authorization before any
+target session reads the outbox. See
+[target configuration over the management API](management-target-configuration.md).
+
 Archive and discard never transfer ownership. Even after an authorized disposition, the runtime
 delivery guard rejects recovered or queued payloads whose instance or revision differs from the
 validated startup selection. Command results independently retain the authenticated origin and

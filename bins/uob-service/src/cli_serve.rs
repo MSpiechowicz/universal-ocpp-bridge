@@ -90,6 +90,7 @@ pub(super) async fn serve(configuration_path: &std::path::Path, no_ui: bool) -> 
             charging,
             target_selection: configuration.service.target_selection,
             exporter,
+            configuration_api: configuration.configuration_api,
         },
     )
     .await;

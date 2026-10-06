@@ -29,7 +29,11 @@ port.
 - `control` permits ordinary typed charging commands;
 - `privileged_control` permits pinned-schema OCPP management operations;
 - resource scopes grant one bridge, one station and its descendants, or one exact canonical
-  resource.
+  resource;
+- `configuration_read`, `configuration_write`, and `destructive_disposition` permit the
+  [target configuration routes](../configuration/management-target-configuration.md). They take
+  effect only with a whole-bridge scope and never authorize charging commands. Discarding undrained
+  critical deliveries needs `destructive_disposition` in addition to `configuration_write`.
 
 The adapter authenticates the connection or request and attaches the resulting trusted origin;
 origin fields never come from the submitted command body. `ScopedCommandAdmissionPort` rejects an

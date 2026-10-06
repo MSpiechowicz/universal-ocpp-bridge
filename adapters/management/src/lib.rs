@@ -10,6 +10,16 @@ pub use capture_api::{
     ManagementCaptureAuthenticator, ManagementCaptureConfiguration, capture_router,
 };
 mod command_api;
+mod configuration_api;
+pub use configuration_api::{
+    BacklogView, CandidateSetting, CandidateTarget, ConfigurationApiError, ConfigurationFuture,
+    DestinationView, DispositionAction, ManagementConfigurationAuthenticator,
+    ManagementConfigurationPort, ManagementConfigurationSetup, NamedView, SchemaFieldView,
+    SettingView, TargetApplyOutcome, TargetApplyRequest, TargetCatalogView,
+    TargetConfigurationCandidate, TargetConfigurationView, TargetDispositionRequest,
+    TargetDispositionView, TargetEntryView, TargetKindView, TargetSectionView,
+    TargetValidationReport, ValidationIssue, configuration_router,
+};
 mod event_api;
 mod health_view;
 mod read_api;

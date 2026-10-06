@@ -28,9 +28,11 @@ mod security;
 mod station;
 mod storage;
 mod target;
+pub mod target_disposition;
 pub mod transaction16;
 pub use reservation16::*;
 pub use reservation201::*;
+pub use target_disposition::*;
 
 pub use access::{
     AccessGrant, AccessPermission, AccessPolicy, AccessPolicyError, AccessResourceScope,

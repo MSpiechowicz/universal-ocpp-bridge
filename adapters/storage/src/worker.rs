@@ -129,6 +129,17 @@ pub(crate) enum Request<C, E, D> {
     PendingDeliveries(String, i64, String, usize, Reply<Vec<ScheduledDelivery<D>>>),
     RecordDeliveryAttempt(EncodedDeliveryAttempt, Reply<()>),
     DeliveryAttempts(String, usize, Reply<Vec<RecordedDeliveryAttempt>>),
+    TargetBacklog(Reply<Vec<uob_application::TargetBacklogFact>>),
+    PendingTargetDispositions(Reply<Vec<uob_application::DeliveryDispositionRecord>>),
+    AuthorizeTargetDisposition(
+        uob_application::DeliveryDispositionRequest,
+        Reply<uob_application::DeliveryDispositionRecord>,
+    ),
+    SettleTargetDispositions(
+        Option<uob_application::TargetDeliveryDestination>,
+        UtcTimestamp,
+        Reply<Vec<uob_application::DeliveryDispositionRecord>>,
+    ),
 }
 
 pub(crate) type Reply<T> = oneshot::Sender<Result<T, StorageError>>;
@@ -285,6 +296,28 @@ fn handle_request<C, E, D>(
         Request::DeliveryAttempts(delivery_id, limit, reply) => respond(
             reply,
             delivery::read_attempts(connection, &delivery_id, limit),
+        ),
+        Request::TargetBacklog(reply) => {
+            respond(reply, crate::target_disposition::backlog(connection));
+        }
+        Request::PendingTargetDispositions(reply) => {
+            respond(reply, crate::target_disposition::pending(connection));
+        }
+        Request::AuthorizeTargetDisposition(request, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| crate::target_disposition::authorize(connection, &request)),
+        ),
+        Request::SettleTargetDispositions(selected, settled_at, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| {
+                    crate::target_disposition::settle(connection, selected.as_ref(), settled_at)
+                }),
         ),
     }
 }

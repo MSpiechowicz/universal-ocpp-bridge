@@ -79,6 +79,7 @@ async fn start_service(fixture: &Fixture, hung: bool) -> RunningService {
             charging: Some(charging),
             target_selection: None,
             exporter,
+            configuration_api: configuration.configuration_api,
         },
         async move {
             let _ = stopped.await;
