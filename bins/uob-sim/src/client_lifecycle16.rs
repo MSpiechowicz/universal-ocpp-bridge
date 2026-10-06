@@ -50,8 +50,9 @@ pub(crate) async fn connect(
     .await;
     let reconnect_state = Arc::clone(&state);
     let reconnect_traces = traces.clone();
-    let recover_on_reconnect =
-        config.local_authorization.is_some() || config.local_authorization_file.is_some();
+    let recover_on_reconnect = config.local_authorization.is_some()
+        || config.local_authorization_file.is_some()
+        || config.reservation16.is_some();
     client
         .on_reconnect(move |client| {
             let state = Arc::clone(&reconnect_state);

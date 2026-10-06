@@ -7,6 +7,7 @@ use crate::StationConnection;
 use axum::extract::ws::Message;
 use tokio::time::Instant;
 use uob_application::{FlowEvidence, FlowStage};
+#[allow(clippy::too_many_lines)] // Each deferred wire kind must reach the same send boundary.
 pub(super) async fn send_outbound(
     connection: &mut StationConnection,
     state: &mut SessionState,
@@ -47,6 +48,15 @@ pub(super) async fn send_outbound(
             return;
         };
         sent
+    } else if let QueuedWire::Reservation16(deferred) = &queued.wire {
+        let Some(sent) = deferred.send_at_boundary(connection, &message_id).await else {
+            finish_not_transmitted(
+                queued,
+                "protected reservation authority unavailable before socket send",
+            );
+            return;
+        };
+        sent
     } else {
         // The existing 1.6 resolver remains synchronous immediately before initiating send.
         let deferred_encoded = match &queued.wire {
@@ -63,6 +73,7 @@ pub(super) async fn send_outbound(
             }
             QueuedWire::Configuration201(_)
             | QueuedWire::LocalAuthorization16(_)
+            | QueuedWire::Reservation16(_)
             | QueuedWire::LocalAuthorization201(_) => {
                 unreachable!("handled above")
             }
@@ -72,6 +83,7 @@ pub(super) async fn send_outbound(
             QueuedWire::Configuration(_) => deferred_encoded.expect("checked above"),
             QueuedWire::Configuration201(_)
             | QueuedWire::LocalAuthorization16(_)
+            | QueuedWire::Reservation16(_)
             | QueuedWire::LocalAuthorization201(_) => {
                 unreachable!("handled above")
             }
@@ -105,6 +117,15 @@ pub(super) async fn send_outbound(
             deadline: Instant::now() + configuration.response_timeout,
             _reservation: queued.reservation,
             response_reservation: queued.response_reservation,
+            reservation_action: if state.protocol == uob_contracts::ProtocolEdition::Ocpp16j {
+                match queued.request.action.as_str() {
+                    "ReserveNow" => Some("ReserveNow"),
+                    "CancelReservation" => Some("CancelReservation"),
+                    _ => None,
+                }
+            } else {
+                None
+            },
         },
     );
 }
@@ -127,7 +148,7 @@ fn unavailable_before_send(
         || state
             .timed_out
             .iter()
-            .any(|(id, _)| id == &queued.request.message_id)
+            .any(|(id, _, _)| id == &queued.request.message_id)
         || state.retired_outbound.contains(&queued.request.message_id)
     {
         return Some("duplicate or retired message ID");

@@ -45,7 +45,8 @@ async fn trigger_sends_exact_scope_and_preserves_response_separate_from_later_re
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     enable(&mut snapshot, &port);
     let commands = Arc::new(scoped(
         coordinator,
@@ -91,7 +92,8 @@ async fn trigger_denials_and_pending_registration_never_transmit() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     let commands = Arc::new(scoped(
         coordinator.clone(),
         &snapshot,
@@ -169,7 +171,8 @@ async fn preaccepted_boot_and_delayed_native_reply_remain_distinct() {
     let mut running = session("ocpp2.0.1", Duration::from_millis(150)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     enable(&mut snapshot, &port);
     let commands = Arc::new(scoped(
         coordinator,

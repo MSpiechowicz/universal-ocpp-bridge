@@ -13,7 +13,7 @@ async fn accepted_and_mixed_native_writes_emit_value_free_correlated_protocol_re
     let database = Database::new();
     let store = database.open();
     let entries = vec![entry("First", 1), entry("Second", 2)];
-    let (snapshot, _, port, _) = configured(
+    let (snapshot, _, port, _) = Box::pin(configured(
         &store,
         &running,
         entries
@@ -23,7 +23,7 @@ async fn accepted_and_mixed_native_writes_emit_value_free_correlated_protocol_re
             .collect(),
         None,
         Arc::new(Clock),
-    )
+    ))
     .await;
     let app = crate::endpoint_support::application(Environment::Demo, None);
     let capture = CaptureManager::new(true);

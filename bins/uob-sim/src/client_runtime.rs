@@ -171,6 +171,7 @@ pub(super) async fn run_1_6(
     loop {
         tokio::select! {
             _ = reset_poll.tick() => {
+                crate::reservation16::transport::expire(&state);
                 let reset = state.lock().expect("OCPP 1.6 state lock").reset_reason.is_some();
                 if reset {
                     requests.shutdown().await;
@@ -201,15 +202,20 @@ pub(super) async fn run_1_6(
                         let _ = result.send(response);
                     });
                 }
-                Some(Command::Call(call, result)) => {
+                Some(Command::Call(mut call, result)) => {
                     let client = client.clone();
                     let traces = traces.clone();
                     let state = Arc::clone(&state);
                     requests.spawn(async move {
                         traces.push(TraceKind::ChargingCallSent, call.action.name());
                         let exchange = crate::client_exchange16::NativeExchange::capture(&state, &call);
-                        let response = exchange.send(&client, &call).await;
-                        let response = finish_call(&state, &call, response, &traces, exchange);
+                        let response = match crate::reservation16::transport::prepare(&client, &state, &mut call, exchange.generation).await {
+                            Ok(()) => {
+                                let response = exchange.send(&client, &call).await;
+                                finish_call(&state, &call, response, &traces, exchange)
+                            }
+                            Err(error) => Err(error),
+                        };
                         traces.push(if response.is_ok() { TraceKind::ChargingCallResult } else { TraceKind::Failed }, call.action.name());
                         let _ = result.send(response);
                     });
@@ -228,6 +234,16 @@ pub(super) async fn run_1_6(
                         crate::client_observation16::notify_conflict(&client, &traces).await;
                     });
                 }
+                Some(Command::ReservationStatus(connector, status)) => {
+                    let client = client.clone();
+                    let traces = traces.clone();
+                    let state = Arc::clone(&state);
+                    requests.spawn(async move {
+                        if crate::reservation16::transport::status(&client, &state, connector, status).await.is_err() {
+                            traces.push(TraceKind::Failed, "reservation_status_uncertain");
+                        }
+                    });
+                }
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
                     replay.shutdown().await;
@@ -235,6 +251,7 @@ pub(super) async fn run_1_6(
                         .map_err(|error| SimulatorClientError::Protocol(error.to_string()));
                     traces.push(TraceKind::Stopped, "client disconnected");
                     state.lock().expect("OCPP 1.6 state lock").local = None;
+                    state.lock().expect("native state lock").reservation16 = None;
                     let _ = result.send(response);
                     break;
                 }
@@ -243,6 +260,7 @@ pub(super) async fn run_1_6(
         }
     }
     state.lock().expect("OCPP 1.6 state lock").local = None;
+    state.lock().expect("native state lock").reservation16 = None;
 }
 
 pub(crate) async fn send_1_6_call(

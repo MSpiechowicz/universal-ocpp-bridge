@@ -27,6 +27,7 @@ pub(super) fn command_result<P>(
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     }
 }
 
@@ -63,6 +64,7 @@ pub(super) fn rejected_external<P>(
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     }
 }
 

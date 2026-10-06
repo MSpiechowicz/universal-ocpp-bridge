@@ -37,6 +37,7 @@ pub(crate) struct Configuration {
 /// Station actions are individually opt-in; their TOML keys remain on the station table.
 #[derive(Clone, Copy, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)] // Each flag is an independent operator-facing TOML key.
 pub(crate) struct StationControlOptions {
     pub change_availability: bool,
     pub trigger_message: StationActionOption,
@@ -51,6 +52,9 @@ pub(crate) struct StationControlOptions {
     pub get_local_list_version: StationActionOption,
     pub send_local_list: StationActionOption,
     pub clear_cache: StationActionOption,
+    pub reserve_now: StationActionOption,
+    pub cancel_reservation: StationActionOption,
+    pub reserve_connector_zero_supported: bool,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
 }
@@ -102,6 +106,8 @@ impl StationControlOptions {
             || self.device_model_enabled()
             || self.configuration_enabled()
             || self.local_authorization_enabled()
+            || self.reserve_now.enabled()
+            || self.cancel_reservation.enabled()
     }
 }
 
@@ -113,6 +119,7 @@ struct StationConfiguration {
     credential_file: String,
     resources: Vec<ResourceConfiguration>,
     start_token_file: Option<String>,
+    reservation16_file: Option<String>,
     #[serde(flatten)]
     control: StationControlOptions,
 }
@@ -153,6 +160,7 @@ pub(crate) struct ValidatedChargingStation {
     pub resources: Vec<ResourceRef>,
     pub start_token_file: Option<CredentialReference>,
     pub control: StationControlOptions,
+    pub reservation16_file: Option<PathBuf>,
 }
 
 impl Configuration {
@@ -274,6 +282,7 @@ impl Configuration {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Cross-field station checks stay together so none is skipped.
 fn validate_stations(
     entries: Vec<StationConfiguration>,
     state_directory: &Path,
@@ -293,6 +302,17 @@ fn validate_stations(
         if (station.control.device_model_enabled() || station.control.configuration_enabled())
             && station.protocol != ProtocolEdition::Ocpp201
         {
+            return Err(fail);
+        }
+        if (station.control.reserve_now.enabled()
+            || station.control.cancel_reservation.enabled()
+            || station.control.reserve_connector_zero_supported
+            || station.reservation16_file.is_some())
+            && station.protocol != ProtocolEdition::Ocpp16j
+        {
+            return Err(fail);
+        }
+        if station.control.reserve_now.enabled() && station.reservation16_file.is_none() {
             return Err(fail);
         }
         if station.control.get_composite_schedule.enabled()
@@ -340,6 +360,19 @@ fn validate_stations(
                 CredentialReference::new(path.to_string_lossy().into_owned()).map_err(|_| fail)
             })
             .transpose()?;
+        let reservation16_file = station
+            .reservation16_file
+            .map(|value| {
+                let path = private_absolute_path(&value)?;
+                if path == state_directory
+                    || path.starts_with(state_directory)
+                    || !credential_files.insert(path.clone())
+                {
+                    return Err(fail);
+                }
+                Ok(path)
+            })
+            .transpose()?;
         if station.resources.is_empty() || station.resources.len() > MAX_RESOURCES_PER_STATION {
             return Err(fail);
         }
@@ -356,6 +389,7 @@ fn validate_stations(
             start_token_file,
             control: station.control,
             resources,
+            reservation16_file,
         });
     }
     Ok(stations)

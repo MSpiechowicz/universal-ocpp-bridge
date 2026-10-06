@@ -11,6 +11,8 @@ mod identity;
 mod local_authorization;
 mod local_authorization_values;
 mod mapping;
+mod reservation;
+mod reservation_values;
 mod trigger;
 pub(crate) use configuration_values::DeferredConfigurationCall;
 pub use configuration_values::{
@@ -22,6 +24,10 @@ pub use local_authorization_values::{
     LocalAuthorizationUpdates16, ProtectedLocalListUpdate16, ProtectedLocalListValue16,
     wipe_local_authorization_json,
 };
+pub(crate) use reservation::DeferredReservationCall16;
+pub use reservation::ReservationGrant16;
+pub use reservation::response as reservation_response_16;
+pub use reservation_values::{ReservationValues16, reservation_key_16};
 pub mod observation;
 
 use crate::{CallSessionHandle, SessionCallOutcome};
@@ -55,13 +61,17 @@ pub trait RemoteStartIdentity: Send + Sync {
 /// here and wraps its coordinator with scoped access and charging authorization guards.
 pub struct RemoteControlSession {
     handle: CallSessionHandle,
-    snapshot: RwLock<StationSnapshot>,
+    snapshot: Arc<RwLock<StationSnapshot>>,
     identity: Arc<dyn RemoteStartIdentity>,
     configuration_values: Option<Arc<LocalConfigurationValues>>,
     configuration_facts: RwLock<configuration::SessionFacts>,
     local_authorization_updates: Option<Arc<LocalAuthorizationUpdates16>>,
     local_list_limits: Arc<std::sync::Mutex<local_authorization::LocalListLimits16>>,
     local_list_active: Arc<std::sync::Mutex<bool>>,
+    reservation_values: Option<Arc<ReservationValues16>>,
+    reservation_grant: Option<Arc<ReservationGrant16>>,
+    reserve_zero: bool,
+    reservation_active: Arc<std::sync::Mutex<bool>>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
 }
@@ -80,7 +90,7 @@ impl RemoteControlSession {
         validate_snapshot(&handle, &snapshot)?;
         Ok(Self {
             handle,
-            snapshot: RwLock::new(snapshot),
+            snapshot: Arc::new(RwLock::new(snapshot)),
             identity,
             clock,
             configuration_values: None,
@@ -91,6 +101,10 @@ impl RemoteControlSession {
             )),
             local_list_active: Arc::new(std::sync::Mutex::new(true)),
             evidence,
+            reservation_values: None,
+            reservation_grant: None,
+            reserve_zero: false,
+            reservation_active: Arc::new(std::sync::Mutex::new(true)),
         })
     }
     /// Installs locally provisioned station/key-bound values for this authenticated socket only.
@@ -108,10 +122,25 @@ impl RemoteControlSession {
         self.local_authorization_updates = Some(provider);
         self
     }
+    #[must_use]
+    pub fn with_reservations_16(
+        mut self,
+        provider: Option<Arc<ReservationValues16>>,
+        reserve_zero: bool,
+        grant: Arc<ReservationGrant16>,
+    ) -> Self {
+        self.reservation_values = provider;
+        self.reserve_zero = reserve_zero;
+        self.reservation_grant = Some(grant);
+        self
+    }
 
     /// Retires this exact socket generation before any queued protected send can begin.
     pub fn detach_local_authorization(&self) {
         if let Ok(mut active) = self.local_list_active.lock() {
+            *active = false;
+        }
+        if let Ok(mut active) = self.reservation_active.lock() {
             *active = false;
         }
     }
@@ -191,6 +220,14 @@ impl RemoteControlSession {
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn reservation_expectation_16(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::ReservationMutation16>, CommandErrorCode> {
+        self.reservation_context(command, generation, now)
+    }
     fn charging_profile_expectation(
         &self,
         command: &Command<Value>,
@@ -235,6 +272,7 @@ impl StationCommandPort<Value> for RemoteControlSession {
         })
     }
 
+    #[allow(clippy::too_many_lines)] // Routes every native 1.6 action through one dispatch gate.
     fn dispatch(
         &self,
         command: Command<Value>,
@@ -298,6 +336,14 @@ impl StationCommandPort<Value> for RemoteControlSession {
             };
             Ok(match pending.receive().await {
                 SessionCallOutcome::Result { mut payload, .. } => {
+                    if crate::command_registry::reservation16::ACTIONS.contains(&action) {
+                        return Ok(reservation::response(
+                            action,
+                            &payload,
+                            &command,
+                            self.clock.now(),
+                        ));
+                    }
                     if crate::command_registry::local_authorization16::ACTIONS.contains(&action) {
                         let outcome = local_authorization::response(action, &payload, &command);
                         wipe_local_authorization_json(&mut payload);
@@ -331,6 +377,11 @@ impl StationCommandPort<Value> for RemoteControlSession {
                         return Ok(mapping::uncertain());
                     }
                     outcome
+                }
+                SessionCallOutcome::Error { .. }
+                    if crate::command_registry::reservation16::ACTIONS.contains(&action) =>
+                {
+                    mapping::uncertain()
                 }
                 SessionCallOutcome::Error { .. } => mapping::rejected_response(),
                 SessionCallOutcome::NotTransmitted { reason, .. } => {

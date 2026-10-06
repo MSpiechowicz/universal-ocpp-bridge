@@ -11,7 +11,8 @@ async fn evse_reset_and_connector_unlock_keep_exact_scope_and_constraints() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     snapshot.resources[0]
         .capabilities
         .operations
@@ -120,7 +121,8 @@ async fn station_start_lets_charger_select_evse_without_reusing_other_start_iden
     let mut running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, auth, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, auth, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     snapshot.capabilities.operations.push(SupportedOperation {
         operation: Operation::Start,
         parameters: vec![],

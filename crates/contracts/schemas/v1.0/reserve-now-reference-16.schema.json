@@ -1,0 +1,47 @@
+{
+  "$defs": {
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/reserve-now-reference-16.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "connectorId": {
+      "format": "uint32",
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "expiryDate": {
+      "$ref": "#/$defs/UtcTimestamp"
+    },
+    "reservationId": {
+      "format": "int32",
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "type": "integer"
+    },
+    "reservationReference": {
+      "maxLength": 74,
+      "minLength": 74,
+      "pattern": "^reserve16:[0-9a-fA-F]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "connectorId",
+    "expiryDate",
+    "reservationId",
+    "reservationReference"
+  ],
+  "title": "ReserveNowReference16",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

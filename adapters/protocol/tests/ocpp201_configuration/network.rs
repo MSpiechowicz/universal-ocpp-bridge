@@ -16,8 +16,14 @@ async fn complete_native_profile_slot_zero_preserves_fields_and_exact_staged_sta
     ))
     .unwrap();
     let profile = fixture[3]["connectionData"].clone();
-    let (snapshot, _, _, commands) =
-        configured(&store, &running, vec![], Some(&profile), Arc::new(Clock)).await;
+    let (snapshot, _, _, commands) = Box::pin(configured(
+        &store,
+        &running,
+        vec![],
+        Some(&profile),
+        Arc::new(Clock),
+    ))
+    .await;
     for (status, expected) in [
         ("Accepted", SetNetworkProfileStatus201::Accepted),
         ("Rejected", SetNetworkProfileStatus201::Rejected),

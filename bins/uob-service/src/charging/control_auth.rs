@@ -129,6 +129,17 @@ impl ControlCredentials {
             }),
         })
     }
+    pub(super) fn reservation_grant(
+        self: &Arc<Self>,
+    ) -> Arc<uob_protocol_adapter::v16::remote_control::ReservationGrant16> {
+        let owner = self.clone();
+        Arc::new(move |command, now| {
+            owner.privileged.is_some()
+                && command.origin == owner.privileged_origin
+                && owner.permits_schema(&command.origin, &command.resource)
+                && now < command.expires_at
+        })
+    }
 }
 
 impl ManagementCommandAuthenticator for ControlCredentials {

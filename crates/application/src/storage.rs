@@ -260,6 +260,9 @@ pub struct AtomicStoreWrite<C, E, D, R> {
     /// Native201/canonical201 ownership reservation, atomic with command admission.
     /// Indirection is allocated only for profile admission, never for an absent reservation.
     pub charging_profile_201: Option<Box<ProfileReservation201>>,
+    /// Reservation admission and inbound facts share this authoritative transaction.
+    pub reservation_16: Option<Box<crate::ReservationMutation16>>,
+    pub reservation_observations_16: Vec<crate::ReservationObservation16>,
     /// Durable journal records produced by the operation.
     pub journal_events: Vec<EventEnvelope<E>>,
     /// Required target work produced by the operation.
@@ -280,6 +283,8 @@ impl<C, E, D, R> AtomicStoreWrite<C, E, D, R> {
             command_result: None,
             journal_events: Vec::new(),
             charging_profile_201: None,
+            reservation_16: None,
+            reservation_observations_16: Vec::new(),
             required_deliveries: Vec::new(),
             committed_records: Vec::new(),
         }

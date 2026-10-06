@@ -19,6 +19,9 @@ mod client_runtime;
 mod client_runtime_201;
 pub mod local_authorization;
 pub mod local_authorization201;
+mod native_state;
+pub mod reservation16;
+use native_state::{open_native_state, open_native_state201};
 mod station_auth;
 mod trigger;
 mod trigger201;
@@ -104,6 +107,7 @@ pub struct SimulatorClientConfig {
     pub trigger_observation: TriggerObservation,
     pub local_authorization: Option<local_authorization::LocalAuthorizationHandle>,
     pub local_authorization_file: Option<(String, local_authorization::LocalAuthorizationConfig)>,
+    pub reservation16: Option<(String, reservation16::ReservationConfig)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -202,6 +206,7 @@ enum Command {
     ),
     NextRemote(oneshot::Sender<Result<RemoteCommand, SimulatorClientError>>),
     LocalListConflict,
+    ReservationStatus(u32, &'static str),
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
 }
 
@@ -243,6 +248,8 @@ struct Ocpp16State {
     status: HashMap<u16, serde_json::Value>,
     meters: HashMap<u16, serde_json::Value>,
     local: Option<local_authorization::LocalAuthorizationHandle>,
+    reservation16: Option<reservation16::ReservationHandle>,
+    reservation_notifications: Vec<(u32, &'static str)>,
     local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
     reset_reason: Option<ocpp_client::ocpp_types::v16::common::Reason>,
     reboot_count: u64,
@@ -311,6 +318,7 @@ impl SimulatorProtocolClient {
     /// # Errors
     ///
     /// Returns an error when capacities are zero or WebSocket/OCPP negotiation fails.
+    #[allow(clippy::too_many_lines)] // Session negotiation and every native handler are wired in one place.
     pub async fn connect(config: SimulatorClientConfig) -> Result<Self, SimulatorClientError> {
         validate_client_config(&config)?;
 
@@ -324,6 +332,18 @@ impl SimulatorProtocolClient {
                 let local = open_native_state(&config)?;
                 let state = Arc::new(Mutex::new(Ocpp16State {
                     local: Some(local),
+                    reservation16: config
+                        .reservation16
+                        .as_ref()
+                        .map(|(station, options)| {
+                            reservation16::ReservationHandle::open(
+                                station,
+                                &config.connectors,
+                                options,
+                            )
+                            .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
+                        })
+                        .transpose()?,
                     notifications: Some(commands.downgrade()),
                     ..Ocpp16State::default()
                 }));
@@ -437,43 +457,10 @@ fn validate_client_config(config: &SimulatorClientConfig) -> Result<(), Simulato
             "OCPP 1.6 handle cannot attach to OCPP 2.0.1".to_owned(),
         ));
     }
+    if config.version != OcppVersion::V1_6 && config.reservation16.is_some() {
+        return Err(SimulatorClientError::Protocol(
+            "OCPP 1.6 reservations cannot attach to OCPP 2.0.1".to_owned(),
+        ));
+    }
     Ok(())
-}
-
-fn open_native_state(
-    config: &SimulatorClientConfig,
-) -> Result<local_authorization::LocalAuthorizationHandle, SimulatorClientError> {
-    match (
-        &config.local_authorization,
-        &config.local_authorization_file,
-    ) {
-        (Some(handle), _) if !handle.has_persistence() => Err(SimulatorClientError::Protocol(
-            "persistent native state required".to_owned(),
-        )),
-        (Some(handle), Some((station, _))) if !handle.station_matches(station) => Err(
-            SimulatorClientError::Protocol("private native state binding mismatch".to_owned()),
-        ),
-        (Some(handle), _) => Ok(handle.clone()),
-        (None, Some((station, settings))) => {
-            local_authorization::LocalAuthorizationHandle::open(station, settings)
-                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
-        }
-        (None, None) => Ok(local_authorization::LocalAuthorizationHandle::unsupported(
-            &config.endpoint,
-        )),
-    }
-}
-
-fn open_native_state201(
-    config: &SimulatorClientConfig,
-) -> Result<local_authorization201::LocalAuthorization201Handle, SimulatorClientError> {
-    match &config.local_authorization_file {
-        Some((station, settings)) => {
-            local_authorization201::LocalAuthorization201Handle::open(station, settings)
-                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
-        }
-        None => {
-            Ok(local_authorization201::LocalAuthorization201Handle::unsupported(&config.endpoint))
-        }
-    }
 }

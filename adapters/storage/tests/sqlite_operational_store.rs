@@ -83,7 +83,7 @@ fn upgrades_existing_outbox_schema_without_losing_pending_rows() {
     let version: i64 = reopened
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("schema version");
-    assert_eq!(version, 14);
+    assert_eq!(version, 15);
 }
 
 #[test]
@@ -269,6 +269,8 @@ fn delivery_write(
 ) -> AtomicStoreWrite<String, String, String, String> {
     AtomicStoreWrite {
         charging_profile_201: None,
+        reservation_16: None,
+        reservation_observations_16: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -303,6 +305,8 @@ fn write_with(
 ) -> AtomicStoreWrite<String, String, String, String> {
     AtomicStoreWrite {
         charging_profile_201: None,
+        reservation_16: None,
+        reservation_observations_16: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),

@@ -62,6 +62,7 @@ pub(super) fn device_delivery(delivery_id: &str, request_id: &str) -> TargetDeli
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     };
     TargetDelivery {
         delivery_id: DeliveryId::new(delivery_id).expect("delivery identity"),

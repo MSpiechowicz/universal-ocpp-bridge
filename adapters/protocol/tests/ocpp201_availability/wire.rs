@@ -10,7 +10,7 @@ async fn native_responses_persist_without_changing_observed_availability() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (snapshot, _, coordinator) = setup(&store, running.handle.clone()).await;
+    let (snapshot, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let commands = scoped(
         coordinator,
         &snapshot,
@@ -62,7 +62,7 @@ async fn scheduled_transaction_waits_for_completion_and_fresh_status_evidence() 
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (mut snapshot, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, port, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let transaction = TransactionSnapshot {
         ocpp16: None,
         transaction_id: TransactionId::new("availability-active").unwrap(),
@@ -150,7 +150,7 @@ async fn station_scope_waits_for_every_connector_and_never_widens_connector_cont
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (mut snapshot, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, port, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     // Native topology has two EVSEs, three connectors, and an EVSE aggregate.
     assert_eq!(snapshot.resources.len(), 4);
     port.update_committed(snapshot.clone()).unwrap();
@@ -214,7 +214,7 @@ async fn delayed_reply_keeps_status_processing_live_and_operative_evidence_separ
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = open(&database);
-    let (mut snapshot, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, port, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     status(&mut running, &store, &mut snapshot, 1, "Unavailable", 1).await;
     port.update_committed(snapshot.clone()).unwrap();
     let external = command(&snapshot, "delayed", 1, "Operative");

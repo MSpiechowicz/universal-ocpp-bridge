@@ -10,6 +10,7 @@ mod local_authorization;
 mod local_authorization201;
 mod model;
 mod report;
+mod reservation16;
 mod runner;
 mod scheduling;
 mod state;

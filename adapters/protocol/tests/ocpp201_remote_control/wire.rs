@@ -10,7 +10,7 @@ async fn start_reset_unlock_use_durable_authorized_wire_path_and_native_response
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = database.open();
-    let (snapshot, _, _, coordinator) = setup(&store, running.handle.clone()).await;
+    let (snapshot, _, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let commands = Arc::new(scoped(
         coordinator,
         &snapshot,

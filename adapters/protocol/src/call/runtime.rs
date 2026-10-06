@@ -117,7 +117,7 @@ struct SessionState {
     pending: BTreeMap<String, PendingEntry>,
     incoming_ids: BTreeSet<String>,
     recent_incoming: VecDeque<String>,
-    timed_out: VecDeque<(String, CorrelationId)>,
+    timed_out: VecDeque<(String, CorrelationId, Option<&'static str>)>,
     retired_outbound: VecDeque<String>,
     history_capacity: usize,
     reports: super::reports::SharedReports,

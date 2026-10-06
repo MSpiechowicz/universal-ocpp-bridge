@@ -55,6 +55,17 @@ impl CallSessionHandle {
             bytes
                 .checked_add(metadata)
                 .ok_or(SessionSubmitError::InvalidRequest)?
+        } else if let QueuedWire::Reservation16(deferred) = &wire {
+            let metadata = deferred
+                .metadata_size(
+                    &request.payload,
+                    &request.message_id,
+                    request.correlation_id.as_str(),
+                )
+                .ok_or(SessionSubmitError::InvalidRequest)?;
+            bytes
+                .checked_add(metadata)
+                .ok_or(SessionSubmitError::InvalidRequest)?
         } else {
             bytes
         };
@@ -114,6 +125,12 @@ impl CallSessionHandle {
             return Err(SessionSubmitError::InvalidRequest);
         }
         let (wire, bytes) = match deferred {
+            Some(QueuedWire::Reservation16(deferred)) => {
+                let bytes = deferred
+                    .wire_size(&request.message_id)
+                    .ok_or(SessionSubmitError::InvalidRequest)?;
+                (QueuedWire::Reservation16(deferred), bytes)
+            }
             Some(QueuedWire::Configuration(deferred)) => {
                 let bytes = deferred.wire_size(&request.message_id).unwrap_or_default();
                 (QueuedWire::Configuration(deferred), bytes)
@@ -139,7 +156,8 @@ impl CallSessionHandle {
             Some(QueuedWire::Ready(_)) => return Err(SessionSubmitError::InvalidRequest),
             None => {
                 if self.protocol == ProtocolEdition::Ocpp16j
-                    && request.action.as_str() == "SendLocalList"
+                    && ["SendLocalList", "ReserveNow", "CancelReservation"]
+                        .contains(&request.action.as_str())
                 {
                     return Err(SessionSubmitError::InvalidRequest);
                 }

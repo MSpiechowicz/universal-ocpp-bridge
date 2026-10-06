@@ -22,6 +22,9 @@ pub trait ProtocolClient: Send + Sync {
     ) -> Option<crate::local_authorization201::LocalAuthorization201Handle> {
         None
     }
+    fn reservation16(&self) -> Option<crate::reservation16::ReservationHandle> {
+        None
+    }
     fn reboot_count(&self) -> u64 {
         0
     }

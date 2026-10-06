@@ -28,13 +28,13 @@ async fn empty_unicode_and_all_native_statuses_are_exact_and_durable_without_val
         "y".into(),
         "z".into(),
     ];
-    let (snapshot, _, _, commands) = configured(
+    let (snapshot, _, _, commands) = Box::pin(configured(
         &store,
         &running,
         entries.iter().cloned().zip(values.clone()).collect(),
         None,
         Arc::new(Clock),
-    )
+    ))
     .await;
     learn(&mut running, &snapshot, &commands, 6, 16384, "all").await;
     let request = variables(&snapshot, "all-statuses", &entries);
@@ -112,7 +112,7 @@ async fn missing_extra_duplicate_or_wrong_identity_replies_are_uncertain() {
     let database = Database::new();
     let store = database.open();
     let request_entries = vec![entry("Value", 1), entry("Other", 2)];
-    let (snapshot, _, _, commands) = configured(
+    let (snapshot, _, _, commands) = Box::pin(configured(
         &store,
         &running,
         request_entries
@@ -122,7 +122,7 @@ async fn missing_extra_duplicate_or_wrong_identity_replies_are_uncertain() {
             .collect(),
         None,
         Arc::new(Clock),
-    )
+    ))
     .await;
     learn(&mut running, &snapshot, &commands, 2, 4096, "correlation").await;
     let reply = json!({"component":{"name":"VendorCtrlr"},"variable":{"name":"Value"},"attributeStatus":"Accepted"});

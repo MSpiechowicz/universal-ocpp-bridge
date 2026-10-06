@@ -44,6 +44,7 @@ pub struct StationDefinition {
     #[serde(default)]
     pub trigger_observation: TriggerObservation,
     pub local_authorization: Option<crate::local_authorization::LocalAuthorizationConfig>,
+    pub reservation16: Option<crate::reservation16::ReservationConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -90,6 +91,10 @@ impl StationDefinition {
                 .local_authorization
                 .as_ref()
                 .map(|settings| (self.id.clone(), settings.clone())),
+            reservation16: self
+                .reservation16
+                .as_ref()
+                .map(|options| (self.id.clone(), options.clone())),
         }
     }
 
@@ -147,6 +152,11 @@ pub struct StepDefinition {
     pub payload: Option<serde_json::Value>,
     #[serde(default)]
     pub use_awaited_remote_start_id: bool,
+    #[serde(default)]
+    pub use_current_timestamp: bool,
+    /// Binds `stop_transaction` to the single transaction this run actually started.
+    #[serde(default)]
+    pub use_active_transaction: bool,
     pub expect_response: Option<serde_json::Value>,
     pub fixture_id: Option<String>,
     pub expect_failure: Option<String>,

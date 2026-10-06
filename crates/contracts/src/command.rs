@@ -429,6 +429,9 @@ pub struct CommandResult {
     /// Value-free native OCPP 2.0.1 list/cache evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_authorization_201: Option<crate::LocalAuthorizationResult201>,
+    /// Value-free native reservation acknowledgement and independent reconciliation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reservation_16: Option<crate::ReservationResult16>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

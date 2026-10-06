@@ -49,6 +49,9 @@ pub(super) async fn execute_action(
             Ok(format!("{duration_ms}ms"))
         }
         ActionKind::Disconnect => disconnect(client, state).await,
+        ActionKind::AssertReservation | ActionKind::AwaitReservation => {
+            super::reservation16::observe(step, client.as_deref()).await
+        }
         ActionKind::CsmsOffline
         | ActionKind::CsmsReconnect
         | ActionKind::OfflineStart
@@ -138,11 +141,41 @@ async fn charging_call(
     {
         state.registered = registered;
     }
+    let bound;
+    let step = if step.use_active_transaction {
+        // Bind before validation so the stop is checked against the actual open transaction.
+        let mut value = step.clone();
+        let id = state
+            .single_active_transaction()
+            .and_then(|id| id.parse::<i64>().ok())
+            .ok_or_else(|| {
+                failure(
+                    "transaction_not_active",
+                    "exactly one simulator transaction must be active",
+                )
+            })?;
+        value.payload.as_mut().expect("validated charging payload")["transactionId"] = id.into();
+        bound = value;
+        &bound
+    } else {
+        step
+    };
     match state.version {
         crate::OcppVersion::V1_6 => super::execution_16::validate_before(state, step, action)?,
         crate::OcppVersion::V2_0_1 => super::execution_201::validate_before(state, step, action)?,
     }
     let mut payload = step.payload.clone().expect("validated charging payload");
+    if step.use_current_timestamp {
+        payload["timestamp"] = time::OffsetDateTime::now_utc()
+            .format(&time::format_description::well_known::Rfc3339)
+            .map_err(|_| {
+                failure(
+                    "source_clock_unavailable",
+                    "native source timestamp could not be generated",
+                )
+            })?
+            .into();
+    }
     if step.use_awaited_remote_start_id {
         if state.version != crate::OcppVersion::V2_0_1 {
             return Err(failure(

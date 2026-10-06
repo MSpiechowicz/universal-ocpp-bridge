@@ -38,7 +38,7 @@ async fn native_evidence_failure_keeps_the_dispatched_command_uncertain() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = open(&database);
-    let (snapshot, _, _) = setup(&store, running.handle.clone()).await;
+    let (snapshot, _, _) = Box::pin(setup(&store, running.handle.clone())).await;
     let port = Arc::new(
         RemoteControlSession::new(
             running.handle.clone(),
@@ -96,7 +96,8 @@ async fn connector_unavailability_blocks_evse_start_until_observed_operative() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(1)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = remote::setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(remote::setup(&store, running.handle.clone())).await;
     for (index, state) in ["Unavailable", "Faulted", "Available"]
         .into_iter()
         .enumerate()

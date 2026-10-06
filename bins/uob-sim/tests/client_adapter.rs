@@ -35,6 +35,7 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         trigger_observation: TriggerObservation::default(),
         local_authorization: None,
         local_authorization_file: None,
+        reservation16: None,
     }
 }
 

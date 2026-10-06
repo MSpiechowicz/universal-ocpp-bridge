@@ -6,6 +6,12 @@ use uob_application::{CommandCoordinator, PageLimit};
 use super::{ChargingStore, commands::LiveCommands, runtime::Clock};
 
 pub(super) async fn recover(store: &ChargingStore, commands: Arc<LiveCommands>) -> io::Result<()> {
+    uob_application::ReservationStore16::recover_reservations_16(
+        store,
+        uob_application::CommandClock::now(&Clock),
+    )
+    .await
+    .map_err(io::Error::other)?;
     let coordinator = CommandCoordinator::new(Arc::new(store.clone()), commands, Arc::new(Clock));
     let limit = PageLimit::new(100).map_err(io::Error::other)?;
     let mut after = None;

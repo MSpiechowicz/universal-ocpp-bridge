@@ -336,7 +336,8 @@ async fn default_off_rejects_all_queries_even_with_capabilities_and_notify_repor
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = database.open();
-    let (mut snapshot, _, port, coordinator) = setup(&store, running.handle.clone()).await;
+    let (mut snapshot, _, port, coordinator) =
+        Box::pin(setup(&store, running.handle.clone())).await;
     for action in ["GetVariables", "GetReport"] {
         snapshot.capabilities.operations.push(SupportedOperation {
             operation: Operation::ProtocolAction {

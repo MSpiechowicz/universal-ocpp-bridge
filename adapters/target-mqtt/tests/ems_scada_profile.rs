@@ -333,6 +333,7 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         configuration_201: None,
         local_authorization_16: None,
         local_authorization_201: None,
+        reservation_16: None,
     };
     submission
         .respond(Ok(result.clone()))

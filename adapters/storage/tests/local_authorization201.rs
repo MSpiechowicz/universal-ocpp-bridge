@@ -63,6 +63,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
             update_type: LocalListUpdateType201::Full,
             status: SendLocalListStatus201::Accepted,
         }),
+        reservation_16: None,
         local_authorization_16: None,
     }
 }

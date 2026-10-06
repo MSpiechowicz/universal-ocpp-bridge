@@ -1,5 +1,6 @@
 use super::{ActionKind, RunFailure, StepDefinition, command, setup_failure};
 
+#[allow(clippy::too_many_lines)] // Exhaustive per-action field validation reads best as one match.
 pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
     if step.start_delay_ms.checked_add(step.jitter_ms).is_none() {
         return Err(setup_failure(
@@ -47,6 +48,32 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
         ));
     }
     validate_remote_start_binding(step)?;
+    if step.use_current_timestamp
+        && (!matches!(
+            step.action,
+            ActionKind::StartTransaction | ActionKind::StopTransaction
+        ) || step
+            .payload
+            .as_ref()
+            .is_some_and(|payload| payload.get("timestamp").is_some()))
+    {
+        return Err(setup_failure(
+            "invalid_current_timestamp",
+            "only transaction start/stop with an omitted timestamp accepts use_current_timestamp",
+        ));
+    }
+    if step.use_active_transaction
+        && (!matches!(step.action, ActionKind::StopTransaction)
+            || step
+                .payload
+                .as_ref()
+                .is_some_and(|payload| payload.get("transactionId").is_some()))
+    {
+        return Err(setup_failure(
+            "invalid_active_transaction",
+            "only stop_transaction with an omitted transactionId accepts use_active_transaction",
+        ));
+    }
     if is_charging_call != step.fixture_id.is_some() {
         return Err(setup_failure(
             "missing_wire_fixture",
@@ -68,6 +95,8 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::OfflineStop
                 | ActionKind::AssertLocalAuthorization
                 | ActionKind::AwaitLocalAuthorization
+                | ActionKind::AssertReservation
+                | ActionKind::AwaitReservation
         )
     {
         return Err(setup_failure(

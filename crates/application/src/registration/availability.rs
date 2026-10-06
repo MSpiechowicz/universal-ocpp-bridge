@@ -55,6 +55,7 @@ where
     R: Send + 'static,
 {
     let next = status_snapshot(snapshot, observation, now)?;
+    let reservations = crate::reservation16::status::observations(&next, observation, now);
     commit_status(
         store,
         snapshot,
@@ -63,6 +64,7 @@ where
         context,
         now,
         trigger,
+        reservations,
     )
     .await
 }
@@ -112,10 +114,12 @@ where
         context,
         now,
         trigger,
+        Vec::new(),
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)] // Status and its reservation effects commit atomically.
 async fn commit_status<C, E, D, R>(
     store: &dyn OperationalStore<C, E, D, R>,
     snapshot: &mut StationSnapshot,
@@ -124,6 +128,7 @@ async fn commit_status<C, E, D, R>(
     context: AvailabilityContext,
     now: UtcTimestamp,
     trigger: Option<EventEnvelope<E>>,
+    reservation_observations: Vec<crate::ReservationObservation16>,
 ) -> Result<(), RegistrationError>
 where
     C: Send + 'static,
@@ -165,6 +170,7 @@ where
         payload: E::from(next.clone()),
     };
     let mut write = AtomicStoreWrite::empty();
+    write.reservation_observations_16 = reservation_observations;
     write.station_snapshot = Some(next.clone());
     write.journal_events.push(event);
     if let Some(marker) = trigger {

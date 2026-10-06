@@ -36,6 +36,15 @@ impl ProtocolClient for SimulatorProtocolClient {
             .as_ref()
             .and_then(|state| state.lock().expect("native state lock").local.clone())
     }
+    fn reservation16(&self) -> Option<crate::reservation16::ReservationHandle> {
+        self.ocpp16_state.as_ref().and_then(|state| {
+            state
+                .lock()
+                .expect("native state lock")
+                .reservation16
+                .clone()
+        })
+    }
 
     fn reboot_count(&self) -> u64 {
         self.ocpp16_state.as_ref().map_or_else(
@@ -144,6 +153,7 @@ impl ProtocolClient for SimulatorProtocolClient {
             let response = self.emergency_client.disconnect().await;
             if let Some(state) = &self.ocpp16_state {
                 state.lock().expect("OCPP 1.6 state lock").local = None;
+                state.lock().expect("native state lock").reservation16 = None;
             }
             if let Some(state) = &self.ocpp201_state {
                 state.lock().expect("native state lock").local = None;
@@ -158,6 +168,7 @@ impl ProtocolClient for SimulatorProtocolClient {
         self.worker.abort();
         if let Some(state) = &self.ocpp16_state {
             state.lock().expect("OCPP 1.6 state lock").local = None;
+            state.lock().expect("native state lock").reservation16 = None;
         }
         if let Some(state) = &self.ocpp201_state {
             state.lock().expect("native state lock").local = None;

@@ -227,6 +227,28 @@ impl LocalAuthorizationHandle {
     pub fn authorize_offline(&self, token: &str, now: OffsetDateTime) -> bool {
         self.0.lock().authorize_offline(token, now)
     }
+    /// Actual list/cache identity information; no parent-as-token lookup.
+    #[must_use]
+    pub fn identity_info(&self, token: &str) -> Option<NativeInfo> {
+        let model = self.0.lock();
+        if model.unavailable {
+            return None;
+        }
+        let key = zeroize::Zeroizing::new(caseless::default_case_fold_str(token));
+        model
+            .state
+            .list
+            .get(key.as_str())
+            .filter(|_| model.list_supported)
+            .or_else(|| {
+                model
+                    .state
+                    .cache
+                    .get(key.as_str())
+                    .filter(|_| model.cache_supported)
+            })
+            .and_then(|entry| entry.id_tag_info.clone())
+    }
 
     /// Observe central authorization; identities in an enabled list are never cached.
     ///

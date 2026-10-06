@@ -91,6 +91,16 @@ pub(super) fn prepare(
             charging_limit::prepare(command, snapshot, limit)?,
         )),
         CommandOperation::Ocpp(operation) if operation.protocol == ProtocolEdition::Ocpp16j => {
+            if crate::command_registry::reservation16::ACTIONS.contains(&operation.action.as_str())
+            {
+                crate::command_registry::reservation16::validate(&command.resource, operation)?;
+                let action = if operation.action.as_str() == "ReserveNow" {
+                    "ReserveNow"
+                } else {
+                    "CancelReservation"
+                };
+                return Ok((action, operation.payload.clone()));
+            }
             if crate::command_registry::charging_profile16::ACTIONS
                 .contains(&operation.action.as_str())
             {

@@ -11,7 +11,7 @@ async fn delayed_malformed_and_disconnected_results_remain_uncertain_after_resta
         let mut running = session("ocpp2.0.1", Duration::from_millis(120)).await;
         let database = Database::new();
         let store = database.open();
-        let (snapshot, _, _, coordinator) = setup(&store, running.handle.clone()).await;
+        let (snapshot, _, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
         let commands = Arc::new(scoped(
             coordinator.clone(),
             &snapshot,
@@ -93,7 +93,7 @@ async fn delayed_malformed_and_disconnected_results_remain_uncertain_after_resta
         store.shutdown(Duration::from_secs(1)).await.unwrap();
         let store = database.open();
         let mut next = session("ocpp2.0.1", Duration::from_secs(1)).await;
-        let (_, _, _, coordinator) = setup(&store, next.handle.clone()).await;
+        let (_, _, _, coordinator) = Box::pin(setup(&store, next.handle.clone())).await;
         let recovered = coordinator
             .recover_unresolved(None, PageLimit::new(100).unwrap())
             .await
@@ -116,7 +116,7 @@ async fn crash_after_dispatch_is_recovered_without_sending_a_second_reset() {
     let mut running = session("ocpp2.0.1", Duration::from_secs(2)).await;
     let database = Database::new();
     let store = database.open();
-    let (snapshot, _, _, coordinator) = setup(&store, running.handle.clone()).await;
+    let (snapshot, _, _, coordinator) = Box::pin(setup(&store, running.handle.clone())).await;
     let external = command(
         &snapshot,
         "crash",
@@ -144,7 +144,7 @@ async fn crash_after_dispatch_is_recovered_without_sending_a_second_reset() {
     store.shutdown(Duration::from_secs(1)).await.unwrap();
     let store = database.open();
     let mut next = session("ocpp2.0.1", Duration::from_secs(1)).await;
-    let (_, _, _, coordinator) = setup(&store, next.handle.clone()).await;
+    let (_, _, _, coordinator) = Box::pin(setup(&store, next.handle.clone())).await;
     let recovered = coordinator
         .recover_unresolved(None, PageLimit::new(100).unwrap())
         .await

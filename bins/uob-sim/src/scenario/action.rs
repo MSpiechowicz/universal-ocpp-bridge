@@ -27,6 +27,8 @@ pub enum ActionKind {
     AwaitReboot,
     DelayLocalReply,
     DropLocalReply,
+    AssertReservation,
+    AwaitReservation,
 }
 
 impl ActionKind {
@@ -57,6 +59,8 @@ impl ActionKind {
             Self::AwaitReboot => "await_reboot",
             Self::DelayLocalReply => "delay_local_reply",
             Self::DropLocalReply => "drop_local_reply",
+            Self::AssertReservation => "assert_reservation",
+            Self::AwaitReservation => "await_reservation",
         }
     }
 
@@ -87,6 +91,7 @@ impl ActionKind {
             }
             Self::AwaitReboot => "reboot_observed",
             Self::DelayLocalReply | Self::DropLocalReply => "native_fault_armed",
+            Self::AssertReservation | Self::AwaitReservation => "reservation_observed",
         }
     }
 
@@ -116,6 +121,8 @@ impl ActionKind {
             | Self::AwaitReboot
             | Self::DelayLocalReply
             | Self::DropLocalReply
+            | Self::AssertReservation
+            | Self::AwaitReservation
             | Self::Disconnect => None,
         }
     }

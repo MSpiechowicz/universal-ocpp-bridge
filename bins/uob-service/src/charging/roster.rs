@@ -53,6 +53,19 @@ pub(super) fn load_stations(
                 files::grant(bytes),
             ));
         }
+        let reservations = station
+            .reservation16_file
+            .as_ref()
+            .map(|file| {
+                let mut bytes = files::protected(file, 65536, seen).map_err(io::Error::other)?;
+                uob_protocol_adapter::v16::remote_control::ReservationValues16::from_json_bytes(
+                    station.resources[0].clone(),
+                    std::mem::take(&mut bytes.0),
+                )
+                .map(std::sync::Arc::new)
+                .map_err(|error| io::Error::other(error.context().to_owned()))
+            })
+            .transpose()?;
         settings.insert(
             station.station_id.clone(),
             StationSettings {
@@ -62,6 +75,7 @@ pub(super) fn load_stations(
                 configuration: None,
                 local_authorization: None,
                 local_authorization_201: None,
+                reservations,
             },
         );
         resources.insert(station.station_id, station.resources);

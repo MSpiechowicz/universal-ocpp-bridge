@@ -69,7 +69,7 @@ pub(crate) struct DeferredLocalAuthorizationCall16 {
     pub expires_at: UtcTimestamp,
 }
 #[derive(Default)]
-struct ByteCounter(usize);
+pub(super) struct ByteCounter(pub(super) usize);
 impl std::io::Write for ByteCounter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.0 = self

@@ -1,0 +1,158 @@
+{
+  "cases": [
+    {
+      "id": "negative-connector",
+      "wire": [
+        2,
+        "negative-connector",
+        "ReserveNow",
+        {
+          "connectorId": -1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": "group-marker-113",
+          "reservationId": -113
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "connector-u32-overflow",
+      "wire": [
+        2,
+        "connector-u32-overflow",
+        "ReserveNow",
+        {
+          "connectorId": 4294967296,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": "group-marker-113",
+          "reservationId": -113
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "id-i32-overflow",
+      "wire": [
+        2,
+        "id-i32-overflow",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": "group-marker-113",
+          "reservationId": 2147483648
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false
+    },
+    {
+      "id": "id-fraction",
+      "wire": [
+        2,
+        "id-fraction",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": "group-marker-113",
+          "reservationId": 1.5
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "token-too-long",
+      "wire": [
+        2,
+        "token-too-long",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "XXXXXXXXXXXXXXXXXXXXX",
+          "parentIdTag": "group-marker-113",
+          "reservationId": -113
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "parent-too-long",
+      "wire": [
+        2,
+        "parent-too-long",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": "PPPPPPPPPPPPPPPPPPPPP",
+          "reservationId": -113
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "null-parent",
+      "wire": [
+        2,
+        "null-parent",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": null,
+          "reservationId": -113
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "unknown-field",
+      "wire": [
+        2,
+        "unknown-field",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "2099-01-01T00:00:00Z",
+          "idTag": "token-marker-113",
+          "parentIdTag": "group-marker-113",
+          "reservationId": -113,
+          "extra": true
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    },
+    {
+      "id": "invalid-expiry",
+      "wire": [
+        2,
+        "invalid-expiry",
+        "ReserveNow",
+        {
+          "connectorId": 1,
+          "expiryDate": "not-a-date",
+          "idTag": "token-marker-113",
+          "parentIdTag": "group-marker-113",
+          "reservationId": -113
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false
+    }
+  ]
+}

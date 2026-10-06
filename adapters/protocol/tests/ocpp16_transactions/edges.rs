@@ -47,9 +47,9 @@ async fn delayed_authorization_rechecks_policy_and_timeout_fails_closed() {
         // Relative sleeps do not establish this ordering on a loaded CI runner.
         provider.resume.notify_one();
     };
-    let (result, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+    let (result, ()) = Box::pin(tokio::time::timeout(Duration::from_secs(10), async {
         tokio::join!(result, revoke)
-    })
+    }))
     .await
     .expect("authorization and revocation must finish");
     assert_eq!(result.unwrap()[2]["idTagInfo"]["status"], "Blocked");

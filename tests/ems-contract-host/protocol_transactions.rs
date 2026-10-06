@@ -30,6 +30,7 @@ pub(super) async fn handle_16(
         provider: &LocalAuthorizationProvider,
         clock: &Clock,
         authorization_timeout: Duration::from_secs(1),
+        reservation_values: None,
     };
     let response = v16::complete_transaction(incoming.call, snapshot, &services, context)
         .await

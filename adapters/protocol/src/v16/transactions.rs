@@ -18,6 +18,7 @@ pub struct TransactionServices<'a, C, R> {
     pub provider: &'a dyn AuthorizationProvider,
     pub clock: &'a dyn CommandClock,
     pub authorization_timeout: Duration,
+    pub reservation_values: Option<&'a super::remote_control::ReservationValues16>,
 }
 
 /// Decodes a bounded transaction call and commits before exposing a response.
@@ -40,12 +41,14 @@ pub async fn transaction_call<C: Send + 'static, R: Send + 'static>(
 /// Send element 2 with the incoming responder; never respond before this future completes.
 /// # Errors
 /// A failed commit leaves the authoritative in-memory snapshot unchanged.
+#[allow(clippy::too_many_lines)] // Transaction and reservation effects commit in one ordered step.
 pub async fn complete_transaction<C: Send + 'static, R: Send + 'static>(
     call: DecodedCall,
     snapshot: &mut StationSnapshot,
     services: &TransactionServices<'_, C, R>,
     context: TransactionContext,
 ) -> Result<Value, OcppCallError> {
+    let mut reservation_observations = Vec::new();
     let (transaction, duplicate, response) = match call.observation {
         ChargerObservation::TransactionStarted(observation) if observation.protocol == PROTOCOL => {
             if let Some(transaction) = transaction16::replay_start(
@@ -71,6 +74,11 @@ pub async fn complete_transaction<C: Send + 'static, R: Send + 'static>(
                 .ok_or_else(|| error(OcppErrorCode::ProtocolError))?;
             let token = SensitiveAuthorizationToken::new(&observation.identity.token)
                 .map_err(|_| error(OcppErrorCode::PropertyConstraintViolation))?;
+            let id = services
+                .store
+                .reserve_transaction_id()
+                .await
+                .map_err(|_| error(OcppErrorCode::InternalError))?;
             // Consult policy only after resolution, so delayed revocation/expiry remains effective.
             let (decision, reference) = match tokio::time::timeout(
                 services.authorization_timeout,
@@ -104,11 +112,30 @@ pub async fn complete_transaction<C: Send + 'static, R: Send + 'static>(
                     None,
                 ),
             };
-            let id = services
-                .store
-                .reserve_transaction_id()
-                .await
-                .map_err(|_| error(OcppErrorCode::InternalError))?;
+            if let (
+                Some(reservation_id),
+                uob_contracts::NativeProtocolReference::Ocpp16 { connector_id },
+            ) = (observation.reservation_id, observation.native_resource)
+            {
+                let token_key = super::remote_control::reservation_key_16(
+                    observation.identity.token.as_bytes(),
+                )
+                .ok_or_else(|| error(OcppErrorCode::PropertyConstraintViolation))?;
+                let group_key = services
+                    .reservation_values
+                    .and_then(|p| p.group_key(observation.identity.token.as_bytes()));
+                reservation_observations.push(uob_application::ReservationObservation16 {
+                    station: snapshot.station.clone(),
+                    observed_at: services.clock.now(),
+                    kind: uob_application::ReservationObservationKind16::Start {
+                        reservation_id,
+                        connector_id,
+                        token_key,
+                        group_key,
+                        source_time: observation.occurred_at,
+                    },
+                });
+            }
             let transaction = transaction16::start(
                 snapshot,
                 &observation,
@@ -132,12 +159,13 @@ pub async fn complete_transaction<C: Send + 'static, R: Send + 'static>(
         _ => return Err(error(OcppErrorCode::NotImplemented)),
     };
     if !duplicate {
-        transaction16::commit(
+        transaction16::commit_with_reservations(
             services.store,
             snapshot,
             transaction,
             context,
             services.clock.now(),
+            reservation_observations,
         )
         .await
         .map_err(|e| lifecycle(&e))?;

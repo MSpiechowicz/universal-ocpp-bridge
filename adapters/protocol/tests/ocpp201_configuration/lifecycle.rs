@@ -55,7 +55,7 @@ async fn queued_revocation_expiry_and_generation_detach_send_no_secret_call() {
     let clock = Arc::new(AdvancingClock(AtomicBool::new(false)));
     let a = entry("Revoked", 1);
     let b = entry("Expired", 2);
-    let (snapshot, provider, port, _) = configured(
+    let (snapshot, provider, port, _) = Box::pin(configured(
         &store,
         &running,
         vec![
@@ -64,7 +64,7 @@ async fn queued_revocation_expiry_and_generation_detach_send_no_secret_call() {
         ],
         None,
         clock.clone(),
-    )
+    ))
     .await;
     let mut revoked =
         Box::pin(port.dispatch(variables(&snapshot, "queued-revoked", &[a]).admit(clock.now())));
@@ -111,7 +111,7 @@ async fn actual_escaped_native_frame_limits_are_inclusive_and_unknown_limits_are
     let store = database.open();
     let a = entry("First", 1);
     let b = entry("Second", 2);
-    let (snapshot, _, _, commands) = configured(
+    let (snapshot, _, _, commands) = Box::pin(configured(
         &store,
         &running,
         vec![
@@ -120,7 +120,7 @@ async fn actual_escaped_native_frame_limits_are_inclusive_and_unknown_limits_are
         ],
         None,
         Arc::new(Clock),
-    )
+    ))
     .await;
     let request = variables(&snapshot, "unknown-multiple", &[a.clone(), b.clone()]);
     assert!(matches!(
@@ -176,13 +176,13 @@ async fn admission_preflight_binds_exact_resource_unicode_identity_attribute_and
     let store = database.open();
     let mut original = entry("Straße", 1);
     original.component.name = "Straße".into();
-    let (snapshot, provider, _, _) = configured(
+    let (snapshot, provider, _, _) = Box::pin(configured(
         &store,
         &running,
         vec![(original.clone(), "BOUND_SECRET".into())],
         None,
         Arc::new(Clock),
-    )
+    ))
     .await;
     let mut normalized = original.clone();
     normalized.component.name = "STRASSE".into();

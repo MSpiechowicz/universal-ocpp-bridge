@@ -1,10 +1,12 @@
 mod calls;
+mod dispatch;
 mod effects;
 mod session;
 mod state;
 mod status;
 mod trigger;
 mod trigger201;
+use dispatch::dispatch_call;
 
 use calls::{apply_observation, call_error, context, event_identity};
 pub(super) use state::reconcile;
@@ -20,9 +22,8 @@ use uob_contracts::{
 };
 use uob_protocol_adapter::{
     CallSessionConfiguration, IncomingCall, OcppCallError, OcppErrorCode, StationConnection,
-    spawn_call_session, v16, v201,
+    spawn_call_session,
 };
-use uob_provider_adapter::{LocalAuthorizationProvider, LocalChargingIdentityProvider};
 
 use super::{
     ChargingAuthorization, ChargingRuntime, ChargingStore, StationSettings, commands::LiveCommands,
@@ -47,6 +48,7 @@ struct StationContext {
     application: uob_application::Application,
     identity: ServiceIdentity,
     target: Option<(TargetInstanceId, u64)>,
+    credentials: Option<Arc<super::control_auth::ControlCredentials>>,
 }
 
 struct CallContext<'a> {
@@ -56,6 +58,7 @@ struct CallContext<'a> {
     identity: &'a ServiceIdentity,
     target: Option<(TargetInstanceId, u64)>,
     trigger_enabled: bool,
+    reservations: Option<&'a uob_protocol_adapter::v16::remote_control::ReservationValues16>,
 }
 
 #[derive(Default)]
@@ -83,6 +86,7 @@ pub(super) async fn serve(
         authorization: state.authorization.clone(),
         commands: state.commands.clone(),
         commands_enabled: state.credentials.is_some(),
+        credentials: state.credentials.clone(),
         identity: application.identity().clone(),
         application,
         target,
@@ -100,9 +104,14 @@ pub(super) async fn serve(
                 biased;
                 result = &mut server => break Err(io::Error::other(format!("charging listener stopped: {result:?}"))),
                 () = &mut stop => break Ok(()),
-                _ = trigger_timer.tick(), if context.commands_enabled => {
-                    if let Err(error) = trigger::sweep(&context.store, &context.commands, &mut trigger_cursor).await {
+                _ = trigger_timer.tick() => {
+                    if context.commands_enabled
+                        && let Err(error) = trigger::sweep(&context.store, &context.commands, &mut trigger_cursor).await
+                    {
                         break Err(error);
+                    }
+                    if uob_application::ReservationStore16::expire_reservations_16(&context.store, Clock.now()).await.is_err() {
+                        break Err(unavailable());
                     }
                 },
                 result = tasks.join_next(), if !tasks.is_empty() => {
@@ -186,6 +195,14 @@ async fn station(
         tokio::select! {
             biased;
             changed = stop.changed() => { if changed.is_err() || *stop.borrow() { break; } },
+            diagnostic = outputs.diagnostics.recv() => {
+                if let Some(diagnostic) = diagnostic {
+                    if super::reservations::late_response(store, &snapshot, diagnostic).await.is_err() {
+                        error = Some(unavailable()); break;
+                    }
+                }
+                else { break; }
+            },
             call = outputs.incoming.receive() => {
                 let Some(call) = call else { break; };
                 let _profile_commit = if let Some(generation) =
@@ -206,6 +223,7 @@ async fn station(
                     target: target.clone(),
                     trigger_enabled: configuration.control.trigger_message.enabled()
                         && context.commands_enabled,
+                    reservations: configuration.reservations.as_deref(),
                 };
                 if let Err(failure) = handle_call(call, &mut snapshot, call_context).await {
                     error = Some(failure); break;
@@ -327,109 +345,6 @@ async fn complete_registration(
         trigger::sweep(services.store, services.commands, &mut None).await?;
     }
     if result.is_err_and(|error| error.code == OcppErrorCode::InternalError) {
-        Err(unavailable())
-    } else {
-        Ok(())
-    }
-}
-
-async fn dispatch_call(
-    incoming: IncomingCall,
-    snapshot: &mut StationSnapshot,
-    mut services: CallContext<'_>,
-    protocol: ProtocolEdition,
-) -> io::Result<()> {
-    let mut commits = CommitState::default();
-    let response = match (protocol, incoming.call.action.as_str()) {
-        (_, "StatusNotification") => {
-            status::complete_status(incoming.call, snapshot, &services, protocol, &mut commits)
-                .await?
-        }
-        (ProtocolEdition::Ocpp16j, "Authorize") => {
-            v16::complete_authorization(
-                incoming.call,
-                &snapshot.station,
-                services.authorization,
-                &LocalAuthorizationProvider,
-                &Clock,
-                Duration::from_secs(2),
-            )
-            .await
-        }
-        (ProtocolEdition::Ocpp16j, "StartTransaction" | "StopTransaction") => {
-            let context = context(
-                services.store,
-                services.identity,
-                &incoming,
-                services.target.take(),
-            )
-            .await?;
-            commits.committed = Some(context.event_id.clone());
-            let transaction_services = v16::TransactionServices {
-                store: services.store,
-                authorization: services.authorization,
-                provider: &LocalAuthorizationProvider,
-                clock: &Clock,
-                authorization_timeout: Duration::from_secs(2),
-            };
-            v16::complete_transaction(incoming.call, snapshot, &transaction_services, context).await
-        }
-        (ProtocolEdition::Ocpp201, "Authorize") => {
-            v201::complete_authorization(
-                incoming.call,
-                &snapshot.station,
-                services.authorization,
-                &LocalChargingIdentityProvider,
-                &Clock,
-                Duration::from_secs(2),
-            )
-            .await
-        }
-        (ProtocolEdition::Ocpp201, "TransactionEvent") | (_, "MeterValues") => {
-            complete_observation(&incoming, snapshot, &mut services, protocol, &mut commits).await
-        }
-        (
-            ProtocolEdition::Ocpp16j,
-            "DiagnosticsStatusNotification" | "FirmwareStatusNotification",
-        ) => status::complete_trigger_status(&incoming, snapshot, &services, &mut commits).await?,
-        (
-            ProtocolEdition::Ocpp201,
-            "LogStatusNotification"
-            | "FirmwareStatusNotification"
-            | "PublishFirmwareStatusNotification"
-            | "SignCertificate",
-        ) => {
-            status::complete_trigger_receipt_201(&incoming, snapshot, &services, &mut commits)
-                .await?
-        }
-        _ => Err(call_error(protocol, OcppErrorCode::NotImplemented)),
-    };
-    if let (Ok(_), Some(event_id)) = (&response, commits.committed) {
-        effects::reconcile(
-            services.store,
-            services.commands,
-            &snapshot.station,
-            event_id,
-        )
-        .await?;
-    }
-    if commits.trigger_committed {
-        trigger::sweep(services.store, services.commands, &mut None).await?;
-    }
-    let failed_storage = response
-        .as_ref()
-        .is_err_and(|error| error.code == OcppErrorCode::InternalError);
-    match response {
-        Ok(response) => incoming
-            .responder
-            .respond(&response[2])
-            .map_err(|_| unavailable())?,
-        Err(error) => incoming
-            .responder
-            .reject(error)
-            .map_err(|_| unavailable())?,
-    }
-    if failed_storage {
         Err(unavailable())
     } else {
         Ok(())
