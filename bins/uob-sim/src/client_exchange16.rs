@@ -23,7 +23,7 @@ impl NativeExchange {
             (
                 state.socket_generation,
                 local,
-                state.reservation16.is_some()
+                (state.reservation16.is_some() || state.firmware16.is_some())
                     && call.action != crate::SimulatorAction::BootNotification,
             )
         };
@@ -72,6 +72,11 @@ impl NativeExchange {
         EXCHANGE
             .scope(self, crate::client_runtime::send_1_6_call(client, call))
             .await
+    }
+
+    /// Bind any native client send to this exchange's socket generation.
+    pub(crate) async fn run<F: Future>(self, future: F) -> F::Output {
+        EXCHANGE.scope(self, future).await
     }
 }
 

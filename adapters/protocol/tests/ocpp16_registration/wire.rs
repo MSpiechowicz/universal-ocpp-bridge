@@ -151,9 +151,9 @@ async fn exercise(pressure: bool) {
             "no speculative response while application is delayed"
         );
         let correlation = incoming.correlation_id.clone();
-        let result = incoming
-            .complete_registration(&store, &mut state, decision, 10, now(second))
-            .await;
+        let result =
+            Box::pin(incoming.complete_registration(&store, &mut state, decision, 10, now(second)))
+                .await;
         if result.is_ok() {
             assert_eq!(persisted(&store).await, state);
         }

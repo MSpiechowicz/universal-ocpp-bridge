@@ -51,6 +51,11 @@ pub(crate) enum Request<C, E, D> {
         Reply<Vec<uob_application::ReservationRecord201>>,
     ),
     MaintainReservations201(UtcTimestamp, bool, Reply<()>),
+    FirmwareJobs16(
+        ResourceRef,
+        Reply<Vec<uob_application::FirmwareJobRecord16>>,
+    ),
+    MaintainFirmware16(UtcTimestamp, bool, Reply<()>),
     TransactionId(Reply<i32>),
     EventSequence(Reply<u64>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -199,6 +204,16 @@ fn handle_request<C, E, D>(
                 .check_completion_write()
                 .and_then(|()| drain.changed())
                 .and_then(|()| crate::reservation201::maintain(connection, now, startup)),
+        ),
+        Request::FirmwareJobs16(station, reply) => {
+            respond(reply, crate::firmware16::read(connection, &station));
+        }
+        Request::MaintainFirmware16(now, startup, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| crate::firmware16::maintain(connection, now, startup)),
         ),
         Request::ChargingProfileOwnership(station, reply) => {
             respond(

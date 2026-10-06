@@ -80,9 +80,9 @@ async fn authenticated_wire_replies_follow_durable_decisions() {
                 .is_err(),
             "no speculative response while application is delayed"
         );
-        let result = incoming
-            .complete_registration(&store, &mut state, decision, 10, now(second))
-            .await;
+        let result =
+            Box::pin(incoming.complete_registration(&store, &mut state, decision, 10, now(second)))
+                .await;
         if result.is_ok() {
             assert_eq!(persisted(&store).await, state);
         }

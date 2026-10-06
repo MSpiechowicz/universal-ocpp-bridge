@@ -19,6 +19,7 @@
     {"id":"ocpp16.reservations","feature":"reservations","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.remote-trigger","feature":"remote_trigger","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
     {"id":"ocpp16.firmware-diagnostics","feature":"firmware_diagnostics","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
+    {"id":"ocpp16.firmware-diagnostics.firmware-update","feature":"firmware_diagnostics.firmware_update","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.monitoring-security","feature":"monitoring_security","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.smart-charging","feature":"smart_charging","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
     {"id":"ocpp16.smart-charging.composite-schedule","feature":"smart_charging.composite_schedule","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},

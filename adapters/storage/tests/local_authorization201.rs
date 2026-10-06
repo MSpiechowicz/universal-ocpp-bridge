@@ -68,6 +68,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
         local_authorization_16: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 async fn admit(

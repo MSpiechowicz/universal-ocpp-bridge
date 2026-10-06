@@ -153,6 +153,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             reservation_201: None,
             composite_schedule_201: None,
             charging_profiles_201: None,
+            firmware_16: None,
         }),
         ..EventSource::default()
     });

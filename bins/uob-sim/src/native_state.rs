@@ -41,6 +41,19 @@ pub(crate) fn open_native_state201(
     }
 }
 
+pub(crate) fn open_firmware16(
+    config: &SimulatorClientConfig,
+) -> Result<Option<crate::firmware16::FirmwareHandle>, SimulatorClientError> {
+    config
+        .firmware16
+        .as_ref()
+        .map(|(station, options)| {
+            crate::firmware16::FirmwareHandle::open(station, options)
+                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
+        })
+        .transpose()
+}
+
 pub(crate) fn open_reservation201(
     config: &SimulatorClientConfig,
 ) -> Result<Option<reservation201::Reservation201Handle>, SimulatorClientError> {

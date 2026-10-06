@@ -38,6 +38,8 @@ uob-target-adapter = { path = "../../adapters/target" }
 [dev-dependencies]
 axum.workspace = true
 base64.workspace = true
+rustls-pki-types.workspace = true
+rustls-webpki.workspace = true
 tower = { version = "=0.5.3", features = ["util"] }
 tokio-tungstenite.workspace = true
 

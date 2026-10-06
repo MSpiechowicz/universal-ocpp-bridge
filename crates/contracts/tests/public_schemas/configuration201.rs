@@ -55,8 +55,8 @@ fn configuration_results_and_nested_exports_preserve_native_statuses_without_val
             batch.records()[0].metadata().clone(),
             ExportPayload::CommandResult(typed),
         );
-        assert_eq!(record.metadata().schema_version.revision, 13);
-        assert_eq!(ExportBatch::SCHEMA_VERSION.revision, 13);
+        assert_eq!(record.metadata().schema_version.revision, 14);
+        assert_eq!(ExportBatch::SCHEMA_VERSION.revision, 14);
         batch = ExportBatch::new(
             batch.batch_id().clone(),
             batch.destination().clone(),

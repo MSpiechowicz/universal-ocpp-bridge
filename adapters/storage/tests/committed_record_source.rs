@@ -77,6 +77,8 @@ fn commit(
         reservation_observations_16: Vec::new(),
         reservation_201: None,
         reservation_observations_201: Vec::new(),
+        firmware_16: None,
+        firmware_observations_16: Vec::new(),
         purpose: StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: vec![],

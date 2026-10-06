@@ -44,11 +44,21 @@ pub(super) async fn attach(
                 None => session,
             };
             let session = if let Some(credentials) = &context.credentials {
-                session.with_reservations_16(
+                let session = session.with_reservations_16(
                     configuration.reservations.clone(),
                     configuration.control.reserve_connector_zero_supported,
                     credentials.reservation_grant(),
-                )
+                );
+                match (configuration.firmware, &configuration.firmware_providers) {
+                    (Some(firmware), Some(providers)) => {
+                        session.with_firmware_16(super::super::firmware::session(
+                            firmware,
+                            providers,
+                            credentials.reservation_grant(),
+                        ))
+                    }
+                    _ => session,
+                }
             } else {
                 session
             };

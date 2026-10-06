@@ -1,6 +1,8 @@
 //! Opt-in demo-only station roster and native-to-canonical charging topology.
 //! Secrets and persistent-state directory contents are resolved and protected by the runtime.
+mod firmware;
 mod topology;
+pub(crate) use firmware::{StationFirmware, ValidatedFirmwareArtifacts};
 use std::{
     collections::BTreeSet,
     net::SocketAddr,
@@ -31,6 +33,7 @@ pub(crate) struct Configuration {
     #[serde(rename = "configuration_values_file")]
     values_file: Option<String>,
     local_authorization_updates_file: Option<String>,
+    firmware: Option<firmware::FirmwareSection>,
     stations: Vec<StationConfiguration>,
 }
 
@@ -55,6 +58,9 @@ pub(crate) struct StationControlOptions {
     pub clear_cache: StationActionOption,
     pub reserve_now: StationActionOption,
     pub cancel_reservation: StationActionOption,
+    /// OCPP 1.6 `UpdateFirmware`; exclusive with the Security Whitepaper variant.
+    pub update_firmware: StationActionOption,
+    pub signed_update_firmware: StationActionOption,
     pub reserve_connector_zero_supported: bool,
     /// OCPP 2.0.1 `ReservationCtrlr.NonEvseSpecific`; never inferred from the station.
     pub reserve_non_evse_specific_supported: bool,
@@ -115,6 +121,8 @@ impl StationControlOptions {
             || self.local_authorization_enabled()
             || self.reserve_now.enabled()
             || self.cancel_reservation.enabled()
+            || self.update_firmware.enabled()
+            || self.signed_update_firmware.enabled()
     }
 }
 
@@ -128,6 +136,7 @@ struct StationConfiguration {
     start_token_file: Option<String>,
     reservation16_file: Option<String>,
     reservation201_file: Option<String>,
+    firmware_job_timeout_seconds: Option<u64>,
     #[serde(flatten)]
     control: StationControlOptions,
 }
@@ -157,6 +166,7 @@ pub(crate) struct ValidatedChargingConfiguration {
     pub privileged_grant_file: Option<CredentialReference>,
     pub configuration_values_file: Option<PathBuf>,
     pub local_authorization_updates_file: Option<PathBuf>,
+    pub firmware: Option<ValidatedFirmwareArtifacts>,
 }
 
 pub(crate) struct ValidatedChargingStation {
@@ -170,6 +180,7 @@ pub(crate) struct ValidatedChargingStation {
     pub control: StationControlOptions,
     pub reservation16_file: Option<PathBuf>,
     pub reservation201_file: Option<PathBuf>,
+    pub firmware: Option<StationFirmware>,
 }
 
 impl Configuration {
@@ -262,6 +273,12 @@ impl Configuration {
             return Err(fail);
         }
         let stations = validate_stations(self.stations, &state_directory, paths, bridge_name)?;
+        let firmware = firmware::validate(
+            self.firmware,
+            &stations,
+            &state_directory,
+            &[listen_addr, management_address],
+        )?;
         Ok(Some(ValidatedChargingConfiguration {
             listen_addr,
             state_directory,
@@ -271,6 +288,7 @@ impl Configuration {
             privileged_grant_file,
             configuration_values_file,
             local_authorization_updates_file,
+            firmware,
         }))
     }
 
@@ -282,6 +300,7 @@ impl Configuration {
             && self.privileged_grant_file.is_none()
             && self.values_file.is_none()
             && self.local_authorization_updates_file.is_none()
+            && self.firmware.is_none()
             && self.stations.is_empty()
         {
             Ok(())
@@ -401,6 +420,11 @@ fn validate_stations(
                 })
                 .transpose()
         };
+        let firmware = firmware::station(
+            &station.control,
+            station.firmware_job_timeout_seconds,
+            station.protocol,
+        )?;
         let reservation16_file = provider_file(station.reservation16_file)?;
         let reservation201_file = provider_file(station.reservation201_file)?;
         if station.resources.is_empty() || station.resources.len() > MAX_RESOURCES_PER_STATION {
@@ -421,6 +445,7 @@ fn validate_stations(
             resources,
             reservation16_file,
             reservation201_file,
+            firmware,
         });
     }
     Ok(stations)

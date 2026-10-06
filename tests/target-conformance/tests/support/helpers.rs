@@ -51,5 +51,6 @@ pub(crate) fn result_for(command: &ExternalCommand<()>) -> CommandResult {
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }

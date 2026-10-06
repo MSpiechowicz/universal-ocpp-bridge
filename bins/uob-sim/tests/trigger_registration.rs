@@ -53,6 +53,7 @@ fn config(listener: &TcpListener, reconnect: bool) -> SimulatorClientConfig {
         local_authorization_file: None,
         reservation16: None,
         reservation201: None,
+        firmware16: None,
     }
 }
 

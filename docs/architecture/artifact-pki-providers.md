@@ -99,5 +99,9 @@ unavailable faults, uploads over the cap refused by header and while chunked, an
 timing out. Further tests cover production refusal, the `TEST ONLY` marking, and the absence of
 private keys, credentials and spool paths in responses, errors and debug output.
 
-Not in scope: firmware, diagnostics, security-event and certificate CSMS workflows, compose
-integration, and production PKI or persistent artifact storage.
+The OCPP 1.6J firmware workflow ([ocpp16-firmware.md](ocpp16-firmware.md)) is the first
+consumer: the demo charging runtime composes one `TestArtifactService` and one
+`TestCertificateAuthority` from `[charging.firmware]`.
+
+Not in scope: diagnostics, security-event and certificate CSMS workflows, OCPP 2.0.1
+firmware, compose integration, and production PKI or persistent artifact storage.

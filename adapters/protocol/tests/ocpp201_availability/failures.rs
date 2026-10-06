@@ -104,14 +104,14 @@ async fn connector_unavailability_blocks_evse_start_until_observed_operative() {
     {
         for connector in [1, 2] {
             let frame = serde_json::json!([2,"connector","StatusNotification",{"evseId":1,"connectorId":connector,"connectorStatus":state,"timestamp":"2026-09-01T02:00:00Z"}]);
-            v201::registration_call(
+            Box::pin(v201::registration_call(
                 frame.to_string().as_bytes(),
                 &store,
                 &mut snapshot,
                 registration::RegistrationDecision::Accepted,
                 60,
                 Clock.now(),
-            )
+            ))
             .await
             .unwrap();
         }

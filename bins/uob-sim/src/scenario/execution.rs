@@ -52,6 +52,9 @@ pub(super) async fn execute_action(
         ActionKind::AssertReservation | ActionKind::AwaitReservation => {
             super::reservation16::observe(step, client.as_deref()).await
         }
+        ActionKind::AssertFirmware | ActionKind::AwaitFirmware => {
+            super::firmware16::observe(step, client.as_deref()).await
+        }
         ActionKind::CsmsOffline
         | ActionKind::CsmsReconnect
         | ActionKind::OfflineStart

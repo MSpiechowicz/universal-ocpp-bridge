@@ -31,6 +31,7 @@ pub(super) fn command_result<P>(
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 
@@ -71,6 +72,7 @@ pub(super) fn rejected_external<P>(
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 

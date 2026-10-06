@@ -388,6 +388,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle, hour: i64) -> 
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 

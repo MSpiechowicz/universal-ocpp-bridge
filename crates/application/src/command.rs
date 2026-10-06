@@ -92,6 +92,8 @@ pub enum CommandDispatchOutcome {
     CompositeScheduleResponse201(uob_contracts::CompositeScheduleResult201),
     /// Native installed-profile acknowledgement; collection completes independently.
     ChargingProfilesResponse201(uob_contracts::ChargingProfilesResult201),
+    /// Native firmware reply and sent-artifact facts; job progress is reconciled in storage.
+    FirmwareResponse16(uob_contracts::FirmwareResult16),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -169,6 +171,18 @@ pub trait StationCommandPort<P>: Send + Sync {
         _generation: Option<u64>,
         _now: UtcTimestamp,
     ) -> Result<Option<crate::ReservationMutation16>, CommandErrorCode> {
+        Ok(None)
+    }
+    /// Captures a protected OCPP 1.6 firmware job; unrelated operations return None.
+    ///
+    /// # Errors
+    /// Rejects invalid, unprivileged or unavailable firmware context before admission.
+    fn firmware_expectation_16(
+        &self,
+        _command: &Command<P>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<crate::FirmwareJobMutation16>, CommandErrorCode> {
         Ok(None)
     }
     /// Captures protected native201 mutations; unrelated operations return None.

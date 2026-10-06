@@ -90,6 +90,8 @@ pub(super) fn load_stations(
                 local_authorization_201: None,
                 reservations,
                 reservations_201,
+                firmware: station.firmware,
+                firmware_providers: None,
             },
         );
         resources.insert(station.station_id, station.resources);

@@ -87,6 +87,7 @@ pub(super) fn result(response: Option<TriggerNativeResponse>) -> CommandResult {
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     }
 }
 pub(super) fn event(

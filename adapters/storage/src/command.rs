@@ -93,6 +93,7 @@ pub(crate) fn write_result_value(
         .transpose()?;
     crate::reservation16::finish(transaction, &mut incoming)?;
     crate::reservation201::finish(transaction, &mut incoming)?;
+    crate::firmware16::finish(transaction, &mut incoming)?;
 
     let mut retire_trigger_201 = false;
     if let Some(mut previous) = previous {
@@ -111,6 +112,7 @@ pub(crate) fn write_result_value(
         codec::local_authorization201::merge(&previous, &mut incoming)?;
         crate::reservation16::validation::merge(&previous, &mut incoming)?;
         crate::reservation201::validation::merge(&previous, &mut incoming)?;
+        crate::firmware16::validation::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -170,6 +172,12 @@ pub(crate) fn write_result_value(
             if incoming.reservation_201.is_none() {
                 incoming.reservation_201 = previous.reservation_201;
             }
+            if let (Some(old), Some(new)) = (previous.firmware_16, incoming.firmware_16.as_mut()) {
+                // Keep the settled reply and artifact; the job always reflects durable state.
+                let job = new.job().clone();
+                *new = old;
+                *new.job_mut() = job;
+            }
         }
         for observation in previous.configuration_observations {
             if !incoming
@@ -198,6 +206,7 @@ pub(crate) fn write_result_value(
     codec::local_authorization201::validate_stored(transaction, &incoming)?;
     crate::reservation16::codec_validation::validate_stored(transaction, &incoming)?;
     crate::reservation201::codec_validation::validate_stored(transaction, &incoming)?;
+    crate::firmware16::validation::validate_stored(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 

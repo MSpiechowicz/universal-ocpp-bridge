@@ -1,0 +1,17 @@
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "1.6"
+request_timeout_ms = 5000
+connectors = [1]
+
+[stations.firmware16]
+# Security Whitepaper Edition 4 L01: UpdateFirmware is answered with CALLERROR NotSupported.
+private_state_file = "/tmp/uob-sim-signed-firmware-122/firmware.json"
+mode = "signed"
+# Public PEM: 1-4 manufacturer roots that issue the firmware signing certificate directly.
+manufacturer_root_file = "/tmp/uob-sim-signed-firmware-122/manufacturer-root.pem"
+cancel_policy = "cancel"
+reboot_after_install = true

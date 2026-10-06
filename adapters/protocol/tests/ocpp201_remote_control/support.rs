@@ -251,14 +251,14 @@ async fn setup_with(
     schedules: bool,
 ) -> Harness {
     let mut snapshot = prepared_snapshot(device);
-    v201::registration_call(
+    Box::pin(v201::registration_call(
         include_bytes!("../../../../tests/ocpp-fixtures/corpus/wire/2.0.1/boot-notification.json"),
         store,
         &mut snapshot,
         registration::RegistrationDecision::Accepted,
         60,
         Clock.now(),
-    )
+    ))
     .await
     .unwrap();
     let (auth, identity) = authorize_snapshot(store, &snapshot).await;

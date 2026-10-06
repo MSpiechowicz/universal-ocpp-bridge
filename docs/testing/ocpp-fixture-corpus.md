@@ -62,6 +62,65 @@ four native write statuses and rejected commands. The corpus proves wire shape,
 while `ocpp16_configuration*` protocol integration tests exercise authenticated
 admission, redaction, persistent outcomes, recovery and one-shot dispatch.
 
+## OCPP 1.6 firmware fixtures
+
+Two sources are pinned in `provenance.json`.
+
+- **OCPP 1.6 archive.** `UpdateFirmware.json`, `UpdateFirmwareResponse.json` and
+  `FirmwareStatusNotificationResponse.json` come from the archive above. They keep their
+  original CRLF bytes, like the GetCompositeSchedule pair. The existing
+  `FirmwareStatusNotification.json` copy is reused.
+- **Security Whitepaper.** The four signed schemas come from **Improved security for
+  OCPP 1.6-J, Edition 4 (2026-02-05)**:
+  - Its OCA download is recorded as provenance version `1.6-security-whitepaper`, archive
+    SHA-256 `158b883e8ee712fd80fad3610b69fad355f7831d7a0ccdd996ce6b5452ce6859`.
+  - The inner `JSON_schemas.zip` has SHA-256
+    `5c69b84a5b4efe99d90a6c432034f726894c51a02203c274c00c361caf15a889`.
+  - The schemas are `SignedUpdateFirmware.json`, `SignedUpdateFirmwareResponse.json`,
+    `SignedFirmwareStatusNotification.json` and
+    `SignedFirmwareStatusNotificationResponse.json`.
+  - They are byte-identical, LF and Draft 6, under `schemas/1.6-security/`.
+
+Both sources are OCA copyright under CC BY-ND 4.0.
+
+The 34 fixture IDs beginning with `wire.ocpp16.firmware-` and
+`wire.ocpp16.signed-firmware-` were authored independently. They cover:
+
+- both requests in full and minimal form, including the signed i32 minimum `requestId`;
+- the empty legacy acknowledgement and all five signed replies;
+- all seven legacy statuses and all fourteen signed statuses, each with `requestId`;
+- the identity-free signed `Idle` permitted by L01.FR.21;
+- both empty notification replies.
+
+`wire/1.6/firmware-negative-cases.json` separates the OCA schema floor from native semantics
+with 14 cases. Several are schema-valid but refused natively:
+
+- a non-`Idle` signed status without `requestId`;
+- a `requestId` outside i32;
+- negative `retries`.
+
+The rest violate the schemas:
+
+- the `InvalidCertificate` firmware status that Edition 4 removed;
+- signed-only values in the legacy notification;
+- a location over 512 characters and a signature over 800 characters;
+- a missing signing certificate (L01.FR.11).
+
+`firmware16-requirements.json` maps the 1.6 §4.5/§5.19 and errata items and the L01
+requirement IDs to fixtures and tests.
+
+The new `ocpp16.firmware-diagnostics.firmware-update` row is `verified`. Its evidence
+comes from:
+
+- the bridge decoder and the independent simulator model, which agree with every
+  corpus fixture and negative case;
+- storage and actual-daemon tests;
+- an opt-in separate-process joint smoke.
+
+The broad `ocpp16.firmware-diagnostics` row stays `planned` until diagnostics are
+implemented. Security events, `ExtendedTriggerMessage` and certificate revocation are not
+claimed.
+
 ## OCPP 1.6 TriggerMessage fixtures
 
 The TriggerMessage source is the OCA **OCPP 1.6 Edition 2 with published JSON

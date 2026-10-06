@@ -1,0 +1,52 @@
+{
+  "$defs": {
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/update-firmware-reference-16.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Legacy OCPP 1.6 `UpdateFirmware` (§6.55) without a caller-supplied location.",
+  "properties": {
+    "artifactReference": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+      "type": "string"
+    },
+    "retries": {
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "retrieveDate": {
+      "$ref": "#/$defs/UtcTimestamp"
+    },
+    "retryInterval": {
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "artifactReference",
+    "retrieveDate"
+  ],
+  "title": "UpdateFirmwareReference16",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

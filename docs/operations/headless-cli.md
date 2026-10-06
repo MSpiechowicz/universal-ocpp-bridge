@@ -1076,6 +1076,93 @@ restart; a late `Accepted` reply is kept as evidence but never revives an expire
 superseded reservation. This is software boundary evidence, not hardware
 interoperability or OCA certification.
 
+### Protected OCPP 1.6 firmware updates
+
+`update_firmware` (OCPP 1.6 `UpdateFirmware`) and `signed_update_firmware` (Security
+Whitepaper Edition 4 `SignedUpdateFirmware`) are privileged, default-off,
+**demo-only** station options for `protocol = "ocpp16j"`. A station gets at most one of
+them: a signed-only charger answers the original message with `NotSupported` (L01.FR.20).
+Each firmware station also needs `firmware_job_timeout_seconds` (60–604800). Using
+either option requires one `[charging.firmware]` section, and that section is rejected
+when no station uses it.
+
+```toml
+# Alongside the existing [charging] section:
+[charging.firmware]
+listen_addr = "127.0.0.1:9100"           # loopback test artifact service
+public_base = "http://127.0.0.1:9100"    # optional; defaults to http://<listen_addr>
+spool_directory = "/srv/uob-demo/artifact-spool"
+catalog_file = "/srv/uob-demo/private/firmware-catalog.json"
+manufacturer_root_file = "/srv/uob-demo/public/manufacturer-root.pem"  # optional output
+organization = "Demo CSO"                # optional test PKI organization
+
+[[charging.stations]]
+id = "demo-1"
+protocol = "ocpp16j"
+credential_file = "/srv/uob-demo/private/demo-1.credential"
+signed_update_firmware = true            # or update_firmware = true
+firmware_job_timeout_seconds = 3600
+```
+
+Requirements for the files:
+
+- `spool_directory` is a private `0700` directory.
+- The startup-only catalog is service-owned mode `0600`, at most 64 KiB, and lists 1–16
+  unique references:
+
+  ```json
+  {"artifacts": [
+    {"reference": "station-fw-2.0-signed.bin", "file": "/srv/uob-demo/private/fw-2.0.bin", "signed": true},
+    {"reference": "station-fw-1.1.bin", "file": "/srv/uob-demo/private/fw-1.1.bin", "signed": false}
+  ]}
+  ```
+
+- Each image is an owner-only `0600` file of at most 32 MiB.
+
+At startup the service:
+
+- generates a fresh `TEST ONLY` PKI;
+- signs every `signed` image over its complete bytes with RSA-PSS SHA-256;
+- serves the images at `{public_base}/artifacts/{reference}`;
+- when configured, writes the generated manufacturer root PEM so a demo station can trust
+  it.
+
+Restarting regenerates the PKI and republishes the images. Every resulting artifact is
+marked `test_only`, and both providers refuse production environments.
+
+Commands go through the existing authenticated `POST /api/v1/commands` envelope and
+target the station root only. They name a catalog reference, never a location:
+
+```json
+{"request_id":"fw-1","resource":{"bridge_id":"local-demo","station_id":"demo-1"},
+ "operation":{"kind":"ocpp","parameters":{"protocol":"ocpp16j","action":"SignedUpdateFirmware",
+   "payload_schema":"urn:uob:ocpp16:SignedUpdateFirmwareReference:1",
+   "payload":{"requestId":122,"artifactReference":"station-fw-2.0-signed.bin",
+     "retrieveDateTime":"2026-10-06T12:00:00Z","installDateTime":"2026-10-06T12:05:00Z",
+     "retries":3,"retryInterval":60}}},
+ "expires_at":"2026-10-06T12:10:00Z"}
+```
+
+The legacy action uses `urn:uob:ocpp16:UpdateFirmwareReference:1` with
+`artifactReference`, `retrieveDate` and optional `retries`/`retryInterval`.
+
+Before sending, the bridge resolves the reference, checks that the artifact kind matches the
+action, and verifies the signing certificate against the test manufacturer root. Any refusal
+is reported as not sent.
+
+The command result's `firmware_16` shows:
+
+- the sent artifact's SHA-256 and size;
+- the exact native reply;
+- the durable job, which advances as the station reports `FirmwareStatusNotification` or
+  `SignedFirmwareStatusNotification`.
+
+A job that misses its deadline becomes `timed_out` but keeps blocking a release drain until
+the station reports an end state. To resolve it, send a `TriggerMessage` for
+`FirmwareStatusNotification`; a station that is not busy answers `Idle`. A lost reply stays
+`uncertain` and is never resent after a restart. See
+[OCPP 1.6 firmware](../architecture/ocpp16-firmware.md) for the state rules.
+
 ### Protected OCPP 2.0.1 reservations
 
 For `protocol = "ocpp201"`, the same independent, default-off, privileged **demo-only**

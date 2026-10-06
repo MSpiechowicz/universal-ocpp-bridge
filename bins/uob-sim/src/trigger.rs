@@ -248,6 +248,13 @@ fn payloads(
     connectors: &[u16],
     state: &Arc<Mutex<Ocpp16State>>,
 ) -> Vec<Value> {
+    // Never hold the OCPP state mutex while inspecting the firmware model mutex.
+    let firmware = state
+        .lock()
+        .expect("OCPP 1.6 state lock")
+        .firmware16
+        .clone();
+    let firmware = firmware.map_or_else(|| Some("Idle".to_owned()), |model| model.trigger_status());
     let state = state.lock().expect("OCPP 1.6 state lock");
     match &request.requested_message {
         Requested::BootNotification => vec![state.boot.clone().unwrap_or_else(|| {
@@ -255,9 +262,12 @@ fn payloads(
                 "chargePointVendor": "UOB", "chargePointModel": "Simulator"
             })
         })],
-        Requested::DiagnosticsStatusNotification | Requested::FirmwareStatusNotification => {
-            vec![json!({"status":"Idle"})]
-        }
+        Requested::DiagnosticsStatusNotification => vec![json!({"status":"Idle"})],
+        // OCPP 1.6 §4.5: Idle only when not busy; a busy job reports its current status.
+        Requested::FirmwareStatusNotification => firmware
+            .map(|status| json!({ "status": status }))
+            .into_iter()
+            .collect(),
         Requested::Heartbeat => vec![json!({})],
         Requested::StatusNotification => {
             let ids = scoped_connectors(request, connectors, true);

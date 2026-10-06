@@ -185,6 +185,8 @@ fn write_history_command(
         reservation_observations_16: Vec::new(),
         reservation_201: None,
         reservation_observations_201: Vec::new(),
+        firmware_16: None,
+        firmware_observations_16: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -253,6 +255,7 @@ fn write_command(
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     });
     write_history_command(store, command, command_result);
 }

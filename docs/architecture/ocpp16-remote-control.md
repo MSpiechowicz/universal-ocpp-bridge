@@ -27,6 +27,8 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | GetCompositeSchedule | Privileged `Ocpp`, action `GetCompositeSchedule`, schema `urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest`; station connector 0 or exact positive connector, positive i32 duration and optional A/W unit | Accepted with meaningful typed schedule / Rejected |
 | SetChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:SetChargingProfileRequest`; complete native profile, exact station/connector scope and ongoing transaction checks for TxProfile | Accepted / Rejected / NotSupported |
 | ClearChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:ClearChargingProfileRequest`; station authority for ID/broad clears, exact connector for child filter clears | Accepted / Unknown |
+| UpdateFirmware | Privileged `Ocpp`, bridge reference schema `urn:uob:ocpp16:UpdateFirmwareReference:1`; station scope, provider artifact of kind `Firmware`, durable job before dispatch (see [OCPP 1.6 firmware](ocpp16-firmware.md)) | Empty acknowledgement / CALLERROR |
+| SignedUpdateFirmware | Privileged `Ocpp`, bridge reference schema `urn:uob:ocpp16:SignedUpdateFirmwareReference:1`; station scope, `SignedFirmware` artifact whose signing certificate the PKI provider trusts | Accepted / Rejected / AcceptedCanceled / InvalidCertificate / RevokedCertificate |
 
 Unknown fields, wrong schemas, OCPP 2.0.1 reset types, unsupported operations and cross-resource
 native addresses fail closed. Unlock connector IDs use real topology rather than the pinned

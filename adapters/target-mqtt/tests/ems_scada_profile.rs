@@ -338,6 +338,7 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         reservation_201: None,
         composite_schedule_201: None,
         charging_profiles_201: None,
+        firmware_16: None,
     };
     submission
         .respond(Ok(result.clone()))
