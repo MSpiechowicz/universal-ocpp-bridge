@@ -304,6 +304,9 @@ const fn access_permission(permission: AccessPermission) -> &'static str {
         AccessPermission::Read => "read",
         AccessPermission::Control => "control",
         AccessPermission::PrivilegedControl => "privileged_control",
+        AccessPermission::ConfigurationRead => "configuration_read",
+        AccessPermission::ConfigurationWrite => "configuration_write",
+        AccessPermission::DestructiveDisposition => "destructive_disposition",
     }
 }
 

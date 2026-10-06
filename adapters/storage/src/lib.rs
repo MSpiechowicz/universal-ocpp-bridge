@@ -22,6 +22,7 @@ mod schema;
 mod snapshots;
 mod spool;
 mod store;
+mod target_disposition;
 mod trigger;
 mod trigger201;
 mod worker;

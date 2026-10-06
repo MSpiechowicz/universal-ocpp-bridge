@@ -18,6 +18,12 @@ pub enum AccessPermission {
     Control,
     /// Submit schema-pinned protocol management operations.
     PrivilegedControl,
+    /// Read the target catalog, next-start configuration, and backlog, and validate candidates.
+    ConfigurationRead,
+    /// Apply a validated next-start configuration and authorize archiving of undrained work.
+    ConfigurationWrite,
+    /// Authorize permanent discard of undrained critical target deliveries.
+    DestructiveDisposition,
 }
 
 /// Explicit canonical resource grant established by trusted credential configuration.
@@ -99,6 +105,22 @@ impl AccessGrant {
                 .resource_scopes
                 .iter()
                 .any(|scope| scope.allows(resource))
+    }
+
+    /// Returns whether this credential grants a permission over a whole bridge installation.
+    ///
+    /// Bridge configuration affects every station, so station and resource scopes never grant it.
+    #[must_use]
+    pub fn permits_bridge(
+        &self,
+        permission: AccessPermission,
+        bridge_id: &uob_contracts::BridgeId,
+    ) -> bool {
+        self.permissions.contains(&permission)
+            && self
+                .resource_scopes
+                .iter()
+                .any(|scope| matches!(scope, AccessResourceScope::Bridge(granted) if granted == bridge_id))
     }
 
     fn authorize_command<P>(&self, command: &ExternalCommand<P>) -> Result<(), AccessPolicyError> {

@@ -52,6 +52,7 @@ pub(crate) struct ServeSettings {
     pub charging: Option<ChargingRuntime>,
     pub target_selection: Option<ValidatedTargetSelection<serde_json::Value, serde_json::Value>>,
     pub exporter: Option<ExportRuntime>,
+    pub configuration_api: crate::configuration_api::Validated,
 }
 
 struct ChargingManagement {
@@ -66,6 +67,7 @@ struct ManagementListener {
     release_read: Option<uob_management_adapter::ManagementReleaseReadConfiguration>,
     options: ManagementRouterOptions,
     charging: Option<ChargingManagement>,
+    configuration: Option<uob_management_adapter::ManagementConfigurationSetup>,
 }
 
 pub(crate) async fn serve(application: Application, settings: ServeSettings) -> io::Result<()> {
@@ -87,6 +89,7 @@ pub(crate) async fn serve_until(
         charging,
         target_selection,
         exporter,
+        configuration_api,
     } = settings;
     tokio::pin!(signal);
     let notifier = Notifier::from_environment()?;
@@ -94,6 +97,9 @@ pub(crate) async fn serve_until(
     let charging_enabled = charging.is_some();
     let management = charging_management(&application, charging.as_ref())?;
     probe_startup(&notifier, deployment.as_ref(), charging_store.as_ref()).await?;
+    let configuration = configuration_api
+        .start(&application, target_selection.as_ref(), charging.as_ref())
+        .await?;
     let target = start_target(target_selection.as_ref(), charging.as_ref(), &application)?;
     let (target_stop, target_stopped) = oneshot::channel();
     let mut target_task = target.map(|runtime| tokio::spawn(runtime.run(target_stopped, deadline)));
@@ -123,6 +129,7 @@ pub(crate) async fn serve_until(
             release_read,
             options,
             charging: management,
+            configuration,
         },
         stopped,
         &notifier,
@@ -198,55 +205,55 @@ async fn serve_management(
         release_read,
         options,
         charging,
+        configuration,
     } = listener;
     let shutdown = async move {
         let _ = stopped.await;
     };
     let ready = || notifier.send("READY=1\nSTATUS=Local storage and management initialized");
-    if let Some(ChargingManagement {
-        source,
-        events,
-        commands,
-    }) = charging
-    {
-        if let Some(commands) = commands {
-            let identity = application.identity().clone();
-            let router = uob_management_adapter::router_with_commands_and_authenticated_events(
-                application,
-                source,
-                ManagementReadLimits::default(),
-                commands,
-                events,
-                options,
-            );
-            uob_management_adapter::serve_router_with_capture_and_release_readiness(
-                address,
-                identity,
-                router,
-                Some(diagnostics),
-                release_read,
-                shutdown,
-                ready,
-            )
-            .await
-        } else {
-            uob_management_adapter::serve_with_authenticated_events_and_capture_and_release_readiness(
-                address, application, source, ManagementReadLimits::default(), events,
-                options, Some(diagnostics), release_read, shutdown, ready,
-            ).await
-        }
-    } else {
-        uob_management_adapter::serve_with_capture_and_release_readiness(
-            address,
+    let identity = application.identity().clone();
+    let mut router = match charging {
+        Some(ChargingManagement {
+            source,
+            events,
+            commands: Some(commands),
+        }) => uob_management_adapter::router_with_commands_and_authenticated_events(
             application,
+            source,
+            ManagementReadLimits::default(),
+            commands,
+            events,
             options,
-            Some(diagnostics),
-            release_read,
-            shutdown,
-            ready,
-        )
-        .await
+        ),
+        Some(ChargingManagement {
+            source,
+            events,
+            commands: None,
+        }) => uob_management_adapter::router_with_authenticated_events(
+            application,
+            source,
+            ManagementReadLimits::default(),
+            events,
+            options,
+        ),
+        None => uob_management_adapter::router_with_options(application, options),
+    };
+    if let Some(configuration) = configuration {
+        router = router.merge(uob_management_adapter::configuration_router(
+            identity.clone(),
+            configuration,
+        ));
     }
+    uob_management_adapter::serve_router_with_capture_and_release_readiness(
+        address,
+        identity,
+        router,
+        Some(diagnostics),
+        release_read,
+        shutdown,
+        ready,
+    )
+    .await
 }
 
 fn charging_management(

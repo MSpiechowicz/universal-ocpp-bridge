@@ -3276,6 +3276,7 @@ dependencies = [
 name = "uob-service"
 version = "0.31.0"
 dependencies = [
+ "axum",
  "base64",
  "futures-util",
  "reqwest",

@@ -1,6 +1,8 @@
+use uob_mqtt_target_adapter::EMS_SCADA_PROFILE;
+
 use super::{
-    ConfigurationLoadError, EMS_SCADA_HTTP_TARGET_KIND, EMS_SCADA_PROFILE, FileConfiguration,
-    MQTT_TARGET_KIND, validate,
+    ConfigurationLoadError, EMS_SCADA_HTTP_TARGET_KIND, FileConfiguration, MQTT_TARGET_KIND,
+    validate,
 };
 
 #[test]

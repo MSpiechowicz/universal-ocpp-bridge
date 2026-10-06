@@ -3,6 +3,7 @@
 mod charging;
 pub mod cli;
 mod configuration;
+mod configuration_api;
 mod deployment;
 mod diagnostics;
 mod event_stream;

@@ -295,7 +295,16 @@ fn used_bytes(connection: &Connection) -> Result<u64, StorageError> {
         COALESCE((SELECT SUM(length(CAST(record_id AS BLOB)) +
                                    length(CAST(committed_at AS BLOB)) +
                                    length(CAST(payload AS BLOB)) + 24)
-                  FROM committed_records), 0)";
+                  FROM committed_records), 0) +
+        COALESCE((SELECT SUM(length(CAST(audit_event_id AS BLOB)) +
+                                   length(CAST(target_instance_id AS BLOB)) +
+                                   length(CAST(event_id AS BLOB)) +
+                                   length(CAST(delivery_id AS BLOB)) +
+                                   length(CAST(ordering_key AS BLOB)) +
+                                   length(CAST(deadline AS BLOB)) +
+                                   length(CAST(payload AS BLOB)) +
+                                   length(CAST(archived_at AS BLOB)) + 40)
+                  FROM target_delivery_archive), 0)";
     scalar(connection, statement)
 }
 

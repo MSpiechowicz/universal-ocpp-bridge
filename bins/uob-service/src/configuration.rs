@@ -1,26 +1,23 @@
 use std::{collections::BTreeMap, error::Error, fmt, fs, net::SocketAddr, path::Path};
 
 use reqwest::Url;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use uob_application::{
-    ConfigurationValue, CredentialReference, TargetCapability, TargetConfiguration,
-};
+use uob_application::{ConfigurationValue, CredentialReference, TargetConfiguration};
 use uob_contracts::{ArtifactDigest, BridgeId, Environment, ReleaseId, TargetInstanceId};
-use uob_ems_scada_http_target_adapter::{EMS_SCADA_HTTP_TARGET_KIND, EmsScadaHttpTargetFactory};
+use uob_ems_scada_http_target_adapter::EMS_SCADA_HTTP_TARGET_KIND;
 use uob_external_export_adapter::{
     DataExportConfiguration, DatabaseProviderRegistry, DestinationTransition, ExportBacklogState,
     postgresql_configuration_schema,
 };
-use uob_mqtt_target_adapter::{
-    EMS_SCADA_PROFILE, MQTT_TARGET_KIND, MqttTargetFactory, STANDARD_PROFILE,
-};
+use uob_mqtt_target_adapter::MQTT_TARGET_KIND;
 use uob_target_adapter::{
-    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TargetDisplayFamily, TargetPreset,
-    TargetRegistration, TargetRegistry, TransportEncryption, TransportPolicy, TransportSecurity,
+    BridgeTargetSelection, ConfiguredTarget, NetworkEndpoint, TransportEncryption,
+    TransportSecurity,
 };
 
 use crate::{ServiceComposition, StartupIdentityConfiguration, compose_with_data_export};
+pub(crate) use registry::target_registry;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -42,6 +39,8 @@ struct FileConfiguration {
     lifecycle: crate::lifecycle::LifecycleConfiguration,
     #[serde(default)]
     charging: charging::Configuration,
+    #[serde(default)]
+    configuration_api: crate::configuration_api::Configuration,
 }
 
 #[derive(Deserialize)]
@@ -74,7 +73,7 @@ pub(crate) struct EventClientConfiguration {
     pub credentials_file: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct TargetEntry {
     id: String,
@@ -85,10 +84,11 @@ struct TargetEntry {
     revision: u64,
     #[serde(default)]
     settings: BTreeMap<String, toml::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     transport: Option<TransportConfiguration>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 struct TransportConfiguration {
     endpoint: String,
@@ -100,7 +100,7 @@ struct TransportConfiguration {
     explicitly_isolated: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum TransportEncryptionConfiguration {
     Tls,
@@ -122,6 +122,7 @@ pub(crate) struct ValidatedServiceConfiguration {
     pub deployment: Option<crate::deployment::DeploymentLayout>,
     pub charging: Option<charging::ValidatedChargingConfiguration>,
     pub shutdown_timeout: std::time::Duration,
+    pub configuration_api: crate::configuration_api::Validated,
 }
 
 #[derive(Clone)]
@@ -131,10 +132,16 @@ pub(crate) struct ValidatedEventClientConfiguration {
 }
 
 pub(crate) fn load(path: &Path) -> Result<ValidatedServiceConfiguration, ConfigurationLoadError> {
+    let mut configuration = read_document(path)?;
+    staged::overlay(&mut configuration)?;
+    let mut validated = validate(configuration)?;
+    validated.configuration_api = validated.configuration_api.bound_to(path);
+    Ok(validated)
+}
+
+fn read_document(path: &Path) -> Result<FileConfiguration, ConfigurationLoadError> {
     let document = fs::read_to_string(path).map_err(|_| ConfigurationLoadError::Unavailable)?;
-    let configuration: FileConfiguration =
-        toml::from_str(&document).map_err(|_| ConfigurationLoadError::InvalidDocument)?;
-    validate(configuration)
+    toml::from_str(&document).map_err(|_| ConfigurationLoadError::InvalidDocument)
 }
 
 fn validate(
@@ -177,23 +184,7 @@ fn validate(
     )
     .in_environment(configuration.bridge.environment);
 
-    let mut targets = TargetRegistry::<Value, Value>::new();
-    targets
-        .register(
-            MqttTargetFactory::new(&bridge_id, configuration.bridge.environment)
-                .map_err(|_| ConfigurationLoadError::Composition)?,
-            mqtt_registration(),
-        )
-        .map_err(|_| ConfigurationLoadError::Composition)?;
-    targets
-        .register(
-            EmsScadaHttpTargetFactory::new(configuration.bridge.environment),
-            ems_scada_http_registration(),
-        )
-        .map_err(|_| ConfigurationLoadError::Composition)?;
-    targets
-        .declare_first_release_unavailable_targets()
-        .map_err(|_| ConfigurationLoadError::Composition)?;
+    let targets = target_registry(&bridge_id, configuration.bridge.environment)?;
     let mut providers = DatabaseProviderRegistry::new();
     providers
         .declare_postgresql_unavailable(postgresql_configuration_schema())
@@ -220,6 +211,10 @@ fn validate(
         .validate(configuration.bridge.environment)
         .map_err(|_| ConfigurationLoadError::InvalidDocument)?;
     let events = validate_event_client(configuration.events, configuration.management.listen_addr)?;
+    let configuration_api = configuration
+        .configuration_api
+        .validate(&bridge_id, configuration.bridge.environment)
+        .map_err(|_| ConfigurationLoadError::InvalidConfigurationApi)?;
 
     Ok(ValidatedServiceConfiguration {
         diagnostics,
@@ -230,6 +225,7 @@ fn validate(
         shutdown_timeout,
         deployment,
         events,
+        configuration_api,
     })
 }
 
@@ -332,43 +328,6 @@ fn mqtt_transport(
     })
 }
 
-fn mqtt_registration() -> TargetRegistration {
-    TargetRegistration {
-        display_family: TargetDisplayFamily {
-            id: "mqtt".to_owned(),
-            display_name: "MQTT".to_owned(),
-        },
-        presets: vec![
-            TargetPreset {
-                id: STANDARD_PROFILE.to_owned(),
-                display_name: "Standard bridge namespace".to_owned(),
-            },
-            TargetPreset {
-                id: EMS_SCADA_PROFILE.to_owned(),
-                display_name: "EMS/SCADA over MQTT".to_owned(),
-            },
-        ],
-        capabilities: vec![
-            TargetCapability("retained-state".to_owned()),
-            TargetCapability("redacted-tracing".to_owned()),
-        ],
-        transport_policy: Some(TransportPolicy::Outbound),
-    }
-}
-
-fn ems_scada_http_registration() -> TargetRegistration {
-    TargetRegistration {
-        display_family: TargetDisplayFamily {
-            id: "ems-scada".to_owned(),
-            display_name: "EMS/SCADA".to_owned(),
-        },
-        presets: vec![],
-        capabilities: vec![],
-        // The factory validates listener exposure itself; see `configured_target`.
-        transport_policy: None,
-    }
-}
-
 fn setting(name: &str, value: toml::Value) -> Result<ConfigurationValue, ConfigurationLoadError> {
     match value {
         toml::Value::String(value) if is_credential_field(name) => CredentialReference::new(value)
@@ -463,7 +422,37 @@ pub(crate) enum ConfigurationLoadError {
     InvalidDeployment,
     UnsafeStagingNetwork,
     InvalidCharging,
+    InvalidConfigurationApi,
+    InvalidStagedTargets,
+    StagedTargetsConflict,
     Composition,
+}
+
+impl ConfigurationLoadError {
+    /// Stable sanitized code shared by the CLI and the configuration API.
+    pub(crate) const fn code(self) -> &'static str {
+        match self {
+            Self::Unavailable => "configuration.unavailable",
+            Self::UnavailableSecret => "configuration.unavailable_secret",
+            Self::InvalidDocument => "configuration.invalid_document",
+            Self::InvalidIdentity => "configuration.invalid_identity",
+            Self::MissingTargetSelection => "configuration.missing_target_selection",
+            Self::InvalidTargetSetting => "configuration.invalid_target_setting",
+            Self::InvalidTransport => "configuration.invalid_transport",
+            Self::UnsafeManagementListener => "configuration.unsafe_management_listener",
+            Self::InvalidEventEndpoint => "configuration.invalid_event_endpoint",
+            Self::UnsafeRemoteEventEndpoint => "configuration.unsafe_remote_event_endpoint",
+            Self::UnavailableDataExport => "configuration.unavailable_data_export",
+            Self::InvalidShutdownTimeout => "configuration.invalid_shutdown_timeout",
+            Self::InvalidDeployment => "configuration.invalid_deployment",
+            Self::UnsafeStagingNetwork => "configuration.unsafe_staging_network",
+            Self::InvalidCharging => "configuration.invalid_charging",
+            Self::InvalidConfigurationApi => "configuration.invalid_configuration_api",
+            Self::InvalidStagedTargets => "configuration.invalid_staged_targets",
+            Self::StagedTargetsConflict => "configuration.staged_targets_conflict",
+            Self::Composition => "configuration.composition",
+        }
+    }
 }
 
 impl fmt::Display for ConfigurationLoadError {
@@ -478,8 +467,13 @@ impl Error for ConfigurationLoadError {}
 mod tests;
 
 pub(crate) mod charging;
+mod registry;
 mod secrets;
+mod staged;
 mod staging;
+mod target_issues;
+mod target_views;
+pub(crate) mod targets;
 
 pub(crate) fn check_secrets(path: &Path) -> Result<(), ConfigurationLoadError> {
     secrets::check(path)

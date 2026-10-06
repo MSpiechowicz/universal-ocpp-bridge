@@ -273,6 +273,9 @@ the mapping checklist, unavailable first-release OPC UA kind, and compatibility 
 Critical target deliveries remain owned by their original target instance and configuration
 revision across restarts. See [target destination changes](docs/configuration/target-destination-changes.md)
 for offline previews, restart-required state, audited archive/discard handling, and dispatch guards.
+Configuration clients read the target catalog, validate and apply next-start target sections, and
+authorize audited dispositions through the
+[management configuration API](docs/configuration/management-target-configuration.md).
 
 The selected adapter runs in a bounded host-owned session with guarded command ingress, isolated
 critical reporting, and deadline-enforced shutdown. See
