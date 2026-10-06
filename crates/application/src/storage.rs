@@ -263,6 +263,8 @@ pub struct AtomicStoreWrite<C, E, D, R> {
     /// Reservation admission and inbound facts share this authoritative transaction.
     pub reservation_16: Option<Box<crate::ReservationMutation16>>,
     pub reservation_observations_16: Vec<crate::ReservationObservation16>,
+    pub reservation_201: Option<Box<crate::ReservationMutation201>>,
+    pub reservation_observations_201: Vec<crate::ReservationObservation201>,
     /// Durable journal records produced by the operation.
     pub journal_events: Vec<EventEnvelope<E>>,
     /// Required target work produced by the operation.
@@ -285,6 +287,8 @@ impl<C, E, D, R> AtomicStoreWrite<C, E, D, R> {
             charging_profile_201: None,
             reservation_16: None,
             reservation_observations_16: Vec::new(),
+            reservation_201: None,
+            reservation_observations_201: Vec::new(),
             required_deliveries: Vec::new(),
             committed_records: Vec::new(),
         }

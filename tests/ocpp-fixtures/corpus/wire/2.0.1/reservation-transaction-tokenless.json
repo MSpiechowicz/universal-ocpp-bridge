@@ -1,0 +1,1 @@
+[2,"reserved-update-201","TransactionEvent",{"eventType":"Updated","timestamp":"2026-10-06T10:00:05Z","triggerReason":"ChargingStateChanged","seqNo":1,"transactionInfo":{"transactionId":"reserved-tx-201","chargingState":"Charging"},"evse":{"id":1,"connectorId":1},"reservationId":-114}]

@@ -36,6 +36,7 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         local_authorization: None,
         local_authorization_file: None,
         reservation16: None,
+        reservation201: None,
     }
 }
 

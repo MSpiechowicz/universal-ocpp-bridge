@@ -78,6 +78,7 @@ pub(super) struct StationSettings {
     local_authorization_201:
         Option<Arc<uob_protocol_adapter::v201::remote_control::LocalAuthorizationUpdates201>>,
     reservations: Option<Arc<uob_protocol_adapter::v16::remote_control::ReservationValues16>>,
+    reservations_201: Option<Arc<uob_protocol_adapter::v201::remote_control::ReservationValues201>>,
 }
 
 impl StationSettings {

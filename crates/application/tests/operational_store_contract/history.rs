@@ -183,6 +183,8 @@ fn write_history_command(
         charging_profile_201: None,
         reservation_16: None,
         reservation_observations_16: Vec::new(),
+        reservation_201: None,
+        reservation_observations_201: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -248,6 +250,7 @@ fn write_command(
         local_authorization_16: None,
         local_authorization_201: None,
         reservation_16: None,
+        reservation_201: None,
     });
     write_history_command(store, command, command_result);
 }

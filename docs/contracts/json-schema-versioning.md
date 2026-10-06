@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.9 and serves
-the current v1.10 command-result; OpenAPI command result responses reference v1.10.
-Current nested export-record and export-batch references use v1.11, while released
-export schemas through v1.10 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.11 and serves
+the current v1.12 command-result; OpenAPI command result responses reference v1.12.
+Current nested export-record and export-batch references use v1.13, while released
+export schemas through v1.12 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -285,3 +285,19 @@ historically unsupported v1.2/v1.3 and future v1.11 remain rejected before publi
 Immediate and durable result payload caps and packet-specific PUBACK ownership remain
 unchanged; a schema revision grants neither privileged ingress nor physical-effect proof.
 
+OCPP 2.0.1 ReserveNow and CancelReservation add optional action-tagged
+`reservation_201` in command-result v1.12 (`ContractVersion` revision 12), beside the
+OCPP 1.6 `reservation_16` evidence of revision 11. It carries the signed i32
+`reservation_id`, the optional positive `evse_id` of a ReserveNow, the exact native status
+when one was received, and a reconciliation `{revision,state,observed_at,source_time?}`
+whose states include the explicit native `removed`. No idToken, groupIdToken, matching
+key, protected reference, connectorType or native statusInfo appears in this evidence,
+and evidence of both editions on one result fails storage correlation.
+
+The new initial envelope is `v1.0/reserve-now-reference-201.schema.json`, payload
+identity `urn:uob:ocpp201:ReserveNowReference:1`, with camelCase
+`id`/`expiryDateTime`/`evseId`/`connectorType`/`reservationReference` and an exact
+`reserve201:<64 hex>` capability. Nested public exports advance to v1.13; runtime
+ExportRecord/ExportBatch advance separately to revision 12. SQLite advances additively to
+v16 with a separate `reservations201` owner table. MQTT explicitly supports result
+revision 12 while future revision 13 is rejected before publication.

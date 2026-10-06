@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Add independently default-off privileged demo OCPP 2.0.1 `ReserveNow` and
+  `CancelReservation` (#114). Public requests carry only
+  `urn:uob:ocpp201:ReserveNowReference:1` (signed `id`, expiry, optional exact `evseId`
+  and `connectorType`, protected reference); raw `idToken`/`groupIdToken` stay in a
+  per-station owner-only `reservation201_file` and native traffic. Unspecified-EVSE
+  reservations need explicit `reserve_non_evse_specific_supported`. Persist
+  `reservations201` revisions (SQLite v16) and reconcile them only from native facts:
+  exact statuses, same-ID replacement on acceptance, `ReservationStatusUpdate`
+  Expired/Removed committed before acknowledgement, `TransactionEvent` `reservationId`
+  with EVSE plus type-scoped identity or provisioned-group attribution, and trusted
+  offline expiry; never infer removal from StatusNotification. Lost, malformed,
+  CALLERROR and late replies stay uncertain without replay. Publish result v1.12,
+  nested export v1.13 and runtime export revision 12; add an independent simulator
+  station model, pinned 2.0.1 schemas, wire fixtures, a requirements mapping and an
+  opt-in actual separate-process joint smoke. Software verification only, not hardware
+  interoperability or OCA certification.
 - Add independently default-off privileged demo OCPP 2.0.1 `GetLocalListVersion`,
   reference-only `SendLocalList` and `ClearCache` (#112). Route mixed-edition startup
   material to exact station-bound separately typed providers; keep raw native tokens,

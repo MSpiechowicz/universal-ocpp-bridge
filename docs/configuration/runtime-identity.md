@@ -70,4 +70,8 @@ reserve_connector_zero_supported) are likewise default-off and demo-only for exa
 ocpp16j stations. reserve_now additionally needs a per-station owner-only
 reservation16_file of protected reservation references and native group facts; see
 [the operator example](../operations/headless-cli.md#protected-ocpp-16-reservations).
+For exact ocpp201 stations the same two options are independently default-off and
+demo-only, reserve_now needs a reservation201_file, and unspecified-EVSE reservations
+additionally need reserve_non_evse_specific_supported; see
+[the 2.0.1 operator example](../operations/headless-cli.md#protected-ocpp-201-reservations).
 

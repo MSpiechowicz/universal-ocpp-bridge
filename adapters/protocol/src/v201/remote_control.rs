@@ -20,11 +20,18 @@ pub mod local_authorization_values;
 pub(crate) mod local_authorization_wire;
 mod mapping;
 mod phase_capability;
+mod reservation;
+mod reservation_values;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub use local_authorization_values::{
     LocalAuthorizationUpdates201, ProtectedLocalListUpdate201, ProtectedLocalListValue201,
 };
+pub(crate) use reservation::DeferredReservationCall201;
+pub use reservation::ReservationGrant201;
+pub(crate) use reservation::native_status as reservation_native_status_201;
+pub use reservation::response as reservation_response_201;
+pub use reservation_values::{ReservationValues201, reservation_key_201};
 pub mod observation;
 
 use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
@@ -59,7 +66,7 @@ pub trait RemoteStartIdentity: Send + Sync {
 /// here and wraps its coordinator with scoped access and charging authorization guards.
 pub struct RemoteControlSession {
     handle: CallSessionHandle,
-    snapshot: RwLock<StationSnapshot>,
+    snapshot: Arc<RwLock<StationSnapshot>>,
     identity: Arc<dyn RemoteStartIdentity>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
@@ -72,6 +79,9 @@ pub struct RemoteControlSession {
     configuration_active: Arc<std::sync::Mutex<bool>>,
     local_authorization_updates: Option<Arc<LocalAuthorizationUpdates201>>,
     local_authorization_authority: [Arc<std::sync::Mutex<bool>>; 3],
+    reservation_values: Option<Arc<reservation_values::ReservationValues201>>,
+    reservation_grant: Option<Arc<ReservationGrant201>>,
+    reserve_non_evse_specific: bool,
 }
 
 impl RemoteControlSession {
@@ -101,7 +111,7 @@ impl RemoteControlSession {
         });
         Ok(Self {
             handle,
-            snapshot: RwLock::new(snapshot),
+            snapshot: Arc::new(RwLock::new(snapshot)),
             identity,
             clock,
             evidence,
@@ -116,6 +126,9 @@ impl RemoteControlSession {
             configuration_active: Arc::new(std::sync::Mutex::new(true)),
             local_authorization_updates: None,
             local_authorization_authority,
+            reservation_values: None,
+            reservation_grant: None,
+            reserve_non_evse_specific: false,
         })
     }
 
@@ -227,6 +240,11 @@ impl RemoteControlSession {
         reservation: Option<uob_application::ProfileReservation201>,
     ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
         Box::pin(async move {
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::reservation201::ACTIONS.contains(&operation.action.as_str()))
+            {
+                return Ok(self.dispatch_reservation(command).await);
+            }
             if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
                 if crate::command_registry::local_authorization201::ACTIONS.contains(&operation.action.as_str()))
             {
@@ -343,6 +361,14 @@ impl RemoteControlSession {
 }
 
 impl StationCommandPort<Value> for RemoteControlSession {
+    fn reservation_expectation_201(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::ReservationMutation201>, CommandErrorCode> {
+        self.reservation_context(command, generation, now)
+    }
     fn charging_profile_expectation(
         &self,
         command: &Command<Value>,

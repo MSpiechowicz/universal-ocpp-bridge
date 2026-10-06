@@ -1,69 +1,14 @@
-use std::time::Duration;
-
-use futures::{SinkExt, StreamExt};
+use futures::SinkExt;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::handshake::server::{
-    Callback, ErrorResponse, Request, Response,
-};
 use uob_sim::{
-    OcppVersion, ProtocolClient, SimulatorAction, SimulatorCall, SimulatorClientConfig,
-    SimulatorProtocolClient, TriggerObservation, TriggerReply, TriggerResponses,
+    ProtocolClient, SimulatorAction, SimulatorCall, SimulatorProtocolClient, TriggerReply,
 };
-
-const BOUND: Duration = Duration::from_secs(4);
-type Socket = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
-
-fn config(endpoint: String) -> SimulatorClientConfig {
-    SimulatorClientConfig {
-        endpoint,
-        credentials_file: None,
-        version: OcppVersion::V1_6,
-        request_timeout: Duration::from_secs(2),
-        reconnect: false,
-        command_capacity: 16,
-        trace_capacity: 64,
-        connectors: vec![1, 2],
-        evse_connectors: vec![],
-        trigger_responses: TriggerResponses::default(),
-        trigger_observation: TriggerObservation::default(),
-        local_authorization: None,
-        local_authorization_file: None,
-        reservation16: None,
-    }
-}
-
-struct Ocpp16Handshake;
-
-impl Callback for Ocpp16Handshake {
-    fn on_request(self, _: &Request, mut response: Response) -> Result<Response, ErrorResponse> {
-        response
-            .headers_mut()
-            .insert("Sec-WebSocket-Protocol", "ocpp1.6".parse().unwrap());
-        Ok(response)
-    }
-}
-
-async fn accept(listener: &TcpListener) -> Socket {
-    let (stream, _) = listener.accept().await.unwrap();
-    tokio_tungstenite::accept_hdr_async(stream, Ocpp16Handshake)
-        .await
-        .unwrap()
-}
-
-async fn recv(socket: &mut Socket) -> Value {
-    let frame = timeout(BOUND, socket.next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
-    match frame {
-        Message::Text(text) => serde_json::from_str(&text).unwrap(),
-        frame => panic!("unexpected WebSocket frame: {frame:?}"),
-    }
-}
+#[path = "trigger_message/support.rs"]
+mod support;
+use support::{BOUND, Socket, accept, config, recv};
 
 async fn assert_invalid_field_response(socket: &mut Socket, id: &str) {
     socket

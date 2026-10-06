@@ -19,6 +19,7 @@ pub mod registration;
 pub mod release_drain;
 pub mod remote_control;
 pub mod reservation16;
+pub mod reservation201;
 mod resource;
 mod security;
 mod station;
@@ -26,6 +27,7 @@ mod storage;
 mod target;
 pub mod transaction16;
 pub use reservation16::*;
+pub use reservation201::*;
 
 pub use access::{
     AccessGrant, AccessPermission, AccessPolicy, AccessPolicyError, AccessResourceScope,
@@ -87,7 +89,8 @@ pub use protocol::{
     RegistrationObservation, TransactionApplyError, TransactionApplyOutcome, TransactionEventKind,
     TransactionEventObservation, TransactionStartObservation, apply_measurements,
     apply_transaction_event, record_measurements, record_measurements_with_trigger,
-    record_transaction_event, record_transaction_event_with_trigger,
+    record_transaction_event, record_transaction_event_with_reservation,
+    record_transaction_event_with_trigger,
 };
 pub use query::{
     CanonicalQuerySource, ScopedTargetQueryPort, TargetQueryAuthorization, TargetQueryPermission,

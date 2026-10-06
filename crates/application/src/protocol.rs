@@ -1,7 +1,8 @@
 mod persistence;
 pub use persistence::{
     ObservationCommitError, record_measurements, record_measurements_with_trigger,
-    record_transaction_event, record_transaction_event_with_trigger,
+    record_transaction_event, record_transaction_event_with_reservation,
+    record_transaction_event_with_trigger,
 };
 
 use uob_contracts::{
@@ -53,6 +54,11 @@ pub enum ChargerObservation {
     TransactionStopped(crate::transaction16::StopObservation),
     /// An OCPP 2.0.1 transaction lifecycle event.
     TransactionEvent(TransactionEventObservation),
+    /// Native OCPP 2.0.1 `ReservationStatusUpdate`; reservationId is a station-local identity.
+    ReservationStatusUpdate201 {
+        reservation_id: i32,
+        status: crate::ReservationUpdateStatus201,
+    },
     /// One or more exact meter samples reported by the station.
     Measurements(MeasurementObservation),
 }
@@ -74,6 +80,10 @@ pub struct TransactionEventObservation {
     pub occurred_at: UtcTimestamp,
     pub measurements: Option<MeasurementObservation>,
     pub payload_fingerprint: String,
+    /// Native reservationId the station reports as terminated by this transaction.
+    pub reservation_id: Option<i32>,
+    /// One-way key of this event's idToken, used only for reservation attribution.
+    pub reservation_token_key: Option<crate::ReservationKey201>,
 }
 
 /// Lifecycle operation carried by an OCPP 2.0.1 `TransactionEvent`.

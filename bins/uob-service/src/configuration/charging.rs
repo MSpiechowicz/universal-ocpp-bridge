@@ -55,6 +55,8 @@ pub(crate) struct StationControlOptions {
     pub reserve_now: StationActionOption,
     pub cancel_reservation: StationActionOption,
     pub reserve_connector_zero_supported: bool,
+    /// OCPP 2.0.1 `ReservationCtrlr.NonEvseSpecific`; never inferred from the station.
+    pub reserve_non_evse_specific_supported: bool,
     pub allow_stop: bool,
     pub allow_charging_limit: bool,
 }
@@ -120,6 +122,7 @@ struct StationConfiguration {
     resources: Vec<ResourceConfiguration>,
     start_token_file: Option<String>,
     reservation16_file: Option<String>,
+    reservation201_file: Option<String>,
     #[serde(flatten)]
     control: StationControlOptions,
 }
@@ -161,6 +164,7 @@ pub(crate) struct ValidatedChargingStation {
     pub start_token_file: Option<CredentialReference>,
     pub control: StationControlOptions,
     pub reservation16_file: Option<PathBuf>,
+    pub reservation201_file: Option<PathBuf>,
 }
 
 impl Configuration {
@@ -304,15 +308,24 @@ fn validate_stations(
         {
             return Err(fail);
         }
-        if (station.control.reserve_now.enabled()
-            || station.control.cancel_reservation.enabled()
-            || station.control.reserve_connector_zero_supported
+        // Each edition owns its reservation provider and capacity option; neither is shared.
+        if (station.control.reserve_connector_zero_supported
             || station.reservation16_file.is_some())
             && station.protocol != ProtocolEdition::Ocpp16j
         {
             return Err(fail);
         }
-        if station.control.reserve_now.enabled() && station.reservation16_file.is_none() {
+        if (station.control.reserve_non_evse_specific_supported
+            || station.reservation201_file.is_some())
+            && station.protocol != ProtocolEdition::Ocpp201
+        {
+            return Err(fail);
+        }
+        let reservation_file = match station.protocol {
+            ProtocolEdition::Ocpp16j => station.reservation16_file.is_some(),
+            ProtocolEdition::Ocpp201 => station.reservation201_file.is_some(),
+        };
+        if station.control.reserve_now.enabled() && !reservation_file {
             return Err(fail);
         }
         if station.control.get_composite_schedule.enabled()
@@ -360,19 +373,22 @@ fn validate_stations(
                 CredentialReference::new(path.to_string_lossy().into_owned()).map_err(|_| fail)
             })
             .transpose()?;
-        let reservation16_file = station
-            .reservation16_file
-            .map(|value| {
-                let path = private_absolute_path(&value)?;
-                if path == state_directory
-                    || path.starts_with(state_directory)
-                    || !credential_files.insert(path.clone())
-                {
-                    return Err(fail);
-                }
-                Ok(path)
-            })
-            .transpose()?;
+        let mut provider_file = |value: Option<String>| {
+            value
+                .map(|value| {
+                    let path = private_absolute_path(&value)?;
+                    if path == state_directory
+                        || path.starts_with(state_directory)
+                        || !credential_files.insert(path.clone())
+                    {
+                        return Err(fail);
+                    }
+                    Ok(path)
+                })
+                .transpose()
+        };
+        let reservation16_file = provider_file(station.reservation16_file)?;
+        let reservation201_file = provider_file(station.reservation201_file)?;
         if station.resources.is_empty() || station.resources.len() > MAX_RESOURCES_PER_STATION {
             return Err(fail);
         }
@@ -390,6 +406,7 @@ fn validate_stations(
             control: station.control,
             resources,
             reservation16_file,
+            reservation201_file,
         });
     }
     Ok(stations)

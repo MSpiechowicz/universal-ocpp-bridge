@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "protocol": "2.0.1",
+  "source": {
+    "title": "OCPP 2.0.1 Part 2 Specification FINAL 2020-03-31 (section H) and Part 2 Errata v1.0 2021-10-01 (items 8.4, 10.1-10.3)",
+    "url": "https://downloads.regulations.gov/FHWA-2022-0008-0404/attachment_6.pdf",
+    "errata_url": "https://downloads.regulations.gov/FHWA-2022-0008-0404/attachment_5.pdf",
+    "specification_sha256": "a4e75cc6008222c556928937d1b8e00aa12dc823febe8981fc9b48034fac4c46",
+    "errata_sha256": "d1d3e15fadc4e1006beac1538b5a02f87688ea21649f02183ed218d607772ccd",
+    "license": "CC BY-ND 4.0; Copyright Open Charge Alliance",
+    "interpretation": "Part 3 JSON validation (pinned Edition 4 schemas) is a floor, not a substitute for Part 2 semantics. These assertions are independently authored source mappings, not a certification or execution report."
+  },
+  "assertions": [
+    {
+      "requirements": [
+        "H01.FR.02 same id replaces",
+        "H01.FR.03",
+        "H01.FR.11 (errata 10.1)",
+        "H01.FR.12",
+        "H01.FR.14",
+        "H02.FR.01",
+        "H02.FR.02"
+      ],
+      "assertion": "All signed i32 reservation ids, all five create statuses and both cancel statuses are preserved; statusInfo is validated and dropped; replacement lands only on acceptance and a refused replacement keeps the previous owner; CSMS cancellation produces no inferred station update.",
+      "evidence": "wire/2.0.1/reservation-negative-cases.json;../../../adapters/storage/tests/reservation201.rs;../../../bins/uob-service/tests/reservations201.rs"
+    },
+    {
+      "requirements": [
+        "H01.FR.04",
+        "H01.FR.06",
+        "H01.FR.07",
+        "H01.FR.18",
+        "H01.FR.19",
+        "H01.FR.23 (errata 10.2)",
+        "H01.FR.24 (errata 10.3)"
+      ],
+      "assertion": "An EVSE reservation is admitted only on the exact EVSE resource; an unspecified-EVSE reservation needs explicit NonEvseSpecific support and never binds capacity to one EVSE; connectorType is an exact optional constraint.",
+      "evidence": "../../../bins/uob-service/tests/reservations201/ingress.rs;../../../bins/uob-sim/tests/reservation201_model.rs"
+    },
+    {
+      "requirements": [
+        "H01.FR.15",
+        "E01.FR.13",
+        "F02.FR.06 (errata 8.4)",
+        "H03.FR.01",
+        "H03.FR.04",
+        "H03.FR.06",
+        "H03.FR.07",
+        "H03.FR.08"
+      ],
+      "assertion": "A TransactionEvent reservationId ends the reservation only on its EVSE and, when an idToken is present, only for the reserved identity (type plus case-insensitive idToken) or a provider-known group member; group linkage never authorizes, and a transaction report is not an authorization grant.",
+      "evidence": "../../../adapters/storage/tests/reservation201/observations.rs;../../../bins/uob-service/tests/reservations201/observations.rs;../../../bins/uob-sim/tests/reservation201_model.rs"
+    },
+    {
+      "requirements": [
+        "H01.FR.16",
+        "H01.FR.17",
+        "H04.FR.01",
+        "H04.FR.02",
+        "H04.FR.03"
+      ],
+      "assertion": "ReservationStatusUpdate Expired/Removed terminate the single sent live owner after commit and before acknowledgement; an in-flight same-id replacement is ambiguous rather than guessed; trusted expiry runs while offline; the bridge never infers Removed from StatusNotification.",
+      "evidence": "../../../adapters/storage/tests/reservation201/observations.rs;../../../bins/uob-service/tests/reservations201/recovery.rs;../../../bins/uob-sim/tests/reservation201_process.rs"
+    }
+  ],
+  "execution_status": "Native model, wire, process and storage tests and actual separate-process bridge/simulator smoke executed in isolated software verification; not hardware or OCA certification."
+}

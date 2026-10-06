@@ -28,6 +28,8 @@ mod local_authorization201;
 pub use local_authorization201::*;
 mod reservation16;
 pub use reservation16::*;
+mod reservation201;
+pub use reservation201::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -159,6 +161,11 @@ impl ContractVersion {
     pub const V1_RESERVATION_16: Self = Self {
         major: 1,
         revision: 11,
+    };
+    /// Additive value-free OCPP 2.0.1 reservation evidence.
+    pub const V1_RESERVATION_201: Self = Self {
+        major: 1,
+        revision: 12,
     };
 }
 

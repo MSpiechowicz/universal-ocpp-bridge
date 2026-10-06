@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "ReservationConnectorType201": {
+      "description": "Native `ConnectorEnumType`; carried only as an exact optional reservation constraint.",
+      "enum": [
+        "cCCS1",
+        "cCCS2",
+        "cG105",
+        "cTesla",
+        "cType1",
+        "cType2",
+        "s309-1P-16A",
+        "s309-1P-32A",
+        "s309-3P-16A",
+        "s309-3P-32A",
+        "sBS1361",
+        "sCEE-7-7",
+        "sType2",
+        "sType3",
+        "Other1PhMax16A",
+        "Other1PhOver16A",
+        "Other3Ph",
+        "Pan",
+        "wInductive",
+        "wResonant",
+        "Undetermined",
+        "Unknown"
+      ],
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/reserve-now-reference-201.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Public request wrapper. Raw `idToken`/`groupIdToken` stay in the owner-only provider file.",
+  "properties": {
+    "connectorType": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReservationConnectorType201"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evseId": {
+      "description": "Absent means an unspecified EVSE, which requires explicit `NonEvseSpecific` support.",
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "expiryDateTime": {
+      "$ref": "#/$defs/UtcTimestamp"
+    },
+    "id": {
+      "format": "int32",
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "type": "integer"
+    },
+    "reservationReference": {
+      "maxLength": 75,
+      "minLength": 75,
+      "pattern": "^reserve201:[0-9a-fA-F]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "expiryDateTime",
+    "reservationReference"
+  ],
+  "title": "ReserveNowReference201",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

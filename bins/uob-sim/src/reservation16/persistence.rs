@@ -3,12 +3,13 @@ use std::io::{Read, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use super::PrivateState;
+use serde::{Serialize, de::DeserializeOwned};
 use zeroize::Zeroizing;
 
 const FILE_LIMIT: u64 = 2 * 1024 * 1024;
 
-pub(super) struct PrivateStorage {
+/// Exclusive owner-only durable file shared by the independent native reservation models.
+pub(crate) struct PrivateStorage {
     path: PathBuf,
     parent: PathBuf,
     owner: u32,
@@ -16,7 +17,7 @@ pub(super) struct PrivateStorage {
     lock_path: PathBuf,
     parent_identity: (u64, u64),
     #[cfg(test)]
-    pub(super) fail_directory_sync: bool,
+    pub(crate) fail_directory_sync: bool,
 }
 
 impl Drop for PrivateStorage {
@@ -28,7 +29,7 @@ impl Drop for PrivateStorage {
 }
 
 impl PrivateStorage {
-    pub(super) fn open(path: &str) -> Result<Self, &'static str> {
+    pub(crate) fn open(path: &str) -> Result<Self, &'static str> {
         let path = PathBuf::from(path);
         let parent = path.parent().ok_or("reservation_state_path")?.to_path_buf();
         if !path.is_absolute()
@@ -116,7 +117,7 @@ impl PrivateStorage {
         }
     }
 
-    pub(super) fn load(&self) -> Result<Option<PrivateState>, &'static str> {
+    pub(crate) fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, &'static str> {
         self.check_existing()?;
         let file = match OpenOptions::new()
             .read(true)
@@ -142,7 +143,7 @@ impl PrivateStorage {
         let parsed = if bytes.len() as u64 > FILE_LIMIT {
             Err("reservation_state_capacity")
         } else {
-            serde_json::from_slice::<PrivateState>(&bytes).map_err(|_| "reservation_state_corrupt")
+            serde_json::from_slice::<T>(&bytes).map_err(|_| "reservation_state_corrupt")
         };
         let state = parsed?;
         file.sync_all()
@@ -153,7 +154,7 @@ impl PrivateStorage {
         Ok(Some(state))
     }
 
-    pub(super) fn commit(&self, state: &PrivateState) -> Result<(), &'static str> {
+    pub(crate) fn commit<T: Serialize>(&self, state: &T) -> Result<(), &'static str> {
         self.check_existing()?;
         let temp = self
             .parent
@@ -165,7 +166,7 @@ impl PrivateStorage {
         result
     }
 
-    fn write_replace(&self, state: &PrivateState, temp: &Path) -> Result<(), &'static str> {
+    fn write_replace<T: Serialize>(&self, state: &T, temp: &Path) -> Result<(), &'static str> {
         let file = OpenOptions::new()
             .write(true)
             .create_new(true)

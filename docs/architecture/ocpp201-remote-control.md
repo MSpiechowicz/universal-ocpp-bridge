@@ -586,3 +586,39 @@ and process restart non-replay. Native simulator behavior remains independently
 implemented; joint service/simulator scenarios provide separate installed-state and
 offline facts. These commands are verification instructions, not a claim they ran.
 
+
+## Protected native reservations
+
+ReserveNow and CancelReservation are default-off privileged demo actions. The public
+ReserveNow wrapper carries only `id`, `expiryDateTime`, optional `evseId` and
+`connectorType`, and a `reserve201:` capability. The owner-only `reservation201_file`
+supplies the exact native request, including `idToken`/`groupIdToken`, which a deferred
+socket encoder resolves only at the send boundary after rechecking the generation,
+privileged grant, registration, capability, scope and expiry. An absent `evseId` needs
+the explicit `reserve_non_evse_specific_supported` option (H01.FR.18/19). Every
+reservation mutation is admitted with a durable `reservations201` revision in one SQLite
+v16 transaction, single-flight per station.
+
+Reconciliation uses only native facts. Accepted, Faulted, Occupied, Rejected and
+Unavailable replies are kept exactly, and a same-ID replacement supersedes the previous
+owner only on Accepted (H01.FR.02). `ReservationStatusUpdate` Expired/Removed is
+committed before its empty acknowledgement (H01.FR.16/17, H04.FR.01). A
+`TransactionEvent` `reservationId` consumes a reservation only on its EVSE and, when an
+idToken is present, only for the reserved type-scoped, case-folded identity or a
+provisioned group member (H01.FR.15, H03). Reused IDs follow the 1.6 chronology rules.
+Trusted expiry also runs offline. The bridge never infers removal from a
+StatusNotification, and a transaction report never grants authorization.
+
+```text
+cargo test --locked -p uob-contracts --test reservation201
+cargo test --locked -p uob-application --test reservation201
+cargo test --locked -p uob-storage-adapter --test reservation201
+cargo test --locked -p uob-protocol-adapter --test ocpp201_reservations
+cargo test --locked -p uob-service --test reservations201
+python3 bins/uob-sim/tests/reservation201_joint_smoke.py --bridge target/debug/uob \
+  --simulator target/debug/uob-sim --output <fresh private directory>
+```
+
+The joint smoke runs the actual daemon and the independent simulator as separate
+processes through a recording loopback relay. It is opt-in and not part of the workspace
+verifier. These commands are verification instructions, not a claim they ran.

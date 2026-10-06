@@ -65,6 +65,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
         }),
         local_authorization_201: None,
         reservation_16: None,
+        reservation_201: None,
     }
 }
 async fn admit(

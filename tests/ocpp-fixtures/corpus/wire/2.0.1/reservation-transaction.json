@@ -1,0 +1,1 @@
+[2,"reserved-start-201","TransactionEvent",{"eventType":"Started","timestamp":"2026-10-06T10:00:00Z","triggerReason":"Authorized","seqNo":0,"transactionInfo":{"transactionId":"reserved-tx-201"},"evse":{"id":1,"connectorId":1},"idToken":{"idToken":"token-marker-114","type":"ISO14443"},"reservationId":-114}]

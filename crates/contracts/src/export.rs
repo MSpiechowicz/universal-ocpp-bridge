@@ -262,7 +262,7 @@ impl ExportRecord {
     /// Runtime revision, distinct from the additive public nested schema revision.
     pub const SCHEMA_VERSION: ContractVersion = ContractVersion {
         major: 1,
-        revision: 11,
+        revision: 12,
     };
     /// Creates a record only from the closed privacy-filtered payload surface.
     #[must_use]

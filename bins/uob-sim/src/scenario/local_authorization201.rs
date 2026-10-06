@@ -32,6 +32,26 @@ pub(super) async fn execute(
     client: &mut Option<Box<dyn ProtocolClient>>,
     state: &mut StationState,
 ) -> Result<String, RunFailure> {
+    if matches!(
+        step.action,
+        ActionKind::DelayLocalReply | ActionKind::DropLocalReply
+    ) {
+        // Native reply faults need only the live socket, not local-list state.
+        let connected = client
+            .as_deref()
+            .ok_or_else(|| failure("not_connected", "native fault requires a client"))?;
+        let fault = if matches!(step.action, ActionKind::DelayLocalReply) {
+            NativeReplyFault::Delay(Duration::from_millis(
+                step.duration_ms.expect("validated delay"),
+            ))
+        } else {
+            NativeReplyFault::DropConnection
+        };
+        connected
+            .arm_local_reply_fault(fault)
+            .map_err(|_| failure("native_fault_unavailable", "native reply fault unavailable"))?;
+        return Ok("armed".to_owned());
+    }
     initialize(station, state)?;
     let local = state.local201.clone().expect("initialized native state");
     match step.action {
@@ -53,22 +73,6 @@ pub(super) async fn execute(
         }
         ActionKind::AssertLocalAuthorization | ActionKind::AwaitLocalAuthorization => {
             observe(step, &local).await
-        }
-        ActionKind::DelayLocalReply | ActionKind::DropLocalReply => {
-            let connected = client
-                .as_deref()
-                .ok_or_else(|| failure("not_connected", "native fault requires a client"))?;
-            let fault = if matches!(step.action, ActionKind::DelayLocalReply) {
-                NativeReplyFault::Delay(Duration::from_millis(
-                    step.duration_ms.expect("validated delay"),
-                ))
-            } else {
-                NativeReplyFault::DropConnection
-            };
-            connected.arm_local_reply_fault(fault).map_err(|_| {
-                failure("native_fault_unavailable", "native reply fault unavailable")
-            })?;
-            Ok("armed".to_owned())
         }
         ActionKind::AwaitReboot => {
             let connected = client

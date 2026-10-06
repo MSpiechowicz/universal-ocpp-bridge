@@ -46,6 +46,31 @@ pub async fn record_transaction_event_with_trigger<C: Send + 'static, R: Send + 
     now: UtcTimestamp,
     trigger: Option<EventEnvelope<StationEvent>>,
 ) -> Result<TransactionApplyOutcome, ObservationCommitError> {
+    record_transaction_event_with_reservation(
+        store,
+        snapshot,
+        observation,
+        context,
+        now,
+        trigger,
+        None,
+    )
+    .await
+}
+
+/// Commits a 2.0.1 transaction, optional trigger marker and the station's native reservation
+/// termination fact atomically. `reservation_group` is a trusted provider-derived group key.
+/// # Errors
+/// Rejects invalid registration, transaction, context, marker or failed persistence.
+pub async fn record_transaction_event_with_reservation<C: Send + 'static, R: Send + 'static>(
+    store: &dyn OperationalStore<C, StationEvent, TransactionSnapshot, R>,
+    snapshot: &mut StationSnapshot,
+    observation: &TransactionEventObservation,
+    context: TransactionContext,
+    now: UtcTimestamp,
+    trigger: Option<EventEnvelope<StationEvent>>,
+    reservation_group: Option<crate::ReservationKey201>,
+) -> Result<TransactionApplyOutcome, ObservationCommitError> {
     validate_context(snapshot, &context)?;
     registration::v201::accepted(snapshot).map_err(|_| ObservationCommitError::InvalidState)?;
     let mut next = snapshot.clone();
@@ -97,6 +122,14 @@ pub async fn record_transaction_event_with_trigger<C: Send + 'static, R: Send + 
         return Err(ObservationCommitError::InvalidState);
     }
     let mut write = AtomicStoreWrite::empty();
+    write
+        .reservation_observations_201
+        .extend(reservation_observation(
+            &next,
+            observation,
+            now,
+            reservation_group,
+        ));
     write.purpose = match transaction.state {
         TransactionState::Ended => StorageWritePurpose::ActiveSessionCompletion,
         _ if observation.event == TransactionEventKind::Started => {
@@ -246,5 +279,37 @@ fn station_invalidation(
         causation_id: Some(context.event_id.clone()),
         provenance: None,
         payload: StationEvent::StationSnapshot(snapshot.clone()),
+    })
+}
+
+/// The station's native termination fact for an OCPP 2.0.1 transaction, if it reports one.
+fn reservation_observation(
+    snapshot: &StationSnapshot,
+    observation: &TransactionEventObservation,
+    now: UtcTimestamp,
+    reservation_group: Option<crate::ReservationKey201>,
+) -> Option<crate::ReservationObservation201> {
+    let (
+        Some(reservation_id),
+        NativeProtocolReference::Ocpp201 { evse_id, .. },
+        ProtocolEdition::Ocpp201,
+    ) = (
+        observation.reservation_id,
+        observation.native_resource,
+        observation.protocol,
+    )
+    else {
+        return None;
+    };
+    Some(crate::ReservationObservation201 {
+        station: snapshot.station.clone(),
+        observed_at: now,
+        kind: crate::ReservationObservationKind201::Transaction {
+            reservation_id,
+            evse_id,
+            token_key: observation.reservation_token_key.clone(),
+            group_key: reservation_group,
+            source_time: observation.occurred_at,
+        },
     })
 }

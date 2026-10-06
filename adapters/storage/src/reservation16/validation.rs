@@ -15,6 +15,10 @@ pub(crate) fn validate_command<P: Serialize>(command: &Command<P>) -> Result<(),
     if !["ReserveNow", "CancelReservation"].contains(&operation.action.as_str()) {
         return Ok(());
     }
+    // OCPP 2.0.1 reservations are validated by their own edition-specific owner.
+    if operation.protocol == ProtocolEdition::Ocpp201 {
+        return Ok(());
+    }
     if operation.protocol != ProtocolEdition::Ocpp16j {
         return Err(conflict("invalid reservation protocol"));
     }

@@ -27,6 +27,7 @@ pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError
         || result.trigger_observation_201.is_some()
         || result.local_authorization_16.is_some()
         || result.local_authorization_201.is_some()
+        || result.reservation_201.is_some()
         || native != matches!(result.lifecycle, CommandLifecycle::ProtocolResponse { .. })
     {
         return Err(conflict("invalid reservation result evidence"));

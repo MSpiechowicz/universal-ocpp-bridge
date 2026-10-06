@@ -50,7 +50,7 @@ pub(super) fn valid_update(value: &Value) -> bool {
             })
 }
 
-pub(super) fn valid_info(value: &Value) -> bool {
+pub(crate) fn valid_info(value: &Value) -> bool {
     let root = &*SEND_SCHEMA;
     valid(root, &root["definitions"]["IdTokenInfoType"], value, 0)
         && value.get("evseId").is_none_or(|value| {
@@ -83,7 +83,7 @@ pub(super) fn valid_info(value: &Value) -> bool {
             .is_none_or(|v| v.as_str().is_some_and(valid_language))
 }
 
-pub(super) fn valid_token(value: &Value) -> bool {
+pub(crate) fn valid_token(value: &Value) -> bool {
     let root = &*SEND_SCHEMA;
     valid(root, &root["definitions"]["IdTokenType"], value, 0)
         && value["idToken"].as_str().is_some_and(valid_identifier)
@@ -98,6 +98,11 @@ pub(super) fn valid_token(value: &Value) -> bool {
                         .is_some_and(valid_identifier)
                 })
             })
+}
+
+/// Validates one complete native request against its own pinned OCA document.
+pub(crate) fn valid_native(root: &Value, value: &Value) -> bool {
+    valid(root, root, value, 0)
 }
 
 pub(super) fn valid_event(value: &Value) -> bool {

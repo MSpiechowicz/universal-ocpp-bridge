@@ -1,0 +1,80 @@
+# Run with reservations-2.0.1-config.toml after substituting private paths.
+# Authenticated daemon management installs each reservation while its await step is active;
+# this scenario never injects a ReserveNow itself.
+schema_version = 1
+seed = 114
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.boot.accepted"
+payload = { reason = "PowerUp", chargingStation = { model = "Independent Reservation Station", vendorName = "UOB" } }
+
+[[steps]]
+id = "explicit-central-authorization"
+station = "alpha"
+action = "authorize"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.authorize.accepted"
+payload = { idToken = { idToken = "token-marker-114", type = "ISO14443" } }
+expect_response = { idTokenInfo = { status = "Accepted" } }
+
+[[steps]]
+id = "await-evse-reservation"
+station = "alpha"
+action = "await_reservation"
+timeout_ms = 30000
+expect_response = { activeReservations = 1 }
+
+[[steps]]
+id = "matched-real-start"
+station = "alpha"
+action = "start_transaction"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.transaction.started"
+use_current_timestamp = true
+payload = { eventType = "Started", triggerReason = "Authorized", seqNo = 0, transactionInfo = { transactionId = "native-reserved-114", chargingState = "EVConnected" }, evse = { id = 1, connectorId = 1 }, idToken = { idToken = "token-marker-114", type = "ISO14443" } }
+
+[[steps]]
+id = "native-termination"
+station = "alpha"
+action = "assert_reservation"
+timeout_ms = 5000
+expect_response = { activeReservations = 0 }
+
+[[steps]]
+id = "await-unspecified-reservation"
+station = "alpha"
+action = "await_reservation"
+timeout_ms = 30000
+expect_response = { activeReservations = 1 }
+
+# The only free EVSE faults: the station cancels and reports Removed (H01.FR.16).
+[[steps]]
+id = "target-faulted"
+station = "alpha"
+action = "status"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.status.faulted"
+payload = { timestamp = "2026-10-06T00:00:00Z", connectorStatus = "Faulted", evseId = 2, connectorId = 1 }
+
+[[steps]]
+id = "removed-reported"
+station = "alpha"
+action = "await_reservation"
+timeout_ms = 10000
+expect_response = { activeReservations = 0, pendingUpdates = 0 }
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

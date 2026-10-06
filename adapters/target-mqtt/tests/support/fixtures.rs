@@ -202,6 +202,7 @@ pub fn result_delivery(
             local_authorization_16: None,
             local_authorization_201: None,
             reservation_16: None,
+            reservation_201: None,
         }),
     )
 }

@@ -1,0 +1,32 @@
+# Copy to a synthetic private directory; chmod directory 0700 and files 0600.
+# Replace endpoint, credential and state paths with canonical absolute paths.
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "2.0.1"
+request_timeout_ms = 5000
+reconnect = true
+
+[[stations.evses]]
+id = 1
+connectors = [1]
+
+[[stations.evses]]
+id = 2
+connectors = [1]
+
+[stations.local_authorization]
+private_state_file = "/tmp/uob-sim-reservations-114/identity.json"
+list_supported = true
+cache_supported = true
+
+[stations.reservation201]
+private_state_file = "/tmp/uob-sim-reservations-114/reservations.json"
+enabled = true
+non_evse_specific = true
+connector_types = [
+  { evse = 1, connector = 1, type = "cType2" },
+  { evse = 2, connector = 1, type = "cCCS2" },
+]

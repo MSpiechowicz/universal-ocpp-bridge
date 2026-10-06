@@ -186,7 +186,15 @@ where
             Ok(mutation) => mutation.map(Box::new),
             Err(code) => return Ok(charging_profile201::rejected(&command, code, now)),
         };
-        let reservation_mutation = write.reservation_16.is_some();
+        write.reservation_201 = match self
+            .stations
+            .reservation_expectation_201(&command, generation, now)
+        {
+            Ok(mutation) => mutation.map(Box::new),
+            Err(code) => return Ok(charging_profile201::rejected(&command, code, now)),
+        };
+        let reservation_mutation =
+            write.reservation_16.is_some() || write.reservation_201.is_some();
         let profile = write.charging_profile_201.clone();
         let outcome = match self.store.write_atomic(write).await {
             Ok(outcome) => outcome,

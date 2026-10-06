@@ -1,6 +1,6 @@
 //! Independent OCPP 1.6 station model, derived from OCA Edition 2 §5.13.
 mod model;
-mod persistence;
+pub(crate) mod persistence;
 #[cfg(test)]
 mod tests;
 pub(crate) mod transport;

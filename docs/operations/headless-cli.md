@@ -962,7 +962,8 @@ or command authority in production.
 **demo-only** station options for `protocol = "ocpp16j"`. `reserve_now` also requires a
 per-station `reservation16_file`; `reserve_connector_zero_supported` separately offers
 `ReserveNow` on connector `0` (any connector) and is never inferred from the station.
-None of these options is accepted for an OCPP 2.0.1 station.
+`reservation16_file` and `reserve_connector_zero_supported` are rejected for an OCPP 2.0.1
+station; 2.0.1 reservations use their own options below.
 
 ```toml
 [[charging.stations]]
@@ -1029,6 +1030,81 @@ it. Lost, malformed or late replies stay uncertain and are never replayed after
 restart; a late `Accepted` reply is kept as evidence but never revives an expired or
 superseded reservation. This is software boundary evidence, not hardware
 interoperability or OCA certification.
+
+### Protected OCPP 2.0.1 reservations
+
+For `protocol = "ocpp201"`, the same independent, default-off, privileged **demo-only**
+`reserve_now` and `cancel_reservation` options apply. `reserve_now` requires a
+per-station `reservation201_file`. A reservation without an `evseId` (an unspecified
+EVSE) is offered only when `reserve_non_evse_specific_supported = true`, which mirrors the
+station's `ReservationCtrlr.NonEvseSpecific` and is never inferred from it.
+`reservation201_file` and `reserve_non_evse_specific_supported` are rejected for an OCPP
+1.6 station.
+
+```toml
+[[charging.stations]]
+id = "demo-201"
+protocol = "ocpp201"
+credential_file = "/srv/uob-demo/private/demo-201.credential"
+reservation201_file = "/srv/uob-demo/private/demo-201-reservations.json"
+reserve_now = true
+cancel_reservation = true
+reserve_non_evse_specific_supported = false
+
+[[charging.stations.resources]]
+evse_id = "one"
+native_evse_id = 1
+```
+
+`ReserveNow` with an `evseId` is offered on, and must target, the exact EVSE resource
+(an EVSE entry without a connector). The provider file follows the 1.6 file rules
+(service-owned `0600` under an owner-only directory, at most 64 KiB and 256 entries,
+unknown fields and duplicates rejected without echo). Requests must be valid against the
+pinned OCPP 2.0.1 `ReserveNowRequest` schema; vendor `customData` and `NoAuthorization`
+tokens are rejected:
+
+```json
+{
+  "reservations": [{
+    "reference": "reserve201:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "request": {
+      "id": -114,
+      "expiryDateTime": "2099-01-01T00:00:00Z",
+      "evseId": 1,
+      "connectorType": "cType2",
+      "idToken": {"idToken": "demo-native-token", "type": "ISO14443"},
+      "groupIdToken": {"idToken": "demo-native-group", "type": "Central"}
+    },
+    "expires_at": "2099-01-01T00:00:00Z",
+    "revoked": false
+  }],
+  "identities": [{
+    "idToken": {"idToken": "demo-member-token", "type": "ISO14443"},
+    "groupIdToken": {"idToken": "demo-native-group", "type": "Central"},
+    "authorize": true,
+    "policy_revision": 1
+  }]
+}
+```
+
+Public `ReserveNow` uses `payload_schema = "urn:uob:ocpp201:ReserveNowReference:1"` and
+only `{"id":-114,"expiryDateTime":"…","evseId":1,"connectorType":"cType2","reservationReference":"reserve201:…"}`
+(`evseId` and `connectorType` are optional and must match the provisioned request).
+`CancelReservation` uses `urn:OCPP:Cp:2:2020:3:CancelReservationRequest` with only
+`{"reservationId":…}` and always targets the station root. Raw `idToken`/`groupIdToken`
+values stay in this file and native traffic; matching uses one-way keys of the token type
+plus the case-folded idToken. Identity entries give the bridge native group membership for
+attribution and optional explicit `Authorize` policy; group linkage never authorizes.
+
+Durable 2.0.1 reservation state reconciles native statuses with explicit station facts:
+`ReservationStatusUpdate` `Expired` or `Removed` (acknowledged only after commit), a
+`TransactionEvent` `reservationId` on the reserved EVSE whose idToken, when present,
+matches the reservation or a provisioned group member, accepted cancellation, and
+inclusive trusted expiry while offline. The bridge never infers `Removed` from a
+`StatusNotification`; a same-ID update while a replacement is in flight is recorded as
+ambiguous. Native `statusInfo` is validated and not retained. Lost, malformed, CALLERROR
+and late replies stay uncertain and are never replayed after restart. This is software
+boundary evidence, not hardware interoperability or OCA certification.
 
 ## Commands and exit codes
 

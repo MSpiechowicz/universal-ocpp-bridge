@@ -2,8 +2,8 @@ use crate::charging::{ChargingStore, runtime::Clock};
 use std::io;
 use uob_application::{AtomicStoreWrite, CommandClock, CommandDispatchOutcome, OperationalStore};
 use uob_contracts::{
-    CommandError, CommandErrorCode, CommandLifecycle, Connectivity, ContractVersion, RequestId,
-    StationSnapshot,
+    Command, CommandError, CommandErrorCode, CommandLifecycle, CommandOperation, CommandResult,
+    Connectivity, ContractVersion, ProtocolEdition, RequestId, StationSnapshot,
 };
 use uob_protocol_adapter::CallSessionDiagnostic;
 
@@ -12,14 +12,30 @@ pub(crate) async fn late_response(
     snapshot: &StationSnapshot,
     diagnostic: CallSessionDiagnostic,
 ) -> io::Result<()> {
-    let CallSessionDiagnostic::LateReservationResponse16 {
-        message_id,
-        correlation_id,
-        action,
-        status,
-    } = diagnostic
-    else {
-        return Ok(());
+    let (message_id, correlation_id, action, status) = match diagnostic {
+        CallSessionDiagnostic::LateReservationResponse16 {
+            message_id,
+            correlation_id,
+            action,
+            status,
+        } => (
+            message_id,
+            correlation_id,
+            action,
+            serde_json::to_value(status).map_err(|_| invalid())?,
+        ),
+        CallSessionDiagnostic::LateReservationResponse201 {
+            message_id,
+            correlation_id,
+            action,
+            status,
+        } => (
+            message_id,
+            correlation_id,
+            action,
+            serde_json::to_value(status).map_err(|_| invalid())?,
+        ),
+        _ => return Ok(()),
     };
     let request = RequestId::new(message_id).map_err(|_| invalid())?;
     let Some(command) = store
@@ -51,18 +67,9 @@ pub(crate) async fn late_response(
         return Ok(());
     };
     let payload = serde_json::json!({"status":status});
-    let CommandDispatchOutcome::ReservationResponse16(evidence) =
-        uob_protocol_adapter::v16::remote_control::reservation_response_16(
-            action,
-            &payload,
-            &command,
-            Clock.now(),
-        )
-    else {
+    let Some(accepted) = native_evidence(&mut result, &command, action, &payload) else {
         return Ok(());
     };
-    let accepted = evidence.accepted();
-    result.schema_version = ContractVersion::V1_RESERVATION_16;
     result.recorded_at = Clock.now();
     result.lifecycle = CommandLifecycle::ProtocolResponse {
         accepted,
@@ -71,12 +78,56 @@ pub(crate) async fn late_response(
             detail: None,
         }),
     };
-    result.reservation_16 = Some(evidence);
     let mut write = AtomicStoreWrite::empty();
     write.purpose = uob_application::StorageWritePurpose::ActiveSessionCompletion;
     write.command_result = Some(result);
     store.write_atomic(write).await.map_err(|_| invalid())?;
     Ok(())
+}
+/// Records the edition's value-free evidence; `None` leaves the uncertain result untouched.
+fn native_evidence(
+    result: &mut CommandResult,
+    command: &Command<serde_json::Value>,
+    action: &str,
+    payload: &serde_json::Value,
+) -> Option<bool> {
+    let CommandOperation::Ocpp(operation) = &command.operation else {
+        return None;
+    };
+    match operation.protocol {
+        ProtocolEdition::Ocpp16j => {
+            let CommandDispatchOutcome::ReservationResponse16(evidence) =
+                uob_protocol_adapter::v16::remote_control::reservation_response_16(
+                    action,
+                    payload,
+                    command,
+                    Clock.now(),
+                )
+            else {
+                return None;
+            };
+            result.schema_version = ContractVersion::V1_RESERVATION_16;
+            let accepted = evidence.accepted();
+            result.reservation_16 = Some(evidence);
+            Some(accepted)
+        }
+        ProtocolEdition::Ocpp201 => {
+            let CommandDispatchOutcome::ReservationResponse201(evidence) =
+                uob_protocol_adapter::v201::remote_control::reservation_response_201(
+                    action,
+                    payload,
+                    command,
+                    Clock.now(),
+                )
+            else {
+                return None;
+            };
+            result.schema_version = ContractVersion::V1_RESERVATION_201;
+            let accepted = evidence.accepted();
+            result.reservation_201 = Some(evidence);
+            Some(accepted)
+        }
+    }
 }
 fn invalid() -> io::Error {
     io::Error::other("late reservation acknowledgement persistence unavailable")
