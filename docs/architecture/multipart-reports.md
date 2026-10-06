@@ -18,8 +18,11 @@ remain nonnegative.
 
 Register exactly one collector per connection/report namespace/request ID before sending its
 request. GetBaseReport and GetReport share `NotifyReport`: native request ID reuse across either
-action is rejected before wire. A budgeted, fixed-capacity used-ID set retires at most 4,096 IDs
-per connection until teardown, including after a collector finishes. A late fragment carrying a
+action is rejected before wire. GetChargingProfiles owns the separate `ReportChargingProfiles`
+namespace, so the same signed ID may be open once in each. Both namespaces share the four route
+slots, and a budgeted, fixed-capacity used-ID set retires at most 4,096 IDs per connection until
+teardown, including after a collector finishes. `ReportChargingProfiles` has no native sequence
+number; the socket owner assigns arrival order, which is the order of one connection's frames. A late fragment carrying a
 reused native ID cannot distinguish two commands. The source routes only the registered request
 and unregisters on drop. It must use bounded ingress from the existing socket-owning call
 lifecycle, validate the full frame before decoding, and retain ingress admission through handoff.

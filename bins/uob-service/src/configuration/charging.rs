@@ -42,6 +42,7 @@ pub(crate) struct StationControlOptions {
     pub change_availability: bool,
     pub trigger_message: StationActionOption,
     pub get_composite_schedule: StationActionOption,
+    pub get_charging_profiles: StationActionOption,
     pub set_charging_profile: StationActionOption,
     pub clear_charging_profile: StationActionOption,
     pub get_variables: StationActionOption,
@@ -104,6 +105,7 @@ impl StationControlOptions {
         self.change_availability
             || self.trigger_message.enabled()
             || self.get_composite_schedule.enabled()
+            || self.get_charging_profiles.enabled()
             || self.charging_profiles_enabled()
             || self.device_model_enabled()
             || self.configuration_enabled()
@@ -328,12 +330,13 @@ fn validate_stations(
         if station.control.reserve_now.enabled() && !reservation_file {
             return Err(fail);
         }
-        if station.control.get_composite_schedule.enabled()
-            && station.protocol != ProtocolEdition::Ocpp16j
+        if station.control.get_charging_profiles.enabled()
+            && station.protocol != ProtocolEdition::Ocpp201
         {
             return Err(fail);
         }
         if (station.control.get_composite_schedule.enabled()
+            || station.control.get_charging_profiles.enabled()
             || station.control.charging_profiles_enabled()
             || station.control.configuration_enabled())
             && station.resources.iter().any(|resource| {

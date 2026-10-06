@@ -101,7 +101,7 @@ async fn configuration_future_version_and_foreign_identity_fail_before_broker_ha
             "future" => {
                 fixtures::result_mut(&mut delivery).schema_version = ContractVersion {
                     major: 1,
-                    revision: ContractVersion::V1_RESERVATION_201.revision + 1,
+                    revision: ContractVersion::V1_SCHEDULES_201.revision + 1,
                 }
             }
             "management" => {

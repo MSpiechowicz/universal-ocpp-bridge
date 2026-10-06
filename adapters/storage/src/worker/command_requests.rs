@@ -83,6 +83,19 @@ pub(super) fn handle<C, E, D>(
                     }),
             );
         }
+        Request::ChargingProfilesReport(id, evidence, lifecycle, now, reply) => {
+            respond(
+                reply,
+                drain
+                    .check_completion_write()
+                    .and_then(|()| drain.changed())
+                    .and_then(|()| {
+                        crate::charging_profiles201::finish(
+                            connection, &id, *evidence, lifecycle, now,
+                        )
+                    }),
+            );
+        }
         Request::PruneCommands(now, reply) => {
             respond(reply, command::prune::<C>(connection, now));
         }

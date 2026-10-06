@@ -251,6 +251,8 @@ fn write_command(
         local_authorization_201: None,
         reservation_16: None,
         reservation_201: None,
+        composite_schedule_201: None,
+        charging_profiles_201: None,
     });
     write_history_command(store, command, command_result);
 }

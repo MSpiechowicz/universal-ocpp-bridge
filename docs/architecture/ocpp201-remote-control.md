@@ -622,3 +622,66 @@ python3 bins/uob-sim/tests/reservation201_joint_smoke.py --bridge target/debug/u
 The joint smoke runs the actual daemon and the independent simulator as separate
 processes through a recording loopback relay. It is opt-in and not part of the workspace
 verifier. These commands are verification instructions, not a claim they ran.
+
+## Opt-in composite schedules and installed-profile reports
+
+`get_composite_schedule = true` (now also accepted for OCPP 2.0.1 stations) and
+`get_charging_profiles = true` (OCPP 2.0.1 only) are independently default-off
+privileged demo actions. Both require the control and privileged grant files, reject
+configured native EVSE or connector IDs above `i32::MAX`, and are advertised for the
+station and each configured positive EVSE, never for a connector.
+
+GetCompositeSchedule (K08) uses schema `urn:OCPP:Cp:2:2020:3:GetCompositeScheduleRequest`.
+Station scope must send `evseId: 0`, the grid connection (K08.FR.03); EVSE scope must send
+its exact native ID. `duration` is 1–2147483647 seconds and the optional unit is exactly
+`A` or `W`. `customData`, unknown fields, nulls and out-of-scope IDs fail before a CALL.
+Accepted requires a schedule for the requested EVSE, within the requested duration and in
+the forced unit when one was requested (K08.FR.02/07), with periods that start at zero,
+strictly increase and stay inside the horizon. Limits are exact tenths including zero;
+`numberPhases` is 1–3 and `phaseToUse` only accompanies a single phase. A Rejected reply
+(K08.FR.05) maps to `protocol_rejected` with typed evidence and may carry a validated
+schedule. Anything else is `transmission_uncertain` without evidence; a CALLERROR is a
+sanitized rejection. The schedule is the charger's indicative calculation: the bridge
+neither calculates nor enforces it and records no snapshot change or physical effect.
+
+GetChargingProfiles (K09) uses schema `urn:OCPP:Cp:2:2020:3:GetChargingProfilesRequest`.
+Station scope may omit `evseId` (every EVSE), send zero (only the grid connection) or name
+one EVSE; EVSE scope must name itself. The criterion carries either profile IDs (at most
+64) or at least one of `stackLevel`, `chargingLimitSource` and `chargingProfilePurpose`,
+never both (K09.FR.03). Admission registers the signed `requestId` in the connection's
+`ReportChargingProfiles` namespace before the CALL is queued; a reused ID is refused.
+
+One task owns each query. It records the native acknowledgement durably before releasing
+the command outcome: `Accepted` leaves the report `pending`, `NoProfiles` makes it
+`not_expected` and maps to a `protocol_response` with `accepted: false` and no error.
+Fragments are routed by the socket owner, answered with an empty
+`ReportChargingProfilesResponse` and sanitized against the exact query. A fragment for
+another EVSE, an unrequested limit source or a profile that does not match every supplied
+criterion is a correlation failure (K09.FR.04-06); a schema-invalid fragment gets a
+CALLERROR. Fragments are retained in arrival order until one without `tbc`
+(K09.FR.01/02), within the shared multipart bounds and the 30-second deadline from actual
+dispatch. Each reported profile keeps its EVSE, `chargingLimitSource`, purpose, kind,
+validity and one to three schedules with exact limits; `customData` is dropped and a
+`salesTariff` is omitted and flagged. Fragments that arrive before the reply are held in
+memory and recorded with it, never before.
+
+Reports end `incomplete` on a correlation failure, an invalid fragment, a limit, the
+deadline or a disconnect, with the accepted progress and no partial inventory. A restart
+terminalizes a pending report as `interrupted` through the existing startup report
+reconciliation. Terminal reports are frozen against later writers, and nothing is
+replayed: duplicates return the durable result and a reconnect sends no CALL. Late
+fragments for a finished request are acknowledged on the wire but never retained.
+Reported profiles describe charger state at report time; they never become local policy,
+ownership metadata or evidence of physical charging.
+
+```text
+cargo test --locked -p uob-contracts --test schedules201
+cargo test --locked -p uob-storage-adapter --test schedules201
+cargo test --locked -p uob-protocol-adapter --test ocpp201_schedules --test command_registry
+cargo test --locked -p uob-service --test schedules201
+```
+
+The service suite starts the actual daemon with an independent WebSocket peer and
+exercises authenticated admission, exact HTTP evidence, report completion, heartbeat
+progress during a delayed reply, a crash after acknowledgement and restart without replay.
+These commands are verification instructions, not a claim they ran.

@@ -1,0 +1,1 @@
+[3,"independent-k08-grid",{"status":"Accepted","schedule":{"evseId":0,"duration":86400,"scheduleStart":"2026-09-01T00:00:00Z","chargingRateUnit":"W","chargingSchedulePeriod":[{"startPeriod":0,"limit":22000.0},{"startPeriod":1800,"limit":7360.5,"numberPhases":3},{"startPeriod":43200,"limit":0}]}}]

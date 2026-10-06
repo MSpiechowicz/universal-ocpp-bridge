@@ -286,12 +286,13 @@ async fn process_frame(
             )
             .await;
         }
-        Frame::NotifyReport {
+        Frame::Report {
+            kind,
             message_id,
             payload,
             bytes,
         } => {
-            incoming::report(message_id, payload, bytes, state, connection, budget).await;
+            incoming::report(kind, message_id, payload, bytes, state, connection, budget).await;
         }
         Frame::Result {
             message_id,

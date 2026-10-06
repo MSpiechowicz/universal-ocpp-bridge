@@ -103,9 +103,7 @@ impl StationSettings {
                 action: "TriggerMessage".to_owned(),
             });
         }
-        if self.control.get_composite_schedule.enabled()
-            && self.protocol == ProtocolEdition::Ocpp16j
-        {
+        if self.control.get_composite_schedule.enabled() {
             operations.push(Operation::ProtocolAction {
                 protocol: self.protocol,
                 action: "GetCompositeSchedule".to_owned(),

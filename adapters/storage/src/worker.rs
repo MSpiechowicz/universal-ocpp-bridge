@@ -115,6 +115,13 @@ pub(crate) enum Request<C, E, D> {
         Reply<Option<CommandResult>>,
     ),
     InterruptDeviceReports(Reply<()>),
+    ChargingProfilesReport(
+        String,
+        Box<uob_contracts::ChargingProfilesResult201>,
+        Option<uob_contracts::CommandLifecycle>,
+        UtcTimestamp,
+        Reply<Option<CommandResult>>,
+    ),
     PruneCommands(i64, Reply<u64>),
     MaintainRetention(i64, Reply<StorageRetentionStatus>),
     RetentionStatus(Reply<StorageRetentionStatus>),
@@ -245,6 +252,7 @@ fn handle_request<C, E, D>(
         | Request::ReconcileTrigger(..)
         | Request::DeviceReport(..)
         | Request::InterruptDeviceReports(..)
+        | Request::ChargingProfilesReport(..)
         | Request::PruneCommands(..)) => {
             command_requests::handle(connection, drain, command_request);
         }

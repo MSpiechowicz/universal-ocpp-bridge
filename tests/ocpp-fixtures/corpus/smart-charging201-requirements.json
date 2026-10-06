@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "protocol": "2.0.1",
+  "source": {
+    "title": "OCPP 2.0.1 Edition 4, December 2025 (Part 2 section K: K08 and K09), June 2026 errata (no K08/K09 items), Appendices v1.5 (reason codes)",
+    "url": "https://openchargealliance.org/download/caaab79c63336ff203104d9940c8eba29adb7d324c384e0578f7f3b7265e03ac",
+    "archive_sha256": "192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a",
+    "schema_zip_sha256": "6279c40b74929cce7fca439622194a8890a0d250de5665f3e4d80ef8529c51ce",
+    "specification_sha256": "2bd854c01abdf20290d016e05779f952655177f09fedff2149126921dd5557e2",
+    "errata_sha256": "7f6daf092ddb9cd888dc787032395f0243c5135dd29c4b6c36bf77ae59dda4ee",
+    "appendices_sha256": "3a8a97133ed904047b128a9bbb906e110f899d42b9f99423c2df27e0327338b3",
+    "license": "CC BY-ND 4.0; Copyright Open Charge Alliance",
+    "interpretation": "Part 3 JSON validation is a floor, not a substitute for Part 2 semantics. These assertions are independently authored source mappings for the CSMS side only; charger-side calculation (K08.FR.02/04/06) is the charger's obligation and is never computed or enforced by the bridge."
+  },
+  "assertions": [
+    {
+      "requirements": [
+        "K08.FR.01",
+        "K08.FR.03"
+      ],
+      "assertion": "A privileged, opted-in GetCompositeSchedule addresses the grid connection only from station scope with evseId 0 and an exact positive EVSE only from that EVSE's scope; positive duration and an optional W/A unit are pinned, and every out-of-scope, extended or malformed request is refused before a CALL.",
+      "evidence": "wire/2.0.1/composite-schedule-201-grid.json;wire/2.0.1/composite-schedule-201-evse.json;../../../adapters/protocol/tests/command_registry/schedules201.rs;../../../adapters/protocol/tests/ocpp201_schedules/validation.rs"
+    },
+    {
+      "requirements": [
+        "K08.FR.02",
+        "K08.FR.05",
+        "K08.FR.07"
+      ],
+      "assertion": "Accepted requires the calculated schedule for the requested EVSE, within the requested duration and in a forced unit when one was requested; Rejected is retained with a standardized reason and may carry a validated schedule. A schedule for another EVSE, a longer horizon or a substituted unit is uncertain, never evidence.",
+      "evidence": "wire/2.0.1/composite-schedule-201-accepted.json;wire/2.0.1/composite-schedule-201-phase.json;wire/2.0.1/composite-schedule-201-rejected.json;../../../adapters/protocol/tests/ocpp201_schedules/composite.rs"
+    },
+    {
+      "requirements": [
+        "K08 remark: indicative schedule",
+        "ChargingSchedulePeriodType"
+      ],
+      "assertion": "Periods start at zero, strictly increase and stay inside the horizon; limits are exact tenths including zero; numberPhases is 1-3 and phaseToUse only accompanies a single phase. The result changes no snapshot and asserts no physical effect.",
+      "evidence": "wire/2.0.1/composite-schedule-201-phase.json;../../../adapters/protocol/tests/ocpp201_schedules/composite.rs;../../../adapters/storage/tests/schedules201.rs"
+    },
+    {
+      "requirements": [
+        "K09.FR.03"
+      ],
+      "assertion": "A GetChargingProfiles criterion carries either profile IDs or at least one of stackLevel, chargingLimitSource and chargingProfilePurpose, never both and never neither.",
+      "evidence": "wire/2.0.1/charging-profiles-201-ids.json;wire/2.0.1/charging-profiles-201-sources.json;../../../adapters/protocol/tests/command_registry/schedules201.rs"
+    },
+    {
+      "requirements": [
+        "K09.FR.01",
+        "K09.FR.02"
+      ],
+      "assertion": "Every accepted ReportChargingProfiles fragment carries the query's requestId; fragments are retained in arrival order until one without tbc, and each is acknowledged with an empty response. Collection is bounded and a disconnect, limit, timeout or restart ends it as incomplete.",
+      "evidence": "wire/2.0.1/charging-profiles-201-accepted.json;wire/2.0.1/report-charging-profiles-201-station.json;wire/2.0.1/report-charging-profiles-201-evse.json;wire/2.0.1/report-charging-profiles-201-ack.json;../../../adapters/protocol/tests/ocpp201_schedules/reports.rs;../../../bins/uob-service/tests/schedules201/recovery.rs"
+    },
+    {
+      "requirements": [
+        "K09.FR.04",
+        "K09.FR.05",
+        "K09.FR.06"
+      ],
+      "assertion": "A selected EVSE (including zero) bounds every reported fragment, an omitted EVSE admits every EVSE, and each reported profile must match every supplied criterion; anything else is a correlation failure rather than evidence.",
+      "evidence": "../../../adapters/protocol/tests/ocpp201_schedules/reports.rs;../../../adapters/protocol/tests/ocpp201_schedules/fixtures.rs"
+    },
+    {
+      "requirements": [
+        "K09 error handling: NoProfiles"
+      ],
+      "assertion": "NoProfiles is a terminal native answer with no expected report; later fragments for that requestId are acknowledged on the wire but never retained.",
+      "evidence": "wire/2.0.1/charging-profiles-201-no-profiles.json;../../../adapters/protocol/tests/ocpp201_schedules/reports.rs"
+    }
+  ],
+  "execution_status": "Native wire, socket, storage and actual-daemon process tests executed in isolated software verification; not hardware or OCA certification."
+}

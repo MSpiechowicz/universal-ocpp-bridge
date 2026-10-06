@@ -12,8 +12,8 @@ use uob_contracts::{
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let revision = match name {
-        "export-record" | "export-batch" => 13,
-        "command-result" => 12,
+        "export-record" | "export-batch" => 14,
+        "command-result" => 13,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };

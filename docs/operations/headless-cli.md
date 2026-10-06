@@ -205,8 +205,9 @@ get_composite_schedule = true
 These are additions, **not a standalone TOML document**. Keep read, control, privileged and
 station credentials separate; reuse already configured grant entries rather than duplicating
 TOML keys. The option requires both control and privileged grant files, but only a per-request
-privileged credential authorizes the query. An OCPP 2.0.1 opt-in is rejected, as is an opt-in
-station with any configured native connector ID above `i32::MAX` (2147483647). Default-off
+privileged credential authorizes the query. An opt-in station with any configured native
+connector or EVSE ID above `i32::MAX` (2147483647) is rejected. The same key on an OCPP 2.0.1
+station enables the separate 2.0.1 query described below. Default-off
 legacy topology behavior and Demo/loopback restrictions remain unchanged.
 
 After Accepted registration, the live station advertises `GetCompositeSchedule` for station
@@ -234,7 +235,26 @@ installed profile or evidence of charging enforcement/physical success.
 Duplicates return the original durable result without another send. Restart and reconnect
 never replay the query, and an old connection's response cannot resolve a new request.
 Inspect the original status before issuing a new explicit request after reconnect.
-This opt-in does not implement OCPP 2.0.1 schedules, simulator smart charging or certification.
+This opt-in does not establish simulator smart charging or certification.
+
+OCPP 2.0.1 stations accept the same `get_composite_schedule = true` key and a separate
+`get_charging_profiles = true` key (2.0.1 only); both require the control and privileged
+grant files. Use protocol `ocpp201` with schema
+`urn:OCPP:Cp:2:2020:3:GetCompositeScheduleRequest` and payload `evseId` (0 at station
+scope for the grid connection, the exact native EVSE ID at EVSE scope), `duration` and an
+optional `chargingRateUnit`. The typed `composite_schedule_201` evidence keeps the request,
+the exact native status, a standardized reason code and the schedule with exact limits.
+
+`GetChargingProfiles` uses schema `urn:OCPP:Cp:2:2020:3:GetChargingProfilesRequest` with a
+signed `requestId`, an optional `evseId` (omitted for every EVSE or zero for the grid
+connection at station scope; required and exact at EVSE scope) and a `chargingProfile`
+criterion with either `chargingProfileId` (at most 64) or at least one of `stackLevel`,
+`chargingLimitSource` and `chargingProfilePurpose`. The HTTP 202 result carries the native
+acknowledgement; while `charging_profiles_201.report.state` is `pending`, poll the command
+detail until it is `complete`, `incomplete` (with a reason such as `correlation`,
+`timeout`, `disconnected` or `interrupted`) or `not_expected` after `NoProfiles`. A
+`requestId` stays retired on that connection. Reported profiles describe the charger's
+state at report time; they are not installed or enforced by the bridge.
 
 ### Full native OCPP 1.6J Set/Clear charging profiles
 

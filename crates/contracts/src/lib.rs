@@ -3,9 +3,13 @@
 mod charging_profile16;
 mod charging_profile201;
 pub use charging_profile201::*;
+mod charging_profile_report201;
+pub use charging_profile_report201::*;
 mod command;
 pub use charging_profile16::*;
 mod composite_schedule16;
+mod composite_schedule201;
+pub use composite_schedule201::*;
 mod configuration;
 mod configuration201;
 pub use configuration201::*;
@@ -166,6 +170,11 @@ impl ContractVersion {
     pub const V1_RESERVATION_201: Self = Self {
         major: 1,
         revision: 12,
+    };
+    /// Additive OCPP 2.0.1 composite-schedule and installed-profile report evidence.
+    pub const V1_SCHEDULES_201: Self = Self {
+        major: 1,
+        revision: 13,
     };
 }
 

@@ -383,6 +383,8 @@ fn result(command: &Command<String>, hour: i64) -> CommandResult {
         local_authorization_201: None,
         reservation_16: None,
         reservation_201: None,
+        composite_schedule_201: None,
+        charging_profiles_201: None,
     }
 }
 fn timestamp(hour: i64) -> UtcTimestamp {

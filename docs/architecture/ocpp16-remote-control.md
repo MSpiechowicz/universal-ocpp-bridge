@@ -169,8 +169,9 @@ creates physical effects, computes a local schedule, installs/removes profiles o
 charging. Results persist across restart; exact duplicates return the original result without
 another CALL. Restart/reconnect never automatically replays a query. A new explicit request
 is required for another query after reconnect, and replies from an old socket generation
-cannot attach to it or resolve a terminal uncertain result. No OCPP 2.0.1 schedule command,
-simulator smart-charging engine or OCA certification is established by this feature.
+cannot attach to it or resolve a terminal uncertain result. No simulator smart-charging engine
+or OCA certification is established by this feature. The separate OCPP 2.0.1 query is described
+in [OCPP 2.0.1 remote control](ocpp201-remote-control.md#opt-in-composite-schedules-and-installed-profile-reports).
 
 ## Opt-in native charging profiles
 

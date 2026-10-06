@@ -1,5 +1,6 @@
 mod admission;
 mod charging_profile201;
+pub mod charging_profiles201;
 mod configuration;
 pub mod device_model201;
 mod errors;
@@ -87,6 +88,10 @@ pub enum CommandDispatchOutcome {
     LocalAuthorizationResponse201(uob_contracts::LocalAuthorizationResult201),
     ReservationResponse16(uob_contracts::ReservationResult16),
     ReservationResponse201(uob_contracts::ReservationResult201),
+    /// Validated native OCPP 2.0.1 composite schedule and immutable query context.
+    CompositeScheduleResponse201(uob_contracts::CompositeScheduleResult201),
+    /// Native installed-profile acknowledgement; collection completes independently.
+    ChargingProfilesResponse201(uob_contracts::ChargingProfilesResult201),
 }
 
 /// Sanitized failure to inspect or use the current station session.

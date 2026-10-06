@@ -233,16 +233,23 @@ pub fn setup_device(
     // The harness future is large; callers await one boxed allocation instead.
     Box::pin(setup_enabled(store, handle, true))
 }
-async fn setup_enabled(
+/// Device harness plus K08/K09 capabilities on the station and EVSE 1, with bound reports.
+#[allow(dead_code)] // Independently compiled roots share this opt-in socket harness.
+pub fn setup_schedules(
+    store: &Store,
+    handle: CallSessionHandle,
+) -> std::pin::Pin<Box<impl Future<Output = Harness>>> {
+    Box::pin(setup_with(store, handle, true, true))
+}
+async fn setup_enabled(store: &Store, handle: CallSessionHandle, device: bool) -> Harness {
+    Box::pin(setup_with(store, handle, device, false)).await
+}
+async fn setup_with(
     store: &Store,
     handle: CallSessionHandle,
     device: bool,
-) -> (
-    StationSnapshot,
-    Arc<Auth>,
-    Arc<RemoteControlSession>,
-    Arc<Coordinator>,
-) {
+    schedules: bool,
+) -> Harness {
     let mut snapshot = prepared_snapshot(device);
     v201::registration_call(
         include_bytes!("../../../../tests/ocpp-fixtures/corpus/wire/2.0.1/boot-notification.json"),
@@ -280,6 +287,22 @@ async fn setup_enabled(
             parameters: vec![],
         });
     }
+    if schedules {
+        for capabilities in [
+            &mut snapshot.capabilities,
+            &mut snapshot.resources[0].capabilities,
+        ] {
+            for action in ["GetCompositeSchedule", "GetChargingProfiles"] {
+                capabilities.operations.push(SupportedOperation {
+                    operation: Operation::ProtocolAction {
+                        protocol: ProtocolEdition::Ocpp201,
+                        action: action.to_owned(),
+                    },
+                    parameters: vec![],
+                });
+            }
+        }
+    }
     let port = RemoteControlSession::new(
         handle,
         snapshot.clone(),
@@ -288,6 +311,11 @@ async fn setup_enabled(
         Arc::new(store.clone()),
     )
     .unwrap();
+    let port = if schedules {
+        port.with_charging_profile_reports(Arc::new(store.clone()))
+    } else {
+        port
+    };
     let port = Arc::new(if device {
         port.with_device_model(Arc::new(store.clone()), 1)
     } else {

@@ -8,7 +8,8 @@ pub(super) enum Frame {
         message_id: String,
         bytes: Vec<u8>,
     },
-    NotifyReport {
+    Report {
+        kind: super::reports::ReportKind,
         message_id: String,
         payload: Value,
         bytes: usize,
@@ -33,8 +34,11 @@ pub(super) struct FrameError {
 pub(super) fn decode(bytes: &[u8]) -> Result<Frame, FrameError> {
     let mut value: Value = serde_json::from_slice(bytes).map_err(|_| invalid(None, "/"))?;
     let items = value.as_array().ok_or_else(|| invalid(None, "/"))?;
-    let report = items.first().and_then(Value::as_u64) == Some(2)
-        && items.get(2).and_then(Value::as_str) == Some("NotifyReport");
+    let kind = items
+        .get(2)
+        .and_then(Value::as_str)
+        .and_then(super::reports::ReportKind::from_action);
+    let report = items.first().and_then(Value::as_u64) == Some(2) && kind.is_some();
     let message_id = items
         .get(1)
         .and_then(Value::as_str)
@@ -52,8 +56,9 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Frame, FrameError> {
             if !items[3].is_object() {
                 return Err(invalid(Some(id), "/3"));
             }
-            if items[2].as_str() == Some("NotifyReport") {
-                return Ok(Frame::NotifyReport {
+            if let Some(kind) = kind {
+                return Ok(Frame::Report {
+                    kind,
                     message_id: id,
                     payload: value[3].take(),
                     bytes: bytes.len(),

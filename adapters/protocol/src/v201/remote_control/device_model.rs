@@ -247,7 +247,13 @@ impl RemoteControlSession {
             };
             let (pending, route) = self
                 .handle
-                .try_report_call_before(call, deadline, key, command.resource.clone())
+                .try_report_call_before(
+                    call,
+                    deadline,
+                    key,
+                    command.resource.clone(),
+                    crate::call::reports::RouteContext::Device,
+                )
                 .map_err(|_| CommandErrorCode::PolicyRejected)?;
             (pending, Some(route))
         } else {

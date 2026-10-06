@@ -114,6 +114,279 @@
         "title": "CapabilityDocument",
         "type": "object"
       },
+      "ChargingLimitSource201": {
+        "description": "Native `ChargingLimitSourceEnumType`: who installed the profile.",
+        "enum": [
+          "EMS",
+          "Other",
+          "SO",
+          "CSO"
+        ],
+        "type": "string"
+      },
+      "ChargingProfileReportFailure201": {
+        "description": "Payload-free terminal reason.",
+        "enum": [
+          "timeout",
+          "byte_limit",
+          "item_limit",
+          "fragment_limit",
+          "capacity",
+          "correlation",
+          "invalid_fragment",
+          "disconnected",
+          "interrupted",
+          "output_limit",
+          "storage_unavailable"
+        ],
+        "type": "string"
+      },
+      "ChargingProfileReportFragment201": {
+        "description": "Metadata for every accepted native fragment, in arrival order.",
+        "properties": {
+          "charging_limit_source": {
+            "$ref": "#/components/schemas/ChargingLimitSource201"
+          },
+          "evse_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "more": {
+            "type": "boolean"
+          },
+          "profiles": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sequence": {
+            "description": "Arrival position; the native message has no sequence number.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "evse_id",
+          "charging_limit_source",
+          "more",
+          "profiles"
+        ],
+        "type": "object"
+      },
+      "ChargingProfileReportProgress201": {
+        "description": "Counts include only accepted fragments; recovered unavailable counts remain absent.",
+        "properties": {
+          "bytes": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "fragments": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "profiles": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fragments",
+          "profiles",
+          "bytes"
+        ],
+        "type": "object"
+      },
+      "ChargingProfileReportState201": {
+        "description": "Collection result, recorded only after the native acknowledgement.",
+        "oneOf": [
+          {
+            "properties": {
+              "state": {
+                "const": "pending",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "fragments": {
+                "items": {
+                  "$ref": "#/components/schemas/ChargingProfileReportFragment201"
+                },
+                "type": "array"
+              },
+              "profiles": {
+                "items": {
+                  "$ref": "#/components/schemas/ReportedChargingProfile201"
+                },
+                "type": "array"
+              },
+              "progress": {
+                "$ref": "#/components/schemas/ChargingProfileReportProgress201"
+              },
+              "state": {
+                "const": "complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "progress",
+              "fragments",
+              "profiles"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "progress": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChargingProfileReportProgress201"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ChargingProfileReportFailure201"
+              },
+              "state": {
+                "const": "incomplete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "state": {
+                "const": "not_expected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ChargingProfilesQuery201": {
+        "description": "Validated native `GetChargingProfilesRequest`. Either profile IDs or at least one other\ncriterion is present (K09.FR.03); every supplied field must match a reported profile.",
+        "properties": {
+          "charging_limit_source": {
+            "items": {
+              "$ref": "#/components/schemas/ChargingLimitSource201"
+            },
+            "type": "array"
+          },
+          "charging_profile_id": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "charging_profile_purpose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportedChargingProfilePurpose201"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evse_id": {
+            "description": "Absent reports every EVSE; zero only the grid connection (K09.FR.04-06).",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "request_id": {
+            "description": "Signed native report correlation identity, separate from the CALL ID.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "stack_level": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "ChargingProfilesResult201": {
+        "description": "Native acknowledgement plus separately collected report evidence.",
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/ChargingProfilesQuery201",
+            "description": "Context captured before transmission."
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SmartChargingReason201"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Standardized native reason, only when supplied and listed."
+          },
+          "report": {
+            "$ref": "#/components/schemas/ChargingProfileReportState201",
+            "description": "Pending after Accepted until the final fragment, a limit or the deadline."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChargingProfilesStatus201",
+            "description": "Exact native status."
+          }
+        },
+        "required": [
+          "query",
+          "status",
+          "report"
+        ],
+        "type": "object"
+      },
+      "ChargingProfilesStatus201": {
+        "description": "Native `GetChargingProfileStatusEnumType`.",
+        "oneOf": [
+          {
+            "const": "Accepted",
+            "description": "Reports follow as `ReportChargingProfilesRequest`.",
+            "type": "string"
+          },
+          {
+            "const": "NoProfiles",
+            "description": "No installed profile matched; no report is expected.",
+            "type": "string"
+          }
+        ]
+      },
       "CommandRequest": {
         "additionalProperties": false,
         "description": "Untrusted command fields that an adapter may deserialize from a request payload.\n\nAuthentication and target-instance context are deliberately absent. Unknown fields and\noperation variants fail deserialization instead of being ignored or treated as extensions.",
@@ -154,6 +427,130 @@
         ],
         "title": "CommandRequest",
         "type": "object"
+      },
+      "CompositeSchedule201": {
+        "description": "Native `CompositeScheduleType`; every field is required on the wire.",
+        "properties": {
+          "charging_rate_unit": {
+            "$ref": "/bridge/v1/schemas/v1.7/command-result.schema.json#/$defs/ChargingScheduleRateUnit201",
+            "description": "Unit of all limits in this schedule."
+          },
+          "charging_schedule_period": {
+            "description": "Ordered relative period boundaries, starting at zero.",
+            "items": {
+              "$ref": "/bridge/v1/schemas/v1.7/command-result.schema.json#/$defs/ChargingSchedulePeriod201"
+            },
+            "type": "array"
+          },
+          "duration": {
+            "description": "Native horizon in seconds.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "evse_id": {
+            "description": "Exact requested EVSE or zero for the grid connection.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "schedule_start": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp",
+            "description": "Anchor of every relative period start."
+          }
+        },
+        "required": [
+          "evse_id",
+          "duration",
+          "schedule_start",
+          "charging_rate_unit",
+          "charging_schedule_period"
+        ],
+        "type": "object"
+      },
+      "CompositeScheduleRequest201": {
+        "description": "Validated immutable context of the one native K08 query.",
+        "properties": {
+          "charging_rate_unit": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.7/command-result.schema.json#/$defs/ChargingScheduleRateUnit201"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional forced unit; omission never invents a unit."
+          },
+          "duration": {
+            "description": "Requested horizon in seconds.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "evse_id": {
+            "description": "Zero addresses the grid connection; positive IDs address the exact EVSE.",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "evse_id",
+          "duration"
+        ],
+        "type": "object"
+      },
+      "CompositeScheduleResult201": {
+        "description": "Validated native response and original query context.",
+        "properties": {
+          "reason_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SmartChargingReason201"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Standardized native reason, only when supplied and listed."
+          },
+          "request": {
+            "$ref": "#/components/schemas/CompositeScheduleRequest201",
+            "description": "Context captured before transmission."
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompositeSchedule201"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Charger-calculated schedule, required for Accepted."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CompositeScheduleStatus201",
+            "description": "Exact native status."
+          }
+        },
+        "required": [
+          "request",
+          "status"
+        ],
+        "type": "object"
+      },
+      "CompositeScheduleStatus201": {
+        "description": "Native `GenericStatusEnumType`, not evidence of physical enforcement.",
+        "oneOf": [
+          {
+            "const": "Accepted",
+            "description": "Charger returned its calculated schedule.",
+            "type": "string"
+          },
+          {
+            "const": "Rejected",
+            "description": "Charger could not report the requested schedule (K08.FR.05/07).",
+            "type": "string"
+          }
+        ]
       },
       "CursorGap": {
         "properties": {
@@ -403,6 +800,102 @@
         "title": "PointView",
         "type": "object"
       },
+      "ReportedChargingProfile201": {
+        "description": "One installed profile with its reporting EVSE and source. `customData` is never retained;\na supplied ISO 15118 `salesTariff` is omitted and flagged rather than interpreted.",
+        "properties": {
+          "charging_limit_source": {
+            "$ref": "#/components/schemas/ChargingLimitSource201"
+          },
+          "charging_profile_kind": {
+            "$ref": "/bridge/v1/schemas/v1.7/command-result.schema.json#/$defs/ChargingProfileKind201"
+          },
+          "charging_profile_purpose": {
+            "$ref": "#/components/schemas/ReportedChargingProfilePurpose201"
+          },
+          "charging_schedule": {
+            "description": "One to three native schedules with exact limits.",
+            "items": {
+              "$ref": "/bridge/v1/schemas/v1.7/command-result.schema.json#/$defs/ChargingSchedule201"
+            },
+            "type": "array"
+          },
+          "evse_id": {
+            "description": "Native EVSE of the report fragment; zero is the grid connection.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "recurrency_kind": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.7/command-result.schema.json#/$defs/ChargingProfileRecurrency201"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sales_tariff_omitted": {
+            "description": "True when at least one schedule carried an omitted native `salesTariff`.",
+            "type": "boolean"
+          },
+          "stack_level": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "transaction_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive lower bound."
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exclusive upper bound."
+          }
+        },
+        "required": [
+          "evse_id",
+          "charging_limit_source",
+          "id",
+          "stack_level",
+          "charging_profile_purpose",
+          "charging_profile_kind",
+          "charging_schedule"
+        ],
+        "type": "object"
+      },
+      "ReportedChargingProfilePurpose201": {
+        "description": "Every native purpose, including externally installed constraints.",
+        "enum": [
+          "ChargingStationExternalConstraints",
+          "ChargingStationMaxProfile",
+          "TxDefaultProfile",
+          "TxProfile"
+        ],
+        "type": "string"
+      },
       "ReservationReconciliation201": {
         "additionalProperties": false,
         "properties": {
@@ -624,6 +1117,20 @@
             "type": "object"
           }
         ]
+      },
+      "SmartChargingReason201": {
+        "description": "Narrow standardized, case-insensitively matched reason codes. Opaque `additionalInfo`,\n`customData` and unlisted codes are excluded.",
+        "enum": [
+          "UnknownEvse",
+          "UnsupportedRateUnit",
+          "NotFound",
+          "DuplicateRequestId",
+          "InvalidValue",
+          "UnsupportedParam",
+          "UnsupportedRequest",
+          "InternalError"
+        ],
+        "type": "string"
       },
       "StationPage": {
         "description": "Bounded station inventory page.",
@@ -863,7 +1370,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
                     }
                   ]
                 }
@@ -909,7 +1416,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
                     }
                   ]
                 }
@@ -956,7 +1463,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
                     }
                   ]
                 }
@@ -976,7 +1483,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
                     }
                   ]
                 }
@@ -1009,7 +1516,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
                     }
                   ]
                 }
@@ -1096,7 +1603,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.12/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.13/command-result.schema.json"
                 }
               }
             },
@@ -3358,7 +3865,8 @@
             "schema": {
               "enum": [
                 "export-record.schema.json",
-                "export-batch.schema.json"
+                "export-batch.schema.json",
+                "command-result.schema.json"
               ],
               "type": "string"
             }
@@ -3436,6 +3944,153 @@
       "head": {
         "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
         "operationId": "schemas_v1_13_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json",
+                "command-result.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.14/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_14",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_14_head",
         "parameters": [
           {
             "in": "path",

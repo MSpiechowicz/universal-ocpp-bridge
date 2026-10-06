@@ -435,6 +435,12 @@ pub struct CommandResult {
     /// Value-free native OCPP 2.0.1 reservation acknowledgement and independent reconciliation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reservation_201: Option<crate::ReservationResult201>,
+    /// Indicative OCPP 2.0.1 schedule reply, never a charging effect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub composite_schedule_201: Option<crate::CompositeScheduleResult201>,
+    /// Native OCPP 2.0.1 installed-profile acknowledgement and bounded report evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub charging_profiles_201: Option<crate::ChargingProfilesResult201>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

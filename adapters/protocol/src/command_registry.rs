@@ -3,7 +3,9 @@ pub(crate) mod charging_profile16;
 mod charging_profile16_schedule;
 pub(crate) mod charging_profile201;
 mod charging_profile201_schedule;
+pub(crate) mod charging_profiles201;
 pub(crate) mod composite_schedule16;
+pub(crate) mod composite_schedule201;
 pub(crate) mod configuration201;
 pub(crate) mod device_model201;
 pub(crate) mod local_authorization16;
@@ -109,6 +111,8 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         }
     } else {
         descriptors.extend(charging_profile201::descriptors(snapshot));
+        descriptors.extend(composite_schedule201::descriptors(snapshot));
+        descriptors.extend(charging_profiles201::descriptors(snapshot));
         descriptors.extend(local_authorization201::descriptors(snapshot));
         descriptors.extend(reservation201::descriptors(snapshot));
         configuration201::append_descriptors(snapshot, &mut descriptors);
@@ -343,7 +347,17 @@ pub fn validate_privileged_operation(
         };
     }
     if operation.action.as_str() == "GetCompositeSchedule" {
-        return composite_schedule16::validate(resource, operation).map(|_| ());
+        return match operation.protocol {
+            ProtocolEdition::Ocpp16j => {
+                composite_schedule16::validate(resource, operation).map(|_| ())
+            }
+            ProtocolEdition::Ocpp201 => {
+                composite_schedule201::validate(resource, operation).map(|_| ())
+            }
+        };
+    }
+    if operation.action.as_str() == charging_profiles201::ACTION {
+        return charging_profiles201::validate(resource, operation).map(|_| ());
     }
     if operation.action.as_str() == "TriggerMessage" {
         return match operation.protocol {

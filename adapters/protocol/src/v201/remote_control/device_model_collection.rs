@@ -122,8 +122,11 @@ pub(super) async fn collect(
                 let Some(ingress) = source.route.next().await? else {
                     return Ok(None);
                 };
-                if source.metadata.len() < 256 {
-                    source.metadata.push(ingress.metadata);
+                if source.metadata.len() < 256
+                    && let crate::call::reports::FragmentMetadata::Device(metadata) =
+                        ingress.metadata
+                {
+                    source.metadata.push(metadata);
                 }
                 source.ingress = Some(ingress.reservation);
                 Ok(Some(ingress.fragment))

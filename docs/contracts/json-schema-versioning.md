@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.11 and serves
-the current v1.12 command-result; OpenAPI command result responses reference v1.12.
-Current nested export-record and export-batch references use v1.13, while released
-export schemas through v1.12 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.12 and serves
+the current v1.13 command-result; OpenAPI command result responses reference v1.13.
+Current nested export-record and export-batch references use v1.14, while released
+export schemas through v1.13 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -301,3 +301,26 @@ identity `urn:uob:ocpp201:ReserveNowReference:1`, with camelCase
 ExportRecord/ExportBatch advance separately to revision 12. SQLite advances additively to
 v16 with a separate `reservations201` owner table. MQTT explicitly supports result
 revision 12 while future revision 13 is rejected before publication.
+
+OCPP 2.0.1 GetCompositeSchedule (K08) and GetChargingProfiles (K09) add two optional
+fields in command-result v1.13 (`ContractVersion` revision 13, `V1_SCHEDULES_201`).
+`composite_schedule_201` keeps the immutable `{evse_id, duration, charging_rate_unit?}`
+request, the exact native `Accepted`/`Rejected` status, a standardized `reason_code`
+matched case-insensitively from a narrow allow-list, and the charger's schedule with its
+EVSE, duration, UTC `schedule_start`, unit and ordered periods. `charging_profiles_201`
+keeps the immutable query (signed `request_id`, optional `evse_id` and either profile IDs
+or the other criteria), the exact `Accepted`/`NoProfiles` status and a report state:
+`pending`, `complete` (progress, per-fragment arrival metadata and typed profiles),
+`incomplete` (a payload-free reason and optional progress) or `not_expected`. Reported
+profiles keep their EVSE, `charging_limit_source`, purpose (including
+`ChargingStationExternalConstraints`), kind, validity and one to three schedules.
+Limits and minimum rates are exact canonical decimal strings, never binary floats.
+`additionalInfo`, `customData` and unlisted reason codes never appear; a native
+`salesTariff` is omitted and flagged with `sales_tariff_omitted`.
+
+Nested public exports advance to v1.14; runtime ExportRecord/ExportBatch advance
+separately to revision 13. SQLite is unchanged: pending reports reuse the existing
+`report_pending` index and startup interruption. MQTT explicitly supports result
+revision 13 while future revision 14 is rejected before publication. Older result JSON
+decodes with both fields absent. These additive response versions do not relax strict
+privileged ingress, calculate or enforce schedules locally, or adopt reported profiles.

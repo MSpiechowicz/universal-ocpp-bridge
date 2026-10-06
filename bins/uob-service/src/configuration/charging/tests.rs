@@ -327,7 +327,7 @@ fn evse_identity_cannot_be_reassigned_to_a_second_native_evse() {
 }
 
 #[test]
-fn composite_schedule_requires_privileged_grants_and_representable_ocpp16_topology() {
+fn composite_schedule_requires_privileged_grants_and_representable_topology() {
     let enabled = CHARGING
         .replace(
             "read_grant_file='/run/uob-demo/read-grant'",
@@ -348,7 +348,28 @@ fn composite_schedule_requires_privileged_grants_and_representable_ocpp16_topolo
         enabled.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
         enabled.replace("/run/uob-demo/privileged", "/run/uob-demo/control"),
         enabled.replace("native_connector_id=1", "native_connector_id=2147483648"),
-        ocpp201,
+        ocpp201.replace("native_evse_id=1", "native_evse_id=2147483648"),
+    ] {
+        assert_eq!(
+            validate_document(&format!("{BASE}{invalid}")).err(),
+            Some(ConfigurationLoadError::InvalidCharging),
+        );
+    }
+    // The same native action is opt-in for both editions; each keeps its own scope rules.
+    assert!(
+        validate_document(&format!("{BASE}{ocpp201}"))
+            .unwrap()
+            .is_some()
+    );
+    let reports = ocpp201.replace("get_composite_schedule=true", "get_charging_profiles=true");
+    assert!(
+        validate_document(&format!("{BASE}{reports}"))
+            .unwrap()
+            .is_some()
+    );
+    for invalid in [
+        enabled.replace("get_composite_schedule=true", "get_charging_profiles=true"),
+        reports.replace("privileged_grant_file='/run/uob-demo/privileged'\n", ""),
     ] {
         assert_eq!(
             validate_document(&format!("{BASE}{invalid}")).err(),
