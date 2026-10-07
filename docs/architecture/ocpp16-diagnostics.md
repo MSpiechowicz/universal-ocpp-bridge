@@ -103,8 +103,8 @@ restart fails and the station reports the failure.
 - `SecurityEventNotification` and the security-log contents themselves (N01.FR.05, #127).
 - FTP/FTPS uploads, resume, `Expect: 100-continue` and basic authorization in upload locations
   (N01.FR.14, N01.FR.17, N01.FR.22, N01.FR.23).
-- OCPP 2.0.1 `GetLog` (#125), persistent production artifact storage, physical stations and OCA
-  certification.
+- Persistent production artifact storage, physical stations and OCA certification. OCPP 2.0.1
+  `GetLog` is covered separately in [OCPP 2.0.1 log retrieval](ocpp201-diagnostics.md).
 
 ## Verification
 

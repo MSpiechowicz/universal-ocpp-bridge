@@ -63,14 +63,28 @@ fn request_id(payload: &Value) -> Result<(), DecodeError> {
     }
 }
 
+/// `LogStatusNotificationRequest`; `requestId` is mandatory unless the status is `Idle`
+/// (N01.FR.13: only a triggered report with no upload ongoing may omit it), because every other
+/// report belongs to exactly one upload (N01.FR.07).
 pub(super) fn log(payload: Value) -> Result<ChargerObservation, DecodeError> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Request {
+        status: uob_contracts::LogUploadStatus201,
+        #[serde(default)]
+        request_id: Option<i32>,
+    }
     fields(&payload, &["status", "requestId"])?;
     status(&payload)?;
     request_id(&payload)?;
-    let request: LogStatusNotificationRequest = payload_as(payload)?;
-    Ok(ChargerObservation::TriggerStatus201 {
-        class: TriggerMessageClass201::LogStatusNotification,
-        status: format!("{:?}", request.status),
+    let _: LogStatusNotificationRequest = payload_as(payload.clone())?;
+    let request: Request = serde_json::from_value(payload).map_err(|_| invalid())?;
+    if request.request_id.is_none() && request.status != uob_contracts::LogUploadStatus201::Idle {
+        return Err(invalid());
+    }
+    Ok(ChargerObservation::LogStatus201 {
+        status: request.status,
+        request_id: request.request_id,
     })
 }
 

@@ -236,6 +236,28 @@ impl StationCommandPort<Value> for LiveCommands {
             Session::V201(_) => Ok(None),
         }
     }
+    fn diagnostics_expectation_201(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: uob_contracts::UtcTimestamp,
+    ) -> Result<Option<uob_application::DiagnosticsJobMutation201>, uob_contracts::CommandErrorCode>
+    {
+        let sessions = self
+            .sessions
+            .read()
+            .map_err(|_| uob_contracts::CommandErrorCode::PolicyRejected)?;
+        let (current, session) = sessions
+            .get(&command.resource.station_id)
+            .ok_or(uob_contracts::CommandErrorCode::StationDisconnected)?;
+        if Some(*current) != generation {
+            return Err(uob_contracts::CommandErrorCode::StationDisconnected);
+        }
+        match session.as_ref() {
+            Session::V16(_) => Ok(None),
+            Session::V201(port) => port.diagnostics_expectation_201(command, generation, now),
+        }
+    }
     fn firmware_expectation_16(
         &self,
         command: &Command<Value>,

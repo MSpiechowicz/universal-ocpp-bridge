@@ -28,6 +28,7 @@ fn supported_result_version(version: ContractVersion) -> bool {
         || version == ContractVersion::V1_FIRMWARE_16
         || version == ContractVersion::V1_FIRMWARE_201
         || version == ContractVersion::V1_DIAGNOSTICS_16
+        || version == ContractVersion::V1_DIAGNOSTICS_201
 }
 
 /// Trusted, versioned MQTT namespace shared by every outbound mapping.

@@ -18,8 +18,8 @@ const SAFE_KEYS: &[&str] = &[
     "cancelled",
 ];
 
-/// Compares only safe OCPP 1.6 log-upload workflow metadata; `await_diagnostics` polls until the
-/// step timeout.
+/// Compares only safe OCPP 1.6 or 2.0.1 log-upload workflow metadata; `await_diagnostics` polls
+/// until the step timeout.
 pub(super) async fn observe(
     step: &StepDefinition,
     client: Option<&dyn ProtocolClient>,
@@ -38,16 +38,23 @@ pub(super) async fn observe(
             "diagnostics assertion accepts only safe workflow metadata",
         ));
     };
-    let handle = client
-        .and_then(ProtocolClient::diagnostics16)
-        .ok_or_else(|| {
-            failure(
-                "diagnostics_state_missing",
-                "durable native diagnostics state is unavailable",
-            )
-        })?;
+    // A station carries at most one edition's log model.
+    let snapshot: Box<dyn Fn() -> serde_json::Value + Send + Sync> =
+        if let Some(handle) = client.and_then(ProtocolClient::diagnostics16) {
+            Box::new(move || handle.snapshot())
+        } else {
+            let handle = client
+                .and_then(ProtocolClient::diagnostics201)
+                .ok_or_else(|| {
+                    failure(
+                        "diagnostics_state_missing",
+                        "durable native diagnostics state is unavailable",
+                    )
+                })?;
+            Box::new(move || handle.snapshot())
+        };
     loop {
-        let actual = handle.snapshot();
+        let actual = snapshot();
         if fields
             .iter()
             .all(|(key, value)| actual.get(key) == Some(value))

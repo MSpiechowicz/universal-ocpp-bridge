@@ -110,6 +110,7 @@ impl TransportStream for Stream {
                         | "ReserveNow"
                         | "CancelReservation"
                 ) && !crate::firmware201::transport::intercepts(action, &self.state)
+                    && !crate::diagnostics201::transport::intercepts(action, &self.state)
                 {
                     return Ok(event);
                 }
@@ -247,6 +248,8 @@ impl Stream {
                 crate::reservation201::transport::reply(action, payload, &self.state)
             } else if action == "UpdateFirmware" {
                 crate::firmware201::transport::reply(payload, &self.state)
+            } else if action == "GetLog" {
+                crate::diagnostics201::transport::reply(payload, &self.state)
             } else {
                 native_reply(action, payload, &local)
             };

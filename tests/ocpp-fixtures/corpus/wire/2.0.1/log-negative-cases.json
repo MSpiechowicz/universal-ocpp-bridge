@@ -1,0 +1,559 @@
+{
+  "cases": [
+    {
+      "id": "status-uploaded-without-request",
+      "wire": [
+        2,
+        "neg201-log-1",
+        "LogStatusNotification",
+        {
+          "status": "Uploaded"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "N01.FR.13 requestId is mandatory unless a TriggerMessageRequest triggered the report and no upload is ongoing"
+    },
+    {
+      "id": "status-uploading-without-request",
+      "wire": [
+        2,
+        "neg201-log-2",
+        "LogStatusNotification",
+        {
+          "status": "Uploading"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "N01.FR.13 a running upload always reports its requestId"
+    },
+    {
+      "id": "status-accepted-canceled-without-request",
+      "wire": [
+        2,
+        "neg201-log-3",
+        "LogStatusNotification",
+        {
+          "status": "AcceptedCanceled"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "N01.FR.13/N01.FR.20 the cancelled upload is identified by its requestId"
+    },
+    {
+      "id": "status-upload-failed-legacy-value",
+      "wire": [
+        2,
+        "neg201-log-4",
+        "LogStatusNotification",
+        {
+          "status": "UploadFailed",
+          "requestId": 4101
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "UploadFailed is the OCPP 1.6 DiagnosticsStatusEnumType value; 2.0.1 uses UploadFailure"
+    },
+    {
+      "id": "status-lowercase",
+      "wire": [
+        2,
+        "neg201-log-5",
+        "LogStatusNotification",
+        {
+          "status": "uploaded",
+          "requestId": 4101
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "status-missing",
+      "wire": [
+        2,
+        "neg201-log-6",
+        "LogStatusNotification",
+        {
+          "requestId": 4101
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "status is required"
+    },
+    {
+      "id": "status-empty-object",
+      "wire": [
+        2,
+        "neg201-log-7",
+        "LogStatusNotification",
+        {}
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "status is required"
+    },
+    {
+      "id": "status-extra-field",
+      "wire": [
+        2,
+        "neg201-log-8",
+        "LogStatusNotification",
+        {
+          "status": "Uploaded",
+          "requestId": 4101,
+          "filename": "a.log"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties"
+    },
+    {
+      "id": "status-request-string",
+      "wire": [
+        2,
+        "neg201-log-9",
+        "LogStatusNotification",
+        {
+          "status": "Uploading",
+          "requestId": "4101"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestId is an integer"
+    },
+    {
+      "id": "status-request-null",
+      "wire": [
+        2,
+        "neg201-log-10",
+        "LogStatusNotification",
+        {
+          "status": "Uploading",
+          "requestId": null
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "null is not an integer"
+    },
+    {
+      "id": "status-status-null",
+      "wire": [
+        2,
+        "neg201-log-11",
+        "LogStatusNotification",
+        {
+          "status": null,
+          "requestId": 4101
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "null is not an enumeration value"
+    },
+    {
+      "id": "status-request-overflow",
+      "wire": [
+        2,
+        "neg201-log-12",
+        "LogStatusNotification",
+        {
+          "status": "Uploading",
+          "requestId": 2147483648
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "OCPP integer is a signed 32-bit identity"
+    },
+    {
+      "id": "status-custom-data-without-vendor",
+      "wire": [
+        2,
+        "neg201-log-13",
+        "LogStatusNotification",
+        {
+          "status": "Uploading",
+          "requestId": 4101,
+          "customData": {}
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "CustomDataType requires vendorId"
+    },
+    {
+      "id": "get-log-missing-log",
+      "wire": [
+        2,
+        "neg201-log-14",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "log is required"
+    },
+    {
+      "id": "get-log-missing-log-type",
+      "wire": [
+        2,
+        "neg201-log-15",
+        "GetLog",
+        {
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "logType is required"
+    },
+    {
+      "id": "get-log-missing-request",
+      "wire": [
+        2,
+        "neg201-log-16",
+        "GetLog",
+        {
+          "logType": "SecurityLog",
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestId is required"
+    },
+    {
+      "id": "get-log-unknown-log-type",
+      "wire": [
+        2,
+        "neg201-log-17",
+        "GetLog",
+        {
+          "logType": "MonitoringLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "LogEnumType is DiagnosticsLog or SecurityLog"
+    },
+    {
+      "id": "get-log-missing-location",
+      "wire": [
+        2,
+        "neg201-log-18",
+        "GetLog",
+        {
+          "logType": "SecurityLog",
+          "requestId": 1,
+          "log": {}
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "log.remoteLocation is required"
+    },
+    {
+      "id": "get-log-location-too-long",
+      "wire": [
+        2,
+        "neg201-log-19",
+        "GetLog",
+        {
+          "logType": "SecurityLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://logs.example.test/uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "remoteLocation is string[0..512]"
+    },
+    {
+      "id": "get-log-negative-retries",
+      "wire": [
+        2,
+        "neg201-log-20",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "retries": -1,
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "the bridge never sends a negative attempt count"
+    },
+    {
+      "id": "get-log-negative-retry-interval",
+      "wire": [
+        2,
+        "neg201-log-21",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "retryInterval": -30,
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "the bridge never sends a negative interval"
+    },
+    {
+      "id": "get-log-retries-string",
+      "wire": [
+        2,
+        "neg201-log-22",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "retries": "3",
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "retries is an integer"
+    },
+    {
+      "id": "get-log-extra-field",
+      "wire": [
+        2,
+        "neg201-log-23",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/"
+          },
+          "location": "https://logs.example.test/"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties; the legacy location field does not exist"
+    },
+    {
+      "id": "get-log-inverted-window",
+      "wire": [
+        2,
+        "neg201-log-24",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://logs.example.test/upload/b3/",
+            "oldestTimestamp": "2026-10-07T00:00:00Z",
+            "latestTimestamp": "2026-10-06T00:00:00Z"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "oldestTimestamp must not follow latestTimestamp; the bridge never sends it"
+    },
+    {
+      "id": "reply-missing-status",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-25",
+        {
+          "filename": "a.log"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "status is required"
+    },
+    {
+      "id": "reply-unknown-status",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-26",
+        {
+          "status": "Busy"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "LogStatusEnumType is Accepted, Rejected or AcceptedCanceled"
+    },
+    {
+      "id": "reply-lowercase-status",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-27",
+        {
+          "status": "accepted"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "reply-filename-wrong-type",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-28",
+        {
+          "status": "Accepted",
+          "filename": 7
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "filename is a string"
+    },
+    {
+      "id": "reply-filename-too-long",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-29",
+        {
+          "status": "Accepted",
+          "filename": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "filename is string[0..255]"
+    },
+    {
+      "id": "reply-filename-control-character",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-30",
+        {
+          "status": "Accepted",
+          "filename": "cs-bravo\tlog.zip"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "file names are printable ASCII; the bridge treats the reply as uncorrelated"
+    },
+    {
+      "id": "reply-filename-capitalised",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-31",
+        {
+          "status": "Accepted",
+          "fileName": "a.log"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "the 2.0.1 property is lowercase filename (fileName is the 1.6 GetDiagnostics spelling)"
+    },
+    {
+      "id": "reply-extra-field",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-32",
+        {
+          "status": "Accepted",
+          "requestId": 4101
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties"
+    },
+    {
+      "id": "reply-status-info-without-reason",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-33",
+        {
+          "status": "Rejected",
+          "statusInfo": {
+            "additionalInfo": "no logs"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "statusInfo.reasonCode is required"
+    },
+    {
+      "id": "reply-reason-code-too-long",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-34",
+        {
+          "status": "Rejected",
+          "statusInfo": {
+            "reasonCode": "rrrrrrrrrrrrrrrrrrrrr"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "reasonCode is string[0..20]"
+    },
+    {
+      "id": "reply-reason-code-control",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg201-log-35",
+        {
+          "status": "Rejected",
+          "statusInfo": {
+            "reasonCode": "No\tLog"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "the bridge retains only printable reason codes and treats the reply as uncorrelated"
+    }
+  ]
+}

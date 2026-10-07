@@ -216,6 +216,56 @@ The broad `ocpp201.firmware-diagnostics` row stays `planned` until diagnostics (
 implemented. Security events (#128), L03/L04 local-controller publishing and certificate
 revocation are not claimed.
 
+## OCPP 2.0.1 log-retrieval fixtures
+
+`GetLogRequest.json`, `GetLogResponse.json` and `LogStatusNotificationResponse.json` were
+added to `schemas/2.0.1/` byte-identical (LF, Draft 6) from the pinned 2.0.1 Part 3 archive
+in `provenance.json`. The existing `LogStatusNotificationRequest.json` copy is reused
+unchanged; like the firmware copy it carries one trailing newline that the archive member
+lacks, and its recorded SHA-256 is the one fixtures cite.
+
+The 19 fixture IDs beginning with `wire.ocpp201.log-` were authored independently from use
+case N01 and Figure 129. They cover:
+
+- `GetLog` for `DiagnosticsLog` and `SecurityLog`, each in full (retries, retry interval, time
+  window) and minimal form, with the i32 minimum and zero as `requestId`;
+- the `Accepted` (with and without `filename`), `AcceptedCanceled` and `Rejected` replies, and
+  a `Rejected` reply with `statusInfo`;
+- all eight `UploadLogStatusEnumType` notifications, including `AcceptedCanceled`
+  (N01.FR.20) and the `UploadFailure` spelling (the 1.6 `UploadFailed` is a different value);
+- the identity-free `Idle` that N01.FR.13 permits for a triggered report, and the empty reply.
+
+`wire/2.0.1/log-negative-cases.json` holds 35 cases. CALLRESULT cases carry a `schema` key
+because their frame names no action. Cases that are schema-valid but refused natively:
+
+- a non-`Idle` notification without `requestId` (N01.FR.13);
+- a `requestId` outside i32;
+- negative `retries` or `retryInterval`, and an inverted `oldestTimestamp`/`latestTimestamp`
+  window, which the bridge never sends;
+- a `filename` or `reasonCode` with a control character.
+
+The schema-invalid cases include:
+
+- the 1.6-only `UploadFailed` status, a lowercase status, null or string identities;
+- extra properties, including the 1.6 `location` field and the 1.6 `fileName` spelling;
+- a missing `log`, `logType`, `requestId`, `remoteLocation` or reply `status`;
+- a `remoteLocation` over 512 characters, a `filename` over 255 and a `reasonCode` over 20;
+- `customData` without `vendorId`, and `statusInfo` without `reasonCode`.
+
+`diagnostics201-requirements.json` maps the N01 requirement IDs to fixtures and tests. N01.FR.17
+(basic authorization), FTP, resume and `Expect: 100-continue` are listed as not covered.
+
+The new `ocpp201.firmware-diagnostics.diagnostics-logs` row is `verified`. Its evidence comes
+from:
+
+- the bridge decoder and the independent simulator model, which agree with every corpus
+  fixture and negative case;
+- contract, application, storage and actual-daemon tests;
+- an opt-in separate-process joint smoke.
+
+The broad `ocpp201.firmware-diagnostics` row stays `planned` until the remaining diagnostic
+areas are implemented. Security events (#128) and monitoring (#126) are not claimed.
+
 ## OCPP 1.6 TriggerMessage fixtures
 
 The TriggerMessage source is the OCA **OCPP 1.6 Edition 2 with published JSON

@@ -68,6 +68,16 @@ impl ProtocolClient for SimulatorProtocolClient {
             .and_then(|state| state.lock().expect("native state lock").firmware201.clone())
     }
 
+    fn diagnostics201(&self) -> Option<crate::diagnostics201::Diagnostics201Handle> {
+        self.ocpp201_state.as_ref().and_then(|state| {
+            state
+                .lock()
+                .expect("native state lock")
+                .diagnostics201
+                .clone()
+        })
+    }
+
     fn reservation201(&self) -> Option<crate::reservation201::Reservation201Handle> {
         self.ocpp201_state.as_ref().and_then(|state| {
             state
@@ -194,6 +204,7 @@ impl ProtocolClient for SimulatorProtocolClient {
                 state.local = None;
                 state.reservation201 = None;
                 state.firmware201 = None;
+                state.diagnostics201 = None;
             }
             response
         })
@@ -214,6 +225,7 @@ impl ProtocolClient for SimulatorProtocolClient {
             state.local = None;
             state.reservation201 = None;
             state.firmware201 = None;
+            state.diagnostics201 = None;
         }
     }
 

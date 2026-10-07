@@ -37,6 +37,9 @@ pub trait ProtocolClient: Send + Sync {
     fn firmware201(&self) -> Option<crate::firmware201::Firmware201Handle> {
         None
     }
+    fn diagnostics201(&self) -> Option<crate::diagnostics201::Diagnostics201Handle> {
+        None
+    }
     fn reboot_count(&self) -> u64 {
         0
     }

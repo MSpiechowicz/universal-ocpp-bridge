@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.15 and serves
-the current v1.16 command-result; OpenAPI command result responses reference v1.16.
-Current nested export-record and export-batch references use v1.17, while released
-export schemas through v1.16 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.16 and serves
+the current v1.17 command-result; OpenAPI command result responses reference v1.17.
+Current nested export-record and export-batch references use v1.18, while released
+export schemas through v1.17 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -391,3 +391,23 @@ ends before it starts is refused by the contract decoder. Nested public exports 
 v1.17; runtime ExportRecord/ExportBatch advance separately to revision 16. SQLite advances
 additively to v20 with a `diagnostics16_jobs` owner table. MQTT explicitly supports result
 revision 16 while future revision 17 is rejected before publication.
+
+OCPP 2.0.1 log retrieval adds the optional `diagnostics_201` field in command-result v1.17
+(`ContractVersion` revision 17, `V1_DIAGNOSTICS_201`). It carries the `log_type` and the native
+signed i32 `request_id`, the offered `destination` (`log_type`, effective `maximum_bytes` and
+`test_only`), the exact native `reply` (`status` with one of the three `LogStatusEnumType`
+values, an optional printable-ASCII `file_name` of at most 255 characters and an optional
+`reason_code` of 1 to 20 printable ASCII characters, or a sanitized `call_error` code) and the
+durable `job` (`revision`, snake_case `state`, `deadline`, `observed_at`, the last native
+`LogStatusNotification` status, a notification counter and, for `uploaded`, the
+provider-observed lowercase hex `sha256` and `size_bytes`). Upload locations, destination
+identities, log contents and raw payloads never appear in this evidence.
+
+The new initial envelope `v1.0/get-log-reference-201.schema.json`
+(`urn:uob:ocpp201:GetLogReference:1`, `logType`/`requestId`/`oldestTimestamp?`/
+`latestTimestamp?`/`retries?`/`retryInterval?`) accepts no location. Counts are 0 to
+2147483647, and a window that ends before it starts is refused by the contract decoder. Nested
+public exports advance to v1.18; runtime ExportRecord/ExportBatch advance separately to
+revision 17. SQLite advances additively to v21 with a `diagnostics201_jobs` owner table. MQTT
+explicitly supports result revision 17 while future revision 18 is rejected before
+publication.

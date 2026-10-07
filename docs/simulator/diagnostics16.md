@@ -40,7 +40,8 @@ get_log_failure_status = "UploadFailure"  # security_log only: or BadMessage, Pe
 ```
 
 The private state file and its `.lock` use the same owner-only, exclusive, fsync-before-rename
-storage as the reservation and firmware models. The table is rejected for an OCPP 2.0.1 station.
+storage as the reservation and firmware models. The table is rejected for an OCPP 2.0.1 station;
+see [diagnostics201.md](diagnostics201.md) for the 2.0.1 `GetLog` model.
 
 ## Station behavior
 

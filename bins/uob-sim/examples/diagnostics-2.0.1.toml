@@ -1,0 +1,40 @@
+schema_version = 1
+seed = 125
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+# chargingStation.model is CiString20 and vendorName CiString50.
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.boot.accepted"
+payload = { reason = "PowerUp", chargingStation = { vendorName = "UOB", model = "DiagnosticsSt201", firmwareVersion = "sim-1.0.0" } }
+
+# The CSMS sends GetLog(DiagnosticsLog); the station uploads one file and reports Uploading and
+# Uploaded, each with the request's requestId (N01.FR.07).
+[[steps]]
+id = "await-uploaded-diagnostics-log"
+station = "alpha"
+action = "await_diagnostics"
+timeout_ms = 120000
+expect_response = { active = false, kind = "DiagnosticsLog", lastStatus = "Uploaded", uploads = 1, pendingStatuses = 0 }
+
+# The CSMS then sends GetLog(SecurityLog).
+[[steps]]
+id = "await-uploaded-security-log"
+station = "alpha"
+action = "await_diagnostics"
+timeout_ms = 120000
+expect_response = { active = false, kind = "SecurityLog", lastStatus = "Uploaded", uploads = 2, pendingStatuses = 0 }
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

@@ -115,6 +115,14 @@ pub(super) async fn dispatch_call(
             super::firmware::complete_status_201(&incoming, snapshot, &services, &mut commits)
                 .await?
         }
+        (ProtocolEdition::Ocpp201, "LogStatusNotification")
+            if services
+                .diagnostics
+                .is_some_and(|(settings, _)| settings.log) =>
+        {
+            super::diagnostics201::complete_status_201(&incoming, snapshot, &services, &mut commits)
+                .await?
+        }
         (
             ProtocolEdition::Ocpp201,
             "LogStatusNotification"

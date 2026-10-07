@@ -254,7 +254,8 @@ fn incoming_trigger_reports_validate_native_identity_and_do_not_sign_certificate
     for (action, payload, class) in reports {
         let call = v201::decode_call(json!([2, "report", action, payload]).to_string().as_bytes())
             .unwrap();
-        // Firmware reports carry their own typed observation; trigger receipt maps it back.
+        // Firmware and log reports carry their own typed observation; trigger receipt maps it
+        // back.
         assert!(
             matches!(call.observation, ChargerObservation::TriggerStatus201 { class: received, .. } if received == class)
                 || (class == TriggerMessageClass201::FirmwareStatusNotification
@@ -262,6 +263,14 @@ fn incoming_trigger_reports_validate_native_identity_and_do_not_sign_certificate
                         call.observation,
                         ChargerObservation::FirmwareStatus201 {
                             request_id: Some(1),
+                            ..
+                        }
+                    ))
+                || (class == TriggerMessageClass201::LogStatusNotification
+                    && matches!(
+                        call.observation,
+                        ChargerObservation::LogStatus201 {
+                            request_id: None,
                             ..
                         }
                     ))
@@ -282,6 +291,8 @@ fn incoming_trigger_reports_validate_native_identity_and_do_not_sign_certificate
         ),
         ("SignCertificate", json!({"csr":"x","unknown":false})),
         ("LogStatusNotification", json!({"status":"fabricated"})),
+        // N01.FR.13: only Idle may omit the upload identity.
+        ("LogStatusNotification", json!({"status":"Uploaded"})),
         (
             "FirmwareStatusNotification",
             json!({"status":"Idle","requestId":2_147_483_648_u64}),

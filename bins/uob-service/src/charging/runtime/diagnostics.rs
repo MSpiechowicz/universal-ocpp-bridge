@@ -128,25 +128,33 @@ async fn check_upload(
     else {
         return Ok(None);
     };
-    let outcome = match UploadId::new(upload_id.as_str()) {
-        Ok(identity) => {
-            match tokio::time::timeout(PROVIDER_TIMEOUT, artifacts.upload_status(&identity)).await {
-                Ok(Ok(UploadStatus::Received { size_bytes, sha256 })) => {
-                    UploadOutcome16::Received(DiagnosticsUpload16 {
-                        sha256: sha256.as_bytes().iter().fold(
-                            String::with_capacity(64),
-                            |mut hex, byte| {
-                                let _ = write!(hex, "{byte:02x}");
-                                hex
-                            },
-                        ),
-                        size_bytes,
-                    })
-                }
-                _ => UploadOutcome16::Missing,
-            }
+    let outcome = match stored_upload(artifacts, upload_id.as_str()).await {
+        Some((sha256, size_bytes)) => {
+            UploadOutcome16::Received(DiagnosticsUpload16 { sha256, size_bytes })
         }
-        Err(_) => UploadOutcome16::Missing,
+        None => UploadOutcome16::Missing,
     };
     Ok(Some(UploadCheck16 { upload_id, outcome }))
+}
+
+/// Lowercase SHA-256 and size of the complete file the provider holds for one destination, or
+/// None for an incomplete or unknown upload and for an unavailable provider.
+pub(super) async fn stored_upload(
+    artifacts: &impl ArtifactProvider,
+    upload_id: &str,
+) -> Option<(String, u64)> {
+    let identity = UploadId::new(upload_id).ok()?;
+    match tokio::time::timeout(PROVIDER_TIMEOUT, artifacts.upload_status(&identity)).await {
+        Ok(Ok(UploadStatus::Received { size_bytes, sha256 })) => Some((
+            sha256
+                .as_bytes()
+                .iter()
+                .fold(String::with_capacity(64), |mut hex, byte| {
+                    let _ = write!(hex, "{byte:02x}");
+                    hex
+                }),
+            size_bytes,
+        )),
+        _ => None,
+    }
 }

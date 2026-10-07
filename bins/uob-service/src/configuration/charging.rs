@@ -68,7 +68,8 @@ pub(crate) struct StationControlOptions {
     pub signed_update_firmware: StationActionOption,
     /// OCPP 1.6 `GetDiagnostics`; uploads go to the `[charging.firmware]` artifact service.
     pub get_diagnostics: StationActionOption,
-    /// Security Whitepaper `GetLog` (diagnostics or security log) on OCPP 1.6.
+    /// `GetLog` (diagnostics or security log): the Security Whitepaper message on OCPP 1.6 and
+    /// the native N01 message on OCPP 2.0.1.
     pub get_log: StationActionOption,
     /// OCPP 2.0.1 only: send firmware without signing certificate or signature (L02).
     pub non_secure_firmware: bool,

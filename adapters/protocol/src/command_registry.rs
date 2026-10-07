@@ -9,6 +9,7 @@ pub(crate) mod composite_schedule201;
 pub(crate) mod configuration201;
 pub(crate) mod device_model201;
 pub(crate) mod diagnostics16;
+pub(crate) mod diagnostics201;
 pub(crate) mod firmware16;
 pub(crate) mod firmware201;
 pub(crate) mod local_authorization16;
@@ -121,6 +122,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         descriptors.extend(local_authorization201::descriptors(snapshot));
         descriptors.extend(reservation201::descriptors(snapshot));
         descriptors.extend(firmware201::descriptors(snapshot));
+        descriptors.extend(diagnostics201::descriptors(snapshot));
         configuration201::append_descriptors(snapshot, &mut descriptors);
         for (index, action) in device_model201::ACTIONS.iter().enumerate() {
             let operation = Operation::ProtocolAction {
@@ -329,6 +331,9 @@ pub fn validate_privileged_operation(
     }
     if diagnostics16::owns(operation) {
         return diagnostics16::validate(resource, operation).map(|_| ());
+    }
+    if diagnostics201::owns(operation) {
+        return diagnostics201::validate(resource, operation).map(|_| ());
     }
     if firmware16::ACTIONS.contains(&operation.action.as_str()) {
         return match operation.protocol {

@@ -123,6 +123,7 @@ pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError
         || result.reservation_201.is_some()
         || result.firmware_201.is_some()
         || result.diagnostics_16.is_some()
+        || result.diagnostics_201.is_some()
         || native != matches!(result.lifecycle, CommandLifecycle::ProtocolResponse { .. })
         || evidence.artifact().is_some_and(|artifact| {
             !uob_contracts::valid_firmware_artifact_reference(&artifact.artifact_reference)

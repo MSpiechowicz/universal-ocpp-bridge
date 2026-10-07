@@ -264,6 +264,7 @@ fn payloads(
     state: &Arc<Mutex<Ocpp201State>>,
 ) -> Vec<Value> {
     let firmware = crate::firmware201::transport::trigger_payload(state);
+    let log = crate::diagnostics201::transport::trigger_payload(state);
     let state = state.lock().expect("OCPP 2.0.1 state lock");
     match &request.requested_message {
         Requested::BootNotification => {
@@ -276,9 +277,9 @@ fn payloads(
             vec![boot]
         }
         Requested::Heartbeat => vec![json!({})],
-        Requested::LogStatusNotification | Requested::PublishFirmwareStatusNotification => {
-            vec![json!({"status":"Idle"})]
-        }
+        // N01.FR.13: Uploading with the ongoing requestId, otherwise Idle without one.
+        Requested::LogStatusNotification => vec![log],
+        Requested::PublishFirmwareStatusNotification => vec![json!({"status":"Idle"})],
         // L01.FR.25/26: Idle after Installed, otherwise the last sent status and requestId.
         Requested::FirmwareStatusNotification => vec![firmware],
         Requested::StatusNotification => scoped_resources(request, resources, true)

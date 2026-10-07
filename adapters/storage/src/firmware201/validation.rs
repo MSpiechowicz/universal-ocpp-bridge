@@ -103,6 +103,7 @@ fn other_evidence(result: &CommandResult) -> bool {
         || result.reservation_201.is_some()
         || result.firmware_16.is_some()
         || result.diagnostics_16.is_some()
+        || result.diagnostics_201.is_some()
 }
 
 pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError> {

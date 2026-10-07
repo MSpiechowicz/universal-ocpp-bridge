@@ -42,6 +42,8 @@ mod firmware201;
 pub use firmware201::*;
 mod diagnostics16;
 pub use diagnostics16::*;
+mod diagnostics201;
+pub use diagnostics201::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -198,6 +200,11 @@ impl ContractVersion {
     pub const V1_DIAGNOSTICS_16: Self = Self {
         major: 1,
         revision: 16,
+    };
+    /// Additive value-free OCPP 2.0.1 log upload evidence.
+    pub const V1_DIAGNOSTICS_201: Self = Self {
+        major: 1,
+        revision: 17,
     };
 }
 

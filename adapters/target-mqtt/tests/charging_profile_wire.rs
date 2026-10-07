@@ -140,7 +140,7 @@ async fn future_versions_management_origin_and_oversized_profiles_fail_before_pu
             "future" => {
                 result.schema_version = ContractVersion {
                     major: 1,
-                    revision: ContractVersion::V1_DIAGNOSTICS_16.revision + 1,
+                    revision: ContractVersion::V1_DIAGNOSTICS_201.revision + 1,
                 }
             }
             "management" => {

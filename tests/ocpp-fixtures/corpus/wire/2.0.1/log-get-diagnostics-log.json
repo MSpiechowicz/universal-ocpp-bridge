@@ -1,0 +1,1 @@
+[2,"log201-get-1","GetLog",{"logType":"DiagnosticsLog","requestId":4101,"retries":3,"retryInterval":45,"log":{"remoteLocation":"https://logs.example.test/upload/a7c3e9d2/","oldestTimestamp":"2026-10-06T00:00:00Z","latestTimestamp":"2026-10-07T00:00:00Z"}}]

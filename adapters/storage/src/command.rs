@@ -96,6 +96,7 @@ pub(crate) fn write_result_value(
     crate::firmware16::finish(transaction, &mut incoming)?;
     crate::firmware201::finish(transaction, &mut incoming)?;
     crate::diagnostics16::finish(transaction, &mut incoming)?;
+    crate::diagnostics201::finish(transaction, &mut incoming)?;
 
     let mut retire_trigger_201 = false;
     if let Some(mut previous) = previous {
@@ -117,6 +118,7 @@ pub(crate) fn write_result_value(
         crate::firmware16::validation::merge(&previous, &mut incoming)?;
         crate::firmware201::validation::merge(&previous, &mut incoming)?;
         crate::diagnostics16::validation::merge(&previous, &mut incoming)?;
+        crate::diagnostics201::validation::merge(&previous, &mut incoming)?;
         for effect in previous.observed_effects.drain(..) {
             if !incoming
                 .observed_effects
@@ -195,6 +197,13 @@ pub(crate) fn write_result_value(
                 *new = old;
                 *new.job_mut() = job;
             }
+            if let (Some(old), Some(new)) =
+                (previous.diagnostics_201, incoming.diagnostics_201.as_mut())
+            {
+                let job = new.job.clone();
+                *new = old;
+                new.job = job;
+            }
         }
         for observation in previous.configuration_observations {
             if !incoming
@@ -226,6 +235,7 @@ pub(crate) fn write_result_value(
     crate::firmware16::validation::validate_stored(transaction, &incoming)?;
     crate::firmware201::validation::validate_stored(transaction, &incoming)?;
     crate::diagnostics16::validation::validate_stored(transaction, &incoming)?;
+    crate::diagnostics201::validation::validate_stored(transaction, &incoming)?;
     persist_result(transaction, &incoming, request, retire_trigger_201)
 }
 

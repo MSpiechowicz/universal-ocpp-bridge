@@ -1346,6 +1346,61 @@ deadline becomes `timed_out` but keeps blocking a release drain. A `TriggerMessa
 settles the job as `station_idle`. See [OCPP 2.0.1 firmware](../architecture/ocpp201-firmware.md)
 for the state rules.
 
+### Protected OCPP 2.0.1 log retrieval
+
+For `protocol = "ocpp201"`, `get_log` enables OCPP 2.0.1 `GetLog` (N01) for a diagnostics or
+security log. It is privileged, default-off and **demo-only**, needs
+`diagnostics_job_timeout_seconds` (60–86400) and accepts the same optional
+`diagnostics_upload_max_bytes` (1 to 33554432, default 8 MiB) as
+[the OCPP 1.6 log uploads](#protected-ocpp-16-diagnostics-and-log-uploads). OCPP 2.0.1 has no
+`GetDiagnostics`, so `get_diagnostics` is refused for these stations. Uploads go to the same
+`[charging.firmware]` artifact service, which needs no `catalog_file` unless a station also
+enables firmware.
+
+```toml
+[charging.firmware]
+listen_addr = "127.0.0.1:9100"
+spool_directory = "/srv/uob-demo/artifact-spool"
+
+[[charging.stations]]
+id = "demo-201"
+protocol = "ocpp201"
+credential_file = "/srv/uob-demo/private/demo-201.credential"
+get_log = true
+diagnostics_job_timeout_seconds = 1800
+```
+
+Commands target the station root and never carry a location; the bridge opens a fresh
+destination for each one:
+
+```json
+{"request_id":"log-201-1","resource":{"bridge_id":"local-demo","station_id":"demo-201"},
+ "operation":{"kind":"ocpp","parameters":{"protocol":"ocpp201","action":"GetLog",
+   "payload_schema":"urn:uob:ocpp201:GetLogReference:1",
+   "payload":{"logType":"SecurityLog","requestId":124,
+     "oldestTimestamp":"2026-10-01T00:00:00Z","retries":2,"retryInterval":30}}},
+ "expires_at":"2026-10-07T12:10:00Z"}
+```
+
+A `requestId` still retained for the station is refused, because the station's
+`LogStatusNotification` reports are matched by it alone. Sending another `GetLog` while an
+upload is running lets the station cancel the first one (`AcceptedCanceled`).
+
+The command result's `diagnostics_201` shows:
+
+- the offered destination's log type, byte cap and `test_only` marking;
+- the exact native reply, including the station's file name and reason code;
+- the durable job, which advances as the station reports `LogStatusNotification`.
+
+When the station reports `Uploaded`, the job becomes `uploaded` only if the artifact service
+holds a complete file for it. The result then shows that file's SHA-256 and size; otherwise the
+job is `upload_unconfirmed`. A job that misses its deadline becomes `timed_out` but keeps
+blocking a release drain. A `TriggerMessage` for `LogStatusNotification` makes a station that
+is not uploading answer `Idle` without a `requestId`; that report is accepted only as the
+answer to a pending trigger and settles a stalled job as `station_idle`. A lost reply stays
+`uncertain` and is never resent after a restart. See
+[OCPP 2.0.1 log retrieval](../architecture/ocpp201-diagnostics.md) for the state rules.
+
 ## Commands and exit codes
 
 Validate without binding a socket, resolving DNS, reading credentials, or starting adapters:

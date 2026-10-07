@@ -63,6 +63,10 @@ pub(super) async fn complete_trigger_receipt_201(
             TriggerMessageClass201::FirmwareStatusNotification,
             Some(status.as_str()),
         ),
+        uob_application::ChargerObservation::LogStatus201 { status, .. } => (
+            TriggerMessageClass201::LogStatusNotification,
+            Some(status.as_str()),
+        ),
         uob_application::ChargerObservation::TriggerCertificate201 { class } => (*class, None),
         _ => return Ok(Err(call_error(protocol, OcppErrorCode::ProtocolError))),
     };

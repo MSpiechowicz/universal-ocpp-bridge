@@ -22,7 +22,7 @@ async fn schema_v18_database_gains_firmware201_jobs_without_losing_release_jobs(
         .unwrap()
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .unwrap();
-    assert_eq!(version, 20);
+    assert_eq!(version, 21);
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn newer_schema_is_refused() {
     drop(database.open());
     rusqlite::Connection::open(&database.0)
         .unwrap()
-        .execute_batch("PRAGMA user_version = 21;")
+        .execute_batch("PRAGMA user_version = 22;")
         .unwrap();
     assert!(Store::open(&database.0, 32).is_err());
 }
