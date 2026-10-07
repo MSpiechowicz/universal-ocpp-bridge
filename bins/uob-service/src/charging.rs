@@ -179,6 +179,7 @@ impl StationSettings {
         reservations::apply_capabilities(snapshot, self);
         firmware::apply_capabilities(
             snapshot,
+            self.protocol,
             self.firmware.filter(|_| self.firmware_providers.is_some()),
         );
     }

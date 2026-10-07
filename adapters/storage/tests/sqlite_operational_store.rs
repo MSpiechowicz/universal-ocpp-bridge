@@ -83,7 +83,7 @@ fn upgrades_existing_outbox_schema_without_losing_pending_rows() {
     let version: i64 = reopened
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .expect("schema version");
-    assert_eq!(version, 18);
+    assert_eq!(version, 19);
 }
 
 #[test]
@@ -275,6 +275,8 @@ fn delivery_write(
         reservation_observations_201: Vec::new(),
         firmware_16: None,
         firmware_observations_16: Vec::new(),
+        firmware_201: None,
+        firmware_observations_201: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -315,6 +317,8 @@ fn write_with(
         reservation_observations_201: Vec::new(),
         firmware_16: None,
         firmware_observations_16: Vec::new(),
+        firmware_201: None,
+        firmware_observations_201: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),

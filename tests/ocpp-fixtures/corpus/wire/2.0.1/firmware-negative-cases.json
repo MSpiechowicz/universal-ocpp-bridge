@@ -1,0 +1,291 @@
+{
+  "cases": [
+    {
+      "id": "status-installed-without-request",
+      "wire": [
+        2,
+        "neg201-1",
+        "FirmwareStatusNotification",
+        {
+          "status": "Installed"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "L01.FR.20/L02.FR.14 requestId is mandatory unless Idle"
+    },
+    {
+      "id": "status-downloading-without-request",
+      "wire": [
+        2,
+        "neg201-2",
+        "FirmwareStatusNotification",
+        {
+          "status": "Downloading"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "L01.FR.20 requestId is mandatory unless Idle"
+    },
+    {
+      "id": "status-unknown-value",
+      "wire": [
+        2,
+        "neg201-3",
+        "FirmwareStatusNotification",
+        {
+          "status": "InvalidCertificate",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "FirmwareStatusEnumType has no InvalidCertificate value"
+    },
+    {
+      "id": "status-lowercase",
+      "wire": [
+        2,
+        "neg201-4",
+        "FirmwareStatusNotification",
+        {
+          "status": "installed",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "status-extra-field",
+      "wire": [
+        2,
+        "neg201-5",
+        "FirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": 1,
+          "firmwareVersion": "3.1"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties"
+    },
+    {
+      "id": "status-request-string",
+      "wire": [
+        2,
+        "neg201-6",
+        "FirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": "1"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestId is an integer"
+    },
+    {
+      "id": "status-request-null",
+      "wire": [
+        2,
+        "neg201-7",
+        "FirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": null
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "null is not an integer"
+    },
+    {
+      "id": "status-request-overflow",
+      "wire": [
+        2,
+        "neg201-8",
+        "FirmwareStatusNotification",
+        {
+          "status": "Installed",
+          "requestId": 2147483648
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "OCPP integer is a signed 32-bit identity"
+    },
+    {
+      "id": "update-missing-request",
+      "wire": [
+        2,
+        "neg201-9",
+        "UpdateFirmware",
+        {
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestId is required"
+    },
+    {
+      "id": "update-missing-retrieve",
+      "wire": [
+        2,
+        "neg201-10",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "firmware.retrieveDateTime is required"
+    },
+    {
+      "id": "update-location-too-long",
+      "wire": [
+        2,
+        "neg201-11",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "retrieveDateTime": "2026-10-07T12:00:00Z"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "location is string[0..512]"
+    },
+    {
+      "id": "update-signature-too-long",
+      "wire": [
+        2,
+        "neg201-12",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z",
+            "signingCertificate": "-----BEGIN CERTIFICATE-----\nMIIBuDCCAV6gAwIBAgIUTESTONLY201FIRMWARESIGNERyyyyyyyyywCgYIKoZIzj0E\nAwIwLTErMCkGA1UEAwwiVEVTVCBPTkxZIDIuMC4xIE1hbnVmYWN0dXJlciBSb290\n-----END CERTIFICATE-----\n",
+            "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "signature is string[0..800]"
+    },
+    {
+      "id": "update-certificate-too-long",
+      "wire": [
+        2,
+        "neg201-13",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z",
+            "signingCertificate": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+            "signature": "VEVTVC1PTkxZLTIwMS1maXJtd2FyZS1zaWduYXR1cmUtb3Zlci10aGUtZW50aXJlLWltYWdl"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "signingCertificate is string[0..5500]"
+    },
+    {
+      "id": "update-extra-field",
+      "wire": [
+        2,
+        "neg201-14",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z",
+            "checksum": "00"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "FirmwareType has no additional properties"
+    },
+    {
+      "id": "update-signature-without-certificate",
+      "wire": [
+        2,
+        "neg201-15",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z",
+            "signature": "VEVTVC1PTkxZLTIwMS1maXJtd2FyZS1zaWduYXR1cmUtb3Zlci10aGUtZW50aXJlLWltYWdl"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "L01.FR.11/L01.FR.12 a signature cannot be verified without the signing certificate"
+    },
+    {
+      "id": "update-install-before-retrieve",
+      "wire": [
+        2,
+        "neg201-16",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z",
+            "installDateTime": "2026-10-07T11:00:00Z"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "installation cannot precede retrieval; the bridge never sends it"
+    },
+    {
+      "id": "update-negative-retries",
+      "wire": [
+        2,
+        "neg201-17",
+        "UpdateFirmware",
+        {
+          "requestId": 1,
+          "retries": -1,
+          "firmware": {
+            "location": "http://127.0.0.1:9100/artifacts/fw.bin",
+            "retrieveDateTime": "2026-10-07T12:00:00Z"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "the bridge never sends a negative count"
+    }
+  ]
+}

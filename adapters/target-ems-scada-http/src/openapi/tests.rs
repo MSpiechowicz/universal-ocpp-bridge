@@ -4,6 +4,7 @@ use super::{
         CANONICAL, CANONICAL_V1_1, CANONICAL_V1_2, CANONICAL_V1_3, CANONICAL_V1_4, CANONICAL_V1_5,
         CANONICAL_V1_6, CANONICAL_V1_7, CANONICAL_V1_8, CANONICAL_V1_9, CANONICAL_V1_10,
         CANONICAL_V1_11, CANONICAL_V1_12, CANONICAL_V1_13, CANONICAL_V1_14, CANONICAL_V1_15,
+        CANONICAL_V1_16,
     },
 };
 use crate::test_support::{READER_TOKEN, authenticated_router, get};
@@ -32,6 +33,7 @@ fn registry() -> jsonschema::Registry<'static> {
         ("v1.13", CANONICAL_V1_13),
         ("v1.14", CANONICAL_V1_14),
         ("v1.15", CANONICAL_V1_15),
+        ("v1.16", CANONICAL_V1_16),
     ]
     .into_iter()
     .flat_map(|(revision, schemas)| {
@@ -144,6 +146,7 @@ async fn schema_versions_serve_exact_canonical_files() {
         ("v1.13", CANONICAL_V1_13),
         ("v1.14", CANONICAL_V1_14),
         ("v1.15", CANONICAL_V1_15),
+        ("v1.16", CANONICAL_V1_16),
     ] {
         for (file, source) in schemas {
             let path = format!("/bridge/v1/schemas/{revision}/{file}");

@@ -90,6 +90,7 @@ fn every_independent_inbound_firmware_fixture_decodes_and_negative_cases_do_not(
     for fixture in registry["fixtures"].as_array().unwrap() {
         let action = fixture["action"].as_str().unwrap();
         if fixture["message_type"] != 2
+            || fixture["protocol_version"] == "2.0.1"
             || !matches!(
                 action,
                 "FirmwareStatusNotification" | "SignedFirmwareStatusNotification"

@@ -302,6 +302,7 @@ fn admitted_result(command: &ExternalCommand<()>) -> CommandResult {
         composite_schedule_201: None,
         charging_profiles_201: None,
         firmware_16: None,
+        firmware_201: None,
     }
 }
 

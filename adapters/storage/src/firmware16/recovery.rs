@@ -1,4 +1,6 @@
-use super::{observe, read_key, register_release_job, save, transitions::sync_result};
+use super::{
+    observe, read_key, register_release_job, release_job_id, save, transitions::sync_result,
+};
 use crate::configuration::unavailable;
 use rusqlite::{Connection, TransactionBehavior};
 use uob_application::{FirmwareObservation16, FirmwareObservationKind16, StorageError};
@@ -44,7 +46,7 @@ pub(crate) fn maintain(
                     record.changed_at = record.changed_at.max(now);
                 }
                 if !record.state.resolved() {
-                    register_release_job(&transaction, &record.request_id, false)?;
+                    register_release_job(&transaction, &release_job_id(&record.request_id), false)?;
                 }
                 save(&transaction, &record, Some(false))?;
                 sync_result(&transaction, &record)?;

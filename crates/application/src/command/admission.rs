@@ -200,8 +200,18 @@ where
             Ok(mutation) => mutation.map(Box::new),
             Err(code) => return Ok(charging_profile201::rejected(&command, code, now)),
         };
+        write.firmware_201 = match self
+            .stations
+            .firmware_expectation_201(&command, generation, now)
+        {
+            Ok(mutation) => mutation.map(Box::new),
+            Err(code) => return Ok(charging_profile201::rejected(&command, code, now)),
+        };
         // A firmware job must be registered durably before any byte can reach the station.
-        if write.firmware_16.is_none() && firmware_action(&command.operation) {
+        if write.firmware_16.is_none()
+            && write.firmware_201.is_none()
+            && firmware_action(&command.operation)
+        {
             return Ok(charging_profile201::rejected(
                 &command,
                 CommandErrorCode::UnsupportedOperation,
@@ -210,7 +220,8 @@ where
         }
         let reservation_mutation = write.reservation_16.is_some()
             || write.reservation_201.is_some()
-            || write.firmware_16.is_some();
+            || write.firmware_16.is_some()
+            || write.firmware_201.is_some();
         let profile = write.charging_profile_201.clone();
         let outcome = match self.store.write_atomic(write).await {
             Ok(outcome) => outcome,
@@ -276,6 +287,5 @@ where
 
 fn firmware_action<P>(operation: &uob_contracts::CommandOperation<P>) -> bool {
     matches!(operation, uob_contracts::CommandOperation::Ocpp(operation)
-        if operation.protocol == uob_contracts::ProtocolEdition::Ocpp16j
-            && matches!(operation.action.as_str(), "UpdateFirmware" | "SignedUpdateFirmware"))
+        if matches!(operation.action.as_str(), "UpdateFirmware" | "SignedUpdateFirmware"))
 }

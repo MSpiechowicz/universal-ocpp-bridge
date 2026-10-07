@@ -38,6 +38,8 @@ mod reservation201;
 pub use reservation201::*;
 mod firmware16;
 pub use firmware16::*;
+mod firmware201;
+pub use firmware201::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -184,6 +186,11 @@ impl ContractVersion {
     pub const V1_FIRMWARE_16: Self = Self {
         major: 1,
         revision: 14,
+    };
+    /// Additive value-free OCPP 2.0.1 firmware request and job evidence.
+    pub const V1_FIRMWARE_201: Self = Self {
+        major: 1,
+        revision: 15,
     };
 }
 

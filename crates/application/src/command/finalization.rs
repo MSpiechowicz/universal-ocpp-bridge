@@ -41,6 +41,7 @@ where
         let mut composite_schedule_201 = None;
         let mut installed_profiles_201 = None;
         let mut firmware_16 = None;
+        let mut firmware_201 = None;
         let outcome = if let Some(reservation) = profile {
             self.stations
                 .dispatch_reserved_profile(command.clone(), generation, *reservation)
@@ -313,6 +314,25 @@ where
                     }),
                 }
             }
+            CommandDispatchOutcome::FirmwareResponse201(response) => {
+                let accepted = response.accepted();
+                trace.emit(
+                    FlowStage::ProtocolResponse,
+                    if accepted {
+                        FlowEvidence::Accepted
+                    } else {
+                        FlowEvidence::Rejected
+                    },
+                );
+                firmware_201 = Some(response);
+                CommandLifecycle::ProtocolResponse {
+                    accepted,
+                    error: (!accepted).then_some(CommandError {
+                        code: CommandErrorCode::ProtocolRejected,
+                        detail: None,
+                    }),
+                }
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -378,6 +398,10 @@ where
         if let Some(evidence) = firmware_16 {
             result.schema_version = ContractVersion::V1_FIRMWARE_16;
             result.firmware_16 = Some(evidence);
+        }
+        if let Some(evidence) = firmware_201 {
+            result.schema_version = ContractVersion::V1_FIRMWARE_201;
+            result.firmware_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

@@ -8,13 +8,13 @@ use uob_contracts::{
     ReserveNowReference201, ResourceCapabilities, ResourceRef, RuntimeIdentity,
     SendLocalListReference16, SendLocalListReference201, ServiceIdentity,
     SetNetworkProfileReference201, SetVariablesReference201, SignedUpdateFirmwareReference16,
-    StationSnapshot, TraceRecord, UpdateFirmwareReference16,
+    StationSnapshot, TraceRecord, UpdateFirmwareReference16, UpdateFirmwareReference201,
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let revision = match name {
-        "export-record" | "export-batch" => 15,
-        "command-result" => 14,
+        "export-record" | "export-batch" => 16,
+        "command-result" => 15,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
@@ -76,6 +76,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     publish::<ReserveNowReference201>(output, "reserve-now-reference-201")?;
     publish::<UpdateFirmwareReference16>(output, "update-firmware-reference-16")?;
     publish::<SignedUpdateFirmwareReference16>(output, "signed-update-firmware-reference-16")?;
+    publish::<UpdateFirmwareReference201>(output, "update-firmware-reference-201")?;
     publish::<EventEnvelope<Value>>(output, "event-envelope")?;
     publish::<TraceRecord>(output, "trace-record")?;
     publish::<ExportRecord>(output, "export-record")?;

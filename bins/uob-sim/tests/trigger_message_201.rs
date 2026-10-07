@@ -119,6 +119,7 @@ fn config(endpoint: String) -> SimulatorClientConfig {
         reservation16: None,
         reservation201: None,
         firmware16: None,
+        firmware201: None,
     }
 }
 

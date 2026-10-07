@@ -5,7 +5,7 @@ use uob_protocol_adapter::CallSessionHandle;
 use uob_provider_adapter::LocalChargingIdentityProvider;
 
 use super::{Clock, StationContext, unavailable};
-use crate::charging::StationSettings;
+use crate::charging::{StationSettings, firmware};
 
 pub(super) async fn attach(
     context: &StationContext,
@@ -50,13 +50,9 @@ pub(super) async fn attach(
                     credentials.reservation_grant(),
                 );
                 match (configuration.firmware, &configuration.firmware_providers) {
-                    (Some(firmware), Some(providers)) => {
-                        session.with_firmware_16(super::super::firmware::session(
-                            firmware,
-                            providers,
-                            credentials.reservation_grant(),
-                        ))
-                    }
+                    (Some(firmware), Some(providers)) => session.with_firmware_16(
+                        firmware::session(firmware, providers, credentials.reservation_grant()),
+                    ),
                     _ => session,
                 }
             } else {
@@ -95,11 +91,17 @@ pub(super) async fn attach(
                 None => session,
             };
             let session = if let Some(credentials) = &context.credentials {
-                session.with_reservations_201(
+                let session = session.with_reservations_201(
                     configuration.reservations_201.clone(),
                     configuration.control.reserve_non_evse_specific_supported,
                     credentials.reservation_grant(),
-                )
+                );
+                match (configuration.firmware, &configuration.firmware_providers) {
+                    (Some(firmware), Some(providers)) => session.with_firmware_201(
+                        firmware::session_201(firmware, providers, credentials.reservation_grant()),
+                    ),
+                    _ => session,
+                }
             } else {
                 session
             };

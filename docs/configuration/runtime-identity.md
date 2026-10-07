@@ -82,3 +82,10 @@ owner-only catalog_file and private spool_directory feed a loopback test artifac
 and a freshly generated TEST ONLY PKI; nothing in it is production artifact storage. See
 [the operator example](../operations/headless-cli.md#protected-ocpp-16-firmware-updates).
 
+For exact ocpp201 stations, update_firmware enables OCPP 2.0.1 UpdateFirmware with the same
+[charging.firmware] section and bounded firmware_job_timeout_seconds. It is a secure update
+(L01) that only sends signed artifacts unless non_secure_firmware selects L02, which only
+sends unsigned ones. signed_update_firmware is refused for ocpp201 stations, and
+non_secure_firmware is refused without update_firmware or on ocpp16j stations. See
+[the 2.0.1 operator example](../operations/headless-cli.md#protected-ocpp-201-firmware-updates).
+

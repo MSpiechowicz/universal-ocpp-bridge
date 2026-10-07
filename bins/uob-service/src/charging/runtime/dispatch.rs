@@ -101,6 +101,10 @@ pub(super) async fn dispatch_call(
             ProtocolEdition::Ocpp16j,
             "DiagnosticsStatusNotification" | "FirmwareStatusNotification",
         ) => status::complete_trigger_status(&incoming, snapshot, &services, &mut commits).await?,
+        (ProtocolEdition::Ocpp201, "FirmwareStatusNotification") if services.firmware.is_some() => {
+            super::firmware::complete_status_201(&incoming, snapshot, &services, &mut commits)
+                .await?
+        }
         (
             ProtocolEdition::Ocpp201,
             "LogStatusNotification"

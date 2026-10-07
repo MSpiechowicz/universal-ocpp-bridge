@@ -12,6 +12,18 @@ fn station(protocol: &str, options: &str) -> String {
     )
 }
 
+fn station_201(protocol: &str, options: &str) -> String {
+    let station = station(protocol, options);
+    if protocol == "ocpp201" {
+        station.replace(
+            "connector_id='connector-1'\nnative_connector_id=1",
+            "evse_id='evse-1'\nnative_evse_id=1",
+        )
+    } else {
+        station
+    }
+}
+
 fn validate(
     station: &str,
     section: &str,
@@ -56,6 +68,32 @@ fn exactly_one_native_family_with_a_bounded_job_deadline_and_a_used_artifact_ser
 }
 
 #[test]
+fn ocpp201_update_is_secure_unless_explicitly_non_secure() {
+    let secure = validate(
+        &station_201(
+            "ocpp201",
+            "update_firmware=true\nfirmware_job_timeout_seconds=600",
+        ),
+        SECTION,
+    )
+    .unwrap()
+    .unwrap();
+    let firmware = secure.stations[0].firmware.unwrap();
+    assert!(firmware.signed);
+    assert_eq!(firmware.job_timeout, Duration::from_secs(600));
+    let non_secure = validate(
+        &station_201(
+            "ocpp201",
+            "update_firmware=true\nnon_secure_firmware=true\nfirmware_job_timeout_seconds=600",
+        ),
+        SECTION,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(!non_secure.stations[0].firmware.unwrap().signed);
+}
+
+#[test]
 fn ambiguous_unbounded_or_unused_firmware_options_are_rejected() {
     let invalid = ConfigurationLoadError::InvalidCharging;
     for (options, section) in [
@@ -83,21 +121,26 @@ fn ambiguous_unbounded_or_unused_firmware_options_are_rejected() {
             "{options} / {section}"
         );
     }
-    assert_eq!(
-        validate(
-            &station(
-                "ocpp201",
-                "update_firmware=true\nfirmware_job_timeout_seconds=600"
-            )
-            .replace(
-                "connector_id='connector-1'\nnative_connector_id=1",
-                "evse_id='evse-1'\nnative_evse_id=1"
-            ),
-            SECTION
-        )
-        .err(),
-        Some(invalid)
-    );
+    for (protocol, options) in [
+        // The Security Whitepaper message does not exist in OCPP 2.0.1.
+        (
+            "ocpp201",
+            "signed_update_firmware=true\nfirmware_job_timeout_seconds=600",
+        ),
+        // L02 selection is OCPP 2.0.1 only and requires the action itself.
+        (
+            "ocpp16j",
+            "update_firmware=true\nnon_secure_firmware=true\nfirmware_job_timeout_seconds=600",
+        ),
+        ("ocpp201", "non_secure_firmware=true"),
+        ("ocpp201", "update_firmware=true"),
+    ] {
+        assert_eq!(
+            validate(&station_201(protocol, options), SECTION).err(),
+            Some(invalid),
+            "{protocol} {options}"
+        );
+    }
     for section in [
         SECTION.replace("127.0.0.1:9100", "0.0.0.0:9100"),
         SECTION.replace("127.0.0.1:9100", "127.0.0.1:9000"),

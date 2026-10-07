@@ -1,4 +1,5 @@
-//! Independent station-side checks: Security Whitepaper Ed4 L01.FR.04, L01.FR.12 and L01.FR.23.
+//! Independent station-side checks: Security Whitepaper Ed4 L01.FR.04/12/23 and OCPP 2.0.1
+//! errata L01.FR.04 (RSA-PSS or ECDSA over the entire file).
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use rustls_pki_types::{CertificateDer, UnixTime, pem::PemObject};
 use time::OffsetDateTime;
@@ -57,6 +58,29 @@ impl TrustRoots {
                 &raw,
             )
             .is_ok()
+        })
+    }
+
+    /// OCPP 2.0.1 errata L01.FR.04: RSA-PSS or ECDSA, with the hash of the signature algorithm,
+    /// over the entire received file.
+    pub(crate) fn signature_valid_201(
+        &self,
+        certificate: &str,
+        signature: &str,
+        image: &[u8],
+        now: OffsetDateTime,
+    ) -> bool {
+        let Ok(raw) = STANDARD.decode(signature) else {
+            return false;
+        };
+        self.verified(certificate, now, |leaf| {
+            [
+                webpki::aws_lc_rs::RSA_PSS_2048_8192_SHA256_LEGACY_KEY,
+                webpki::aws_lc_rs::ECDSA_P256_SHA256,
+                webpki::aws_lc_rs::ECDSA_P384_SHA384,
+            ]
+            .into_iter()
+            .any(|algorithm| leaf.verify_signature(algorithm, image, &raw).is_ok())
         })
     }
 

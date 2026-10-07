@@ -81,6 +81,7 @@ impl CommandAdmissionPort<Value> for CommandState {
                 composite_schedule_201: None,
                 charging_profiles_201: None,
                 firmware_16: None,
+                firmware_201: None,
             };
             *self.result.lock() = Some(result.clone());
             Ok(result)

@@ -242,7 +242,7 @@ fn incoming_trigger_reports_validate_native_identity_and_do_not_sign_certificate
         ),
         (
             "FirmwareStatusNotification",
-            json!({"status":"Installed"}),
+            json!({"status":"Installed","requestId":1}),
             TriggerMessageClass201::FirmwareStatusNotification,
         ),
         (
@@ -254,8 +254,17 @@ fn incoming_trigger_reports_validate_native_identity_and_do_not_sign_certificate
     for (action, payload, class) in reports {
         let call = v201::decode_call(json!([2, "report", action, payload]).to_string().as_bytes())
             .unwrap();
+        // Firmware reports carry their own typed observation; trigger receipt maps it back.
         assert!(
             matches!(call.observation, ChargerObservation::TriggerStatus201 { class: received, .. } if received == class)
+                || (class == TriggerMessageClass201::FirmwareStatusNotification
+                    && matches!(
+                        call.observation,
+                        ChargerObservation::FirmwareStatus201 {
+                            request_id: Some(1),
+                            ..
+                        }
+                    ))
         );
     }
     let certificate = v201::decode_call(json!([2,"cert","SignCertificate",{"csr":"-----BEGIN CERTIFICATE REQUEST-----","certificateType":"V2GCertificate"}]).to_string().as_bytes()).unwrap();
@@ -277,6 +286,8 @@ fn incoming_trigger_reports_validate_native_identity_and_do_not_sign_certificate
             "FirmwareStatusNotification",
             json!({"status":"Idle","requestId":2_147_483_648_u64}),
         ),
+        // L01.FR.20: only Idle may omit the update identity.
+        ("FirmwareStatusNotification", json!({"status":"Installed"})),
         (
             "PublishFirmwareStatusNotification",
             json!({"status":"Published","location":[null]}),

@@ -12,15 +12,17 @@ pub(crate) async fn register(
             let traces = traces.clone();
             async move {
                 traces.push(TraceKind::Reconnected, "ocpp2.0.1");
-                let (boot, generation, local) = {
+                let (boot, generation, local, firmware) = {
                     let current = state.lock().expect("native state lock");
                     (
                         current.boot.clone(),
                         current.socket_generation,
                         current.local.clone(),
+                        current.firmware201.is_some(),
                     )
                 };
-                if !local.is_some_and(|local| local.has_persistence()) {
+                // A firmware station re-registers after its firmware reboot.
+                if !firmware && !local.is_some_and(|local| local.has_persistence()) {
                     return;
                 }
                 let Some(boot) = boot else {

@@ -22,6 +22,7 @@ backward. Reconnect requires a new port. Old commands are never queued for a rep
 | ClearChargingProfile | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:ClearChargingProfileRequest` | ID alone or nonempty AND criteria; Accepted/Unknown, no removed IDs |
 | SetVariables | Privileged Ocpp with `urn:uob:ocpp201:SetVariablesReference:1` | Exact bound references resolve to native attribute values only at send; all six independent native statuses |
 | SetNetworkProfile | Privileged Ocpp with `urn:uob:ocpp201:SetNetworkProfileReference:1` | Station-only signed configurationSlot and private full connectionData; Accepted/Rejected/Failed, Accepted means staged |
+| UpdateFirmware | Privileged Ocpp with `urn:uob:ocpp201:UpdateFirmwareReference:1` | Station root only; a provider artifact matching the station's secure/non-secure mode and a durable job before dispatch (see [OCPP 2.0.1 firmware](ocpp201-firmware.md)); Accepted/Rejected/AcceptedCanceled/InvalidCertificate/RevokedCertificate |
 
 A start cannot select a connector on the wire. Connector-scoped starts fail explicitly rather
 than widening permission to their EVSE. Station-scoped starts omit evseId and require station-scoped

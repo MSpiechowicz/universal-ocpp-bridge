@@ -113,6 +113,8 @@ async fn seed(
             reservation_observations_201: Vec::new(),
             firmware_16: None,
             firmware_observations_16: Vec::new(),
+            firmware_201: None,
+            firmware_observations_201: Vec::new(),
             purpose: StorageWritePurpose::Routine,
             station_snapshot: None,
             authorization_changes: Vec::new(),

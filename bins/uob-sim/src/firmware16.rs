@@ -4,9 +4,10 @@ mod config;
 mod model;
 pub(crate) mod request;
 pub(crate) mod transport;
-mod verify;
+pub(crate) mod verify;
 
 use config::Settings;
+pub(crate) use config::read_roots;
 pub use config::{CancelPolicy, FirmwareConfig, FirmwareMode};
 use model::{PrivateState, RebootState};
 use parking_lot::Mutex;

@@ -1238,6 +1238,55 @@ ambiguous. Native `statusInfo` is validated and not retained. Lost, malformed, C
 and late replies stay uncertain and are never replayed after restart. This is software
 boundary evidence, not hardware interoperability or OCA certification.
 
+### Protected OCPP 2.0.1 firmware updates
+
+For `protocol = "ocpp201"`, `update_firmware` enables OCPP 2.0.1 `UpdateFirmware`. It is
+privileged, default-off and **demo-only**, needs `firmware_job_timeout_seconds` (60–604800)
+and the same `[charging.firmware]` section as
+[the OCPP 1.6 firmware updates](#protected-ocpp-16-firmware-updates). OCPP 2.0.1 has one
+message for both security modes, so the mode is set per station:
+
+- by default the station receives a **secure** update (L01) with the signing certificate and
+  signature, and only `signed` catalog images can be sent to it;
+- `non_secure_firmware = true` selects a **non-secure** update (L02) without either, and only
+  unsigned images can be sent to it.
+
+```toml
+[[charging.stations]]
+id = "demo-201"
+protocol = "ocpp201"
+credential_file = "/srv/uob-demo/private/demo-201.credential"
+update_firmware = true
+# non_secure_firmware = true             # L02 instead of L01
+firmware_job_timeout_seconds = 3600
+```
+
+`signed_update_firmware` is refused for 2.0.1 stations. Commands target the station root and
+name a catalog reference and the native `requestId`:
+
+```json
+{"request_id":"fw-201-1","resource":{"bridge_id":"local-demo","station_id":"demo-201"},
+ "operation":{"kind":"ocpp","parameters":{"protocol":"ocpp201","action":"UpdateFirmware",
+   "payload_schema":"urn:uob:ocpp201:UpdateFirmwareReference:1",
+   "payload":{"requestId":123,"artifactReference":"station-fw-2.0-signed.bin",
+     "retrieveDateTime":"2026-10-07T12:00:00Z","installDateTime":"2026-10-07T12:05:00Z",
+     "retries":3,"retryInterval":60}}},
+ "expires_at":"2026-10-07T12:10:00Z"}
+```
+
+Before sending a secure update, the bridge verifies the signing certificate against the test
+manufacturer root. A wrong artifact kind, an unknown reference or an untrusted certificate is
+reported as not sent. A `requestId` still retained for the station is refused, because the
+station's `FirmwareStatusNotification` reports are matched by it alone.
+
+The command result's `firmware_201` shows the native `request_id`, whether the update was
+`secure`, the sent artifact's SHA-256 and size, the exact native reply (with its reason code
+but without `additionalInfo`), and the durable job. As with OCPP 1.6, a job that misses its
+deadline becomes `timed_out` but keeps blocking a release drain. A `TriggerMessage` for
+`FirmwareStatusNotification` makes a station report `Idle` once it has finished, which
+settles the job as `station_idle`. See [OCPP 2.0.1 firmware](../architecture/ocpp201-firmware.md)
+for the state rules.
+
 ## Commands and exit codes
 
 Validate without binding a socket, resolving DNS, reading credentials, or starting adapters:
