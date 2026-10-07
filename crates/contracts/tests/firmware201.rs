@@ -144,6 +144,15 @@ fn every_reply_and_job_state_survives_results_and_nested_exports() {
         assert_eq!(record.metadata().schema_version.revision, 15);
         assert!(exports.is_valid(&serde_json::to_value(record).unwrap()));
     }
+}
+
+#[test]
+fn every_job_state_is_public_and_only_end_states_are_resolved() {
+    let old: Value =
+        serde_json::from_str(include_str!("fixtures/command-results-v1.json")).unwrap();
+    let mut result: CommandResult = serde_json::from_value(old[1].clone()).unwrap();
+    result.schema_version = ContractVersion::V1_FIRMWARE_201;
+    let results = validator(include_str!("../schemas/v1.15/command-result.schema.json"));
     let states: Vec<FirmwareJobState201> = serde_json::from_value(json!([
         "pending",
         "uncertain",

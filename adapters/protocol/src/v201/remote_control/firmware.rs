@@ -52,12 +52,21 @@ struct Prepared {
 }
 
 /// A request refused before any byte reached the station.
-fn refused(code: CommandErrorCode, detail: &'static str) -> CommandDispatchOutcome {
-    CommandDispatchOutcome::NotTransmitted {
-        error: CommandError {
-            code,
-            detail: Some(detail.to_owned()),
-        },
+#[derive(Clone, Copy)]
+struct Refusal(CommandErrorCode, &'static str);
+
+const fn refused(code: CommandErrorCode, detail: &'static str) -> Refusal {
+    Refusal(code, detail)
+}
+
+impl From<Refusal> for CommandDispatchOutcome {
+    fn from(Refusal(code, detail): Refusal) -> Self {
+        Self::NotTransmitted {
+            error: CommandError {
+                code,
+                detail: Some(detail.to_owned()),
+            },
+        }
     }
 }
 
@@ -158,7 +167,7 @@ impl RemoteControlSession {
         };
         let prepared = match prepare(settings, &request, now).await {
             Ok(prepared) => prepared,
-            Err(refusal) => return refusal,
+            Err(refusal) => return refusal.into(),
         };
         let pending = {
             // Recheck authority after the provider calls, under the snapshot lock.
@@ -282,7 +291,7 @@ async fn prepare(
     settings: &FirmwareSettings201,
     request: &UpdateFirmwareReference201,
     now: UtcTimestamp,
-) -> Result<Prepared, CommandDispatchOutcome> {
+) -> Result<Prepared, Refusal> {
     let unavailable = || {
         refused(
             CommandErrorCode::PolicyRejected,
@@ -373,7 +382,7 @@ async fn verify_signer(
     settings: &FirmwareSettings201,
     signature: &FirmwareSignature,
     now: UtcTimestamp,
-) -> Result<(), CommandDispatchOutcome> {
+) -> Result<(), Refusal> {
     let untrusted = || {
         refused(
             CommandErrorCode::PolicyRejected,

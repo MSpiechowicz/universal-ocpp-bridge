@@ -66,51 +66,7 @@ async fn actual_daemon_runs_a_verifiable_secure_update_through_reboot_to_install
     assert!(!accepted.to_string().contains("PRIVATE-NOTE"));
     download(&location, &evidence["artifact"], &image(2)).await;
 
-    // Another update's identity never advances this job (L01.FR.10).
-    notify(
-        &mut socket,
-        "foreign",
-        json!({"status":"InvalidSignature","requestId":7}),
-    )
-    .await;
-    assert_eq!(job_state(&client, &fixture, "secure-1").await, "accepted");
-    for (index, status) in [
-        "DownloadScheduled",
-        "Downloading",
-        "DownloadPaused",
-        "Downloading",
-        "Downloaded",
-        "SignatureVerified",
-        "InstallScheduled",
-        "InstallRebooting",
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        notify(
-            &mut socket,
-            &format!("status-{index}"),
-            json!({"status":status,"requestId":4242}),
-        )
-        .await;
-    }
-    // A regression is counted and ignored.
-    notify(
-        &mut socket,
-        "regression",
-        json!({"status":"Downloading","requestId":4242}),
-    )
-    .await;
-    let current = result(&client, &fixture, "secure-1").await;
-    assert_eq!(current["firmware_201"]["job"]["state"], "install_rebooting");
-    assert_eq!(current["firmware_201"]["job"]["rejected_transitions"], 1);
-    // L01.FR.20: requestId may be omitted only for Idle.
-    send(
-        &mut socket,
-        json!([2, "missing-id", "FirmwareStatusNotification", {"status":"Installed"}]),
-    )
-    .await;
-    assert_eq!(receive(&mut socket).await[0], 4);
+    report_until_reboot(&mut socket, &client, &fixture).await;
 
     // The new image reports success on a new socket (L01.FR.32 option a).
     drop(socket);
@@ -193,4 +149,54 @@ async fn non_secure_station_receives_no_signing_material_and_only_unsigned_image
     let installed = result(&client, &fixture, "plain-1").await;
     assert_eq!(installed["firmware_201"]["job"]["state"], "installed");
     assert_eq!(installed["firmware_201"]["job"]["rejected_transitions"], 1);
+}
+
+/// Native progress for request 4242 up to the reboot, with foreign, regressing and
+/// identity-free reports.
+async fn report_until_reboot(socket: &mut Socket, client: &reqwest::Client, fixture: &Fixture) {
+    // Another update's identity never advances this job (L01.FR.10).
+    notify(
+        socket,
+        "foreign",
+        json!({"status":"InvalidSignature","requestId":7}),
+    )
+    .await;
+    assert_eq!(job_state(client, fixture, "secure-1").await, "accepted");
+    for (index, status) in [
+        "DownloadScheduled",
+        "Downloading",
+        "DownloadPaused",
+        "Downloading",
+        "Downloaded",
+        "SignatureVerified",
+        "InstallScheduled",
+        "InstallRebooting",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        notify(
+            socket,
+            &format!("status-{index}"),
+            json!({"status":status,"requestId":4242}),
+        )
+        .await;
+    }
+    // A regression is counted and ignored.
+    notify(
+        socket,
+        "regression",
+        json!({"status":"Downloading","requestId":4242}),
+    )
+    .await;
+    let current = result(client, fixture, "secure-1").await;
+    assert_eq!(current["firmware_201"]["job"]["state"], "install_rebooting");
+    assert_eq!(current["firmware_201"]["job"]["rejected_transitions"], 1);
+    // L01.FR.20: requestId may be omitted only for Idle.
+    send(
+        socket,
+        json!([2, "missing-id", "FirmwareStatusNotification", {"status":"Installed"}]),
+    )
+    .await;
+    assert_eq!(receive(socket).await[0], 4);
 }

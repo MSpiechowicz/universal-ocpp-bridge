@@ -121,6 +121,52 @@ The broad `ocpp16.firmware-diagnostics` row stays `planned` until diagnostics ar
 implemented. Security events, `ExtendedTriggerMessage` and certificate revocation are not
 claimed.
 
+## OCPP 2.0.1 firmware fixtures
+
+`UpdateFirmwareRequest.json`, `UpdateFirmwareResponse.json` and
+`FirmwareStatusNotificationResponse.json` were added to `schemas/2.0.1/` byte-identical
+(LF, Draft 6) from the pinned 2.0.1 Part 3 archive in `provenance.json`. The existing
+`FirmwareStatusNotificationRequest.json` copy is reused unchanged; it carries one trailing
+newline that the archive member lacks, and its recorded SHA-256 is the one fixtures cite.
+
+The 26 fixture IDs beginning with `wire.ocpp201.firmware-` were authored independently from
+use cases L01 and L02, Figure 116 and errata 2.14 (L01.FR.04). They cover:
+
+- one `UpdateFirmware` message in secure form (with `signingCertificate` and `signature`),
+  non-secure form, and minimal forms of both;
+- all five `UpdateFirmwareStatusEnumType` replies and a `Rejected` reply with `statusInfo`;
+- all fourteen `FirmwareStatusEnumType` notifications, each with the same `requestId`
+  (L01.FR.10);
+- the identity-free `Idle` permitted by L01.FR.20;
+- the empty notification reply.
+
+`wire/2.0.1/firmware-negative-cases.json` separates the OCA schema floor from native
+semantics with 17 cases. Several are schema-valid but refused natively:
+
+- a non-`Idle` status without `requestId` (L01.FR.20);
+- a `requestId` outside i32;
+- a signature without its signing certificate (L01.FR.11/12);
+- an installation time before retrieval, and negative `retries`, which the bridge never
+  sends.
+
+The rest violate the schemas: an unknown or lowercase status, extra fields, wrong
+`requestId` types, a missing `requestId` or `retrieveDateTime`, and a location, signature
+or certificate over its length limit.
+
+`firmware201-requirements.json` maps the L01/L02 requirement IDs to fixtures and tests.
+
+The new `ocpp201.firmware-diagnostics.firmware-update` row is `verified`. Its evidence
+comes from:
+
+- the bridge decoder and the independent simulator model, which agree with every corpus
+  fixture and negative case;
+- storage and actual-daemon tests;
+- an opt-in separate-process joint smoke with one secure and one non-secure station.
+
+The broad `ocpp201.firmware-diagnostics` row stays `planned` until diagnostics (#125) are
+implemented. Security events (#128), L03/L04 local-controller publishing and certificate
+revocation are not claimed.
+
 ## OCPP 1.6 TriggerMessage fixtures
 
 The TriggerMessage source is the OCA **OCPP 1.6 Edition 2 with published JSON

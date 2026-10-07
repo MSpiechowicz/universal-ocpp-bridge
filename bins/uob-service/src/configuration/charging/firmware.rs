@@ -66,7 +66,8 @@ pub(super) fn station(
         return Err(fail);
     }
     let signed = match protocol {
-        ProtocolEdition::Ocpp16j if !(legacy && signed) && !control.non_secure_firmware => signed,
+        // One 1.6 family per station; L02 selection does not exist in 1.6.
+        ProtocolEdition::Ocpp16j if !(legacy && signed || control.non_secure_firmware) => signed,
         // OCPP 2.0.1 has one `UpdateFirmware` message for both security modes.
         ProtocolEdition::Ocpp201 if !signed => !control.non_secure_firmware,
         _ => return Err(fail),
