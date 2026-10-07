@@ -17,6 +17,8 @@ pub(super) struct Stream {
     pub(super) generation: u64,
     pub(super) timeout: std::time::Duration,
     pub(super) replies: VecDeque<(String, [u8; 32], Value)>,
+    /// A firmware reboot closes this socket generation like an accepted Reset.
+    pub(super) close: Arc<tokio::sync::Notify>,
 }
 struct PreparedCall {
     local: LocalAuthorization201Handle,
@@ -36,7 +38,16 @@ impl TransportStream for Stream {
     {
         Box::pin(async move {
             loop {
-                let mut event = match self.inner.recv().await {
+                let received = tokio::select! {
+                    biased;
+                    () = self.close.notified() => {
+                        disconnect(&self.state, self.generation);
+                        self.sink.lock().await.inner.close().await?;
+                        return Ok(None);
+                    }
+                    received = self.inner.recv() => received,
+                };
+                let mut event = match received {
                     Ok(event) => event,
                     Err(error) => {
                         disconnect(&self.state, self.generation);
@@ -98,7 +109,8 @@ impl TransportStream for Stream {
                         | "Reset"
                         | "ReserveNow"
                         | "CancelReservation"
-                ) {
+                ) && !crate::firmware201::transport::intercepts(action, &self.state)
+                {
                     return Ok(event);
                 }
                 let Some(prepared) = self.prepare_call(id, action, &frame[3], text).await? else {
@@ -233,6 +245,8 @@ impl Stream {
                 }
             } else if matches!(action, "ReserveNow" | "CancelReservation") {
                 crate::reservation201::transport::reply(action, payload, &self.state)
+            } else if action == "UpdateFirmware" {
+                crate::firmware201::transport::reply(payload, &self.state)
             } else {
                 native_reply(action, payload, &local)
             };

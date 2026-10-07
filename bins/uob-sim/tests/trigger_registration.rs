@@ -54,6 +54,7 @@ fn config(listener: &TcpListener, reconnect: bool) -> SimulatorClientConfig {
         reservation16: None,
         reservation201: None,
         firmware16: None,
+        firmware201: None,
     }
 }
 

@@ -113,7 +113,7 @@ impl From<&FirmwareConfig> for Settings {
 }
 
 /// Public manufacturer roots from an absolute, bounded PEM file.
-pub(super) fn read_roots(path: &str) -> Result<super::verify::TrustRoots, &'static str> {
+pub(crate) fn read_roots(path: &str) -> Result<super::verify::TrustRoots, &'static str> {
     use std::io::Read;
     let path = std::path::Path::new(path);
     if !path.is_absolute() {
