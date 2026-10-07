@@ -141,7 +141,7 @@ fn every_reply_and_job_state_survives_results_and_nested_exports() {
             batch.records()[0].metadata().clone(),
             ExportPayload::CommandResult(result.clone()),
         );
-        assert_eq!(record.metadata().schema_version.revision, 16);
+        assert_eq!(record.metadata().schema_version.revision, 17);
         assert!(exports.is_valid(&serde_json::to_value(record).unwrap()));
     }
 }

@@ -237,7 +237,7 @@ fn log_uploads_use_the_artifact_service_without_a_firmware_catalog() {
 }
 
 #[test]
-fn log_upload_options_are_bounded_ocpp16_only_and_never_unused() {
+fn log_upload_options_are_bounded_edition_correct_and_never_unused() {
     let fail = Err(ConfigurationLoadError::InvalidCharging);
     for (protocol, options, section) in [
         // No deadline, or one outside the bounds.
@@ -269,10 +269,21 @@ fn log_upload_options_are_bounded_ocpp16_only_and_never_unused() {
             UPLOAD_SECTION,
         ),
         ("ocpp16j", "diagnostics_upload_max_bytes=10", UPLOAD_SECTION),
-        // OCPP 2.0.1 log retrieval is a separate workflow.
+        // `GetDiagnostics` is an OCPP 1.6 message; OCPP 2.0.1 retrieves logs with `GetLog`.
         (
             "ocpp201",
-            "get_log=true\ndiagnostics_job_timeout_seconds=600",
+            "get_diagnostics=true\ndiagnostics_job_timeout_seconds=600",
+            UPLOAD_SECTION,
+        ),
+        ("ocpp201", "get_log=true", UPLOAD_SECTION),
+        (
+            "ocpp201",
+            "get_log=true\ndiagnostics_job_timeout_seconds=600\ndiagnostics_upload_max_bytes=0",
+            UPLOAD_SECTION,
+        ),
+        (
+            "ocpp201",
+            "diagnostics_job_timeout_seconds=600",
             UPLOAD_SECTION,
         ),
         // Uploads need the artifact service.
@@ -299,4 +310,49 @@ fn log_upload_options_are_bounded_ocpp16_only_and_never_unused() {
             "{protocol} {options}"
         );
     }
+}
+
+#[test]
+fn ocpp201_log_stations_use_the_artifact_service_without_a_firmware_catalog() {
+    let log = validate(
+        &station_201(
+            "ocpp201",
+            "get_log=true\ndiagnostics_job_timeout_seconds=600\ndiagnostics_upload_max_bytes=4096",
+        ),
+        UPLOAD_SECTION,
+    )
+    .unwrap()
+    .unwrap();
+    let diagnostics = log.stations[0].diagnostics.unwrap();
+    assert!(!diagnostics.diagnostics && diagnostics.log);
+    assert_eq!(diagnostics.job_timeout, Duration::from_secs(600));
+    assert_eq!(diagnostics.maximum_upload_bytes, 4096);
+    assert!(log.stations[0].firmware.is_none());
+    let artifacts = log.firmware.unwrap();
+    assert!(artifacts.catalog_file.is_none());
+    assert_eq!(artifacts.upload_stations, 1);
+    // Without a log or firmware station the artifact service is not allowed, and a log
+    // station cannot start without it.
+    assert!(validate(&station_201("ocpp201", ""), UPLOAD_SECTION).is_err());
+    assert!(
+        validate(
+            &station_201(
+                "ocpp201",
+                "get_log=true\ndiagnostics_job_timeout_seconds=600"
+            ),
+            ""
+        )
+        .is_err()
+    );
+    // A secure firmware station and a log station share one service and one catalog.
+    assert!(
+        validate(
+            &station_201(
+                "ocpp201",
+                "update_firmware=true\nfirmware_job_timeout_seconds=600\nget_log=true\ndiagnostics_job_timeout_seconds=600",
+            ),
+            SECTION,
+        )
+        .is_ok()
+    );
 }

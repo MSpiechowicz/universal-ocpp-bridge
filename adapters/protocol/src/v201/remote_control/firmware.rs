@@ -4,8 +4,8 @@
 #[path = "firmware_tests.rs"]
 mod tests;
 use super::{RemoteControlSession, ReservationGrant201, mapping};
+use crate::SessionCallOutcome;
 use crate::command_registry::firmware201;
-use crate::{OutboundCall, SessionCallOutcome, SessionSubmitError};
 use serde_json::{Map, Value, json};
 use std::{fmt::Write, sync::Arc, time::Duration};
 use uob_application::{
@@ -169,43 +169,15 @@ impl RemoteControlSession {
             Ok(prepared) => prepared,
             Err(refusal) => return refusal.into(),
         };
-        let pending = {
-            // Recheck authority after the provider calls, under the snapshot lock.
-            let Ok(snapshot) = self.snapshot.read() else {
-                return mapping::not_sent(CommandErrorCode::PolicyRejected);
-            };
-            let now = self.clock.now();
-            if let Err(code) = self.firmware_request(command, &snapshot, now) {
-                return mapping::not_sent(code);
-            }
-            if now >= command.expires_at {
-                return mapping::not_sent(CommandErrorCode::Expired);
-            }
-            let remaining = (command.expires_at.into_inner() - now.into_inner()).unsigned_abs();
-            let deadline =
-                tokio::time::Instant::now() + remaining.min(std::time::Duration::from_hours(24));
-            let call = OutboundCall {
-                message_id: command.request_id.as_str().to_owned(),
-                action: uob_contracts::ProtocolActionName::new(firmware201::ACTION)
-                    .expect("static action"),
-                payload: prepared.payload,
-                correlation_id: command.correlation_id.clone().unwrap_or_else(|| {
-                    uob_contracts::CorrelationId::new(command.request_id.as_str())
-                        .expect("request identity")
-                }),
-            };
-            match self.handle.try_call_before(call, deadline) {
-                Ok(pending) => pending,
-                Err(error) => {
-                    return mapping::not_sent(match error {
-                        SessionSubmitError::Closed => CommandErrorCode::StationDisconnected,
-                        SessionSubmitError::InvalidRequest => CommandErrorCode::InvalidParameters,
-                        SessionSubmitError::Resource(_) | SessionSubmitError::Full => {
-                            CommandErrorCode::PolicyRejected
-                        }
-                    });
-                }
-            }
+        // Recheck authority after the provider calls, under the snapshot lock.
+        let pending = match self.enqueue_rechecked(
+            command,
+            firmware201::ACTION,
+            prepared.payload,
+            |snapshot, now| self.firmware_request(command, snapshot, now).map(|_| ()),
+        ) {
+            Ok(pending) => pending,
+            Err(code) => return mapping::not_sent(code),
         };
         let reply = match pending.receive().await {
             SessionCallOutcome::Result { payload, .. } => match native_reply(&payload) {

@@ -67,6 +67,12 @@ pub(crate) enum Request<C, E, D> {
     ),
     BindDiagnosticsUpload16(uob_contracts::RequestId, String, Reply<()>),
     MaintainDiagnostics16(UtcTimestamp, bool, Reply<()>),
+    DiagnosticsJobs201(
+        ResourceRef,
+        Reply<Vec<uob_application::DiagnosticsJobRecord201>>,
+    ),
+    BindDiagnosticsUpload201(uob_contracts::RequestId, String, Reply<()>),
+    MaintainDiagnostics201(UtcTimestamp, bool, Reply<()>),
     TransactionId(Reply<i32>),
     EventSequence(Reply<u64>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -254,6 +260,25 @@ fn handle_request<C, E, D>(
                 .check_completion_write()
                 .and_then(|()| drain.changed())
                 .and_then(|()| crate::diagnostics16::maintain(connection, now, startup)),
+        ),
+        Request::DiagnosticsJobs201(station, reply) => {
+            respond(reply, crate::diagnostics201::read(connection, &station));
+        }
+        Request::BindDiagnosticsUpload201(request_id, upload_id, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| {
+                    crate::diagnostics201::bind_upload(connection, &request_id, upload_id)
+                }),
+        ),
+        Request::MaintainDiagnostics201(now, startup, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| crate::diagnostics201::maintain(connection, now, startup)),
         ),
         Request::ChargingProfileOwnership(station, reply) => {
             respond(

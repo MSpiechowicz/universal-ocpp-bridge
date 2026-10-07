@@ -354,6 +354,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         firmware_16: None,
         firmware_201: None,
         diagnostics_16: None,
+        diagnostics_201: None,
     }
 }
 

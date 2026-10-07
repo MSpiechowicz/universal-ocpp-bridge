@@ -79,20 +79,9 @@ pub(super) async fn attach(
                 Some(provider) => session.with_local_authorization_updates(provider.clone()),
                 None => session,
             };
-            let session = if let Some(credentials) = &context.credentials {
-                let session = session.with_reservations_201(
-                    configuration.reservations_201.clone(),
-                    configuration.control.reserve_non_evse_specific_supported,
-                    credentials.reservation_grant(),
-                );
-                match (configuration.firmware, &configuration.firmware_providers) {
-                    (Some(firmware), Some(providers)) => session.with_firmware_201(
-                        firmware::session_201(firmware, providers, credentials.reservation_grant()),
-                    ),
-                    _ => session,
-                }
-            } else {
-                session
+            let session = match &context.credentials {
+                Some(credentials) => protected_201(session, context, configuration, credentials),
+                None => session,
             };
             context
                 .commands
@@ -125,6 +114,39 @@ fn protected_16(
     match (configuration.diagnostics, &configuration.firmware_providers) {
         (Some(diagnostics), Some(providers)) => {
             session.with_diagnostics_16(super::super::diagnostics::session(
+                diagnostics,
+                providers,
+                Arc::new(context.store.clone()),
+                credentials.reservation_grant(),
+            ))
+        }
+        _ => session,
+    }
+}
+
+/// Installs the privileged OCPP 2.0.1 workflows that need the shared control credentials.
+fn protected_201(
+    session: uob_protocol_adapter::v201::remote_control::RemoteControlSession,
+    context: &StationContext,
+    configuration: &StationSettings,
+    credentials: &Arc<super::super::control_auth::ControlCredentials>,
+) -> uob_protocol_adapter::v201::remote_control::RemoteControlSession {
+    let session = session.with_reservations_201(
+        configuration.reservations_201.clone(),
+        configuration.control.reserve_non_evse_specific_supported,
+        credentials.reservation_grant(),
+    );
+    let session = match (configuration.firmware, &configuration.firmware_providers) {
+        (Some(firmware), Some(providers)) => session.with_firmware_201(firmware::session_201(
+            firmware,
+            providers,
+            credentials.reservation_grant(),
+        )),
+        _ => session,
+    };
+    match (configuration.diagnostics, &configuration.firmware_providers) {
+        (Some(diagnostics), Some(providers)) => {
+            session.with_diagnostics_201(super::super::diagnostics::session_201(
                 diagnostics,
                 providers,
                 Arc::new(context.store.clone()),

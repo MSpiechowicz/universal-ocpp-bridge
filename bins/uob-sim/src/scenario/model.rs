@@ -49,6 +49,7 @@ pub struct StationDefinition {
     pub firmware16: Option<crate::firmware16::FirmwareConfig>,
     pub firmware201: Option<crate::firmware201::FirmwareConfig201>,
     pub diagnostics16: Option<crate::diagnostics16::DiagnosticsConfig>,
+    pub diagnostics201: Option<crate::diagnostics201::Diagnostics201Config>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -113,6 +114,10 @@ impl StationDefinition {
                 .map(|options| (self.id.clone(), options.clone())),
             diagnostics16: self
                 .diagnostics16
+                .as_ref()
+                .map(|options| (self.id.clone(), options.clone())),
+            diagnostics201: self
+                .diagnostics201
                 .as_ref()
                 .map(|options| (self.id.clone(), options.clone())),
         }
@@ -389,6 +394,15 @@ fn validate_station_topology(station: &StationDefinition) -> Result<(), RunFailu
         return Err(setup_failure(
             "invalid_diagnostics_configuration",
             "native diagnostics state requires a valid OCPP 1.6 station configuration",
+        ));
+    }
+    if let Some(diagnostics) = &station.diagnostics201
+        && (station.ocpp_version != ConfiguredOcppVersion::V2_0_1
+            || diagnostics.validate().is_err())
+    {
+        return Err(setup_failure(
+            "invalid_diagnostics_configuration",
+            "native diagnostics state requires a valid OCPP 2.0.1 station configuration",
         ));
     }
     if let Some(firmware) = &station.firmware201

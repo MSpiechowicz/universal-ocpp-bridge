@@ -34,6 +34,7 @@ pub(super) fn command_result<P>(
         firmware_16: None,
         firmware_201: None,
         diagnostics_16: None,
+        diagnostics_201: None,
     }
 }
 
@@ -77,6 +78,7 @@ pub(super) fn rejected_external<P>(
         firmware_16: None,
         firmware_201: None,
         diagnostics_16: None,
+        diagnostics_201: None,
     }
 }
 

@@ -1,0 +1,81 @@
+{
+  "$defs": {
+    "LogType201": {
+      "description": "Native `LogEnumType`.",
+      "enum": [
+        "DiagnosticsLog",
+        "SecurityLog"
+      ],
+      "type": "string"
+    },
+    "UtcTimestamp": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    }
+  },
+  "$id": "https://schemas.universal-ocpp-bridge.dev/contracts/v1.0/get-log-reference-201.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`GetLogRequest` (§1.28) without `log.remoteLocation`.",
+  "properties": {
+    "latestTimestamp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "logType": {
+      "$ref": "#/$defs/LogType201"
+    },
+    "oldestTimestamp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UtcTimestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requestId": {
+      "description": "Native `requestId`; every status report for this upload repeats it (N01.FR.07).",
+      "format": "int32",
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "type": "integer"
+    },
+    "retries": {
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "retryInterval": {
+      "format": "uint32",
+      "maximum": 2147483647,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "logType",
+    "requestId"
+  ],
+  "title": "GetLogReference201",
+  "type": "object",
+  "x-uob-contract-version": {
+    "major": 1,
+    "revision": 0
+  }
+}

@@ -44,6 +44,8 @@ pub(crate) struct EncodedWrite {
     pub firmware_observations_201: Vec<uob_application::FirmwareObservation201>,
     pub diagnostics_16: Option<Box<uob_application::DiagnosticsJobMutation16>>,
     pub diagnostics_observations_16: Vec<uob_application::DiagnosticsObservation16>,
+    pub diagnostics_201: Option<Box<uob_application::DiagnosticsJobMutation201>>,
+    pub diagnostics_observations_201: Vec<uob_application::DiagnosticsObservation201>,
     pub events: Vec<EncodedEvent>,
     pub deliveries: Vec<EncodedDelivery>,
     pub records: Vec<EncodedRecord>,
@@ -163,14 +165,7 @@ where
     let command_result = write
         .command_result
         .map(|value| {
-            configuration201::validate_result(&value)?;
-            local_authorization16::validate_result(&value)?;
-            local_authorization201::validate_result(&value)?;
-            crate::reservation16::codec_validation::validate_result(&value)?;
-            crate::reservation201::codec_validation::validate_result(&value)?;
-            crate::firmware16::validation::validate_result(&value)?;
-            crate::firmware201::validation::validate_result(&value)?;
-            crate::diagnostics16::validation::validate_result(&value)?;
+            crate::codec_evidence::validate_result_evidence(&value)?;
             Ok(EncodedCommandResult {
                 request_id: value.return_route.request_id.as_str().to_owned(),
                 payload: json(&value)?,
@@ -239,6 +234,8 @@ where
         firmware_observations_201: write.firmware_observations_201,
         diagnostics_16: write.diagnostics_16,
         diagnostics_observations_16: write.diagnostics_observations_16,
+        diagnostics_201: write.diagnostics_201,
+        diagnostics_observations_201: write.diagnostics_observations_201,
         events,
         deliveries,
         records,
@@ -249,13 +246,7 @@ pub(crate) fn encode_command<P: Serialize>(
     value: &Command<P>,
 ) -> Result<EncodedCommand, StorageError> {
     configuration::validate_command(value)?;
-    configuration201::validate_command(value)?;
-    local_authorization16::validate_command(value)?;
-    crate::reservation16::validation::validate_command(value)?;
-    crate::reservation201::validation::validate_command(value)?;
-    crate::firmware16::validation::validate_command(value)?;
-    crate::firmware201::validation::validate_command(value)?;
-    crate::diagnostics16::validation::validate_command(value)?;
+    crate::codec_evidence::validate_command_evidence(value)?;
     let admitted_at = value.admitted_at.into_inner().unix_timestamp();
     let retain_until = admitted_at
         .checked_add(COMMAND_DEDUPLICATION_RETENTION_SECONDS)
@@ -445,26 +436,13 @@ pub(crate) fn decode_event<E: DeserializeOwned>(
 
 pub(crate) fn decode_command<C: DeserializeOwned>(value: &str) -> Result<Command<C>, StorageError> {
     let envelope: Command<serde_json::Value> = from_json(value)?;
-    configuration201::validate_command(&envelope)?;
-    local_authorization16::validate_command(&envelope)?;
-    crate::reservation16::validation::validate_command(&envelope)?;
-    crate::reservation201::validation::validate_command(&envelope)?;
-    crate::firmware16::validation::validate_command(&envelope)?;
-    crate::firmware201::validation::validate_command(&envelope)?;
-    crate::diagnostics16::validation::validate_command(&envelope)?;
+    crate::codec_evidence::validate_command_evidence(&envelope)?;
     from_json(value)
 }
 
 pub(crate) fn decode_result(value: &str) -> Result<CommandResult, StorageError> {
     let result: CommandResult = from_json(value)?;
-    configuration201::validate_result(&result)?;
-    local_authorization16::validate_result(&result)?;
-    local_authorization201::validate_result(&result)?;
-    crate::reservation16::codec_validation::validate_result(&result)?;
-    crate::reservation201::codec_validation::validate_result(&result)?;
-    crate::firmware16::validation::validate_result(&result)?;
-    crate::firmware201::validation::validate_result(&result)?;
-    crate::diagnostics16::validation::validate_result(&result)?;
+    crate::codec_evidence::validate_result_evidence(&result)?;
     Ok(result)
 }
 
@@ -485,6 +463,7 @@ pub(crate) fn decode_stored_result(
     crate::firmware16::validation::validate_stored(connection, &result)?;
     crate::firmware201::validation::validate_stored(connection, &result)?;
     crate::diagnostics16::validation::validate_stored(connection, &result)?;
+    crate::diagnostics201::validation::validate_stored(connection, &result)?;
     Ok(result)
 }
 

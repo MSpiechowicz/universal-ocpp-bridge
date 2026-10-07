@@ -1,5 +1,5 @@
-//! Demo-only OCPP 1.6 diagnostics and Security Whitepaper log upload options. Uploads go to the
-//! same local test artifact service as firmware (`[charging.firmware]`).
+//! Demo-only OCPP 1.6 diagnostics, Security Whitepaper log and OCPP 2.0.1 log upload options.
+//! Uploads go to the same local test artifact service as firmware (`[charging.firmware]`).
 use std::time::Duration;
 
 use uob_contracts::ProtocolEdition;
@@ -12,12 +12,12 @@ const MAX_JOB_TIMEOUT_SECONDS: u64 = 24 * 60 * 60;
 const DEFAULT_UPLOAD_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_UPLOAD_BYTES: u64 = 32 * 1024 * 1024;
 
-/// Enabled native log families of one OCPP 1.6 station and its upload bounds.
+/// Enabled native log families of one station and its upload bounds.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct StationDiagnostics {
     /// OCPP 1.6 `GetDiagnostics`.
     pub diagnostics: bool,
-    /// Security Whitepaper `GetLog`.
+    /// Security Whitepaper `GetLog` on OCPP 1.6, or OCPP 2.0.1 `GetLog`.
     pub log: bool,
     pub job_timeout: Duration,
     pub maximum_upload_bytes: u64,
@@ -38,8 +38,8 @@ pub(super) fn station(
             Ok(None)
         };
     }
-    // OCPP 2.0.1 log retrieval is a separate workflow.
-    if protocol != ProtocolEdition::Ocpp16j {
+    // `GetDiagnostics` exists only in OCPP 1.6; OCPP 2.0.1 retrieves every log with `GetLog`.
+    if protocol != ProtocolEdition::Ocpp16j && diagnostics {
         return Err(fail);
     }
     let timeout = timeout_seconds.ok_or(fail)?;

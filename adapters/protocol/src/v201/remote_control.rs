@@ -14,6 +14,7 @@ pub mod device_model;
 mod device_model_collection;
 mod device_model_response;
 pub mod device_model_values;
+mod diagnostics;
 mod firmware;
 mod identity;
 mod local_authorization;
@@ -41,6 +42,7 @@ pub use reservation_values::{ReservationValues201, reservation_key_201};
 pub mod observation;
 
 use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
+pub use diagnostics::DiagnosticsSettings201;
 pub use firmware::FirmwareSettings201;
 use serde_json::Value;
 use snapshot_guard::{connected_at, validate_snapshot};
@@ -92,6 +94,7 @@ pub struct RemoteControlSession {
     reserve_non_evse_specific: bool,
     profile_reports: Option<Arc<dyn uob_application::ChargingProfileReportStore201>>,
     firmware: Option<Arc<FirmwareSettings201>>,
+    diagnostics: Option<Arc<DiagnosticsSettings201>>,
 }
 
 impl RemoteControlSession {
@@ -141,6 +144,7 @@ impl RemoteControlSession {
             reserve_non_evse_specific: false,
             profile_reports: None,
             firmware: None,
+            diagnostics: None,
         })
     }
 
@@ -258,6 +262,9 @@ impl RemoteControlSession {
         Box::pin(async move {
             if firmware::owns(&command) {
                 return Ok(self.dispatch_firmware(&command).await);
+            }
+            if diagnostics::owns(&command) {
+                return Ok(self.dispatch_diagnostics(&command).await);
             }
             if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
                 if crate::command_registry::reservation201::ACTIONS.contains(&operation.action.as_str()))
@@ -404,6 +411,14 @@ impl StationCommandPort<Value> for RemoteControlSession {
         now: UtcTimestamp,
     ) -> Result<Option<uob_application::FirmwareJobMutation201>, CommandErrorCode> {
         self.firmware_context(command, generation, now)
+    }
+    fn diagnostics_expectation_201(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::DiagnosticsJobMutation201>, CommandErrorCode> {
+        self.diagnostics_context(command, generation, now)
     }
     fn charging_profile_expectation(
         &self,

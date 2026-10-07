@@ -134,6 +134,7 @@ pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError
         || result.reservation_201.is_some()
         || result.firmware_16.is_some()
         || result.firmware_201.is_some()
+        || result.diagnostics_201.is_some()
         || native != matches!(result.lifecycle, CommandLifecycle::ProtocolResponse { .. })
         || !reply_matches(evidence)
         || evidence.destination().is_some_and(|destination| {

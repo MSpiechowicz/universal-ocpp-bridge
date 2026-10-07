@@ -1,5 +1,6 @@
 mod calls;
 mod diagnostics;
+mod diagnostics201;
 mod dispatch;
 mod effects;
 mod firmware;
@@ -134,6 +135,7 @@ pub(super) async fn serve(
                         || uob_application::ReservationStore201::expire_reservations_201(&context.store, Clock.now()).await.is_err()
                         || uob_application::FirmwareStore16::expire_firmware_jobs_16(&context.store, Clock.now()).await.is_err()
                         || uob_application::DiagnosticsStore16::expire_diagnostics_jobs_16(&context.store, Clock.now()).await.is_err()
+                        || uob_application::DiagnosticsStore201::expire_diagnostics_jobs_201(&context.store, Clock.now()).await.is_err()
                         || uob_application::FirmwareStore201::expire_firmware_jobs_201(&context.store, Clock.now()).await.is_err()
                     {
                         break Err(unavailable());

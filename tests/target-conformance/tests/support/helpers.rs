@@ -54,5 +54,6 @@ pub(crate) fn result_for(command: &ExternalCommand<()>) -> CommandResult {
         firmware_16: None,
         firmware_201: None,
         diagnostics_16: None,
+        diagnostics_201: None,
     }
 }

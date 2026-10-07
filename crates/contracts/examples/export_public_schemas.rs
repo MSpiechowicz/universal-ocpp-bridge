@@ -5,17 +5,17 @@ use serde_json::Value;
 use uob_contracts::{
     Command, CommandResult, ConfigurationChangeReference, DataPointDescriptor, DataPointValue,
     EventEnvelope, ExportBatch, ExportRecord, ExportReport, GetDiagnosticsReference16,
-    GetLogReference16, ReserveNowReference16, ReserveNowReference201, ResourceCapabilities,
-    ResourceRef, RuntimeIdentity, SendLocalListReference16, SendLocalListReference201,
-    ServiceIdentity, SetNetworkProfileReference201, SetVariablesReference201,
-    SignedUpdateFirmwareReference16, StationSnapshot, TraceRecord, UpdateFirmwareReference16,
-    UpdateFirmwareReference201,
+    GetLogReference16, GetLogReference201, ReserveNowReference16, ReserveNowReference201,
+    ResourceCapabilities, ResourceRef, RuntimeIdentity, SendLocalListReference16,
+    SendLocalListReference201, ServiceIdentity, SetNetworkProfileReference201,
+    SetVariablesReference201, SignedUpdateFirmwareReference16, StationSnapshot, TraceRecord,
+    UpdateFirmwareReference16, UpdateFirmwareReference201,
 };
 
 fn publish<T: JsonSchema>(output: &Path, name: &str) -> Result<(), Box<dyn Error>> {
     let revision = match name {
-        "export-record" | "export-batch" => 17,
-        "command-result" => 16,
+        "export-record" | "export-batch" => 18,
+        "command-result" => 17,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };
@@ -80,6 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     publish::<UpdateFirmwareReference201>(output, "update-firmware-reference-201")?;
     publish::<GetDiagnosticsReference16>(output, "get-diagnostics-reference-16")?;
     publish::<GetLogReference16>(output, "get-log-reference-16")?;
+    publish::<GetLogReference201>(output, "get-log-reference-201")?;
     publish::<EventEnvelope<Value>>(output, "event-envelope")?;
     publish::<TraceRecord>(output, "trace-record")?;
     publish::<ExportRecord>(output, "export-record")?;

@@ -108,5 +108,8 @@ The OCPP 1.6J diagnostics and log workflow ([ocpp16-diagnostics.md](ocpp16-diagn
 opens upload destinations on the same `TestArtifactService` and checks each reported upload
 against `upload_status`.
 
-Not in scope: OCPP 2.0.1 log retrieval, security-event and certificate CSMS workflows, compose
-integration, and production PKI or persistent artifact storage.
+The OCPP 2.0.1 log workflow ([ocpp201-diagnostics.md](ocpp201-diagnostics.md)) does the same
+for `GetLog` on 2.0.1 stations.
+
+Not in scope: security-event and certificate CSMS workflows, compose integration, and
+production PKI or persistent artifact storage.

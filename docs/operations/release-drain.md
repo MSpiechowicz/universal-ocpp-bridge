@@ -41,7 +41,9 @@ deletes it in the transaction that records a resolved job state. A deadline mark
 `timed_out` without removing the entry; startup recovery restores a missing entry for any
 unresolved job. The OCPP 2.0.1 firmware workflow does the same with `firmware201/<sha256>`
 entries and its `firmware201_jobs` table. The OCPP 1.6J diagnostics and log workflow uses
-`diagnostics16/<sha256>` entries of kind `diagnostics` and its `diagnostics16_jobs` table. A previous binary must explicitly qualify schema-v6 compatibility before
+`diagnostics16/<sha256>` entries of kind `diagnostics` and its `diagnostics16_jobs` table. The
+OCPP 2.0.1 log workflow uses `diagnostics201/<sha256>` entries of the same kind and its
+`diagnostics201_jobs` table. A previous binary must explicitly qualify schema-v6 compatibility before
 normal rollback; this change does not claim that an arbitrary older binary is eligible.
 
 ## Supervisor sequence and race handling

@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "protocol": "2.0.1",
+  "sources": [
+    {
+      "title": "OCPP 2.0.1 Edition 4 Part 2 Specification with errata 2026-06",
+      "archive_sha256": "192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "N01",
+        "Figure 129",
+        "N01.FR.01",
+        "N01.FR.02",
+        "N01.FR.03",
+        "N01.FR.04",
+        "N01.FR.05",
+        "N01.FR.07",
+        "N01.FR.08",
+        "N01.FR.09",
+        "N01.FR.10",
+        "N01.FR.12",
+        "N01.FR.13",
+        "N01.FR.14",
+        "N01.FR.17",
+        "N01.FR.18",
+        "N01.FR.20",
+        "N01.FR.21",
+        "GetLogRequest",
+        "GetLogResponse",
+        "LogStatusNotificationRequest",
+        "LogStatusNotificationResponse",
+        "LogEnumType",
+        "LogStatusEnumType",
+        "UploadLogStatusEnumType"
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "requirements": [
+        "N01.FR.01",
+        "N01.FR.02",
+        "N01.FR.03",
+        "N01.FR.04",
+        "GetLogRequest"
+      ],
+      "assertion": "Protected destination-free GetLog sends DiagnosticsLog or SecurityLog with the caller's requestId, optional retries, retryInterval and time window and a bounded provider remoteLocation the caller never supplies; an Accepted reply with the file name is acceptance only, never proof that a file was uploaded.",
+      "evidence": "wire/2.0.1/log-get-diagnostics-log.json;wire/2.0.1/log-get-diagnostics-log-minimal.json;wire/2.0.1/log-get-security-log.json;wire/2.0.1/log-get-security-log-minimal.json;wire/2.0.1/log-get-reply-accepted.json;wire/2.0.1/log-get-reply-accepted-no-filename.json;../../../crates/contracts/tests/diagnostics201.rs;../../../bins/uob-service/tests/diagnostics201.rs;../../../bins/uob-sim/tests/diagnostics201_model.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.05",
+        "GetLogResponse"
+      ],
+      "assertion": "A Rejected GetLogResponse, with or without statusInfo, is a protocol rejection: the job never starts an upload, keeps the exact reply and releases the drain; a CALLERROR is likewise a rejection and a reply outside the schema leaves delivery uncertain.",
+      "evidence": "wire/2.0.1/log-get-reply-rejected.json;wire/2.0.1/log-get-reply-rejected-status-info.json;wire/2.0.1/log-negative-cases.json;../../../adapters/protocol/tests/ocpp201_diagnostics_decode.rs;../../../adapters/storage/tests/diagnostics201.rs;../../../bins/uob-service/tests/diagnostics201/refusals.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.07",
+        "N01.FR.08",
+        "N01.FR.09",
+        "N01.FR.10",
+        "UploadLogStatusEnumType"
+      ],
+      "assertion": "LogStatusNotification advances only the job with its exact requestId; Uploading, Uploaded and the failure statuses UploadFailure, BadMessage, PermissionDenied and NotSupportedOperation decode and resolve the job; the 1.6-only UploadFailed is refused; regressions and late reports are counted, never applied; each status commits before the empty reply.",
+      "evidence": "wire/2.0.1/log-status-uploading.json;wire/2.0.1/log-status-uploaded.json;wire/2.0.1/log-status-upload-failure.json;wire/2.0.1/log-status-bad-message.json;wire/2.0.1/log-status-permission-denied.json;wire/2.0.1/log-status-not-supported-operation.json;wire/2.0.1/log-status-acknowledged.json;wire/2.0.1/log-negative-cases.json;../../../crates/application/src/diagnostics201/tests.rs;../../../adapters/protocol/tests/ocpp201_diagnostics_decode.rs;../../../adapters/storage/tests/diagnostics201.rs;../../../bins/uob-sim/tests/diagnostics201_wire.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.13",
+        "TriggerMessage LogStatusNotification"
+      ],
+      "assertion": "requestId is mandatory unless a TriggerMessageRequest triggered the report and no upload is ongoing: a non-Idle notification without requestId is refused, and an identity-free Idle is accepted only for a triggered report, settles only a job the station has already answered (a pending or uncertain job is left alone) and still counts as trigger evidence.",
+      "evidence": "wire/2.0.1/log-status-idle.json;wire/2.0.1/log-status-idle-unattributed.json;wire/2.0.1/trigger-result-log-status-idle.json;wire/2.0.1/trigger-result-log-status-uploading.json;wire/2.0.1/log-negative-cases.json;../../../adapters/protocol/tests/ocpp201_diagnostics_decode.rs;../../../adapters/storage/tests/diagnostics201.rs;../../../bins/uob-service/tests/diagnostics201.rs;../../../bins/uob-sim/tests/diagnostics201_model.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.12",
+        "N01.FR.20"
+      ],
+      "assertion": "A new GetLog while a log is being assembled or uploaded may be answered AcceptedCanceled, which marks the older job cancelled and keeps the new one; the station then reports AcceptedCanceled for the cancelled requestId, which never revives or regresses the cancelled job; a request answered plain Accepted supersedes the older job instead.",
+      "evidence": "wire/2.0.1/log-get-reply-accepted-canceled.json;wire/2.0.1/log-status-accepted-canceled.json;../../../adapters/storage/tests/diagnostics201.rs;../../../crates/application/src/diagnostics201/tests.rs;../../../bins/uob-sim/tests/diagnostics201_model.rs;../../../bins/uob-sim/tests/diagnostics201_process.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.02",
+        "N01.FR.14",
+        "N01.FR.18",
+        "N01.FR.21"
+      ],
+      "assertion": "The station uploads a single file by HTTP PUT or POST to the bridge-provided destination, appending its reported file name to a trailing-slash location; the bridge binds the destination to the job durably before sending, caps the upload at the station's configured maximum, and refuses a test destination where policy forbids it, a destination of the wrong kind or a cap above the maximum.",
+      "evidence": "wire/2.0.1/log-get-diagnostics-log.json;../../../bins/uob-service/tests/diagnostics201.rs;../../../bins/uob-service/tests/diagnostics201/refusals.rs;../../../bins/uob-sim/tests/diagnostics201_model.rs;../../../bins/uob-sim/tests/diagnostics201_wire.rs;../../../bins/uob-sim/tests/diagnostics201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N01 postconditions",
+        "Figure 129"
+      ],
+      "assertion": "A reported Uploaded becomes the uploaded state only if the artifact provider holds a complete file for that job's own destination, and the result then carries the provider-computed SHA-256 and size; otherwise the job is upload_unconfirmed.",
+      "evidence": "wire/2.0.1/log-status-uploaded.json;../../../crates/application/src/diagnostics201/tests.rs;../../../adapters/storage/tests/diagnostics201.rs;../../../bins/uob-service/tests/diagnostics201.rs;../../../bins/uob-sim/tests/diagnostics201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N01 failure postcondition",
+        "release drain"
+      ],
+      "assertion": "The command, its durable job and the diagnostics201 release-drain entry commit in one transaction; a station has one request in flight and a retained requestId cannot be reused; lost replies stay uncertain and are never replayed after restart or reconnect; a deadline only times the job out, later native reports still resolve it, and only resolved jobs release the drain.",
+      "evidence": "../../../adapters/storage/tests/diagnostics201.rs;../../../adapters/storage/tests/diagnostics201/recovery.rs;../../../bins/uob-service/tests/diagnostics201/recovery.rs;../../../bins/uob-sim/tests/diagnostics201_process.rs;../../../bins/uob-sim/tests/diagnostics201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N01.FR.01",
+        "N01.FR.07",
+        "N01.FR.13"
+      ],
+      "assertion": "The independent simulator station model follows N01 from the specification alone: it answers GetLog Accepted with a file name or Rejected, reports every status with the requestId of its request, reports an identity-free Idle only when triggered without an upload, and shares no code or fixtures with the bridge.",
+      "evidence": "../../../bins/uob-sim/tests/diagnostics201_model.rs;../../../bins/uob-sim/tests/diagnostics201_wire.rs;../../../bins/uob-sim/tests/diagnostics201_scenario.rs;../../../bins/uob-sim/tests/diagnostics201_independence.rs"
+    }
+  ],
+  "not_covered": [
+    "SecurityEventNotification and the security-log contents themselves (issue #128)",
+    "FTP/FTPS uploads, upload resume and Expect: 100-continue (N01.FR.14 beyond HTTP, N01.FR.22, N01.FR.23); only HTTP PUT and POST are exercised",
+    "basic-authorization credentials in upload locations (N01.FR.17); the bridge-provided destination carries none",
+    "ExtendedTriggerMessage; 2.0.1 TriggerMessage for LogStatusNotification is evidence only",
+    "monitoring (issue #126)",
+    "physical hardware, production artifact storage or OCA certification"
+  ],
+  "execution_status": "Pinned-schema corpus tests executed in isolated software verification; the named contract, application, storage, protocol, actual-daemon and simulator evidence files are created with the bridge implementation of #125. Not hardware or OCA certification."
+}

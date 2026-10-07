@@ -19,6 +19,7 @@ mod client_reconnect201;
 mod client_runtime;
 mod client_runtime_201;
 pub mod diagnostics16;
+pub mod diagnostics201;
 pub mod firmware16;
 pub mod firmware201;
 pub mod local_authorization;
@@ -27,8 +28,8 @@ mod native_state;
 pub mod reservation16;
 pub mod reservation201;
 use native_state::{
-    open_diagnostics16, open_firmware16, open_firmware201, open_native_state, open_native_state201,
-    open_reservation201, validate_client_config,
+    open_diagnostics16, open_diagnostics201, open_firmware16, open_firmware201, open_native_state,
+    open_native_state201, open_reservation201, validate_client_config,
 };
 mod station_auth;
 mod trigger;
@@ -120,6 +121,7 @@ pub struct SimulatorClientConfig {
     pub firmware16: Option<(String, firmware16::FirmwareConfig)>,
     pub firmware201: Option<(String, firmware201::FirmwareConfig201)>,
     pub diagnostics16: Option<(String, diagnostics16::DiagnosticsConfig)>,
+    pub diagnostics201: Option<(String, diagnostics201::Diagnostics201Config)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -292,6 +294,7 @@ struct Ocpp201State {
     reservation_retry_at: Option<std::time::Instant>,
     reservation_holds: usize,
     firmware201: Option<firmware201::Firmware201Handle>,
+    diagnostics201: Option<diagnostics201::Diagnostics201Handle>,
     /// Closes the current socket generation for a firmware reboot.
     socket_close: Option<Arc<tokio::sync::Notify>>,
     socket_connected: bool,
@@ -389,6 +392,7 @@ impl SimulatorProtocolClient {
                     local: Some(local),
                     reservation201: open_reservation201(&config)?,
                     firmware201: open_firmware201(&config)?,
+                    diagnostics201: open_diagnostics201(&config)?,
                     ..Ocpp201State::default()
                 }));
                 let (client, barrier, jobs) = trigger_transport::connect_201(

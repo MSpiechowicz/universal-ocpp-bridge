@@ -179,14 +179,18 @@ impl StationSettings {
         device_model::apply(snapshot, self.protocol, self.control);
         profiles::apply(snapshot, self.protocol, self.control);
         reservations::apply_capabilities(snapshot, self);
+        self.apply_transfer_capabilities(snapshot);
+    }
+    /// Firmware and log-upload actions, offered only where the shared artifact service exists.
+    fn apply_transfer_capabilities(&self, snapshot: &mut uob_contracts::StationSnapshot) {
         firmware::apply_capabilities(
             snapshot,
             self.protocol,
             self.firmware.filter(|_| self.firmware_providers.is_some()),
         );
-        // Diagnostics options exist only for OCPP 1.6 stations.
         diagnostics::apply_capabilities(
             snapshot,
+            self.protocol,
             self.diagnostics
                 .filter(|_| self.firmware_providers.is_some()),
         );

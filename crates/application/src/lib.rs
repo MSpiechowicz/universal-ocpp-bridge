@@ -17,6 +17,7 @@ pub mod data_transfer201;
 mod database;
 mod diagnostic;
 pub mod diagnostics16;
+pub mod diagnostics201;
 pub mod firmware16;
 pub mod firmware201;
 mod health;
@@ -40,6 +41,12 @@ pub use diagnostics16::{
     DiagnosticsObservationKind16, DiagnosticsStore16, DiagnosticsTransition16,
     DiagnosticsVariant16, MAX_DIAGNOSTICS_JOBS_16, UploadCheck16, UploadOutcome16,
     apply_diagnostics_status_16, attribute_diagnostics_16,
+};
+pub use diagnostics201::{
+    DiagnosticsJobMutation201, DiagnosticsJobRecord201, DiagnosticsObservation201,
+    DiagnosticsObservationKind201, DiagnosticsStore201, DiagnosticsTransition201,
+    MAX_DIAGNOSTICS_JOBS_201, UploadCheck201, UploadOutcome201, apply_diagnostics_status_201,
+    attribute_diagnostics_201,
 };
 pub use firmware16::{
     FirmwareJobMutation16, FirmwareJobRecord16, FirmwareObservation16, FirmwareObservationKind16,

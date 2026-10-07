@@ -95,3 +95,9 @@ need a bounded diagnostics_job_timeout_seconds, accept an optional diagnostics_u
 and use the same [charging.firmware] artifact service, which then needs no catalog_file unless a
 station also enables firmware. Timeout and cap options without either action are refused. See
 [the operator example](../operations/headless-cli.md#protected-ocpp-16-diagnostics-and-log-uploads).
+
+For exact ocpp201 stations, get_log enables OCPP 2.0.1 GetLog (N01) with the same
+diagnostics_job_timeout_seconds and diagnostics_upload_max_bytes options and the same
+[charging.firmware] artifact service. get_diagnostics is refused for ocpp201 stations, because
+2.0.1 has no GetDiagnostics. See
+[the 2.0.1 operator example](../operations/headless-cli.md#protected-ocpp-201-log-retrieval).

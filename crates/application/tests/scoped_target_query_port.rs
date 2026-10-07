@@ -433,6 +433,7 @@ fn command_result(resource: ResourceRef) -> CommandResult {
         firmware_16: None,
         firmware_201: None,
         diagnostics_16: None,
+        diagnostics_201: None,
     }
 }
 fn request_id() -> RequestId {

@@ -1,0 +1,1 @@
+[2,"log201-get-3","GetLog",{"logType":"SecurityLog","requestId":4102,"retries":1,"retryInterval":120,"log":{"remoteLocation":"https://logs.example.test/upload/c1d84e07/","oldestTimestamp":"2026-10-01T06:30:00.000Z","latestTimestamp":"2026-10-07T06:30:00.000Z"}}]
