@@ -8,6 +8,8 @@ use uob_protocol_adapter::command_registry::{command_schemas, validate_privilege
 
 #[path = "command_registry/composite_schedule16.rs"]
 mod composite_schedule16;
+#[path = "command_registry/diagnostics16.rs"]
+mod diagnostics16;
 #[path = "command_registry/firmware16.rs"]
 mod firmware16;
 #[path = "command_registry/firmware201.rs"]

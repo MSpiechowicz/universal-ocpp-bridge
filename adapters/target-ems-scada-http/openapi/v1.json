@@ -602,6 +602,377 @@
         ],
         "type": "object"
       },
+      "DiagnosticsCallError16": {
+        "description": "Sanitized OCPP-J error code returned instead of a native result.",
+        "enum": [
+          "FormationViolation",
+          "GenericError",
+          "InternalError",
+          "NotImplemented",
+          "NotSupported",
+          "OccurrenceConstraintViolation",
+          "PropertyConstraintViolation",
+          "ProtocolError",
+          "SecurityError",
+          "TypeConstraintViolation"
+        ],
+        "type": "string"
+      },
+      "DiagnosticsDestination16": {
+        "additionalProperties": false,
+        "description": "Public facts about the destination offered; never its location or identity.",
+        "properties": {
+          "log_type": {
+            "$ref": "#/components/schemas/LogType16"
+          },
+          "maximum_bytes": {
+            "description": "Effective byte cap the provider enforces.",
+            "format": "uint64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "test_only": {
+            "description": "Provider material is test-only; production composition refuses it.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "log_type",
+          "maximum_bytes",
+          "test_only"
+        ],
+        "type": "object"
+      },
+      "DiagnosticsJob16": {
+        "additionalProperties": false,
+        "description": "Durable job state, refreshed in the command result as native facts arrive.",
+        "properties": {
+          "deadline": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp",
+            "description": "Bridge deadline after which an unresolved job becomes `timed_out`."
+          },
+          "last_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LogUploadStatus16"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_status_at": {
+            "anyOf": [
+              {
+                "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notifications": {
+            "description": "Native notifications attributed to this job.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "observed_at": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+          },
+          "rejected_transitions": {
+            "description": "Attributed notifications that would regress or contradict the job; state unchanged.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "revision": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DiagnosticsJobState16"
+          },
+          "upload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiagnosticsUpload16"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "state",
+          "deadline",
+          "observed_at",
+          "notifications",
+          "rejected_transitions"
+        ],
+        "type": "object"
+      },
+      "DiagnosticsJobState16": {
+        "description": "Bridge-side lifecycle of one log upload job. Only resolved states release the drain.",
+        "oneOf": [
+          {
+            "enum": [
+              "uploading",
+              "bad_message",
+              "not_supported_operation",
+              "permission_denied"
+            ],
+            "type": "string"
+          },
+          {
+            "const": "pending",
+            "description": "Durably admitted; no correlated reply yet.",
+            "type": "string"
+          },
+          {
+            "const": "uncertain",
+            "description": "Possibly delivered without a correlated reply; never replayed.",
+            "type": "string"
+          },
+          {
+            "const": "accepted",
+            "description": "Station accepted and named a file; no progress reported yet.",
+            "type": "string"
+          },
+          {
+            "const": "timed_out",
+            "description": "Deadline elapsed without a terminal station fact; still blocks release drain.",
+            "type": "string"
+          },
+          {
+            "const": "uploaded",
+            "description": "Station reported `Uploaded` and the provider holds the stored file.",
+            "type": "string"
+          },
+          {
+            "const": "upload_unconfirmed",
+            "description": "Station reported `Uploaded` but the provider holds no complete file for the job.",
+            "type": "string"
+          },
+          {
+            "const": "upload_failed",
+            "description": "`UploadFailed` (diagnostics) or `UploadFailure` (log).",
+            "type": "string"
+          },
+          {
+            "const": "no_log_available",
+            "description": "`GetDiagnostics.conf` without a file name: nothing to upload (§5.9).",
+            "type": "string"
+          },
+          {
+            "const": "rejected",
+            "description": "Station refused the request (native status or CALLERROR).",
+            "type": "string"
+          },
+          {
+            "const": "not_sent",
+            "description": "Definitely never transmitted.",
+            "type": "string"
+          },
+          {
+            "const": "cancelled",
+            "description": "The station cancelled this upload for a newer request (N01.FR.11).",
+            "type": "string"
+          },
+          {
+            "const": "superseded",
+            "description": "A newer request was accepted while this job was unresolved.",
+            "type": "string"
+          },
+          {
+            "const": "station_idle",
+            "description": "A triggered `Idle` report: no upload in progress, outcome not reported.",
+            "type": "string"
+          }
+        ]
+      },
+      "DiagnosticsReply16": {
+        "description": "Correlated native reply, never proof that a file was uploaded.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "description": "`GetDiagnostics.conf`; no file name means no diagnostics are available (§5.9).",
+            "properties": {
+              "file_name": {
+                "maxLength": 255,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "diagnostics",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "`GetLog.conf`.",
+            "properties": {
+              "file_name": {
+                "maxLength": 255,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "log",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/GetLogStatus16"
+              }
+            },
+            "required": [
+              "kind",
+              "status"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Native CALLERROR.",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/DiagnosticsCallError16"
+              },
+              "kind": {
+                "const": "call_error",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "code"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DiagnosticsResult16": {
+        "description": "Does not carry the upload location, its identity, the log content or raw payloads.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "GetDiagnostics",
+                "type": "string"
+              },
+              "destination": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DiagnosticsDestination16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "job": {
+                "$ref": "#/components/schemas/DiagnosticsJob16"
+              },
+              "reply": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DiagnosticsReply16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "job"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "GetLog",
+                "type": "string"
+              },
+              "destination": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DiagnosticsDestination16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "job": {
+                "$ref": "#/components/schemas/DiagnosticsJob16"
+              },
+              "log_type": {
+                "$ref": "#/components/schemas/LogType16"
+              },
+              "reply": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DiagnosticsReply16"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "request_id": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "action",
+              "log_type",
+              "request_id",
+              "job"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DiagnosticsUpload16": {
+        "additionalProperties": false,
+        "description": "What the provider stored for this job, observed by the bridge, not reported by the station.",
+        "properties": {
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "size_bytes": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sha256",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
       "EventPolicy": {
         "description": "Honest delivery and replay policy exposed alongside the descriptor.",
         "properties": {
@@ -1288,6 +1659,15 @@
         ],
         "type": "string"
       },
+      "GetLogStatus16": {
+        "description": "`GetLog.conf` status (`LogStatusEnumType`).",
+        "enum": [
+          "Accepted",
+          "Rejected",
+          "AcceptedCanceled"
+        ],
+        "type": "string"
+      },
       "IntegrationError": {
         "properties": {
           "error": {
@@ -1377,6 +1757,28 @@
           "maximum_station_scan"
         ],
         "type": "object"
+      },
+      "LogType16": {
+        "description": "Security Whitepaper `LogEnumType`.",
+        "enum": [
+          "DiagnosticsLog",
+          "SecurityLog"
+        ],
+        "type": "string"
+      },
+      "LogUploadStatus16": {
+        "description": "Native upload status from either notification. `DiagnosticsStatusNotification` (§7.24)\nuses only `Idle`, `Uploaded`, `UploadFailed` and `Uploading`; `LogStatusNotification`\n(`UploadLogStatusEnumType`) uses every value except `UploadFailed`.",
+        "enum": [
+          "BadMessage",
+          "Idle",
+          "NotSupportedOperation",
+          "PermissionDenied",
+          "Uploaded",
+          "UploadFailed",
+          "UploadFailure",
+          "Uploading"
+        ],
+        "type": "string"
       },
       "PointPage": {
         "description": "Bounded canonical point page.",
@@ -2033,7 +2435,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.15/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.16/command-result.schema.json"
                     }
                   ]
                 }
@@ -2079,7 +2481,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.15/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.16/command-result.schema.json"
                     }
                   ]
                 }
@@ -2126,7 +2528,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.15/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.16/command-result.schema.json"
                     }
                   ]
                 }
@@ -2146,7 +2548,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.15/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.16/command-result.schema.json"
                     }
                   ]
                 }
@@ -2179,7 +2581,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.15/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.16/command-result.schema.json"
                     }
                   ]
                 }
@@ -2266,7 +2668,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.15/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.16/command-result.schema.json"
                 }
               }
             },
@@ -4971,6 +5373,7 @@
             "required": true,
             "schema": {
               "enum": [
+                "command-result.schema.json",
                 "export-record.schema.json",
                 "export-batch.schema.json"
               ],
@@ -5050,6 +5453,153 @@
       "head": {
         "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
         "operationId": "schemas_v1_16_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "command-result.schema.json",
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.17/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_17",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_17_head",
         "parameters": [
           {
             "in": "path",

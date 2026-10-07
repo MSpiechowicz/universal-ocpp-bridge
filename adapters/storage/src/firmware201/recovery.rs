@@ -44,7 +44,12 @@ pub(crate) fn maintain(
                     record.changed_at = record.changed_at.max(now);
                 }
                 if !record.state.resolved() {
-                    register_release_job(&transaction, &release_job_id(&record.request_id), false)?;
+                    register_release_job(
+                        &transaction,
+                        &release_job_id(&record.request_id),
+                        "firmware",
+                        false,
+                    )?;
                 }
                 save(&transaction, &record, Some(false))?;
                 sync_result(&transaction, &record)?;

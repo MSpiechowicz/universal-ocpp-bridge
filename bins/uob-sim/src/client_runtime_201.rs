@@ -212,7 +212,7 @@ pub(super) async fn run(
                     let _ = result.send(response);
                 }
                 Some(Command::LocalListConflict) => unreachable!("native notification sender exists only for OCPP 1.6"),
-                Some(Command::ReservationStatus(_, _) | Command::FirmwareStatus(_, _)) => unreachable!("native notifications are OCPP 1.6 only"),
+                Some(Command::ReservationStatus(_, _) | Command::FirmwareStatus(_, _) | Command::DiagnosticsStatus(_, _)) => unreachable!("native notifications are OCPP 1.6 only"),
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
                     replay.shutdown().await;

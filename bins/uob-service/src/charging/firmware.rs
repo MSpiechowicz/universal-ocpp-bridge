@@ -35,12 +35,25 @@ use crate::configuration::charging::{StationFirmware, ValidatedFirmwareArtifacts
 const CATALOG_BYTES: usize = 64 * 1024;
 const MAX_CATALOG_ENTRIES: usize = 16;
 const MAX_IMAGE_BYTES: usize = 32 * 1024 * 1024;
+/// Open upload destinations per diagnostics-enabled station: one active upload plus a
+/// cancelling `GetLog` (N01.FR.11) and late retries. The oldest idle destination is evicted.
+const UPLOADS_PER_STATION: usize = 4;
+const MAX_UPLOADS: usize = 64;
 
 /// Shared providers referenced by every firmware-enabled station.
 pub(super) struct Providers {
     artifacts: TestArtifactService,
     certificates: TestCertificateAuthority,
     policy: RuntimeSecurityPolicy,
+}
+
+impl Providers {
+    pub(super) const fn artifacts(&self) -> &TestArtifactService {
+        &self.artifacts
+    }
+    pub(super) const fn policy(&self) -> RuntimeSecurityPolicy {
+        self.policy
+    }
 }
 
 /// Listener reserved at startup; serving starts with the charging runtime.
@@ -146,19 +159,28 @@ pub(super) async fn install(
     let fail = |detail: &'static str| io::Error::other(detail);
     let policy = application.security_policy();
     files::directory(&config.spool_directory).map_err(fail)?;
-    let catalog = files::protected(&config.catalog_file, CATALOG_BYTES, seen).map_err(fail)?;
-    let catalog: Catalog =
-        serde_json::from_slice(&catalog.0).map_err(|_| fail("invalid firmware catalog"))?;
-    let references = catalog
-        .artifacts
-        .iter()
-        .map(|entry| entry.reference.as_str())
-        .collect::<BTreeSet<_>>();
-    if catalog.artifacts.is_empty()
-        || catalog.artifacts.len() > MAX_CATALOG_ENTRIES
-        || references.len() != catalog.artifacts.len()
-    {
-        return Err(fail("invalid firmware catalog"));
+    let catalog = match &config.catalog_file {
+        Some(path) => {
+            let catalog = files::protected(path, CATALOG_BYTES, seen).map_err(fail)?;
+            Some(
+                serde_json::from_slice::<Catalog>(&catalog.0)
+                    .map_err(|_| fail("invalid firmware catalog"))?,
+            )
+        }
+        None => None,
+    };
+    let entries = catalog.map(|catalog| catalog.artifacts);
+    if let Some(entries) = &entries {
+        let references = entries
+            .iter()
+            .map(|entry| entry.reference.as_str())
+            .collect::<BTreeSet<_>>();
+        if entries.is_empty()
+            || entries.len() > MAX_CATALOG_ENTRIES
+            || references.len() != entries.len()
+        {
+            return Err(fail("invalid firmware catalog"));
+        }
     }
     let transfers = ArtifactTransfers::new(
         application.health().resources().clone(),
@@ -176,13 +198,13 @@ pub(super) async fn install(
             public_base: config.public_base.clone(),
             spool_directory: config.spool_directory.clone(),
             maximum_artifacts: MAX_CATALOG_ENTRIES,
-            maximum_uploads: 1,
+            maximum_uploads: (config.upload_stations * UPLOADS_PER_STATION).clamp(1, MAX_UPLOADS),
         },
     )
     .map_err(|_| fail("firmware artifact service unavailable"))?;
     let certificates = TestCertificateAuthority::generate(policy, &config.organization)
         .map_err(|_| fail("firmware test PKI unavailable"))?;
-    for entry in catalog.artifacts {
+    for entry in entries.into_iter().flatten() {
         let reference = ArtifactReference::new(entry.reference)
             .map_err(|_| fail("invalid firmware catalog reference"))?;
         let mut image = files::protected(Path::new(&entry.file), MAX_IMAGE_BYTES, seen)
@@ -215,7 +237,7 @@ pub(super) async fn install(
     });
     for station in stations
         .values_mut()
-        .filter(|station| station.firmware.is_some())
+        .filter(|station| station.firmware.is_some() || station.diagnostics.is_some())
     {
         station.firmware_providers = Some(providers.clone());
     }

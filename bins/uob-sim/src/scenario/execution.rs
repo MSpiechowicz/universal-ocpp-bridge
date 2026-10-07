@@ -55,6 +55,9 @@ pub(super) async fn execute_action(
         ActionKind::AssertFirmware | ActionKind::AwaitFirmware => {
             super::firmware16::observe(step, client.as_deref()).await
         }
+        ActionKind::AssertDiagnostics | ActionKind::AwaitDiagnostics => {
+            super::diagnostics16::observe(step, client.as_deref()).await
+        }
         ActionKind::CsmsOffline
         | ActionKind::CsmsReconnect
         | ActionKind::OfflineStart

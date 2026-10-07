@@ -233,6 +233,7 @@ impl TransportStream for Stream {
                         | "ReserveNow"
                         | "CancelReservation"
                 ) && !crate::firmware16::transport::intercepts(action, &self.state)
+                    && !crate::diagnostics16::transport::intercepts(action, &self.state)
                 {
                     return Ok(event);
                 }
@@ -266,13 +267,7 @@ impl TransportStream for Stream {
                         serde_json::json!({"callError":true})
                     }
                 } else {
-                    let reply = if matches!(action, "ReserveNow" | "CancelReservation") {
-                        crate::reservation16::transport::reply(action, payload, &self.state)
-                    } else if matches!(action, "UpdateFirmware" | "SignedUpdateFirmware") {
-                        crate::firmware16::transport::reply(action, payload, &self.state)
-                    } else {
-                        native_reply(action, payload, &local, text.len())
-                    };
+                    let reply = station_reply(action, payload, &self.state, &local, text.len());
                     if self.replies.len() == 128 {
                         self.replies.pop_front();
                     }
@@ -360,6 +355,28 @@ impl Stream {
             return Ok(true);
         }
         Ok(false)
+    }
+}
+
+/// Routes one intercepted native CALL to the station model that owns its action.
+fn station_reply(
+    action: &str,
+    payload: &Value,
+    state: &Arc<Mutex<Ocpp16State>>,
+    local: &LocalAuthorizationHandle,
+    wire_bytes: usize,
+) -> Value {
+    match action {
+        "ReserveNow" | "CancelReservation" => {
+            crate::reservation16::transport::reply(action, payload, state)
+        }
+        "UpdateFirmware" | "SignedUpdateFirmware" => {
+            crate::firmware16::transport::reply(action, payload, state)
+        }
+        "GetDiagnostics" | "GetLog" => {
+            crate::diagnostics16::transport::reply(action, payload, state)
+        }
+        _ => native_reply(action, payload, local, wire_bytes),
     }
 }
 

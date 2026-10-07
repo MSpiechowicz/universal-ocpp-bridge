@@ -119,7 +119,7 @@ fn composite_and_profile_report_evidence_validate_in_results_and_nested_exports(
             batch.records()[0].metadata().clone(),
             ExportPayload::CommandResult(result.clone()),
         );
-        assert_eq!(record.metadata().schema_version.revision, 15);
+        assert_eq!(record.metadata().schema_version.revision, 16);
         assert!(export_validator.is_valid(&serde_json::to_value(record).unwrap()));
     }
     // Exact rates are strings; a binary number never validates as evidence.

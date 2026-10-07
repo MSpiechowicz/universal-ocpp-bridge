@@ -23,7 +23,9 @@ impl NativeExchange {
             (
                 state.socket_generation,
                 local,
-                (state.reservation16.is_some() || state.firmware16.is_some())
+                (state.reservation16.is_some()
+                    || state.firmware16.is_some()
+                    || state.diagnostics16.is_some())
                     && call.action != crate::SimulatorAction::BootNotification,
             )
         };

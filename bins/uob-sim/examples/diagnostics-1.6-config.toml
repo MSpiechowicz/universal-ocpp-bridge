@@ -1,0 +1,19 @@
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "1.6"
+request_timeout_ms = 5000
+connectors = [1]
+
+[stations.diagnostics16]
+# Owner-only (0700) directory; the file and its lock are created mode 0600.
+private_state_file = "/tmp/uob-sim-diagnostics-124/diagnostics.json"
+legacy = true
+security_log = true
+maximum_bytes = 1048576
+upload_timeout_ms = 30000
+diagnostics_bytes = 4096
+security_log_bytes = 2048
+cancel_policy = "cancel"

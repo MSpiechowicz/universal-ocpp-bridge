@@ -1,7 +1,11 @@
 //! Opt-in demo-only station roster and native-to-canonical charging topology.
 //! Secrets and persistent-state directory contents are resolved and protected by the runtime.
+mod action_option;
+mod diagnostics;
 mod firmware;
+pub(crate) use action_option::StationActionOption;
 mod topology;
+pub(crate) use diagnostics::StationDiagnostics;
 pub(crate) use firmware::{StationFirmware, ValidatedFirmwareArtifacts};
 use std::{
     collections::BTreeSet,
@@ -62,6 +66,10 @@ pub(crate) struct StationControlOptions {
     /// OCPP 2.0.1 it is a secure update (L01) unless `non_secure_firmware` selects L02.
     pub update_firmware: StationActionOption,
     pub signed_update_firmware: StationActionOption,
+    /// OCPP 1.6 `GetDiagnostics`; uploads go to the `[charging.firmware]` artifact service.
+    pub get_diagnostics: StationActionOption,
+    /// Security Whitepaper `GetLog` (diagnostics or security log) on OCPP 1.6.
+    pub get_log: StationActionOption,
     /// OCPP 2.0.1 only: send firmware without signing certificate or signature (L02).
     pub non_secure_firmware: bool,
     pub reserve_connector_zero_supported: bool,
@@ -72,30 +80,6 @@ pub(crate) struct StationControlOptions {
     /// OCPP 2.0.1 only: answer charging needs with `Processing` because the operator's EMS
     /// sends a `TxProfile` through this bridge (K15.FR.05/07/08). Default `Rejected`.
     pub ev_charging_needs_processing: bool,
-}
-
-#[derive(Clone, Copy, Default, Deserialize)]
-#[serde(from = "bool")]
-pub(crate) enum StationActionOption {
-    #[default]
-    Disabled,
-    Enabled,
-}
-
-impl From<bool> for StationActionOption {
-    fn from(enabled: bool) -> Self {
-        if enabled {
-            Self::Enabled
-        } else {
-            Self::Disabled
-        }
-    }
-}
-
-impl StationActionOption {
-    pub fn enabled(self) -> bool {
-        matches!(self, Self::Enabled)
-    }
 }
 
 impl StationControlOptions {
@@ -126,6 +110,8 @@ impl StationControlOptions {
             || self.cancel_reservation.enabled()
             || self.update_firmware.enabled()
             || self.signed_update_firmware.enabled()
+            || self.get_diagnostics.enabled()
+            || self.get_log.enabled()
     }
 }
 
@@ -140,6 +126,8 @@ struct StationConfiguration {
     reservation16_file: Option<String>,
     reservation201_file: Option<String>,
     firmware_job_timeout_seconds: Option<u64>,
+    diagnostics_job_timeout_seconds: Option<u64>,
+    diagnostics_upload_max_bytes: Option<u64>,
     #[serde(flatten)]
     control: StationControlOptions,
 }
@@ -184,6 +172,7 @@ pub(crate) struct ValidatedChargingStation {
     pub reservation16_file: Option<PathBuf>,
     pub reservation201_file: Option<PathBuf>,
     pub firmware: Option<StationFirmware>,
+    pub diagnostics: Option<StationDiagnostics>,
 }
 
 impl Configuration {
@@ -428,6 +417,12 @@ fn validate_stations(
             station.firmware_job_timeout_seconds,
             station.protocol,
         )?;
+        let diagnostics = diagnostics::station(
+            &station.control,
+            station.diagnostics_job_timeout_seconds,
+            station.diagnostics_upload_max_bytes,
+            station.protocol,
+        )?;
         let reservation16_file = provider_file(station.reservation16_file)?;
         let reservation201_file = provider_file(station.reservation201_file)?;
         if station.resources.is_empty() || station.resources.len() > MAX_RESOURCES_PER_STATION {
@@ -449,6 +444,7 @@ fn validate_stations(
             reservation16_file,
             reservation201_file,
             firmware,
+            diagnostics,
         });
     }
     Ok(stations)

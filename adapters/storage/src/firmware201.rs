@@ -182,7 +182,12 @@ pub(crate) fn reserve(
         notifications: 0,
         rejected_transitions: 0,
     };
-    register_release_job(transaction, &release_job_id(&record.request_id), true)?;
+    register_release_job(
+        transaction,
+        &release_job_id(&record.request_id),
+        "firmware",
+        true,
+    )?;
     transaction
         .execute(
             "INSERT INTO firmware201_jobs(station,revision,request_id,native_request_id,inflight,payload)

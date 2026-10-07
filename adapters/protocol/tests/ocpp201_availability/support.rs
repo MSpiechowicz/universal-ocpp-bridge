@@ -60,14 +60,14 @@ pub async fn setup(
         entry.current_values.clear();
         entry.capabilities.operations.push(operation.clone());
     }
-    v201::registration_call(
+    Box::pin(v201::registration_call(
         &serde_json::to_vec(&fixture("boot-notification")).unwrap(),
         store,
         &mut snapshot,
         registration::RegistrationDecision::Accepted,
         60,
         Clock.now(),
-    )
+    ))
     .await
     .unwrap();
     let port = Arc::new(

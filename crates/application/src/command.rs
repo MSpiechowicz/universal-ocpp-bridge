@@ -96,6 +96,9 @@ pub enum CommandDispatchOutcome {
     FirmwareResponse16(uob_contracts::FirmwareResult16),
     /// Native OCPP 2.0.1 firmware reply and sent-artifact facts.
     FirmwareResponse201(uob_contracts::FirmwareResult201),
+    /// Native diagnostics/log reply and offered-destination facts; upload progress is
+    /// reconciled in storage.
+    DiagnosticsResponse16(uob_contracts::DiagnosticsResult16),
 }
 
 /// Sanitized failure to inspect or use the current station session.
@@ -185,6 +188,19 @@ pub trait StationCommandPort<P>: Send + Sync {
         _generation: Option<u64>,
         _now: UtcTimestamp,
     ) -> Result<Option<crate::FirmwareJobMutation16>, CommandErrorCode> {
+        Ok(None)
+    }
+    /// Captures a protected OCPP 1.6 diagnostics/log upload job; unrelated operations return
+    /// None.
+    ///
+    /// # Errors
+    /// Rejects invalid, unprivileged or unavailable diagnostics context before admission.
+    fn diagnostics_expectation_16(
+        &self,
+        _command: &Command<P>,
+        _generation: Option<u64>,
+        _now: UtcTimestamp,
+    ) -> Result<Option<crate::DiagnosticsJobMutation16>, CommandErrorCode> {
         Ok(None)
     }
     /// Captures a protected OCPP 2.0.1 firmware job; unrelated operations return None.

@@ -303,6 +303,7 @@ fn admitted_result(command: &ExternalCommand<()>) -> CommandResult {
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     }
 }
 

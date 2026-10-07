@@ -31,6 +31,8 @@ pub enum ActionKind {
     AwaitReservation,
     AssertFirmware,
     AwaitFirmware,
+    AssertDiagnostics,
+    AwaitDiagnostics,
 }
 
 impl ActionKind {
@@ -65,6 +67,8 @@ impl ActionKind {
             Self::AwaitReservation => "await_reservation",
             Self::AssertFirmware => "assert_firmware",
             Self::AwaitFirmware => "await_firmware",
+            Self::AssertDiagnostics => "assert_diagnostics",
+            Self::AwaitDiagnostics => "await_diagnostics",
         }
     }
 
@@ -97,6 +101,7 @@ impl ActionKind {
             Self::DelayLocalReply | Self::DropLocalReply => "native_fault_armed",
             Self::AssertReservation | Self::AwaitReservation => "reservation_observed",
             Self::AssertFirmware | Self::AwaitFirmware => "firmware_observed",
+            Self::AssertDiagnostics | Self::AwaitDiagnostics => "diagnostics_observed",
         }
     }
 
@@ -130,6 +135,8 @@ impl ActionKind {
             | Self::AwaitReservation
             | Self::AssertFirmware
             | Self::AwaitFirmware
+            | Self::AssertDiagnostics
+            | Self::AwaitDiagnostics
             | Self::Disconnect => None,
         }
     }

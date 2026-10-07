@@ -387,6 +387,7 @@ fn result(command: &Command<String>, hour: i64) -> CommandResult {
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     }
 }
 fn timestamp(hour: i64) -> UtcTimestamp {

@@ -270,6 +270,9 @@ pub struct AtomicStoreWrite<C, E, D, R> {
     pub firmware_observations_16: Vec<crate::FirmwareObservation16>,
     pub firmware_201: Option<Box<crate::FirmwareJobMutation201>>,
     pub firmware_observations_201: Vec<crate::FirmwareObservation201>,
+    /// Diagnostics/log upload job admission and native status facts share the transaction.
+    pub diagnostics_16: Option<Box<crate::DiagnosticsJobMutation16>>,
+    pub diagnostics_observations_16: Vec<crate::DiagnosticsObservation16>,
     /// Durable journal records produced by the operation.
     pub journal_events: Vec<EventEnvelope<E>>,
     /// Required target work produced by the operation.
@@ -298,6 +301,8 @@ impl<C, E, D, R> AtomicStoreWrite<C, E, D, R> {
             firmware_observations_16: Vec::new(),
             firmware_201: None,
             firmware_observations_201: Vec::new(),
+            diagnostics_16: None,
+            diagnostics_observations_16: Vec::new(),
             required_deliveries: Vec::new(),
             committed_records: Vec::new(),
         }

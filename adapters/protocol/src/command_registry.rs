@@ -8,6 +8,7 @@ pub(crate) mod composite_schedule16;
 pub(crate) mod composite_schedule201;
 pub(crate) mod configuration201;
 pub(crate) mod device_model201;
+pub(crate) mod diagnostics16;
 pub(crate) mod firmware16;
 pub(crate) mod firmware201;
 pub(crate) mod local_authorization16;
@@ -82,6 +83,7 @@ pub fn command_schemas(snapshot: &StationSnapshot) -> Vec<CommandSchemaDescripto
         descriptors.extend(local_authorization16::descriptors(snapshot));
         descriptors.extend(reservation16::descriptors(snapshot));
         descriptors.extend(firmware16::descriptors(snapshot));
+        descriptors.extend(diagnostics16::descriptors(snapshot));
         if snapshot.capabilities.supports(&trigger) && station_scope(&snapshot.station) {
             descriptors.push(trigger_descriptor(snapshot.station.clone()));
         }
@@ -313,6 +315,7 @@ fn connector_scope(resource: &ResourceRef) -> Option<u32> {
 /// Capability and authorization remain separate checks at admission and dispatch.
 /// # Errors
 /// Rejects an unlisted action or protocol and every schema, field, or scope mismatch.
+#[allow(clippy::too_many_lines)] // One ordered gate routes every privileged action to its pinned schema.
 pub fn validate_privileged_operation(
     resource: &ResourceRef,
     operation: &PrivilegedOcppOperation<Value>,
@@ -323,6 +326,9 @@ pub fn validate_privileged_operation(
             ProtocolEdition::Ocpp16j => reservation16::validate(resource, operation).map(|_| ()),
             ProtocolEdition::Ocpp201 => reservation201::validate(resource, operation).map(|_| ()),
         };
+    }
+    if diagnostics16::owns(operation) {
+        return diagnostics16::validate(resource, operation).map(|_| ());
     }
     if firmware16::ACTIONS.contains(&operation.action.as_str()) {
         return match operation.protocol {

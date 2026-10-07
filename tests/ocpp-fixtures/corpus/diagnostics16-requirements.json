@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "protocol": "1.6",
+  "sources": [
+    {
+      "title": "OCPP 1.6 Edition 2 with errata 2025-04-29",
+      "archive_sha256": "2a1d80284ca60449e85951fc55bc0538b5d45bd6f97c6d9228745acacb52c11b",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "4.4",
+        "5.9",
+        "6.17",
+        "6.18",
+        "6.25",
+        "6.26",
+        "7.24"
+      ]
+    },
+    {
+      "title": "Improved security for OCPP 1.6-J, Edition 4 (2026-02-05)",
+      "archive_sha256": "158b883e8ee712fd80fad3610b69fad355f7831d7a0ccdd996ce6b5452ce6859",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "N01",
+        "5.9",
+        "5.10",
+        "5.13",
+        "5.14",
+        "N01.FR.01",
+        "N01.FR.02",
+        "N01.FR.03",
+        "N01.FR.04",
+        "N01.FR.07",
+        "N01.FR.08",
+        "N01.FR.09",
+        "N01.FR.10",
+        "N01.FR.11",
+        "N01.FR.12",
+        "N01.FR.18",
+        "N01.FR.21"
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "requirements": [
+        "5.9",
+        "6.25 GetDiagnostics fields",
+        "6.26 optional fileName"
+      ],
+      "assertion": "Protected reference-only GetDiagnostics sends a provider upload directory as location with the caller's startTime, stopTime, retries and retryInterval; a reply with fileName is acceptance only and a reply without fileName means no diagnostics are available.",
+      "evidence": "wire/1.6/diagnostics-get-request.json;wire/1.6/diagnostics-get-reply-file.json;wire/1.6/diagnostics-get-reply-no-file.json;../../../bins/uob-service/tests/diagnostics16.rs"
+    },
+    {
+      "requirements": [
+        "4.4",
+        "6.17",
+        "7.24"
+      ],
+      "assertion": "Every DiagnosticsStatusNotification is committed before its empty reply and advances the newest unresolved GetDiagnostics job; Idle is a triggered not-busy report that resolves the job without claiming success.",
+      "evidence": "wire/1.6/diagnostics-status-uploading.json;wire/1.6/diagnostics-status-idle.json;../../../crates/application/src/diagnostics16/tests.rs;../../../adapters/storage/tests/diagnostics16.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.01",
+        "N01.FR.03",
+        "N01.FR.04",
+        "5.9",
+        "5.10"
+      ],
+      "assertion": "Protected reference-only GetLog sends DiagnosticsLog or SecurityLog with the caller's requestId and time window and a provider remoteLocation; Accepted, Rejected and AcceptedCanceled replies and the optional filename are preserved exactly.",
+      "evidence": "wire/1.6/log-get-diagnostics-log.json;wire/1.6/log-get-security-log.json;wire/1.6/log-get-reply-accepted.json;wire/1.6/log-get-reply-rejected.json;../../../bins/uob-service/tests/diagnostics16/security_log.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.07",
+        "N01.FR.08",
+        "N01.FR.09",
+        "N01.FR.10",
+        "N01.FR.12",
+        "5.13",
+        "5.14"
+      ],
+      "assertion": "LogStatusNotification advances only the job with its exact requestId; a missing requestId is accepted only for Idle; Uploading, Uploaded and the four failure statuses decode, and regressions or late reports are counted, not applied.",
+      "evidence": "wire/1.6/log-status-uploaded.json;wire/1.6/log-status-idle-unattributed.json;wire/1.6/diagnostics-negative-cases.json;../../../adapters/protocol/tests/ocpp16_diagnostics_decode.rs;../../../adapters/storage/tests/diagnostics16.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.11",
+        "N01.FR.20"
+      ],
+      "assertion": "AcceptedCanceled cancels the previous unresolved log job; later reports for a cancelled job never revive it. UploadLogStatusEnumType has no AcceptedCanceled value, so the N01.FR.20 notification is refused as schema-invalid.",
+      "evidence": "wire/1.6/log-get-reply-accepted-canceled.json;wire/1.6/diagnostics-negative-cases.json;../../../bins/uob-service/tests/diagnostics16/security_log.rs"
+    },
+    {
+      "requirements": [
+        "N01.FR.02",
+        "N01.FR.18",
+        "N01.FR.21"
+      ],
+      "assertion": "The station uploads a single file to the provider destination by PUT or POST with its reported file name appended to the trailing-slash location; a reported Uploaded is confirmed against the size and SHA-256 of the bytes the provider actually stored.",
+      "evidence": "../../../bins/uob-service/tests/diagnostics16.rs;../../../bins/uob-service/tests/diagnostics16/security_log.rs;../../../bins/uob-sim/tests/diagnostics16_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "5.9 retries",
+        "release drain"
+      ],
+      "assertion": "Lost replies stay uncertain and are never replayed after restart or reconnect; a deadline only times the job out; later native reports still resolve the job, and only resolved jobs release the drain.",
+      "evidence": "../../../adapters/storage/tests/diagnostics16/recovery.rs;../../../bins/uob-service/tests/diagnostics16/recovery.rs"
+    }
+  ],
+  "not_covered": [
+    "ExtendedTriggerMessage for LogStatusNotification (N01.FR.12 trigger path)",
+    "SecurityEventNotification and the security-log contents themselves (N01.FR.05, issue #127)",
+    "FTP/FTPS uploads, upload resume and Expect: 100-continue (N01.FR.14, N01.FR.22, N01.FR.23)",
+    "basic-authorization credentials in upload locations (N01.FR.17)",
+    "physical hardware, production artifact storage or OCA certification"
+  ],
+  "execution_status": "Fixture corpus validated against the pinned OCA schemas; the named contract, application, storage, protocol, actual-daemon and simulator tests pass in the workspace verifier, and the opt-in joint smoke passed on two consecutive runs."
+}

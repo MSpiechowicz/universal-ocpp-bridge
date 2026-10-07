@@ -1,0 +1,1 @@
+[2,"log16-get-3","GetLog",{"logType":"SecurityLog","requestId":102,"retries":0,"retryInterval":0,"log":{"remoteLocation":"ftps://uploads.demo.invalid/security/","oldestTimestamp":"2026-09-30T08:15:00+02:00","latestTimestamp":"2026-10-07T08:15:00+02:00"}}]

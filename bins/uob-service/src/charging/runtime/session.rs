@@ -43,20 +43,9 @@ pub(super) async fn attach(
                 Some(provider) => session.with_local_authorization_updates(provider.clone()),
                 None => session,
             };
-            let session = if let Some(credentials) = &context.credentials {
-                let session = session.with_reservations_16(
-                    configuration.reservations.clone(),
-                    configuration.control.reserve_connector_zero_supported,
-                    credentials.reservation_grant(),
-                );
-                match (configuration.firmware, &configuration.firmware_providers) {
-                    (Some(firmware), Some(providers)) => session.with_firmware_16(
-                        firmware::session(firmware, providers, credentials.reservation_grant()),
-                    ),
-                    _ => session,
-                }
-            } else {
-                session
+            let session = match &context.credentials {
+                Some(credentials) => protected_16(session, context, configuration, credentials),
+                None => session,
             };
             let session = Arc::new(session);
             context.commands.attach_16(station.clone(), session)
@@ -111,4 +100,37 @@ pub(super) async fn attach(
         }
     };
     Ok(Some(generation))
+}
+
+/// Installs the privileged OCPP 1.6 workflows that need the shared control credentials.
+fn protected_16(
+    session: uob_protocol_adapter::v16::remote_control::RemoteControlSession,
+    context: &StationContext,
+    configuration: &StationSettings,
+    credentials: &Arc<super::super::control_auth::ControlCredentials>,
+) -> uob_protocol_adapter::v16::remote_control::RemoteControlSession {
+    let session = session.with_reservations_16(
+        configuration.reservations.clone(),
+        configuration.control.reserve_connector_zero_supported,
+        credentials.reservation_grant(),
+    );
+    let session = match (configuration.firmware, &configuration.firmware_providers) {
+        (Some(firmware), Some(providers)) => session.with_firmware_16(firmware::session(
+            firmware,
+            providers,
+            credentials.reservation_grant(),
+        )),
+        _ => session,
+    };
+    match (configuration.diagnostics, &configuration.firmware_providers) {
+        (Some(diagnostics), Some(providers)) => {
+            session.with_diagnostics_16(super::super::diagnostics::session(
+                diagnostics,
+                providers,
+                Arc::new(context.store.clone()),
+                credentials.reservation_grant(),
+            ))
+        }
+        _ => session,
+    }
 }

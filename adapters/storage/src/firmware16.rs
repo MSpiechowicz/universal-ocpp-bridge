@@ -195,7 +195,12 @@ pub(crate) fn reserve(
         notifications: 0,
         rejected_transitions: 0,
     };
-    register_release_job(transaction, &release_job_id(&record.request_id), true)?;
+    register_release_job(
+        transaction,
+        &release_job_id(&record.request_id),
+        "firmware",
+        true,
+    )?;
     transaction
         .execute(
             "INSERT INTO firmware16_jobs(station,revision,request_id,native_request_id,inflight,payload)
@@ -219,6 +224,7 @@ pub(crate) fn reserve(
 pub(crate) fn register_release_job(
     connection: &Connection,
     id: &str,
+    kind: &'static str,
     bounded: bool,
 ) -> Result<(), StorageError> {
     let count: i64 = connection
@@ -229,8 +235,8 @@ pub(crate) fn register_release_job(
     }
     connection
         .execute(
-            "INSERT OR IGNORE INTO release_jobs(id, kind) VALUES (?1, 'firmware')",
-            [id],
+            "INSERT OR IGNORE INTO release_jobs(id, kind) VALUES (?1, ?2)",
+            [id, kind],
         )
         .map_err(unavailable)?;
     Ok(())

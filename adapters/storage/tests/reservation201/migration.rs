@@ -44,7 +44,7 @@ async fn populated_v15_upgrade_adds_the_201_owner_without_touching_16_rows() {
     seed_v15(&database);
     let store = database.open();
     let connection = Connection::open(&database.0).unwrap();
-    assert_eq!(version(&connection), 19);
+    assert_eq!(version(&connection), 20);
     assert_eq!(table_count(&connection), 1);
     drop(connection);
     let legacy = store.reservations_16(station()).await.unwrap();

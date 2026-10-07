@@ -188,7 +188,9 @@ fn write_history_command(
         firmware_16: None,
         firmware_observations_16: Vec::new(),
         firmware_201: None,
+        diagnostics_16: None,
         firmware_observations_201: Vec::new(),
+        diagnostics_observations_16: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: None,
         authorization_changes: Vec::new(),
@@ -259,6 +261,7 @@ fn write_command(
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     });
     write_history_command(store, command, command_result);
 }

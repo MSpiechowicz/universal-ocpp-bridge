@@ -155,6 +155,7 @@ async fn combined_status_requires_event_bearer_and_command_status_grant() {
             charging_profiles_201: None,
             firmware_16: None,
             firmware_201: None,
+            diagnostics_16: None,
         }),
         ..EventSource::default()
     });

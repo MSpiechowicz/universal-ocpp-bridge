@@ -51,6 +51,12 @@ pub(super) fn write_atomic(
     for observation in &write.firmware_observations_201 {
         crate::firmware201::observe(&transaction, observation)?;
     }
+    if let Some(mutation) = write.diagnostics_16.as_deref() {
+        crate::diagnostics16::reserve(&transaction, mutation)?;
+    }
+    for observation in &write.diagnostics_observations_16 {
+        crate::diagnostics16::observe(&transaction, observation)?;
+    }
     if let Some((station, payload)) = write.snapshot {
         crate::charging_profile201::retire_ended(
             &transaction,

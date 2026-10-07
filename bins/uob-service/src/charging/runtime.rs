@@ -1,4 +1,5 @@
 mod calls;
+mod diagnostics;
 mod dispatch;
 mod effects;
 mod firmware;
@@ -65,6 +66,11 @@ struct CallContext<'a> {
     negotiation: uob_application::NegotiationPolicy201,
     /// Native firmware family whose notifications reconcile durable jobs.
     firmware: Option<crate::configuration::charging::StationFirmware>,
+    /// Enabled native log families and the provider that received their uploads.
+    diagnostics: Option<(
+        crate::configuration::charging::StationDiagnostics,
+        &'a super::firmware::Providers,
+    )>,
 }
 
 #[derive(Default)]
@@ -127,6 +133,7 @@ pub(super) async fn serve(
                     if uob_application::ReservationStore16::expire_reservations_16(&context.store, Clock.now()).await.is_err()
                         || uob_application::ReservationStore201::expire_reservations_201(&context.store, Clock.now()).await.is_err()
                         || uob_application::FirmwareStore16::expire_firmware_jobs_16(&context.store, Clock.now()).await.is_err()
+                        || uob_application::DiagnosticsStore16::expire_diagnostics_jobs_16(&context.store, Clock.now()).await.is_err()
                         || uob_application::FirmwareStore201::expire_firmware_jobs_201(&context.store, Clock.now()).await.is_err()
                     {
                         break Err(unavailable());
@@ -279,6 +286,9 @@ fn call_context<'a>(
         firmware: configuration
             .firmware
             .filter(|_| configuration.firmware_providers.is_some()),
+        diagnostics: configuration
+            .diagnostics
+            .zip(configuration.firmware_providers.as_deref()),
     }
 }
 

@@ -92,6 +92,7 @@ pub(super) fn load_stations(
                 reservations_201,
                 firmware: station.firmware,
                 firmware_providers: None,
+                diagnostics: station.diagnostics,
             },
         );
         resources.insert(station.station_id, station.resources);

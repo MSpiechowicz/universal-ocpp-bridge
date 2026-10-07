@@ -79,7 +79,9 @@ pub(super) fn populated_write()
         firmware_16: None,
         firmware_observations_16: Vec::new(),
         firmware_201: None,
+        diagnostics_16: None,
         firmware_observations_201: Vec::new(),
+        diagnostics_observations_16: Vec::new(),
         purpose: uob_application::StorageWritePurpose::Routine,
         station_snapshot: Some(snapshot()),
         authorization_changes: vec![AuthorizationChange {

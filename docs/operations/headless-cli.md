@@ -1083,8 +1083,8 @@ Whitepaper Edition 4 `SignedUpdateFirmware`) are privileged, default-off,
 **demo-only** station options for `protocol = "ocpp16j"`. A station gets at most one of
 them: a signed-only charger answers the original message with `NotSupported` (L01.FR.20).
 Each firmware station also needs `firmware_job_timeout_seconds` (60–604800). Using
-either option requires one `[charging.firmware]` section, and that section is rejected
-when no station uses it.
+either option requires one `[charging.firmware]` section with a `catalog_file`, and that
+section is rejected when no station uses it.
 
 ```toml
 # Alongside the existing [charging] section:
@@ -1162,6 +1162,65 @@ the station reports an end state. To resolve it, send a `TriggerMessage` for
 `FirmwareStatusNotification`; a station that is not busy answers `Idle`. A lost reply stays
 `uncertain` and is never resent after a restart. See
 [OCPP 1.6 firmware](../architecture/ocpp16-firmware.md) for the state rules.
+
+### Protected OCPP 1.6 diagnostics and log uploads
+
+`get_diagnostics` (OCPP 1.6 `GetDiagnostics`) and `get_log` (Security Whitepaper Edition 4
+`GetLog` for a diagnostics or security log) are privileged, default-off, **demo-only** station
+options for `protocol = "ocpp16j"`. They are independent of each other and of firmware. A
+station with either one needs `diagnostics_job_timeout_seconds` (60–86400) and may lower the
+upload cap with `diagnostics_upload_max_bytes` (1 to 33554432, default 8 MiB).
+
+Stations upload to the same loopback test artifact service as firmware, so either option
+requires a `[charging.firmware]` section. Without a firmware station the section has no
+`catalog_file`:
+
+```toml
+[charging.firmware]
+listen_addr = "127.0.0.1:9100"
+spool_directory = "/srv/uob-demo/artifact-spool"
+
+[[charging.stations]]
+id = "demo-1"
+protocol = "ocpp16j"
+credential_file = "/srv/uob-demo/private/demo-1.credential"
+get_diagnostics = true
+get_log = true
+diagnostics_job_timeout_seconds = 1800
+```
+
+Commands target the station root and never carry a location; the bridge opens a fresh
+destination for each one:
+
+```json
+{"request_id":"log-1","resource":{"bridge_id":"local-demo","station_id":"demo-1"},
+ "operation":{"kind":"ocpp","parameters":{"protocol":"ocpp16j","action":"GetLog",
+   "payload_schema":"urn:uob:ocpp16:GetLogReference:1",
+   "payload":{"logType":"SecurityLog","requestId":124,
+     "oldestTimestamp":"2026-10-01T00:00:00Z","retries":2,"retryInterval":30}}},
+ "expires_at":"2026-10-07T12:10:00Z"}
+```
+
+`GetDiagnostics` uses `urn:uob:ocpp16:GetDiagnosticsReference:1` with optional `startTime`,
+`stopTime`, `retries` and `retryInterval`.
+
+The command result's `diagnostics_16` shows:
+
+- the offered destination's log type, byte cap and `test_only` marking;
+- the exact native reply, including the station's file name;
+- the durable job, which advances as the station reports `DiagnosticsStatusNotification` or
+  `LogStatusNotification`.
+
+When the station reports `Uploaded`, the job becomes `uploaded` only if the artifact service
+holds a complete file for it. The result then shows that file's SHA-256 and size; otherwise the
+job is `upload_unconfirmed`. Received files live in unlinked spool files for the life of the
+process; this is not log storage.
+
+A job that misses its deadline becomes `timed_out` but keeps blocking a release drain. A
+`TriggerMessage` for `DiagnosticsStatusNotification` makes a station that is not busy answer
+`Idle`, which resolves a stalled legacy job. A lost reply stays `uncertain` and is never resent
+after a restart. See [OCPP 1.6 diagnostics](../architecture/ocpp16-diagnostics.md) for the state
+rules.
 
 ### Protected OCPP 2.0.1 reservations
 

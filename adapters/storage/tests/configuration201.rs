@@ -62,6 +62,7 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     }
 }
 fn accepted(command: &Command<Value>) -> CommandResult {

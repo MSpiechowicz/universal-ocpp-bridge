@@ -33,6 +33,7 @@ pub(crate) fn config(endpoint: String) -> SimulatorClientConfig {
         reservation201: None,
         firmware16: None,
         firmware201: None,
+        diagnostics16: None,
     }
 }
 
