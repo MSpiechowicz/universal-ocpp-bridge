@@ -24,6 +24,12 @@ pub(super) async fn recover(store: &ChargingStore, commands: Arc<LiveCommands>) 
     )
     .await
     .map_err(io::Error::other)?;
+    uob_application::DiagnosticsStore16::recover_diagnostics_jobs_16(
+        store,
+        uob_application::CommandClock::now(&Clock),
+    )
+    .await
+    .map_err(io::Error::other)?;
     uob_application::FirmwareStore201::recover_firmware_jobs_201(
         store,
         uob_application::CommandClock::now(&Clock),

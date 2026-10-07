@@ -5,6 +5,7 @@ mod charging_profile;
 mod composite_schedule;
 mod configuration;
 mod configuration_values;
+mod diagnostics;
 mod enqueue;
 pub(crate) mod exact_rate;
 mod firmware;
@@ -19,6 +20,7 @@ pub(crate) use configuration_values::DeferredConfigurationCall;
 pub use configuration_values::{
     LocalConfigurationValues, ProtectedConfigurationText, ProtectedConfigurationValue,
 };
+pub use diagnostics::DiagnosticsSettings16;
 pub use firmware::FirmwareSettings16;
 pub use identity::LocalRemoteStartIdentity;
 pub(crate) use local_authorization::DeferredLocalAuthorizationCall16;
@@ -75,6 +77,7 @@ pub struct RemoteControlSession {
     reserve_zero: bool,
     reservation_active: Arc<std::sync::Mutex<bool>>,
     firmware: Option<Arc<FirmwareSettings16>>,
+    diagnostics: Option<Arc<DiagnosticsSettings16>>,
     clock: Arc<dyn CommandClock>,
     evidence: Arc<dyn uob_application::remote_control::RemoteControlStore>,
 }
@@ -109,12 +112,19 @@ impl RemoteControlSession {
             reserve_zero: false,
             reservation_active: Arc::new(std::sync::Mutex::new(true)),
             firmware: None,
+            diagnostics: None,
         })
     }
     /// Enables exactly one native firmware family for this authenticated socket.
     #[must_use]
     pub fn with_firmware_16(mut self, settings: Arc<FirmwareSettings16>) -> Self {
         self.firmware = Some(settings);
+        self
+    }
+    /// Enables the configured native log upload families for this authenticated socket.
+    #[must_use]
+    pub fn with_diagnostics_16(mut self, settings: Arc<DiagnosticsSettings16>) -> Self {
+        self.diagnostics = Some(settings);
         self
     }
     /// Installs locally provisioned station/key-bound values for this authenticated socket only.
@@ -246,6 +256,14 @@ impl StationCommandPort<Value> for RemoteControlSession {
     ) -> Result<Option<uob_application::FirmwareJobMutation16>, CommandErrorCode> {
         self.firmware_context(command, generation, now)
     }
+    fn diagnostics_expectation_16(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::DiagnosticsJobMutation16>, CommandErrorCode> {
+        self.diagnostics_context(command, generation, now)
+    }
     fn charging_profile_expectation(
         &self,
         command: &Command<Value>,
@@ -300,6 +318,11 @@ impl StationCommandPort<Value> for RemoteControlSession {
                 if crate::command_registry::firmware16::ACTIONS.contains(&operation.action.as_str()))
             {
                 return self.dispatch_firmware(&command).await;
+            }
+            if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
+                if crate::command_registry::diagnostics16::owns(operation))
+            {
+                return self.dispatch_diagnostics(&command).await;
             }
             let (action, unqueued_payload, profile_request, ready_pending) = {
                 let snapshot = self.snapshot.read().map_err(|_| state_error())?;

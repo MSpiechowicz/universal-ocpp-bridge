@@ -190,3 +190,113 @@ fn firmware_requires_the_privileged_grant() {
         Some(ConfigurationLoadError::InvalidCharging)
     );
 }
+
+const UPLOAD_SECTION: &str = "[charging.firmware]\nlisten_addr='127.0.0.1:9100'\nspool_directory='/var/lib/uob-demo/spool'\n";
+
+#[test]
+fn log_uploads_use_the_artifact_service_without_a_firmware_catalog() {
+    let both = validate(
+        &station(
+            "ocpp16j",
+            "get_diagnostics=true\nget_log=true\ndiagnostics_job_timeout_seconds=600",
+        ),
+        UPLOAD_SECTION,
+    )
+    .unwrap()
+    .unwrap();
+    let diagnostics = both.stations[0].diagnostics.unwrap();
+    assert!(diagnostics.diagnostics && diagnostics.log);
+    assert_eq!(diagnostics.job_timeout, Duration::from_secs(600));
+    assert_eq!(diagnostics.maximum_upload_bytes, 8 * 1024 * 1024);
+    let artifacts = both.firmware.unwrap();
+    assert!(artifacts.catalog_file.is_none());
+    assert_eq!(artifacts.upload_stations, 1);
+    let log_only = validate(
+        &station(
+            "ocpp16j",
+            "get_log=true\ndiagnostics_job_timeout_seconds=60\ndiagnostics_upload_max_bytes=1",
+        ),
+        UPLOAD_SECTION,
+    )
+    .unwrap()
+    .unwrap();
+    let diagnostics = log_only.stations[0].diagnostics.unwrap();
+    assert!(!diagnostics.diagnostics && diagnostics.log);
+    assert_eq!(diagnostics.maximum_upload_bytes, 1);
+    // A station may combine firmware and log uploads on the same service.
+    assert!(
+        validate(
+            &station(
+                "ocpp16j",
+                "update_firmware=true\nfirmware_job_timeout_seconds=600\nget_diagnostics=true\ndiagnostics_job_timeout_seconds=600",
+            ),
+            SECTION,
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn log_upload_options_are_bounded_ocpp16_only_and_never_unused() {
+    let fail = Err(ConfigurationLoadError::InvalidCharging);
+    for (protocol, options, section) in [
+        // No deadline, or one outside the bounds.
+        ("ocpp16j", "get_diagnostics=true", UPLOAD_SECTION),
+        (
+            "ocpp16j",
+            "get_diagnostics=true\ndiagnostics_job_timeout_seconds=59",
+            UPLOAD_SECTION,
+        ),
+        (
+            "ocpp16j",
+            "get_diagnostics=true\ndiagnostics_job_timeout_seconds=86401",
+            UPLOAD_SECTION,
+        ),
+        (
+            "ocpp16j",
+            "get_log=true\ndiagnostics_job_timeout_seconds=600\ndiagnostics_upload_max_bytes=0",
+            UPLOAD_SECTION,
+        ),
+        (
+            "ocpp16j",
+            "get_log=true\ndiagnostics_job_timeout_seconds=600\ndiagnostics_upload_max_bytes=33554433",
+            UPLOAD_SECTION,
+        ),
+        // Options without an enabled family.
+        (
+            "ocpp16j",
+            "diagnostics_job_timeout_seconds=600",
+            UPLOAD_SECTION,
+        ),
+        ("ocpp16j", "diagnostics_upload_max_bytes=10", UPLOAD_SECTION),
+        // OCPP 2.0.1 log retrieval is a separate workflow.
+        (
+            "ocpp201",
+            "get_log=true\ndiagnostics_job_timeout_seconds=600",
+            UPLOAD_SECTION,
+        ),
+        // Uploads need the artifact service.
+        (
+            "ocpp16j",
+            "get_diagnostics=true\ndiagnostics_job_timeout_seconds=600",
+            "",
+        ),
+        // A catalog belongs only to firmware, and firmware needs one.
+        (
+            "ocpp16j",
+            "get_diagnostics=true\ndiagnostics_job_timeout_seconds=600",
+            SECTION,
+        ),
+        (
+            "ocpp16j",
+            "update_firmware=true\nfirmware_job_timeout_seconds=600",
+            UPLOAD_SECTION,
+        ),
+    ] {
+        assert_eq!(
+            validate(&station_201(protocol, options), section).map(|_| ()),
+            fail,
+            "{protocol} {options}"
+        );
+    }
+}

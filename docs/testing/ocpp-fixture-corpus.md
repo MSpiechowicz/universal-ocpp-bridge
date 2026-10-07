@@ -121,6 +121,55 @@ The broad `ocpp16.firmware-diagnostics` row stays `planned` until diagnostics ar
 implemented. Security events, `ExtendedTriggerMessage` and certificate revocation are not
 claimed.
 
+## OCPP 1.6 diagnostics and log fixtures
+
+The schemas come from the two sources pinned for firmware:
+
+- **OCPP 1.6 archive.** `GetDiagnostics.json`, `GetDiagnosticsResponse.json` and
+  `DiagnosticsStatusNotificationResponse.json` keep their original CRLF bytes. The existing
+  LF-normalized `DiagnosticsStatusNotification.json` copy is reused unchanged, because the
+  TriggerMessage fixtures pin its digest.
+- **Security Whitepaper Edition 4.** `GetLog.json`, `GetLogResponse.json`,
+  `LogStatusNotification.json` and `LogStatusNotificationResponse.json` are byte-identical
+  LF Draft 6 copies from its `JSON_schemas.zip`, under `schemas/1.6-security/`.
+
+The 26 fixture IDs beginning with `wire.ocpp16.diagnostics-` and `wire.ocpp16.log-` were
+authored independently. They cover:
+
+- `GetDiagnostics` in full (time window, retries) and minimal form, and its reply with and
+  without `fileName` (no `fileName` means no diagnostics are available, §5.9);
+- all four `DiagnosticsStatusNotification` statuses and the empty reply;
+- `GetLog` for `DiagnosticsLog` and `SecurityLog`, each in full and minimal form, with the
+  i32 maximum and minimum `requestId`;
+- the `Accepted` (with and without `filename`), `Rejected` and `AcceptedCanceled` replies;
+- all seven `LogStatusNotification` statuses with `requestId`, the identity-free `Idle` that
+  N01.FR.12 permits, and the empty reply.
+
+`wire/1.6/diagnostics-negative-cases.json` holds 24 cases. CALLRESULT cases carry a
+`schema` key because their frame names no action. Schema-valid cases that are still refused
+natively:
+
+- a non-`Idle` `LogStatusNotification` without `requestId` (N01.FR.12);
+- a `requestId` outside i32;
+- negative `retries` or `retryInterval`;
+- an inverted `startTime`/`stopTime` or `oldestTimestamp`/`latestTimestamp` window;
+- a `fileName` with a control character (CiString is printable ASCII).
+
+The schema-invalid cases include:
+
+- `AcceptedCanceled` as an upload status. N01.FR.20 names it, but `UploadLogStatusEnumType`
+  does not contain it.
+- the log-only failure statuses in the legacy notification;
+- a `remoteLocation` over 512 characters and file names over 255 characters;
+- missing `location`, `log`, `requestId` or reply `status`;
+- an unknown `logType`, and a `status` in the legacy reply.
+
+`diagnostics16-requirements.json` maps 1.6 §4.4, §5.9, §6.17/6.18, §6.25/6.26 and §7.24 and
+the N01 requirement IDs to fixtures and tests. The new
+`ocpp16.firmware-diagnostics.diagnostics-logs` row stays `planned` until the bridge,
+simulator and joint-smoke evidence it names exists. The broad `ocpp16.firmware-diagnostics`
+row is unchanged.
+
 ## OCPP 2.0.1 firmware fixtures
 
 `UpdateFirmwareRequest.json`, `UpdateFirmwareResponse.json` and

@@ -1,6 +1,7 @@
 mod action;
 mod cancellation;
 mod cli;
+mod diagnostics16;
 mod execution;
 mod execution_16;
 mod execution_201;

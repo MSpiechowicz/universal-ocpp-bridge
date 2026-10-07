@@ -173,6 +173,7 @@ pub(super) async fn run_1_6(
             _ = reset_poll.tick() => {
                 crate::reservation16::transport::expire(&state);
                 crate::firmware16::transport::poll(&state, &traces);
+                crate::diagnostics16::transport::poll(&state);
                 let reset = state.lock().expect("OCPP 1.6 state lock").reset_reason.is_some();
                 if reset {
                     requests.shutdown().await;
@@ -249,6 +250,10 @@ pub(super) async fn run_1_6(
                     requests.spawn(crate::firmware16::transport::send(client.clone(),
                         Arc::clone(&state), traces.clone(), status, generation));
                 }
+                Some(Command::DiagnosticsStatus(status, generation)) => {
+                    requests.spawn(crate::diagnostics16::transport::send(client.clone(),
+                        Arc::clone(&state), traces.clone(), status, generation));
+                }
                 Some(Command::Shutdown(result)) => {
                     requests.shutdown().await;
                     replay.shutdown().await;
@@ -258,6 +263,7 @@ pub(super) async fn run_1_6(
                     state.lock().expect("OCPP 1.6 state lock").local = None;
                     state.lock().expect("native state lock").reservation16 = None;
                     state.lock().expect("native state lock").firmware16 = None;
+                    state.lock().expect("native state lock").diagnostics16 = None;
                     let _ = result.send(response);
                     break;
                 }
@@ -268,6 +274,7 @@ pub(super) async fn run_1_6(
     state.lock().expect("OCPP 1.6 state lock").local = None;
     state.lock().expect("native state lock").reservation16 = None;
     state.lock().expect("native state lock").firmware16 = None;
+    state.lock().expect("native state lock").diagnostics16 = None;
 }
 
 pub(crate) async fn send_1_6_call(

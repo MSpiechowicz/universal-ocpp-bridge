@@ -336,6 +336,7 @@ fn admitted<P>(command: &uob_contracts::ExternalCommand<P>) -> CommandResult {
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     }
 }
 

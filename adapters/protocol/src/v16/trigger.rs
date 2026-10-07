@@ -86,3 +86,27 @@ pub(super) fn signed_firmware(payload: Value) -> Result<ChargerObservation, Deco
         request_id: request.request_id,
     })
 }
+
+/// Security Whitepaper Ed. 4 §5.13. Exact fields only; the request identity is mandatory unless
+/// the station reports `Idle` (N01.FR.12). `UploadFailed` belongs to the diagnostics message.
+pub(super) fn log_status(payload: Value) -> Result<ChargerObservation, DecodeError> {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Request {
+        status: uob_contracts::LogUploadStatus16,
+        #[serde(default)]
+        request_id: Option<i32>,
+    }
+    let invalid = || DecodeError::new(PROTOCOL, DecodeErrorKind::InvalidPayload);
+    let request: Request = serde_json::from_value(payload).map_err(|_| invalid())?;
+    if !request.status.log()
+        || (request.request_id.is_none()
+            && request.status != uob_contracts::LogUploadStatus16::Idle)
+    {
+        return Err(invalid());
+    }
+    Ok(ChargerObservation::LogStatus16 {
+        status: request.status,
+        request_id: request.request_id,
+    })
+}

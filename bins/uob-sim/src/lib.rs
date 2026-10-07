@@ -18,6 +18,7 @@ mod client_observation16;
 mod client_reconnect201;
 mod client_runtime;
 mod client_runtime_201;
+pub mod diagnostics16;
 pub mod firmware16;
 pub mod firmware201;
 pub mod local_authorization;
@@ -26,7 +27,7 @@ mod native_state;
 pub mod reservation16;
 pub mod reservation201;
 use native_state::{
-    open_firmware16, open_firmware201, open_native_state, open_native_state201,
+    open_diagnostics16, open_firmware16, open_firmware201, open_native_state, open_native_state201,
     open_reservation201, validate_client_config,
 };
 mod station_auth;
@@ -118,6 +119,7 @@ pub struct SimulatorClientConfig {
     pub reservation201: Option<(String, reservation201::Reservation201Config)>,
     pub firmware16: Option<(String, firmware16::FirmwareConfig)>,
     pub firmware201: Option<(String, firmware201::FirmwareConfig201)>,
+    pub diagnostics16: Option<(String, diagnostics16::DiagnosticsConfig)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -218,6 +220,7 @@ enum Command {
     LocalListConflict,
     ReservationStatus(u32, &'static str),
     FirmwareStatus(firmware16::FirmwareStatus, u64),
+    DiagnosticsStatus(diagnostics16::LogStatus, u64),
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
 }
 
@@ -261,6 +264,7 @@ struct Ocpp16State {
     local: Option<local_authorization::LocalAuthorizationHandle>,
     reservation16: Option<reservation16::ReservationHandle>,
     firmware16: Option<firmware16::FirmwareHandle>,
+    diagnostics16: Option<diagnostics16::DiagnosticsHandle>,
     reservation_notifications: Vec<(u32, &'static str)>,
     local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
     reset_reason: Option<ocpp_client::ocpp_types::v16::common::Reason>,
@@ -363,6 +367,7 @@ impl SimulatorProtocolClient {
                         })
                         .transpose()?,
                     firmware16: open_firmware16(&config)?,
+                    diagnostics16: open_diagnostics16(&config)?,
                     notifications: Some(commands.downgrade()),
                     ..Ocpp16State::default()
                 }));

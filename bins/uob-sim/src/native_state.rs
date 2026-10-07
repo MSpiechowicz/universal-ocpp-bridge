@@ -54,6 +54,19 @@ pub(crate) fn open_firmware16(
         .transpose()
 }
 
+pub(crate) fn open_diagnostics16(
+    config: &SimulatorClientConfig,
+) -> Result<Option<crate::diagnostics16::DiagnosticsHandle>, SimulatorClientError> {
+    config
+        .diagnostics16
+        .as_ref()
+        .map(|(station, options)| {
+            crate::diagnostics16::DiagnosticsHandle::open(station, options)
+                .map_err(|code| SimulatorClientError::Protocol(code.to_owned()))
+        })
+        .transpose()
+}
+
 pub(crate) fn open_firmware201(
     config: &SimulatorClientConfig,
 ) -> Result<Option<crate::firmware201::Firmware201Handle>, SimulatorClientError> {
@@ -102,6 +115,11 @@ pub(crate) fn validate_client_config(
     if config.version != OcppVersion::V1_6 && config.firmware16.is_some() {
         return Err(SimulatorClientError::Protocol(
             "OCPP 1.6 firmware cannot attach to OCPP 2.0.1".to_owned(),
+        ));
+    }
+    if config.version != OcppVersion::V1_6 && config.diagnostics16.is_some() {
+        return Err(SimulatorClientError::Protocol(
+            "OCPP 1.6 diagnostics cannot attach to OCPP 2.0.1".to_owned(),
         ));
     }
     if config.version != OcppVersion::V2_0_1 && config.firmware201.is_some() {

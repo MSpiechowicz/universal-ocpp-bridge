@@ -97,6 +97,16 @@ pub(super) async fn dispatch_call(
         {
             super::firmware::complete_status(&incoming, snapshot, &services, &mut commits).await?
         }
+        (ProtocolEdition::Ocpp16j, "DiagnosticsStatusNotification")
+            if services.diagnostics.is_some() =>
+        {
+            super::diagnostics::complete_status(&incoming, snapshot, &services, &mut commits)
+                .await?
+        }
+        (ProtocolEdition::Ocpp16j, "LogStatusNotification") => {
+            super::diagnostics::complete_status(&incoming, snapshot, &services, &mut commits)
+                .await?
+        }
         (
             ProtocolEdition::Ocpp16j,
             "DiagnosticsStatusNotification" | "FirmwareStatusNotification",

@@ -68,6 +68,7 @@ pub(super) fn device_delivery(delivery_id: &str, request_id: &str) -> TargetDeli
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     };
     TargetDelivery {
         delivery_id: DeliveryId::new(delivery_id).expect("delivery identity"),

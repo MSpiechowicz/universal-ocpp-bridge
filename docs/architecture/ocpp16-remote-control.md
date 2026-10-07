@@ -28,6 +28,8 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | SetChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:SetChargingProfileRequest`; complete native profile, exact station/connector scope and ongoing transaction checks for TxProfile | Accepted / Rejected / NotSupported |
 | ClearChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:ClearChargingProfileRequest`; station authority for ID/broad clears, exact connector for child filter clears | Accepted / Unknown |
 | UpdateFirmware | Privileged `Ocpp`, bridge reference schema `urn:uob:ocpp16:UpdateFirmwareReference:1`; station scope, provider artifact of kind `Firmware`, durable job before dispatch (see [OCPP 1.6 firmware](ocpp16-firmware.md)) | Empty acknowledgement / CALLERROR |
+| GetDiagnostics | Privileged `Ocpp`, bridge reference schema `urn:uob:ocpp16:GetDiagnosticsReference:1`; station scope, provider upload destination bound to a durable job before dispatch (see [OCPP 1.6 diagnostics](ocpp16-diagnostics.md)) | fileName / no fileName / CALLERROR |
+| GetLog | Privileged `Ocpp`, bridge reference schema `urn:uob:ocpp16:GetLogReference:1`; station scope, `DiagnosticsLog` or `SecurityLog` destination bound to a durable job | Accepted / Rejected / AcceptedCanceled |
 | SignedUpdateFirmware | Privileged `Ocpp`, bridge reference schema `urn:uob:ocpp16:SignedUpdateFirmwareReference:1`; station scope, `SignedFirmware` artifact whose signing certificate the PKI provider trusts | Accepted / Rejected / AcceptedCanceled / InvalidCertificate / RevokedCertificate |
 
 Unknown fields, wrong schemas, OCPP 2.0.1 reset types, unsupported operations and cross-resource

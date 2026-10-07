@@ -89,3 +89,9 @@ sends unsigned ones. signed_update_firmware is refused for ocpp201 stations, and
 non_secure_firmware is refused without update_firmware or on ocpp16j stations. See
 [the 2.0.1 operator example](../operations/headless-cli.md#protected-ocpp-201-firmware-updates).
 
+Independent station options get_diagnostics/get_log enable OCPP 1.6 GetDiagnostics and the
+Security Whitepaper GetLog for exact ocpp16j stations only. They are default-off and demo-only,
+need a bounded diagnostics_job_timeout_seconds, accept an optional diagnostics_upload_max_bytes,
+and use the same [charging.firmware] artifact service, which then needs no catalog_file unless a
+station also enables firmware. Timeout and cap options without either action are refused. See
+[the operator example](../operations/headless-cli.md#protected-ocpp-16-diagnostics-and-log-uploads).

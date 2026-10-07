@@ -99,6 +99,8 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::AwaitReservation
                 | ActionKind::AssertFirmware
                 | ActionKind::AwaitFirmware
+                | ActionKind::AssertDiagnostics
+                | ActionKind::AwaitDiagnostics
         )
     {
         return Err(setup_failure(

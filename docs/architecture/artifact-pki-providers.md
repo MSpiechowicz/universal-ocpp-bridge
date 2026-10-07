@@ -104,5 +104,9 @@ The OCPP 1.6J and OCPP 2.0.1 firmware workflows ([ocpp16-firmware.md](ocpp16-fir
 composes one `TestArtifactService` and one `TestCertificateAuthority` from
 `[charging.firmware]` and shares them between stations of either edition.
 
-Not in scope: diagnostics, security-event and certificate CSMS workflows, compose
+The OCPP 1.6J diagnostics and log workflow ([ocpp16-diagnostics.md](ocpp16-diagnostics.md))
+opens upload destinations on the same `TestArtifactService` and checks each reported upload
+against `upload_status`.
+
+Not in scope: OCPP 2.0.1 log retrieval, security-event and certificate CSMS workflows, compose
 integration, and production PKI or persistent artifact storage.

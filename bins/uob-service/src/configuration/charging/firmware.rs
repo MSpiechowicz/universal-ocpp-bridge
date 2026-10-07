@@ -1,5 +1,6 @@
 //! Demo-only firmware options: one native family or security mode per station and one local
-//! test artifact service. Production never reaches this section because charging is demo-only.
+//! test artifact service, which also receives OCPP 1.6 diagnostics and log uploads. Production
+//! never reaches this section because charging is demo-only.
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use serde::Deserialize;
@@ -12,7 +13,8 @@ use super::{
 const MIN_JOB_TIMEOUT_SECONDS: u64 = 60;
 const MAX_JOB_TIMEOUT_SECONDS: u64 = 7 * 24 * 60 * 60;
 
-/// `[charging.firmware]`: where stations download test firmware and what is published.
+/// `[charging.firmware]`: where stations download test firmware and upload logs, and what is
+/// published.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FirmwareSection {
@@ -20,7 +22,8 @@ pub(crate) struct FirmwareSection {
     /// Station-reachable base; defaults to `http://<listen_addr>`.
     public_base: Option<String>,
     spool_directory: String,
-    catalog_file: String,
+    /// Required exactly when a station enables a firmware update.
+    catalog_file: Option<String>,
     /// Optional public output of the generated demo manufacturer root for station provisioning.
     manufacturer_root_file: Option<String>,
     organization: Option<String>,
@@ -30,7 +33,9 @@ pub(crate) struct ValidatedFirmwareArtifacts {
     pub listen_addr: SocketAddr,
     pub public_base: String,
     pub spool_directory: PathBuf,
-    pub catalog_file: PathBuf,
+    pub catalog_file: Option<PathBuf>,
+    /// Stations with diagnostics or log uploads; bounds the open upload destinations.
+    pub upload_stations: usize,
     pub manufacturer_root_file: Option<PathBuf>,
     pub organization: String,
 }
@@ -85,7 +90,12 @@ pub(super) fn validate(
     occupied: &[SocketAddr],
 ) -> Result<Option<ValidatedFirmwareArtifacts>, ConfigurationLoadError> {
     let fail = ConfigurationLoadError::InvalidCharging;
-    let used = stations.iter().any(|station| station.firmware.is_some());
+    let firmware = stations.iter().any(|station| station.firmware.is_some());
+    let upload_stations = stations
+        .iter()
+        .filter(|station| station.diagnostics.is_some())
+        .count();
+    let used = firmware || upload_stations > 0;
     let Some(section) = section else {
         return if used { Err(fail) } else { Ok(None) };
     };
@@ -105,16 +115,21 @@ pub(super) fn validate(
         Ok(path)
     };
     let spool_directory = private(&section.spool_directory)?;
-    let catalog_file = private(&section.catalog_file)?;
+    if firmware != section.catalog_file.is_some() {
+        return Err(fail);
+    }
+    let catalog_file = section.catalog_file.as_deref().map(private).transpose()?;
     let manufacturer_root_file = section
         .manufacturer_root_file
         .as_deref()
         .map(private)
         .transpose()?;
-    if catalog_file.starts_with(&spool_directory)
-        || manufacturer_root_file
-            .as_ref()
-            .is_some_and(|path| path == &catalog_file || path.starts_with(&spool_directory))
+    if catalog_file
+        .as_ref()
+        .is_some_and(|catalog| catalog.starts_with(&spool_directory))
+        || manufacturer_root_file.as_ref().is_some_and(|path| {
+            catalog_file.as_ref() == Some(path) || path.starts_with(&spool_directory)
+        })
     {
         return Err(fail);
     }
@@ -129,6 +144,7 @@ pub(super) fn validate(
         public_base,
         spool_directory,
         catalog_file,
+        upload_stations,
         manufacturer_root_file,
         organization,
     }))

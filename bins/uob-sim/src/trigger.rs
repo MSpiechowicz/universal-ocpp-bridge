@@ -255,6 +255,13 @@ fn payloads(
         .firmware16
         .clone();
     let firmware = firmware.map_or_else(|| Some("Idle".to_owned()), |model| model.trigger_status());
+    // §4.4: Idle only when not busy uploading diagnostics.
+    let diagnostics = state
+        .lock()
+        .expect("OCPP 1.6 state lock")
+        .diagnostics16
+        .clone()
+        .map_or("Idle", |model| model.trigger_status());
     let state = state.lock().expect("OCPP 1.6 state lock");
     match &request.requested_message {
         Requested::BootNotification => vec![state.boot.clone().unwrap_or_else(|| {
@@ -262,7 +269,7 @@ fn payloads(
                 "chargePointVendor": "UOB", "chargePointModel": "Simulator"
             })
         })],
-        Requested::DiagnosticsStatusNotification => vec![json!({"status":"Idle"})],
+        Requested::DiagnosticsStatusNotification => vec![json!({ "status": diagnostics })],
         // OCPP 1.6 §4.5: Idle only when not busy; a busy job reports its current status.
         Requested::FirmwareStatusNotification => firmware
             .map(|status| json!({ "status": status }))

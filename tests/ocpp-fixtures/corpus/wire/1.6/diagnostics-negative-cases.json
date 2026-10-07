@@ -1,0 +1,372 @@
+{
+  "cases": [
+    {
+      "id": "log-status-uploaded-without-request",
+      "wire": [
+        2,
+        "neg-1",
+        "LogStatusNotification",
+        {
+          "status": "Uploaded"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "N01.FR.12 requestId is mandatory unless ExtendedTriggerMessage triggered the report while no upload is ongoing"
+    },
+    {
+      "id": "log-status-accepted-canceled",
+      "wire": [
+        2,
+        "neg-2",
+        "LogStatusNotification",
+        {
+          "status": "AcceptedCanceled",
+          "requestId": 101
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "N01.FR.20 names AcceptedCanceled but UploadLogStatusEnumType does not contain it"
+    },
+    {
+      "id": "log-status-extra-field",
+      "wire": [
+        2,
+        "neg-3",
+        "LogStatusNotification",
+        {
+          "status": "Uploaded",
+          "requestId": 101,
+          "filename": "a.log"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties"
+    },
+    {
+      "id": "log-status-request-overflow",
+      "wire": [
+        2,
+        "neg-4",
+        "LogStatusNotification",
+        {
+          "status": "Uploading",
+          "requestId": 2147483648
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "OCPP integer is a signed 32-bit identity"
+    },
+    {
+      "id": "log-status-null-request",
+      "wire": [
+        2,
+        "neg-5",
+        "LogStatusNotification",
+        {
+          "status": "Uploading",
+          "requestId": null
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "null is not an integer"
+    },
+    {
+      "id": "diagnostics-status-log-only-value",
+      "wire": [
+        2,
+        "neg-6",
+        "DiagnosticsStatusNotification",
+        {
+          "status": "UploadFailure"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "UploadFailure belongs to UploadLogStatusEnumType; 1.6 DiagnosticsStatus uses UploadFailed"
+    },
+    {
+      "id": "diagnostics-status-request-identity",
+      "wire": [
+        2,
+        "neg-7",
+        "DiagnosticsStatusNotification",
+        {
+          "status": "Uploaded",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "1.6 DiagnosticsStatusNotification carries no request identity"
+    },
+    {
+      "id": "diagnostics-status-missing-status",
+      "wire": [
+        2,
+        "neg-8",
+        "DiagnosticsStatusNotification",
+        {}
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "status is required"
+    },
+    {
+      "id": "get-diagnostics-missing-location",
+      "wire": [
+        2,
+        "neg-9",
+        "GetDiagnostics",
+        {
+          "retries": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "6.25 location is required"
+    },
+    {
+      "id": "get-diagnostics-extra-field",
+      "wire": [
+        2,
+        "neg-10",
+        "GetDiagnostics",
+        {
+          "location": "https://uploads.demo.invalid/u/",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties"
+    },
+    {
+      "id": "get-diagnostics-negative-retries",
+      "wire": [
+        2,
+        "neg-11",
+        "GetDiagnostics",
+        {
+          "location": "https://uploads.demo.invalid/u/",
+          "retries": -1
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "6.25 retries is a count of attempts"
+    },
+    {
+      "id": "get-diagnostics-inverted-window",
+      "wire": [
+        2,
+        "neg-12",
+        "GetDiagnostics",
+        {
+          "location": "https://uploads.demo.invalid/u/",
+          "startTime": "2026-10-07T12:00:00Z",
+          "stopTime": "2026-10-07T00:00:00Z"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "6.25 startTime is the oldest and stopTime the latest logging information"
+    },
+    {
+      "id": "get-log-missing-log",
+      "wire": [
+        2,
+        "neg-13",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "log is required"
+    },
+    {
+      "id": "get-log-missing-request",
+      "wire": [
+        2,
+        "neg-14",
+        "GetLog",
+        {
+          "logType": "SecurityLog",
+          "log": {
+            "remoteLocation": "https://uploads.demo.invalid/u/"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestId is required"
+    },
+    {
+      "id": "get-log-unknown-log-type",
+      "wire": [
+        2,
+        "neg-15",
+        "GetLog",
+        {
+          "logType": "ConfigurationLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://uploads.demo.invalid/u/"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "LogEnumType is DiagnosticsLog or SecurityLog"
+    },
+    {
+      "id": "get-log-location-too-long",
+      "wire": [
+        2,
+        "neg-16",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://uploads.demo.invalid/uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu"
+          }
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "remoteLocation is limited to 512 characters"
+    },
+    {
+      "id": "get-log-negative-retry-interval",
+      "wire": [
+        2,
+        "neg-17",
+        "GetLog",
+        {
+          "logType": "DiagnosticsLog",
+          "requestId": 1,
+          "retryInterval": -30,
+          "log": {
+            "remoteLocation": "https://uploads.demo.invalid/u/"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "retryInterval is a number of seconds"
+    },
+    {
+      "id": "get-log-inverted-window",
+      "wire": [
+        2,
+        "neg-18",
+        "GetLog",
+        {
+          "logType": "SecurityLog",
+          "requestId": 1,
+          "log": {
+            "remoteLocation": "https://uploads.demo.invalid/u/",
+            "oldestTimestamp": "2026-10-07T00:00:00Z",
+            "latestTimestamp": "2026-10-06T00:00:00Z"
+          }
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "oldestTimestamp must not follow latestTimestamp"
+    },
+    {
+      "id": "get-diagnostics-reply-file-name-too-long",
+      "schema": "GetDiagnosticsResponse",
+      "wire": [
+        3,
+        "neg-19",
+        {
+          "fileName": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "6.26 fileName is CiString255"
+    },
+    {
+      "id": "get-diagnostics-reply-file-name-control",
+      "schema": "GetDiagnosticsResponse",
+      "wire": [
+        3,
+        "neg-20",
+        {
+          "fileName": "diag\u0007.tar"
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "CiString is printable ASCII"
+    },
+    {
+      "id": "get-diagnostics-reply-status",
+      "schema": "GetDiagnosticsResponse",
+      "wire": [
+        3,
+        "neg-21",
+        {
+          "status": "Accepted"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "1.6 GetDiagnostics.conf has no status"
+    },
+    {
+      "id": "get-log-reply-missing-status",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg-22",
+        {
+          "filename": "a.log"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "status is required"
+    },
+    {
+      "id": "get-log-reply-unknown-status",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg-23",
+        {
+          "status": "Busy"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "LogStatusEnumType is Accepted, Rejected or AcceptedCanceled"
+    },
+    {
+      "id": "get-log-reply-filename-too-long",
+      "schema": "GetLogResponse",
+      "wire": [
+        3,
+        "neg-24",
+        {
+          "status": "Accepted",
+          "filename": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "filename is limited to 255 characters"
+    }
+  ]
+}

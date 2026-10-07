@@ -99,8 +99,9 @@ EMS consumption or electrical energy delivery.
 MQTT explicitly accepts named command-result v1.0/v1.1/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10
 and runtime revisions 11 (OCPP 1.6 reservations), 12 (OCPP 2.0.1 reservations), 13
 (OCPP 2.0.1 composite schedules and installed-profile reports), 14 (OCPP 1.6 firmware
-updates) and 15 (OCPP 2.0.1 firmware updates) on existing topics. Historically unsupported
-v1.2/v1.3 remain unsupported, and future revision 16 is rejected before publication. Immediate and durable results retain
+updates), 15 (OCPP 2.0.1 firmware updates) and 16 (OCPP 1.6 diagnostics and log uploads)
+on existing topics. Historically unsupported v1.2/v1.3 remain unsupported, and future revision
+17 is rejected before publication. Immediate and durable results retain
 packet-specific PUBACK correlation and existing encoded-message caps; oversized
 results fail without truncated evidence. Broker receipt is not native acceptance,
 installed list contents, offline authorization or physical effects. Result compatibility

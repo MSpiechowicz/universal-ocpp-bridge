@@ -45,6 +45,12 @@ pub enum ChargerObservation {
         status: uob_contracts::FirmwareStatus16,
         request_id: Option<i32>,
     },
+    /// Security Whitepaper `LogStatusNotification`; `request_id` is absent only for a
+    /// triggered `Idle` (N01.FR.12).
+    LogStatus16 {
+        status: uob_contracts::LogUploadStatus16,
+        request_id: Option<i32>,
+    },
     /// OCPP 2.0.1 `FirmwareStatusNotification`; `request_id` is absent only for `Idle`
     /// (L01.FR.20).
     FirmwareStatus201 {

@@ -1,0 +1,39 @@
+schema_version = 1
+seed = 124
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "wire.ocpp16.boot.valid"
+payload = { chargePointVendor = "UOB", chargePointModel = "DiagnosticsStation" }
+
+# The CSMS sends GetDiagnostics; the station uploads one file and reports Uploaded.
+[[steps]]
+id = "await-uploaded-diagnostics"
+station = "alpha"
+action = "await_diagnostics"
+timeout_ms = 120000
+expect_response = { active = false, kind = "Diagnostics", lastStatus = "Uploaded", pendingStatuses = 0 }
+
+# The CSMS then sends GetLog(SecurityLog); the station reports Uploading and Uploaded with its
+# requestId (N01.FR.07).
+[[steps]]
+id = "await-uploaded-security-log"
+station = "alpha"
+action = "await_diagnostics"
+timeout_ms = 120000
+expect_response = { active = false, kind = "SecurityLog", lastStatus = "Uploaded", uploads = 2, pendingStatuses = 0 }
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

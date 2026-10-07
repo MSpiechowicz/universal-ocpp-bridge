@@ -1,0 +1,1 @@
+[2,"log16-get-1","GetLog",{"logType":"DiagnosticsLog","requestId":101,"retries":2,"retryInterval":30,"log":{"remoteLocation":"https://uploads.demo.invalid/uploads/b81d44c0/","oldestTimestamp":"2026-10-06T00:00:00Z","latestTimestamp":"2026-10-07T00:00:00Z"}}]

@@ -3,6 +3,7 @@ mod commands;
 mod configuration201;
 mod control_auth;
 mod device_model;
+mod diagnostics;
 mod files;
 mod firmware;
 mod local_authorization;
@@ -83,6 +84,7 @@ pub(super) struct StationSettings {
     reservations_201: Option<Arc<uob_protocol_adapter::v201::remote_control::ReservationValues201>>,
     firmware: Option<crate::configuration::charging::StationFirmware>,
     firmware_providers: Option<Arc<firmware::Providers>>,
+    diagnostics: Option<crate::configuration::charging::StationDiagnostics>,
 }
 
 impl StationSettings {
@@ -181,6 +183,12 @@ impl StationSettings {
             snapshot,
             self.protocol,
             self.firmware.filter(|_| self.firmware_providers.is_some()),
+        );
+        // Diagnostics options exist only for OCPP 1.6 stations.
+        diagnostics::apply_capabilities(
+            snapshot,
+            self.diagnostics
+                .filter(|_| self.firmware_providers.is_some()),
         );
     }
     fn add_local_authorization_operations(&self, operations: &mut Vec<uob_contracts::Operation>) {

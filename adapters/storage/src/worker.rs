@@ -61,6 +61,12 @@ pub(crate) enum Request<C, E, D> {
         Reply<Vec<uob_application::FirmwareJobRecord201>>,
     ),
     MaintainFirmware201(UtcTimestamp, bool, Reply<()>),
+    DiagnosticsJobs16(
+        ResourceRef,
+        Reply<Vec<uob_application::DiagnosticsJobRecord16>>,
+    ),
+    BindDiagnosticsUpload16(uob_contracts::RequestId, String, Reply<()>),
+    MaintainDiagnostics16(UtcTimestamp, bool, Reply<()>),
     TransactionId(Reply<i32>),
     EventSequence(Reply<u64>),
     Write(EncodedWrite, Reply<AtomicWriteOutcome>),
@@ -229,6 +235,25 @@ fn handle_request<C, E, D>(
                 .check_completion_write()
                 .and_then(|()| drain.changed())
                 .and_then(|()| crate::firmware201::maintain(connection, now, startup)),
+        ),
+        Request::DiagnosticsJobs16(station, reply) => {
+            respond(reply, crate::diagnostics16::read(connection, &station));
+        }
+        Request::BindDiagnosticsUpload16(request_id, upload_id, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| {
+                    crate::diagnostics16::bind_upload(connection, &request_id, upload_id)
+                }),
+        ),
+        Request::MaintainDiagnostics16(now, startup, reply) => respond(
+            reply,
+            drain
+                .check_completion_write()
+                .and_then(|()| drain.changed())
+                .and_then(|()| crate::diagnostics16::maintain(connection, now, startup)),
         ),
         Request::ChargingProfileOwnership(station, reply) => {
             respond(

@@ -340,6 +340,7 @@ async fn authorized_commands_stay_unretained_and_correlated_under_the_preset() {
         charging_profiles_201: None,
         firmware_16: None,
         firmware_201: None,
+        diagnostics_16: None,
     };
     submission
         .respond(Ok(result.clone()))
