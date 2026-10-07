@@ -10,6 +10,8 @@ use uob_protocol_adapter::command_registry::{command_schemas, validate_privilege
 mod composite_schedule16;
 #[path = "command_registry/firmware16.rs"]
 mod firmware16;
+#[path = "command_registry/firmware201.rs"]
+mod firmware201;
 #[path = "command_registry/schedules201.rs"]
 mod schedules201;
 #[path = "command_registry/trigger_201.rs"]

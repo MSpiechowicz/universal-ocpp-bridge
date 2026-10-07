@@ -40,6 +40,8 @@ pub(crate) struct EncodedWrite {
     pub reservation_observations_201: Vec<uob_application::ReservationObservation201>,
     pub firmware_16: Option<Box<uob_application::FirmwareJobMutation16>>,
     pub firmware_observations_16: Vec<uob_application::FirmwareObservation16>,
+    pub firmware_201: Option<Box<uob_application::FirmwareJobMutation201>>,
+    pub firmware_observations_201: Vec<uob_application::FirmwareObservation201>,
     pub events: Vec<EncodedEvent>,
     pub deliveries: Vec<EncodedDelivery>,
     pub records: Vec<EncodedRecord>,
@@ -165,6 +167,7 @@ where
             crate::reservation16::codec_validation::validate_result(&value)?;
             crate::reservation201::codec_validation::validate_result(&value)?;
             crate::firmware16::validation::validate_result(&value)?;
+            crate::firmware201::validation::validate_result(&value)?;
             Ok(EncodedCommandResult {
                 request_id: value.return_route.request_id.as_str().to_owned(),
                 payload: json(&value)?,
@@ -229,6 +232,8 @@ where
         reservation_observations_201: write.reservation_observations_201,
         firmware_16: write.firmware_16,
         firmware_observations_16: write.firmware_observations_16,
+        firmware_201: write.firmware_201,
+        firmware_observations_201: write.firmware_observations_201,
         events,
         deliveries,
         records,
@@ -244,6 +249,7 @@ pub(crate) fn encode_command<P: Serialize>(
     crate::reservation16::validation::validate_command(value)?;
     crate::reservation201::validation::validate_command(value)?;
     crate::firmware16::validation::validate_command(value)?;
+    crate::firmware201::validation::validate_command(value)?;
     let admitted_at = value.admitted_at.into_inner().unix_timestamp();
     let retain_until = admitted_at
         .checked_add(COMMAND_DEDUPLICATION_RETENTION_SECONDS)
@@ -438,6 +444,7 @@ pub(crate) fn decode_command<C: DeserializeOwned>(value: &str) -> Result<Command
     crate::reservation16::validation::validate_command(&envelope)?;
     crate::reservation201::validation::validate_command(&envelope)?;
     crate::firmware16::validation::validate_command(&envelope)?;
+    crate::firmware201::validation::validate_command(&envelope)?;
     from_json(value)
 }
 
@@ -449,6 +456,7 @@ pub(crate) fn decode_result(value: &str) -> Result<CommandResult, StorageError> 
     crate::reservation16::codec_validation::validate_result(&result)?;
     crate::reservation201::codec_validation::validate_result(&result)?;
     crate::firmware16::validation::validate_result(&result)?;
+    crate::firmware201::validation::validate_result(&result)?;
     Ok(result)
 }
 
@@ -467,6 +475,7 @@ pub(crate) fn decode_stored_result(
     crate::reservation16::codec_validation::validate_stored(connection, &result)?;
     crate::reservation201::codec_validation::validate_stored(connection, &result)?;
     crate::firmware16::validation::validate_stored(connection, &result)?;
+    crate::firmware201::validation::validate_stored(connection, &result)?;
     Ok(result)
 }
 

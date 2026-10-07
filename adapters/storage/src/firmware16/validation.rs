@@ -47,7 +47,11 @@ pub(crate) fn validate_command<P: Serialize>(command: &Command<P>) -> Result<(),
     let CommandOperation::Ocpp(operation) = &command.operation else {
         return Ok(());
     };
-    if !ACTIONS.contains(&operation.action.as_str()) {
+    // OCPP 2.0.1 `UpdateFirmware` is validated by its own edition module.
+    if !ACTIONS.contains(&operation.action.as_str())
+        || (operation.protocol == ProtocolEdition::Ocpp201
+            && operation.action.as_str() == "UpdateFirmware")
+    {
         return Ok(());
     }
     let envelope: Command<Value> = serde_json::to_value(command)
@@ -117,6 +121,7 @@ pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError
         || result.local_authorization_201.is_some()
         || result.reservation_16.is_some()
         || result.reservation_201.is_some()
+        || result.firmware_201.is_some()
         || native != matches!(result.lifecycle, CommandLifecycle::ProtocolResponse { .. })
         || evidence.artifact().is_some_and(|artifact| {
             !uob_contracts::valid_firmware_artifact_reference(&artifact.artifact_reference)

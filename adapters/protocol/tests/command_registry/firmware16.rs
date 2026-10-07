@@ -123,10 +123,11 @@ fn firmware_requests_accept_only_reference_payloads_on_the_station_root() {
         validate_privileged_operation(&state.station, &native),
         Err(CommandErrorCode::InvalidParameters)
     );
+    // OCPP 2.0.1 has its own `UpdateFirmware` reference schema; the 1.6 one never matches it.
     let mut foreign = legacy(valid);
     foreign.protocol = ProtocolEdition::Ocpp201;
     assert_eq!(
         validate_privileged_operation(&state.station, &foreign),
-        Err(CommandErrorCode::UnsupportedOperation)
+        Err(CommandErrorCode::InvalidParameters)
     );
 }

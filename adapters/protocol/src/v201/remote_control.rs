@@ -14,6 +14,7 @@ pub mod device_model;
 mod device_model_collection;
 mod device_model_response;
 pub mod device_model_values;
+mod firmware;
 mod identity;
 mod local_authorization;
 mod local_authorization_language;
@@ -26,6 +27,7 @@ mod phase_capability;
 mod reservation;
 mod reservation_values;
 pub(crate) mod schedule_values;
+mod snapshot_guard;
 mod trigger;
 pub use identity::LocalRemoteStartIdentity;
 pub use local_authorization_values::{
@@ -39,7 +41,9 @@ pub use reservation_values::{ReservationValues201, reservation_key_201};
 pub mod observation;
 
 use crate::{CallSessionHandle, OutboundCall, PendingCall, SessionCallOutcome, SessionSubmitError};
+pub use firmware::FirmwareSettings201;
 use serde_json::Value;
+use snapshot_guard::{connected_at, validate_snapshot};
 use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
 use uob_application::{
@@ -87,6 +91,7 @@ pub struct RemoteControlSession {
     reservation_grant: Option<Arc<ReservationGrant201>>,
     reserve_non_evse_specific: bool,
     profile_reports: Option<Arc<dyn uob_application::ChargingProfileReportStore201>>,
+    firmware: Option<Arc<FirmwareSettings201>>,
 }
 
 impl RemoteControlSession {
@@ -135,6 +140,7 @@ impl RemoteControlSession {
             reservation_grant: None,
             reserve_non_evse_specific: false,
             profile_reports: None,
+            firmware: None,
         })
     }
 
@@ -250,6 +256,9 @@ impl RemoteControlSession {
         reservation: Option<uob_application::ProfileReservation201>,
     ) -> StationCommandFuture<'_, CommandDispatchOutcome> {
         Box::pin(async move {
+            if firmware::owns(&command) {
+                return Ok(self.dispatch_firmware(&command).await);
+            }
             if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
                 if crate::command_registry::reservation201::ACTIONS.contains(&operation.action.as_str()))
             {
@@ -388,6 +397,14 @@ impl StationCommandPort<Value> for RemoteControlSession {
     ) -> Result<Option<uob_application::ReservationMutation201>, CommandErrorCode> {
         self.reservation_context(command, generation, now)
     }
+    fn firmware_expectation_201(
+        &self,
+        command: &Command<Value>,
+        generation: Option<u64>,
+        now: UtcTimestamp,
+    ) -> Result<Option<uob_application::FirmwareJobMutation201>, CommandErrorCode> {
+        self.firmware_context(command, generation, now)
+    }
     fn charging_profile_expectation(
         &self,
         command: &Command<Value>,
@@ -450,41 +467,6 @@ impl StationCommandPort<Value> for RemoteControlSession {
     }
 }
 
-fn connected_at(snapshot: &StationSnapshot) -> Option<UtcTimestamp> {
-    match snapshot.connectivity {
-        Connectivity::Connected { connected_at, .. } => Some(connected_at),
-        _ => None,
-    }
-}
-fn validate_snapshot(
-    handle: &CallSessionHandle,
-    snapshot: &StationSnapshot,
-) -> Result<(), StationCommandError> {
-    if handle.protocol() != ProtocolEdition::Ocpp201
-        || handle.station_id() != &snapshot.station.station_id
-        || !matches!(
-            snapshot.connectivity,
-            Connectivity::Connected {
-                protocol: ProtocolEdition::Ocpp201,
-                ..
-            }
-        )
-        || snapshot
-            .resources
-            .iter()
-            .filter_map(|entry| crate::command_registry::charging_profile201::evse(&entry.resource))
-            .filter(|evse| *evse > 0)
-            .count()
-            > 64
-        || serde_json::to_vec(snapshot)
-            .map_err(|_| state_error())?
-            .len()
-            > 256 * 1024
-    {
-        return Err(state_error());
-    }
-    Ok(())
-}
 fn state_error() -> StationCommandError {
     StationCommandError::new("remote control station state unavailable")
 }

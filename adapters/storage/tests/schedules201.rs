@@ -75,6 +75,7 @@ fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandResul
         composite_schedule_201: None,
         charging_profiles_201: None,
         firmware_16: None,
+        firmware_201: None,
     }
 }
 fn profiles(report: ChargingProfileReportState201) -> ChargingProfilesResult201 {

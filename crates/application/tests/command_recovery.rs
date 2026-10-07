@@ -352,6 +352,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         composite_schedule_201: None,
         charging_profiles_201: None,
         firmware_16: None,
+        firmware_201: None,
     }
 }
 

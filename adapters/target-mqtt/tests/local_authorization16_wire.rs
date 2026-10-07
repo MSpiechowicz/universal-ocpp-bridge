@@ -102,7 +102,7 @@ fn alter(result: &mut uob_contracts::CommandResult, case: &str) {
         "future" => {
             result.schema_version = ContractVersion {
                 major: 1,
-                revision: ContractVersion::V1_FIRMWARE_16.revision + 1,
+                revision: ContractVersion::V1_FIRMWARE_201.revision + 1,
             }
         }
         "large" => {

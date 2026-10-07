@@ -1,4 +1,4 @@
-//! Demo-only OCPP 1.6 firmware composition: one local test artifact service and one generated
+//! Demo-only firmware composition for both editions: one local test artifact service and one generated
 //! test PKI. Every published image and every signature is test-only; production is refused by
 //! both provider constructors and by the charging environment gate.
 use std::{
@@ -19,7 +19,10 @@ use uob_application::{
     certificate_provider::{CertificatePem, CertificateProvider, TrustAnchorKind},
 };
 use uob_contracts::{Operation, ProtocolEdition, StationId, StationSnapshot, SupportedOperation};
-use uob_protocol_adapter::v16::remote_control::{FirmwareSettings16, ReservationGrant16};
+use uob_protocol_adapter::{
+    v16::remote_control::{FirmwareSettings16, ReservationGrant16},
+    v201::remote_control::{FirmwareSettings201, ReservationGrant201},
+};
 use uob_provider_adapter::{
     artifacts::{ArtifactTransfers, TransferLimits},
     test_artifacts::{TestArtifactConfiguration, TestArtifactService},
@@ -77,23 +80,40 @@ pub(super) fn session(
     })
 }
 
+/// Per-socket policy for one firmware-enabled OCPP 2.0.1 station.
+pub(super) fn session_201(
+    station: StationFirmware,
+    providers: &Providers,
+    grant: Arc<ReservationGrant201>,
+) -> Arc<FirmwareSettings201> {
+    Arc::new(FirmwareSettings201 {
+        secure: station.signed,
+        job_timeout: station.job_timeout,
+        artifacts: Arc::new(providers.artifacts.clone()),
+        certificates: Some(Arc::new(providers.certificates.clone())),
+        policy: providers.policy,
+        grant,
+    })
+}
+
 /// Offers exactly the configured native family on the station root.
 pub(super) fn apply_capabilities(
     snapshot: &mut StationSnapshot,
+    protocol: ProtocolEdition,
     firmware: Option<StationFirmware>,
 ) {
     let Some(firmware) = firmware else {
         return;
     };
+    let action = if protocol == ProtocolEdition::Ocpp16j && firmware.signed {
+        "SignedUpdateFirmware"
+    } else {
+        "UpdateFirmware"
+    };
     snapshot.capabilities.operations.push(SupportedOperation {
         operation: Operation::ProtocolAction {
-            protocol: ProtocolEdition::Ocpp16j,
-            action: if firmware.signed {
-                "SignedUpdateFirmware"
-            } else {
-                "UpdateFirmware"
-            }
-            .to_owned(),
+            protocol,
+            action: action.to_owned(),
         },
         parameters: vec![],
     });

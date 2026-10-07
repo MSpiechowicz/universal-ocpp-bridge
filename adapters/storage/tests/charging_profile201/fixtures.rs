@@ -159,6 +159,7 @@ pub fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandR
         composite_schedule_201: None,
         charging_profiles_201: None,
         firmware_16: None,
+        firmware_201: None,
     }
 }
 pub async fn persist(store: &Store, result: CommandResult) {

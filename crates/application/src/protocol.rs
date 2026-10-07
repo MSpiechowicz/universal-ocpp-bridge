@@ -45,7 +45,13 @@ pub enum ChargerObservation {
         status: uob_contracts::FirmwareStatus16,
         request_id: Option<i32>,
     },
-    /// Native OCPP 2.0.1 log, firmware or publication status.
+    /// OCPP 2.0.1 `FirmwareStatusNotification`; `request_id` is absent only for `Idle`
+    /// (L01.FR.20).
+    FirmwareStatus201 {
+        status: uob_contracts::FirmwareStatus201,
+        request_id: Option<i32>,
+    },
+    /// Native OCPP 2.0.1 log or publication status.
     TriggerStatus201 {
         class: uob_contracts::TriggerMessageClass201,
         status: String,

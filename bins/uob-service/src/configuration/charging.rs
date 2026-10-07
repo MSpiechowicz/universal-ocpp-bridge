@@ -58,9 +58,12 @@ pub(crate) struct StationControlOptions {
     pub clear_cache: StationActionOption,
     pub reserve_now: StationActionOption,
     pub cancel_reservation: StationActionOption,
-    /// OCPP 1.6 `UpdateFirmware`; exclusive with the Security Whitepaper variant.
+    /// `UpdateFirmware`. On OCPP 1.6 it is exclusive with the Security Whitepaper variant; on
+    /// OCPP 2.0.1 it is a secure update (L01) unless `non_secure_firmware` selects L02.
     pub update_firmware: StationActionOption,
     pub signed_update_firmware: StationActionOption,
+    /// OCPP 2.0.1 only: send firmware without signing certificate or signature (L02).
+    pub non_secure_firmware: bool,
     pub reserve_connector_zero_supported: bool,
     /// OCPP 2.0.1 `ReservationCtrlr.NonEvseSpecific`; never inferred from the station.
     pub reserve_non_evse_specific_supported: bool,

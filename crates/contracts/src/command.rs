@@ -444,6 +444,9 @@ pub struct CommandResult {
     /// Value-free native OCPP 1.6 firmware reply and durable job evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub firmware_16: Option<crate::FirmwareResult16>,
+    /// Value-free native OCPP 2.0.1 firmware reply and durable job evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_201: Option<crate::FirmwareResult201>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

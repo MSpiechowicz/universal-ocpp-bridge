@@ -95,11 +95,21 @@ pub(super) async fn attach(
                 None => session,
             };
             let session = if let Some(credentials) = &context.credentials {
-                session.with_reservations_201(
+                let session = session.with_reservations_201(
                     configuration.reservations_201.clone(),
                     configuration.control.reserve_non_evse_specific_supported,
                     credentials.reservation_grant(),
-                )
+                );
+                match (configuration.firmware, &configuration.firmware_providers) {
+                    (Some(firmware), Some(providers)) => {
+                        session.with_firmware_201(super::super::firmware::session_201(
+                            firmware,
+                            providers,
+                            credentials.reservation_grant(),
+                        ))
+                    }
+                    _ => session,
+                }
             } else {
                 session
             };

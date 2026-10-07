@@ -1,5 +1,5 @@
-//! Demo-only OCPP 1.6 firmware options: one native family per station and one local test
-//! artifact service. Production never reaches this section because charging is demo-only.
+//! Demo-only firmware options: one native family or security mode per station and one local
+//! test artifact service. Production never reaches this section because charging is demo-only.
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use serde::Deserialize;
@@ -35,7 +35,9 @@ pub(crate) struct ValidatedFirmwareArtifacts {
     pub organization: String,
 }
 
-/// Exactly one native family; a signed station answers `UpdateFirmware` with `NotSupported`.
+/// Exactly one native family or security mode per station. On OCPP 1.6 `signed` selects
+/// `SignedUpdateFirmware` (a signed station answers `UpdateFirmware` with `NotSupported`); on
+/// OCPP 2.0.1 it selects a secure update (L01) over a non-secure one (L02).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct StationFirmware {
     pub signed: bool,
@@ -53,19 +55,22 @@ pub(super) fn station(
         control.signed_update_firmware.enabled(),
     );
     if !legacy && !signed {
-        return if timeout_seconds.is_some() {
+        return if timeout_seconds.is_some() || control.non_secure_firmware {
             Err(fail)
         } else {
             Ok(None)
         };
     }
     let timeout = timeout_seconds.ok_or(fail)?;
-    if (legacy && signed)
-        || protocol != ProtocolEdition::Ocpp16j
-        || !(MIN_JOB_TIMEOUT_SECONDS..=MAX_JOB_TIMEOUT_SECONDS).contains(&timeout)
-    {
+    if !(MIN_JOB_TIMEOUT_SECONDS..=MAX_JOB_TIMEOUT_SECONDS).contains(&timeout) {
         return Err(fail);
     }
+    let signed = match protocol {
+        ProtocolEdition::Ocpp16j if !(legacy && signed) && !control.non_secure_firmware => signed,
+        // OCPP 2.0.1 has one `UpdateFirmware` message for both security modes.
+        ProtocolEdition::Ocpp201 if !signed => !control.non_secure_firmware,
+        _ => return Err(fail),
+    };
     Ok(Some(StationFirmware {
         signed,
         job_timeout: Duration::from_secs(timeout),

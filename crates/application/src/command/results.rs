@@ -32,6 +32,7 @@ pub(super) fn command_result<P>(
         composite_schedule_201: None,
         charging_profiles_201: None,
         firmware_16: None,
+        firmware_201: None,
     }
 }
 
@@ -73,6 +74,7 @@ pub(super) fn rejected_external<P>(
         composite_schedule_201: None,
         charging_profiles_201: None,
         firmware_16: None,
+        firmware_201: None,
     }
 }
 

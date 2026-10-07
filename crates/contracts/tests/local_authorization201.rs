@@ -81,7 +81,7 @@ fn old_results_decode_absent_evidence_and_native_results_survive_nested_exports(
             batch.records()[0].metadata().clone(),
             ExportPayload::CommandResult(result.clone()),
         );
-        assert_eq!(record.metadata().schema_version.revision, 14);
+        assert_eq!(record.metadata().schema_version.revision, 15);
         let export_schema: Value =
             serde_json::from_str(include_str!("../schemas/v1.11/export-record.schema.json"))
                 .unwrap();
