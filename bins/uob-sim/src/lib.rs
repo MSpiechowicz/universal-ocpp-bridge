@@ -19,12 +19,16 @@ mod client_reconnect201;
 mod client_runtime;
 mod client_runtime_201;
 pub mod firmware16;
+pub mod firmware201;
 pub mod local_authorization;
 pub mod local_authorization201;
 mod native_state;
 pub mod reservation16;
 pub mod reservation201;
-use native_state::{open_firmware16, open_native_state, open_native_state201, open_reservation201};
+use native_state::{
+    open_firmware16, open_firmware201, open_native_state, open_native_state201,
+    open_reservation201, validate_client_config,
+};
 mod station_auth;
 mod trigger;
 mod trigger201;
@@ -113,6 +117,7 @@ pub struct SimulatorClientConfig {
     pub reservation16: Option<(String, reservation16::ReservationConfig)>,
     pub reservation201: Option<(String, reservation201::Reservation201Config)>,
     pub firmware16: Option<(String, firmware16::FirmwareConfig)>,
+    pub firmware201: Option<(String, firmware201::FirmwareConfig201)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -282,6 +287,9 @@ struct Ocpp201State {
     reservation201: Option<reservation201::Reservation201Handle>,
     reservation_retry_at: Option<std::time::Instant>,
     reservation_holds: usize,
+    firmware201: Option<firmware201::Firmware201Handle>,
+    /// Closes the current socket generation for a firmware reboot.
+    socket_close: Option<Arc<tokio::sync::Notify>>,
     socket_connected: bool,
     socket_generation: u64,
     reboot_count: u64,
@@ -375,6 +383,7 @@ impl SimulatorProtocolClient {
                 let state = Arc::new(Mutex::new(Ocpp201State {
                     local: Some(local),
                     reservation201: open_reservation201(&config)?,
+                    firmware201: open_firmware201(&config)?,
                     ..Ocpp201State::default()
                 }));
                 let (client, barrier, jobs) = trigger_transport::connect_201(
@@ -455,34 +464,4 @@ impl SimulatorProtocolClient {
         })?;
         receiver.await.map_err(|_| SimulatorClientError::Stopped)?
     }
-}
-
-fn validate_client_config(config: &SimulatorClientConfig) -> Result<(), SimulatorClientError> {
-    if config.command_capacity == 0 {
-        return Err(SimulatorClientError::InvalidCapacity("command_capacity"));
-    }
-    if config.trace_capacity == 0 {
-        return Err(SimulatorClientError::InvalidCapacity("trace_capacity"));
-    }
-    if config.version != OcppVersion::V1_6 && config.local_authorization.is_some() {
-        return Err(SimulatorClientError::Protocol(
-            "OCPP 1.6 handle cannot attach to OCPP 2.0.1".to_owned(),
-        ));
-    }
-    if config.version != OcppVersion::V1_6 && config.reservation16.is_some() {
-        return Err(SimulatorClientError::Protocol(
-            "OCPP 1.6 reservations cannot attach to OCPP 2.0.1".to_owned(),
-        ));
-    }
-    if config.version != OcppVersion::V1_6 && config.firmware16.is_some() {
-        return Err(SimulatorClientError::Protocol(
-            "OCPP 1.6 firmware cannot attach to OCPP 2.0.1".to_owned(),
-        ));
-    }
-    if config.version != OcppVersion::V2_0_1 && config.reservation201.is_some() {
-        return Err(SimulatorClientError::Protocol(
-            "OCPP 2.0.1 reservations cannot attach to OCPP 1.6".to_owned(),
-        ));
-    }
-    Ok(())
 }

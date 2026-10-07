@@ -1,0 +1,22 @@
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "2.0.1"
+request_timeout_ms = 5000
+# A firmware reboot closes the socket; the station reconnects and boots the new firmware.
+reconnect = true
+
+[[stations.evses]]
+id = 1
+connectors = [1]
+
+[stations.firmware201]
+# OCPP 2.0.1 L01 Secure Firmware Update: the certificate is validated before accepting.
+private_state_file = "/tmp/uob-sim-firmware-201/firmware.json"
+mode = "secure"
+# Public PEM: 1-4 manufacturer roots that issue the firmware signing certificate directly.
+manufacturer_root_file = "/tmp/uob-sim-firmware-201/manufacturer-root.pem"
+cancel_policy = "cancel"
+reboot_after_install = true

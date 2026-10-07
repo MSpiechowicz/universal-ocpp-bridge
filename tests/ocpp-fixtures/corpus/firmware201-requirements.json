@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "protocol": "2.0.1",
+  "sources": [
+    {
+      "title": "OCPP 2.0.1 Edition 4 Part 2 Specification with errata 2026-06",
+      "archive_sha256": "192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "L01",
+        "L02",
+        "Figure 116",
+        "errata 2.14 (L01.FR.04)",
+        "UpdateFirmwareRequest",
+        "UpdateFirmwareResponse",
+        "FirmwareStatusNotificationRequest",
+        "FirmwareStatusNotificationResponse",
+        "FirmwareStatusEnumType",
+        "UpdateFirmwareStatusEnumType"
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "requirements": [
+        "L01.FR.11",
+        "L01.FR.12",
+        "L01.FR.21",
+        "L01.FR.22"
+      ],
+      "assertion": "A secure UpdateFirmware always carries the provider's signing certificate and signature; the bridge verifies the certificate under the manufacturer root before sending, and an independent station validates the certificate before accepting and answers InvalidCertificate for an untrusted one.",
+      "evidence": "wire/2.0.1/firmware-update-secure.json;wire/2.0.1/firmware-update-result-invalid-certificate.json;../../../bins/uob-service/tests/firmware201.rs;../../../bins/uob-sim/tests/firmware201_wire.rs"
+    },
+    {
+      "requirements": [
+        "L02 scenario 1-2",
+        "UpdateFirmwareRequest FirmwareType"
+      ],
+      "assertion": "A non-secure UpdateFirmware sends the provider location, retrieveDateTime, optional installDateTime, retries and retryInterval without any signing material; the reply is an acceptance, never proof of installation.",
+      "evidence": "wire/2.0.1/firmware-update-non-secure.json;wire/2.0.1/firmware-update-minimal.json;wire/2.0.1/firmware-update-result-accepted.json;../../../bins/uob-sim/tests/firmware201_model.rs;../../../bins/uob-service/tests/firmware201.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.10",
+        "L01.FR.20",
+        "L02.FR.06",
+        "L02.FR.14"
+      ],
+      "assertion": "Every FirmwareStatusNotification of an update carries the requestId of the UpdateFirmwareRequest that started it; only Idle may omit it, and a notification without requestId for any other status is refused rather than attributed by guesswork.",
+      "evidence": "wire/2.0.1/firmware-status-idle-unattributed.json;wire/2.0.1/firmware-negative-cases.json;../../../adapters/protocol/tests/ocpp201_firmware_decode.rs;../../../adapters/storage/tests/firmware201.rs;../../../bins/uob-sim/tests/firmware201_model.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.01",
+        "L01.FR.13",
+        "L01.FR.14",
+        "L01.FR.15",
+        "L01.FR.16",
+        "L01.FR.28",
+        "L01.FR.30",
+        "L01.FR.32",
+        "L01.FR.34",
+        "Figure 116"
+      ],
+      "assertion": "The station reports every state it enters: DownloadScheduled for a future retrieval, Downloading per attempt and DownloadFailed after the last retry, InstallScheduled for a future install, InstallRebooting before the reboot and Installed from the activated firmware; the CSMS commits each status before its empty reply and progress never regresses.",
+      "evidence": "wire/2.0.1/firmware-status-download-scheduled.json;wire/2.0.1/firmware-status-install-scheduled.json;wire/2.0.1/firmware-status-install-rebooting.json;wire/2.0.1/firmware-status-installed.json;wire/2.0.1/firmware-status-acknowledged.json;../../../bins/uob-sim/tests/firmware201_model.rs;../../../bins/uob-sim/tests/firmware201_process.rs;../../../adapters/storage/tests/firmware201.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.04 (errata 2026-04)",
+        "L01.FR.09",
+        "L01.FR.29"
+      ],
+      "assertion": "After download the station verifies the request's signature over the entire received file using the signing certificate (RSA-PSS with SHA-256 from the test CA) and reports SignatureVerified or InvalidSignature; a configured verification fault reports InstallVerificationFailed.",
+      "evidence": "wire/2.0.1/firmware-status-signature-verified.json;wire/2.0.1/firmware-status-invalid-signature.json;wire/2.0.1/firmware-status-install-verification-failed.json;../../../bins/uob-sim/tests/firmware201_model.rs;../../../bins/uob-sim/tests/firmware201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "L01.FR.24",
+        "L01.FR.27",
+        "L02.FR.15",
+        "L02.FR.18"
+      ],
+      "assertion": "A new UpdateFirmware while an update is pending cancels it with AcceptedCanceled, or is answered Rejected by a station unable to cancel; the CSMS marks the older job cancelled only on AcceptedCanceled and never treats Rejected as success.",
+      "evidence": "wire/2.0.1/firmware-update-result-accepted-canceled.json;wire/2.0.1/firmware-update-result-rejected-status-info.json;../../../bins/uob-sim/tests/firmware201_model.rs;../../../adapters/storage/tests/firmware201.rs"
+    },
+    {
+      "requirements": [
+        "L01.FR.25",
+        "L01.FR.26",
+        "L02.FR.16",
+        "L02.FR.17"
+      ],
+      "assertion": "A triggered FirmwareStatusNotification reports Idle after Installed (or with no update), otherwise the last sent status with its requestId.",
+      "evidence": "wire/2.0.1/firmware-status-idle.json;../../../bins/uob-sim/tests/firmware201_wire.rs"
+    },
+    {
+      "requirements": [
+        "L01 postconditions",
+        "L02 postconditions",
+        "Figure 116"
+      ],
+      "assertion": "Station firmware progress and the CSMS job survive a process kill and restart: an interrupted download is retried, an undelivered status is delivered once, a reboot is followed by Installed from the new firmware, and the CSMS never replays the request.",
+      "evidence": "../../../bins/uob-sim/tests/firmware201_process.rs;../../../bins/uob-service/tests/firmware201.rs;../../../bins/uob-sim/tests/firmware201_joint_smoke.py"
+    }
+  ],
+  "not_covered": [
+    "SecurityEventNotification for InvalidFirmwareSigningCertificate, InvalidFirmwareSignature and FirmwareUpdated (L01.FR.02/03/31, issue #128)",
+    "L01.FR.06/07/33 EVSE unavailability while waiting for transactions (the simulator only defers installation)",
+    "L03/L04 publishing firmware on a Local Controller",
+    "certificate revocation checking (RevokedCertificate is fixture-only)",
+    "physical hardware, production PKI or OCA certification"
+  ],
+  "execution_status": "Simulator model, wire, process and scenario tests plus pinned-schema corpus tests executed in isolated software verification; bridge-side evidence files are added with the bridge implementation of #123. Not hardware or OCA certification."
+}

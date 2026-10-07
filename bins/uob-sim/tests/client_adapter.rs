@@ -38,6 +38,7 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         reservation16: None,
         reservation201: None,
         firmware16: None,
+        firmware201: None,
     }
 }
 

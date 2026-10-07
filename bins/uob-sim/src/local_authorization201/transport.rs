@@ -43,12 +43,16 @@ pub(crate) fn wrap(
     state: Arc<Mutex<Ocpp201State>>,
     timeout: std::time::Duration,
 ) -> (Box<dyn TransportSink>, Box<dyn TransportStream>) {
-    let generation = {
+    let (generation, close) = {
         let mut current = state.lock().expect("native state lock");
         current.socket_generation += 1;
         current.socket_connected = true;
         current.registered = false;
-        current.socket_generation
+        current.socket_close = Some(Arc::new(tokio::sync::Notify::new()));
+        (
+            current.socket_generation,
+            current.socket_close.clone().expect("socket close signal"),
+        )
     };
     let sink = Arc::new(AsyncMutex::new(OwnedSink {
         inner: sink,
@@ -68,6 +72,7 @@ pub(crate) fn wrap(
             generation,
             timeout,
             replies: VecDeque::new(),
+            close,
         }),
     )
 }
