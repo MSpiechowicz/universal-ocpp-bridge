@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "26.8.1",
-    "npm": "12.0.2"
+    "node": "26.13.0",
+    "npm": "12.2.1"
   },
-  "packageManager": "npm@12.0.2",
+  "packageManager": "npm@12.2.1",
   "scripts": {
     "build": "node scripts/capture-schema.mjs --check && tsc --noEmit && vite build && node scripts/check-budget.mjs",
     "test": "node --import tsx --test --test-isolation=none tests/*.test.ts",
@@ -29,6 +29,6 @@
     "oxlint": "1.82.0",
     "tsx": "4.23.13",
     "typescript": "7.0.2",
-    "vite": "8.3.0"
+    "vite": "8.3.5"
   }
 }
