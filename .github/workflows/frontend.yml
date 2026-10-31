@@ -47,7 +47,7 @@ jobs:
       - name: Install locked dependencies
         run: |
           test "$(node --version)" = "v26.13.0"
-          test "$(npm --version)" = "12.0.2"
+          test "$(npm --version)" = "12.2.1"
           npm ci --ignore-scripts
       - name: Typecheck, lint, unit tests, and static asset build
         run: npm run check

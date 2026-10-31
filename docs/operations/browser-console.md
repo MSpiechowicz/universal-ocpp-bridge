@@ -192,7 +192,7 @@ remain on the separately authenticated bridge command API. See the
 
 ## Build and verification
 
-Build only on a developer or CI host, using Node 26.13.0 and npm 12.0.2:
+Build only on a developer or CI host, using Node 26.13.0 and npm 12.2.1:
 
 ```text
 cd frontend
