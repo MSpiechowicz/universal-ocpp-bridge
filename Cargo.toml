@@ -43,9 +43,9 @@ postgres_rustls = "=0.1.6"
 rumqttc = { package = "rumqttc-v4-next", version = "=0.34.0", default-features = false, features = ["use-rustls"] }
 rcgen = "=0.14.5"
 rust-ocpp = { version = "=3.0.4", default-features = false, features = ["v1_6", "v2_0_1"] }
-rustls = "=0.23.45"
+rustls = "=0.23.46"
 rustls-pki-types = { version = "=1.15.1", features = ["std"] }
-rustls-webpki = { version = "=0.103.15", default-features = false, features = ["aws-lc-rs", "std"] }
+rustls-webpki = { version = "=0.103.16", default-features = false, features = ["aws-lc-rs", "std"] }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 schemars = "=1.2.2"
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -53,7 +53,7 @@ serde_json = "=1.0.151"
 sha2 = "=0.11.0"
 subtle = "=2.6.1"
 time = { version = "=0.3.55", features = ["formatting", "parsing"] }
-tokio = { version = "=1.53.1", default-features = false }
+tokio = { version = "=1.53.3", default-features = false }
 tokio-rustls = "=0.26.4"
 tokio-postgres = { version = "=0.7.18", default-features = false, features = ["runtime"] }
 tokio-tungstenite = { version = "=0.30.0", features = ["rustls-tls-webpki-roots"] }
