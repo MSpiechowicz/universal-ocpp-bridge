@@ -7,7 +7,7 @@ unit tests, static build, reproducibility, committed-asset comparison, or browse
 tests fail. Repository administrators can require this check in branch protection.
 It does not publish assets or change release approval policy.
 
-Node 26.8.1, npm 12.0.2 and all direct frontend dependencies are exact pins.
+Node 26.13.0, npm 12.0.2 and all direct frontend dependencies are exact pins.
 `tooling/package-lock.json` bootstraps npm; `npm ci --ignore-scripts` consumes the
 application lockfile. Node setup and npm cache
 are confined to the frontend job. Existing Rust daemon, simulator, commit and
@@ -19,7 +19,7 @@ The approved browser scenario controls measured 387246 bytes raw and 116014 byte
 gzip across those three assets. The separate Rust test bounds each served
 uncompressed response at 384 KiB; no HTTP gzip delivery is implied.
 
-With Node 26.8.1, run from `frontend` (the first command can use Node's bundled npm):
+With Node 26.13.0, run from `frontend` (the first command can use Node's bundled npm):
 
 ```text
 npm ci --prefix tooling --ignore-scripts
@@ -129,9 +129,12 @@ full diagnostics; do not upload those raw outputs. Focused unit tests exercise
 deliberately invalid type/lint inputs, oversized build output, a real failing
 Playwright run with reflected credentials, and report overflow/redaction.
 
-The npm bootstrap preserves the project's existing npm 12.0.2 pin. On 2026-09-12,
-`npm audit --prefix tooling` reports advisories in its bundled brace-expansion,
-ip-address, tar and undici dependencies (five findings including the npm parent).
-The application lockfile audit is clean. Updating the package-manager pin requires
-a separate reviewed tooling update; the frontend job does not run `npm audit fix`
-or silently downgrade tooling.
+The npm bootstrap preserves the project's existing npm 12.0.2 pin. On 2026-10-31,
+`npm audit --prefix tooling` reports 37 findings (32 moderate, 5 high) in npm
+12.0.2's bundled dependencies, such as brace-expansion, ip-address, tar, undici
+and the npm CLI packages that depend on them. The tooling lockfile only pins the
+npm tarball, so these cannot be fixed without moving the package-manager pin. The
+bootstrap npm runs only `npm ci` and is not shipped, and the application lockfile
+audit is clean. Updating the package-manager pin requires a separate reviewed
+tooling update; the frontend job does not run `npm audit fix` or silently
+downgrade tooling.
