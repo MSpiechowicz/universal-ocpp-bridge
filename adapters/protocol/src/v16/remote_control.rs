@@ -8,6 +8,7 @@ mod configuration_values;
 mod diagnostics;
 mod enqueue;
 pub(crate) mod exact_rate;
+mod extended_trigger;
 mod firmware;
 mod identity;
 mod local_authorization;

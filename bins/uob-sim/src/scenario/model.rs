@@ -52,6 +52,7 @@ pub struct StationDefinition {
     pub diagnostics16: Option<crate::diagnostics16::DiagnosticsConfig>,
     pub diagnostics201: Option<crate::diagnostics201::Diagnostics201Config>,
     pub monitoring201: Option<crate::monitoring201::Monitoring201Config>,
+    pub security16: Option<crate::security16::SecurityConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -123,6 +124,10 @@ impl StationDefinition {
                 .as_ref()
                 .map(|options| (self.id.clone(), options.clone())),
             monitoring201: self.monitoring201.clone(),
+            security16: self
+                .security16
+                .as_ref()
+                .map(|options| (self.id.clone(), options.clone())),
         }
     }
 

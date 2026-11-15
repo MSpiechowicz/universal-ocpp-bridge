@@ -46,6 +46,8 @@ mod diagnostics201;
 pub use diagnostics201::*;
 mod monitoring201;
 pub use monitoring201::*;
+mod security_event16;
+pub use security_event16::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -212,6 +214,11 @@ impl ContractVersion {
     pub const V1_MONITORING_201: Self = Self {
         major: 1,
         revision: 18,
+    };
+    /// Additive OCPP 1.6 `ExtendedTriggerMessage` classes without a `TriggerMessage` equivalent.
+    pub const V1_EXTENDED_TRIGGER_16: Self = Self {
+        major: 1,
+        revision: 19,
     };
 }
 

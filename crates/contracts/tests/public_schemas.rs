@@ -51,7 +51,7 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "command-result",
-        include_str!("../schemas/v1.18/command-result.schema.json"),
+        include_str!("../schemas/v1.19/command-result.schema.json"),
     ),
     (
         "configuration-change-reference",
@@ -79,11 +79,11 @@ const SCHEMAS: &[(&str, &str)] = &[
     ),
     (
         "export-record",
-        include_str!("../schemas/v1.19/export-record.schema.json"),
+        include_str!("../schemas/v1.20/export-record.schema.json"),
     ),
     (
         "export-batch",
-        include_str!("../schemas/v1.19/export-batch.schema.json"),
+        include_str!("../schemas/v1.20/export-batch.schema.json"),
     ),
     (
         "export-report",
@@ -101,8 +101,8 @@ fn published(name: &str) -> Value {
 
 fn generated<T: JsonSchema>(name: &str) -> Value {
     let revision = match name {
-        "export-record" | "export-batch" => 19,
-        "command-result" => 18,
+        "export-record" | "export-batch" => 20,
+        "command-result" => 19,
         "station-snapshot" | "configuration-change-reference" => 1,
         _ => 0,
     };

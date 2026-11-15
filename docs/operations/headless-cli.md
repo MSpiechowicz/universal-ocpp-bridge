@@ -1222,6 +1222,61 @@ A job that misses its deadline becomes `timed_out` but keeps blocking a release 
 after a restart. See [OCPP 1.6 diagnostics](../architecture/ocpp16-diagnostics.md) for the state
 rules.
 
+### Protected OCPP 1.6 security events and ExtendedTriggerMessage
+
+Every accepted OCPP 1.6J station is answered `SecurityEventNotification` (Security Whitepaper
+Edition 4) with the empty response; no option enables it. Each call becomes one
+`station.security_event.16` journal record, committed before the answer. It never changes
+configuration, policy or commands. Read the records with the read grant, optionally from a cursor
+(`after`) or `Last-Event-ID`, or follow every event type with `uob events --format jsonl`:
+
+```text
+curl -N -H "Authorization: Bearer $READ" \
+  "http://127.0.0.1:8080/api/v1/events?station_id=demo-1&types=station.security_event.16"
+```
+
+Each `data` is a journal event whose `payload.security_event_16` holds `event_type` (the
+station's text, verbatim), `standard` (one of the 21 Whitepaper names), `timestamp` (UTC),
+`tech_info` and, when present, `tech_info_redactions` and `shed_calls`. Credential-like values in
+`techInfo` are replaced by `[redacted]` before anything is stored or logged. Values after a
+secret label (such as `password=`, `dbToken:`, `apiKey=` or `AuthorizationKey=`, also with
+`=>`, `:=` or URL-encoded separators), `Authorization` header values, values after `Basic` or
+`Bearer`, URL user information and long hex or mixed-case base64 strings are found, so long
+identifiers and hex fingerprints are replaced too. A short secret with no label or in natural
+language (`password is x`) is kept, so treat the field as charger text. A redelivery of the same type, timestamp and
+redacted text is acknowledged without a second record while the journal still retains the first.
+
+Each configured station has a budget of 60 records per minute for the life of the daemon process;
+reconnecting does not refresh it. A call beyond it is still answered, writes nothing and raises
+`uob_dropped_diagnostics_total` on `/metrics`. The next record that is written reports the loss as
+`shed_calls`. A station that is not yet accepted gets a `ProtocolError`, and a schema-invalid event
+gets `PropertyConstraintViolation`; neither is journaled.
+
+`extended_trigger_message` (OCPP 1.6J `ExtendedTriggerMessage`) is a separate privileged,
+default-off, **demo-only** station option for `protocol = "ocpp16j"`. It is refused for an OCPP
+2.0.1 station and needs the privileged grant. It is independent of `trigger_message`:
+
+```toml
+# Inside the existing [charging.stations] entry of an OCPP 1.6J station:
+extended_trigger_message = true
+get_log = true                  # offers requestedMessage LogStatusNotification
+# signed_update_firmware = true # offers requestedMessage FirmwareStatusNotification
+```
+
+Commands use action `ExtendedTriggerMessage`, schema
+`urn:OCPP:Cp:1.6:2020:3:ExtendedTriggerMessage.req` and the native payload, for example
+`{"requestedMessage":"LogStatusNotification"}` or
+`{"requestedMessage":"MeterValues","connectorId":1}`. `LogStatusNotification` and
+`FirmwareStatusNotification` are offered only while the station also has `get_log` or
+`signed_update_firmware`. `connectorId` is optional and must be positive. The result carries the
+usual `trigger_observation` (native reply, frozen targets, 60-second window); a requested
+`FirmwareStatusNotification` is observed as a signed one, which a legacy
+`FirmwareStatusNotification` never satisfies. `SignChargePointCertificate`, a non-positive
+`connectorId`, an unknown value, an extra field or another schema is refused with
+`command.invalid_schema_or_payload`; a class whose capability is missing is `unsupported_operation`
+and a disabled option `command.unsupported_schema`. Nothing is resent after a restart or reconnect.
+See [OCPP 1.6 security events](../architecture/ocpp16-security-events.md) for the rules.
+
 ### Protected OCPP 2.0.1 reservations
 
 For `protocol = "ocpp201"`, the same independent, default-off, privileged **demo-only**

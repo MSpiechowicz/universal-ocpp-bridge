@@ -58,6 +58,7 @@ fn config(listener: &TcpListener, reconnect: bool) -> SimulatorClientConfig {
         diagnostics16: None,
         diagnostics201: None,
         monitoring201: None,
+        security16: None,
     }
 }
 

@@ -118,8 +118,10 @@ comes from:
 - an opt-in separate-process joint smoke.
 
 The broad `ocpp16.firmware-diagnostics` row stays `planned` until diagnostics are
-implemented. Security events, `ExtendedTriggerMessage` and certificate revocation are not
-claimed.
+implemented. Certificate revocation is not claimed. The trigger path for
+`LogStatusNotification` and `SignedFirmwareStatusNotification` is covered by the
+security-event and `ExtendedTriggerMessage` fixtures described in the section for those
+messages.
 
 ## OCPP 1.6 diagnostics and log fixtures
 
@@ -169,6 +171,58 @@ the N01 requirement IDs to fixtures and tests. The new
 `ocpp16.firmware-diagnostics.diagnostics-logs` row stays `planned` until the bridge,
 simulator and joint-smoke evidence it names exists. The broad `ocpp16.firmware-diagnostics`
 row is unchanged.
+
+## OCPP 1.6 security-event and ExtendedTriggerMessage fixtures
+
+The four schemas come from the Security Whitepaper Edition 4 `JSON_schemas.zip` pinned in
+`provenance.json` and are byte-identical LF Draft 6 copies under `schemas/1.6-security/`:
+`SecurityEventNotification.json`, `SecurityEventNotificationResponse.json`,
+`ExtendedTriggerMessage.json` and `ExtendedTriggerMessageResponse.json`. The checker needs no
+other registration: each fixture records the schema path and digest it validates against.
+
+The 20 fixture IDs beginning with `wire.ocpp16.security-event-` and
+`wire.ocpp16.extended-trigger-` were authored independently from Whitepaper sections 5.5,
+5.6, 5.15, 5.16, 6.16, 6.17 and 8 and use cases A04, N01 and L01. They cover:
+
+- `SecurityEventNotification` (charger to CSMS) with standard types from section 8
+  (`FirmwareUpdated`, `StartupOfTheDevice`, `ResetOrReboot`, `SettingSystemTime`), a minimal
+  form without `techInfo`, a 50-character `type`, a 255-character `techInfo`, a vendor type
+  outside the section 8 list, a non-UTC offset timestamp, and a `techInfo` that holds a
+  labelled password and a Basic token (obviously fake values, for redaction tests);
+- the empty `SecurityEventNotification` reply (A04.FR.03);
+- `ExtendedTriggerMessage` (CSMS to charger) for `BootNotification`, `Heartbeat`,
+  `LogStatusNotification`, `FirmwareStatusNotification`, and `MeterValues` and
+  `StatusNotification` for connector 1 and for the whole station;
+- the `Accepted`, `Rejected` and `NotImplemented` replies.
+
+`wire/1.6/security-negative-cases.json` holds 27 cases, each with a `level`:
+
+- `schema` cases are refused by the OCA schema floor: a missing `type` or `timestamp`, a
+  51-character `type`, a 256-character `techInfo`, an extra field, wrong JSON types, a
+  free-text timestamp (needs format assertion), an unknown or lowercase `requestedMessage`,
+  an extra field or missing `requestedMessage`, a non-integer `connectorId` and invalid
+  replies;
+- `application` cases are schema-valid, and the bridge must refuse them itself. Each names the
+  expected `bridge_refusal`. `SignChargePointCertificate` is a legal enum value that
+  triggers a `SignCertificate.req`, which belongs to certificate management (issue #129), so
+  it is `UnsupportedOperation`. A `connectorId` of zero or below passes the schema's plain
+  integer type but breaks the section 5.5 constraint `connectorId > 0`, so it is
+  `InvalidParameters`.
+
+`security16-requirements.json` maps A04.FR.01 to A04.FR.03, the section 8 event list,
+sections 5.5/5.6/6.16, N01.FR.12 and L01.FR.28/29 to fixtures. Each assertion also lists
+`behavioural_evidence` entries naming the contract, application, storage, protocol,
+actual-daemon and simulator tests of issue #127 that prove it. Its
+`behavioural_evidence_pending` entries list what those tests do not prove. `not_covered` names the neighbours that stay out: AuthorizationKey
+rotation (A01), security profiles (A00/A05, issues #345 and #346), certificates and
+`SignCertificate` (#129), OCPP 2.0.1 security events (#128) and the charger-side security log
+(A04.FR.04).
+
+The two rows `ocpp16.monitoring-security.security-events` and
+`ocpp16.monitoring-security.extended-trigger` are `verified`, with the fixture IDs and the
+behavioural tests as evidence. The parent `ocpp16.monitoring-security` row stays `planned`:
+its security-profile half is tracked in issues #345 and #346. An opt-in separate-process
+joint smoke (`bins/uob-sim/tests/security16_joint_smoke.py`) also ran, outside the verifier.
 
 ## OCPP 2.0.1 firmware fixtures
 

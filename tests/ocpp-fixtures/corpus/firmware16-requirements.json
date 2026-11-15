@@ -119,8 +119,7 @@
     }
   ],
   "not_covered": [
-    "SecurityEventNotification for InvalidFirmwareSigningCertificate, InvalidFirmwareSignature and FirmwareUpdated (L01.FR.02/03/33, issue #127)",
-    "ExtendedTriggerMessage (L01.FR.28/29)",
+    "firmware job state driven by security events (L01.FR.02/03/33): the bridge only journals them as station evidence",
     "certificate revocation checking",
     "physical hardware, production PKI or OCA certification"
   ],

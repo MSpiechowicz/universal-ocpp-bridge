@@ -1,4 +1,6 @@
-//! OCPP 1.6 `TriggerMessage` scope and immutable native-target snapshot.
+//! OCPP 1.6 `TriggerMessage` scope and immutable native-target snapshot, plus the routing both
+//! trigger actions share.
+use super::extended_trigger;
 use rust_ocpp::v1_6::messages::trigger_message::{TriggerMessageRequest, TriggerMessageResponse};
 use rust_ocpp::v1_6::types::MessageTrigger;
 use serde_json::Value;
@@ -9,6 +11,31 @@ use uob_contracts::{
 };
 
 pub(super) const SCHEMA: &str = "urn:OCPP:1.6:2019:12:TriggerMessageRequest";
+
+/// Whether the operation asks the station to send one of its own messages.
+pub(super) fn is_trigger(operation: &PrivilegedOcppOperation<Value>) -> bool {
+    matches!(
+        operation.action.as_str(),
+        "TriggerMessage" | extended_trigger::ACTION
+    )
+}
+
+/// Prepares either trigger action; returns the native action name, payload and frozen targets.
+pub(super) fn prepare_operation(
+    operation: &PrivilegedOcppOperation<Value>,
+    resource: &ResourceRef,
+    snapshot: &StationSnapshot,
+) -> Result<(&'static str, Value, TriggerExpectation16), CommandErrorCode> {
+    if operation.action.as_str() == extended_trigger::ACTION {
+        return extended_trigger::prepare(operation, resource, snapshot)
+            .map(|(payload, expectation)| (extended_trigger::ACTION, payload, expectation));
+    }
+    if operation.payload_schema.as_str() != SCHEMA {
+        return Err(CommandErrorCode::InvalidParameters);
+    }
+    prepare(operation, resource, snapshot)
+        .map(|(payload, expectation)| ("TriggerMessage", payload, expectation))
+}
 
 pub(super) fn prepare(
     operation: &PrivilegedOcppOperation<Value>,
@@ -31,15 +58,20 @@ pub(super) fn prepare(
         MessageTrigger::MeterValues => TriggerMessageClass::MeterValues,
         MessageTrigger::StatusNotification => TriggerMessageClass::StatusNotification,
     };
-    let native_scope = request.connector_id;
-    let station_only = matches!(
-        class,
-        TriggerMessageClass::BootNotification
-            | TriggerMessageClass::DiagnosticsStatusNotification
-            | TriggerMessageClass::FirmwareStatusNotification
-            | TriggerMessageClass::Heartbeat
-    );
-    let expected_targets = if station_only {
+    let expectation = expectation(class, request.connector_id, resource, snapshot)?;
+    Ok((operation.payload.clone(), expectation))
+}
+
+/// Freezes the native targets of one trigger request; shared by `TriggerMessage` and
+/// `ExtendedTriggerMessage`. The caller has already validated the request against its schema.
+pub(super) fn expectation(
+    class: TriggerMessageClass,
+    native_scope: Option<u32>,
+    resource: &ResourceRef,
+    snapshot: &StationSnapshot,
+) -> Result<TriggerExpectation16, CommandErrorCode> {
+    use CommandErrorCode::InvalidParameters;
+    let expected_targets = if class.is_station_only() {
         vec![0]
     } else if native_scope == Some(0) {
         if class != TriggerMessageClass::StatusNotification || resource != &snapshot.station {
@@ -81,14 +113,11 @@ pub(super) fn prepare(
         }
         targets
     };
-    Ok((
-        operation.payload.clone(),
-        TriggerExpectation16 {
-            requested_class: class,
-            native_scope,
-            expected_targets,
-        },
-    ))
+    Ok(TriggerExpectation16 {
+        requested_class: class,
+        native_scope,
+        expected_targets,
+    })
 }
 
 fn connector_id(resource: &ResourceRef) -> Option<u32> {

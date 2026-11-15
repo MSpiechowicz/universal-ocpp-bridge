@@ -101,8 +101,9 @@ and runtime revisions 11 (OCPP 1.6 reservations), 12 (OCPP 2.0.1 reservations), 
 (OCPP 2.0.1 composite schedules and installed-profile reports), 14 (OCPP 1.6 firmware
 updates), 15 (OCPP 2.0.1 firmware updates), 16 (OCPP 1.6 diagnostics and log uploads), 17
 (OCPP 2.0.1 log uploads) and 18 (OCPP 2.0.1 variable monitoring) on existing topics.
-Historically unsupported v1.2/v1.3 remain unsupported, and future revision 19 is rejected
-before publication. Immediate and durable results retain
+Historically unsupported v1.2/v1.3 remain unsupported, and revision 19 (OCPP 1.6
+`ExtendedTriggerMessage` classes, published over HTTP as command-result v1.19 and export
+v1.20) and later are rejected before publication. Immediate and durable results retain
 packet-specific PUBACK correlation and existing encoded-message caps; oversized
 results fail without truncated evidence. Broker receipt is not native acceptance,
 installed list contents, offline authorization or physical effects. Result compatibility

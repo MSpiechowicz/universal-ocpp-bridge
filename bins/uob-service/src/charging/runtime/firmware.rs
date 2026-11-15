@@ -73,6 +73,23 @@ pub(super) async fn complete_status(
         write.journal_events.push(marker);
         commits.trigger_committed = true;
     }
+    // The Whitepaper message counts as evidence for `ExtendedTriggerMessage` once it commits.
+    if signed
+        && services.trigger_enabled
+        && let Some(marker) = trigger::marker(
+            services.store,
+            &snapshot.station,
+            services.identity,
+            TriggerMessageClass::SignedFirmwareStatusNotification,
+            None,
+            trigger::status_name(&status).as_deref(),
+            now,
+        )
+        .await?
+    {
+        write.journal_events.push(marker);
+        commits.trigger_committed = true;
+    }
     if !write.firmware_observations_16.is_empty() || !write.journal_events.is_empty() {
         services
             .store

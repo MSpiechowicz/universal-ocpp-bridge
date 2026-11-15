@@ -28,6 +28,7 @@ pub mod monitoring201;
 mod native_state;
 pub mod reservation16;
 pub mod reservation201;
+pub mod security16;
 use native_state::{
     open_diagnostics16, open_diagnostics201, open_firmware16, open_firmware201, open_monitoring201,
     open_native_state, open_native_state201, open_reservation201, validate_client_config,
@@ -124,6 +125,7 @@ pub struct SimulatorClientConfig {
     pub diagnostics16: Option<(String, diagnostics16::DiagnosticsConfig)>,
     pub diagnostics201: Option<(String, diagnostics201::Diagnostics201Config)>,
     pub monitoring201: Option<monitoring201::Monitoring201Config>,
+    pub security16: Option<(String, security16::SecurityConfig)>,
 }
 
 /// A simulator-owned OCPP call that retains exact native JSON field values.
@@ -225,6 +227,7 @@ enum Command {
     ReservationStatus(u32, &'static str),
     FirmwareStatus(firmware16::FirmwareStatus, u64),
     DiagnosticsStatus(diagnostics16::LogStatus, u64),
+    Security16(security16::transport::Dispatch, u64),
     Shutdown(oneshot::Sender<Result<(), SimulatorClientError>>),
 }
 
@@ -269,6 +272,7 @@ struct Ocpp16State {
     reservation16: Option<reservation16::ReservationHandle>,
     firmware16: Option<firmware16::FirmwareHandle>,
     diagnostics16: Option<diagnostics16::DiagnosticsHandle>,
+    security16: Option<security16::SecurityHandle>,
     reservation_notifications: Vec<(u32, &'static str)>,
     local_reply_fault: Option<local_authorization::transport::NativeReplyFault>,
     reset_reason: Option<ocpp_client::ocpp_types::v16::common::Reason>,
@@ -374,6 +378,7 @@ impl SimulatorProtocolClient {
                         .transpose()?,
                     firmware16: open_firmware16(&config)?,
                     diagnostics16: open_diagnostics16(&config)?,
+                    security16: security16::open(&config)?,
                     notifications: Some(commands.downgrade()),
                     ..Ocpp16State::default()
                 }));

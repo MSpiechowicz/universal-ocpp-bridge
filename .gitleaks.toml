@@ -40,3 +40,14 @@ paths = [
 ]
 regexTarget = "secret"
 regexes = ['''^private-owner-114$''']
+
+[[allowlists]]
+description = "Synthetic Basic token (fakeuser:fakepassword) of the OCPP 1.6 security-event redaction fixture, asserted absent from stored and published data"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = [
+  '''^adapters/protocol/tests/ocpp16_security_event_decode\.rs$''',
+  '''^bins/uob-service/tests/security16/support\.rs$''',
+]
+regexTarget = "secret"
+regexes = ['''^ZmFrZXVzZXI6ZmFrZXBhc3N3b3Jk$''']

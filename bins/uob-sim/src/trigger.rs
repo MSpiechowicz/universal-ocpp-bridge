@@ -243,7 +243,7 @@ fn now() -> String {
     .to_string()
 }
 
-fn payloads(
+pub(crate) fn payloads(
     request: &TriggerMessageRequest,
     connectors: &[u16],
     state: &Arc<Mutex<Ocpp16State>>,
@@ -320,7 +320,7 @@ fn payloads(
     }
 }
 
-async fn send_call(
+pub(crate) async fn send_call(
     client: &OCPP1_6Client,
     message: &Requested,
     payload: Value,

@@ -26,7 +26,7 @@ pub(super) fn path(name: &str) -> Value {
         | "schemas_v1_5" | "schemas_v1_6" | "schemas_v1_7" | "schemas_v1_8" | "schemas_v1_9"
         | "schemas_v1_10" | "schemas_v1_11" | "schemas_v1_12" | "schemas_v1_13"
         | "schemas_v1_14" | "schemas_v1_15" | "schemas_v1_16" | "schemas_v1_17"
-        | "schemas_v1_18" | "schemas_v1_19" => (
+        | "schemas_v1_18" | "schemas_v1_19" | "schemas_v1_20" => (
             "get",
             "200",
             json!({"type":"object"}),
@@ -83,7 +83,7 @@ pub(super) fn path(name: &str) -> Value {
         | "schemas_v1_5" | "schemas_v1_6" | "schemas_v1_7" | "schemas_v1_8" | "schemas_v1_9"
         | "schemas_v1_10" | "schemas_v1_11" | "schemas_v1_12" | "schemas_v1_13"
         | "schemas_v1_14" | "schemas_v1_15" | "schemas_v1_16" | "schemas_v1_17"
-        | "schemas_v1_18" | "schemas_v1_19" => "application/schema+json",
+        | "schemas_v1_18" | "schemas_v1_19" | "schemas_v1_20" => "application/schema+json",
         _ => "application/json",
     };
     responses.insert(
@@ -116,6 +116,7 @@ pub(super) fn path(name: &str) -> Value {
             | "schemas_v1_17"
             | "schemas_v1_18"
             | "schemas_v1_19"
+            | "schemas_v1_20"
     ) {
         operation["description"] = json!(
             "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required."
@@ -192,6 +193,7 @@ fn errors(name: &str) -> Map<String, Value> {
                 | "schemas_v1_17"
                 | "schemas_v1_18"
                 | "schemas_v1_19"
+                | "schemas_v1_20"
         );
         let command_only = matches!(
             error,
@@ -249,7 +251,7 @@ fn parameters(name: &str) -> Vec<Value> {
         | "schemas_v1_5" | "schemas_v1_6" | "schemas_v1_7" | "schemas_v1_8" | "schemas_v1_9"
         | "schemas_v1_10" | "schemas_v1_11" | "schemas_v1_12" | "schemas_v1_13"
         | "schemas_v1_14" | "schemas_v1_15" | "schemas_v1_16" | "schemas_v1_17"
-        | "schemas_v1_18" | "schemas_v1_19" => Some("schema"),
+        | "schemas_v1_18" | "schemas_v1_19" | "schemas_v1_20" => Some("schema"),
         _ => None,
     };
     if let Some(path) = path {
@@ -274,6 +276,7 @@ fn parameters(name: &str) -> Vec<Value> {
                 "schemas_v1_17" => "v1.17",
                 "schemas_v1_18" => "v1.18",
                 "schemas_v1_19" => "v1.19",
+                "schemas_v1_20" => "v1.20",
                 _ => "v1.0",
             };
             json!({"type":"string","enum":super::schemas::canonical(revision)

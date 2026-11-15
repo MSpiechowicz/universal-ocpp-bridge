@@ -4,6 +4,7 @@ mod authorization;
 pub mod availability;
 pub mod data_transfer;
 pub mod remote_control;
+pub mod security_event;
 mod transaction_input;
 mod transactions;
 mod trigger;
@@ -67,6 +68,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         "FirmwareStatusNotification" => trigger::firmware(payload)?,
         "SignedFirmwareStatusNotification" => trigger::signed_firmware(payload)?,
         "LogStatusNotification" => trigger::log_status(payload)?,
+        "SecurityEventNotification" => security_event::observation(payload)?,
         "MeterValues" => measurements(payload_as(payload)?)?,
         "DataTransfer" => ChargerObservation::DataTransfer16(data_transfer::observation(payload)?),
         "StartTransaction" => {

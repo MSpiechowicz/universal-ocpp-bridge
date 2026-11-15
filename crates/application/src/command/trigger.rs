@@ -21,8 +21,9 @@ impl TriggerExpectation {
     ) -> Result<(), CommandAdmissionError> {
         match self {
             Self::Ocpp16(expectation) => {
-                result.schema_version = ContractVersion::V1_TRIGGER;
-                result.trigger_observation = Some(expectation.start(now)?);
+                let observation = expectation.start(now)?;
+                result.schema_version = observation.requested_class.contract_version();
+                result.trigger_observation = Some(observation);
             }
             Self::Ocpp201(expectation) => {
                 result.schema_version = ContractVersion::V1_TRIGGER_201;
@@ -91,13 +92,7 @@ impl TriggerExpectation16 {
         {
             return Err(invalid_expectation());
         }
-        let station_only = matches!(
-            self.requested_class,
-            TriggerMessageClass::BootNotification
-                | TriggerMessageClass::DiagnosticsStatusNotification
-                | TriggerMessageClass::FirmwareStatusNotification
-                | TriggerMessageClass::Heartbeat
-        );
+        let station_only = self.requested_class.is_station_only();
         if (station_only && targets.as_slice() != [0])
             || (self.requested_class == TriggerMessageClass::MeterValues
                 && (targets.contains(&0) || targets.len() > 64))
@@ -139,7 +134,39 @@ fn invalid_expectation() -> CommandAdmissionError {
 
 #[cfg(test)]
 mod tests {
+    use uob_contracts::{
+        AuthenticatedCommandOrigin, BridgeId, Command, CommandLifecycle, CommandOperation,
+        PayloadSchemaId, PrincipalId, PrivilegedOcppOperation, ProtocolActionName, ProtocolEdition,
+        RequestId, ResourceRef, StationId,
+    };
+
     use super::*;
+
+    fn blank_result(now: UtcTimestamp) -> CommandResult {
+        let command = Command {
+            schema_version: ContractVersion::V1_INITIAL,
+            request_id: RequestId::new("trigger-revision").unwrap(),
+            correlation_id: None,
+            resource: ResourceRef {
+                bridge_id: BridgeId::new("bridge").unwrap(),
+                station_id: StationId::new("charger").unwrap(),
+                resource: None,
+                native_protocol_reference: None,
+            },
+            operation: CommandOperation::Ocpp(PrivilegedOcppOperation {
+                protocol: ProtocolEdition::Ocpp16j,
+                action: ProtocolActionName::new("ExtendedTriggerMessage").unwrap(),
+                payload_schema: PayloadSchemaId::new("extended-trigger").unwrap(),
+                payload: (),
+            }),
+            expires_at: now,
+            origin: AuthenticatedCommandOrigin::Management {
+                principal_id: PrincipalId::new("operator").unwrap(),
+            },
+            admitted_at: now,
+        };
+        crate::command::results::command_result(&command, CommandLifecycle::Dispatched, now)
+    }
 
     #[test]
     fn all_status_targets_include_zero_and_sixty_four_connectors() {
@@ -175,6 +202,8 @@ mod tests {
             TriggerMessageClass::DiagnosticsStatusNotification,
             TriggerMessageClass::FirmwareStatusNotification,
             TriggerMessageClass::Heartbeat,
+            TriggerMessageClass::LogStatusNotification,
+            TriggerMessageClass::SignedFirmwareStatusNotification,
         ] {
             let observation = TriggerExpectation16 {
                 requested_class,
@@ -185,6 +214,61 @@ mod tests {
             .expect("irrelevant connector ignored");
             assert_eq!(observation.native_scope, Some(42));
             assert_eq!(observation.expected_targets, vec![0]);
+        }
+    }
+
+    #[test]
+    fn whitepaper_classes_are_station_only_and_carry_revision_19() {
+        let now: UtcTimestamp = serde_json::from_str("\"2026-09-01T00:00:00Z\"").unwrap();
+        for requested_class in [
+            TriggerMessageClass::LogStatusNotification,
+            TriggerMessageClass::SignedFirmwareStatusNotification,
+        ] {
+            let station = TriggerExpectation16 {
+                requested_class,
+                native_scope: None,
+                expected_targets: vec![0],
+            };
+            assert!(station.start(now).is_ok());
+            let connector = TriggerExpectation16 {
+                expected_targets: vec![1],
+                ..station.clone()
+            };
+            assert!(connector.start(now).is_err());
+            let both = TriggerExpectation16 {
+                expected_targets: vec![0, 1],
+                ..station
+            };
+            assert!(both.start(now).is_err());
+            assert_eq!(
+                requested_class.contract_version(),
+                ContractVersion::V1_EXTENDED_TRIGGER_16
+            );
+            assert_eq!(ContractVersion::V1_EXTENDED_TRIGGER_16.revision, 19);
+        }
+    }
+
+    #[test]
+    fn expectation_start_sets_result_revision_from_class() {
+        let now: UtcTimestamp = serde_json::from_str("\"2026-09-01T00:00:00Z\"").unwrap();
+        for (requested_class, revision) in [
+            (TriggerMessageClass::LogStatusNotification, 19),
+            (TriggerMessageClass::SignedFirmwareStatusNotification, 19),
+            (TriggerMessageClass::BootNotification, 2),
+            (TriggerMessageClass::FirmwareStatusNotification, 2),
+            (TriggerMessageClass::Heartbeat, 2),
+        ] {
+            let expectation = TriggerExpectation::Ocpp16(TriggerExpectation16 {
+                requested_class,
+                native_scope: None,
+                expected_targets: vec![0],
+            });
+            let mut result = blank_result(now);
+            expectation.start(&mut result, now).unwrap();
+            assert_eq!(
+                result.schema_version.revision, revision,
+                "{requested_class:?}"
+            );
         }
     }
 }

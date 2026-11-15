@@ -74,7 +74,9 @@ An accepted request supersedes every older unresolved job of the station. `Accep
 marks the older one `cancelled` (N01.FR.11), a plain acceptance marks it `superseded`. Startup
 recovery marks a job `uncertain` if dispatch had started and `not_sent` otherwise, and restores a
 missing release-drain entry. A triggered `Idle` resolves a stalled job as `station_idle`; the same
-notification still counts as trigger evidence.
+notification still counts as trigger evidence. An `ExtendedTriggerMessage` for
+`LogStatusNotification` asks for exactly that identity-free `Idle` (see
+[OCPP 1.6 security events](ocpp16-security-events.md)).
 
 ## Public evidence
 
@@ -99,8 +101,9 @@ restart fails and the station reports the failure.
 
 ## Not covered
 
-- `ExtendedTriggerMessage` for `LogStatusNotification` (the N01.FR.12 trigger path).
-- `SecurityEventNotification` and the security-log contents themselves (N01.FR.05, #127).
+- The security-log contents themselves (N01.FR.05). Security events and the
+  `ExtendedTriggerMessage` path for `LogStatusNotification` (N01.FR.12) are described in
+  [OCPP 1.6 security events](ocpp16-security-events.md).
 - FTP/FTPS uploads, resume, `Expect: 100-continue` and basic authorization in upload locations
   (N01.FR.14, N01.FR.17, N01.FR.22, N01.FR.23).
 - Persistent production artifact storage, physical stations and OCA certification. OCPP 2.0.1

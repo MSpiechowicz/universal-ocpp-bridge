@@ -54,7 +54,8 @@ pub(crate) async fn connect(
         || config.local_authorization_file.is_some()
         || config.reservation16.is_some()
         || config.firmware16.is_some()
-        || config.diagnostics16.is_some();
+        || config.diagnostics16.is_some()
+        || config.security16.is_some();
     client
         .on_reconnect(move |client| {
             let state = Arc::clone(&reconnect_state);

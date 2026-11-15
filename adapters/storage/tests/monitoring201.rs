@@ -381,7 +381,7 @@ async fn inconsistent_evidence_is_refused_and_leaves_no_trace() {
 }
 
 #[tokio::test]
-async fn schema_v21_database_opens_as_v22_and_a_newer_one_is_refused() {
+async fn schema_v21_database_opens_as_v23_and_a_newer_one_is_refused() {
     let database = Database::new();
     drop(database.open());
     database
@@ -399,12 +399,12 @@ async fn schema_v21_database_opens_as_v22_and_a_newer_one_is_refused() {
     .unwrap();
     store.shutdown(Duration::from_secs(1)).await.unwrap();
     drop(store);
-    assert_eq!(database.version(), 22);
+    assert_eq!(database.version(), 23);
 
     database
         .connection()
-        .execute_batch("PRAGMA user_version = 23;")
+        .execute_batch("PRAGMA user_version = 24;")
         .unwrap();
     assert!(Store::open(&database.0, 16).is_err());
-    assert_eq!(database.version(), 23);
+    assert_eq!(database.version(), 24);
 }

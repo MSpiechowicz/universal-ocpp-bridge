@@ -83,7 +83,7 @@ Every signed status carries the job's `requestId` (L01.FR.10). A legacy
 `TriggerMessage(FirmwareStatusNotification)` returns `Idle` only when no job is active (§4.5).
 While a job is active it returns the last reported status. When nothing has been reported yet, the
 trigger is answered `Rejected`. A signed station answers that legacy trigger with `Idle` when no
-job is active and `Rejected` otherwise; its own trigger is `ExtendedTriggerMessage` (see below).
+job is active and `Rejected` otherwise; its own trigger is `ExtendedTriggerMessage` (see [security16.md](security16.md)).
 
 ## Durability and delivery
 
@@ -113,12 +113,15 @@ signatures or digests. See `bins/uob-sim/examples/firmware-1.6*.toml` and
 
 ## Not modeled
 
-- **Security events.** `SecurityEventNotification` for `InvalidFirmwareSigningCertificate`,
-  `InvalidFirmwareSignature` and `FirmwareUpdated` (L01.FR.02/03/33) is not sent. Security events
-  belong to issue #127.
+- **Automatic security events.** The firmware model never sends `SecurityEventNotification` for
+  `InvalidFirmwareSigningCertificate`, `InvalidFirmwareSignature` or `FirmwareUpdated`
+  (L01.FR.02/03/33). A scenario can raise them explicitly with `emit_security_event`; see
+  [security16.md](security16.md).
 - **Revocation.** `RevokedCertificate` is never returned, because the station holds no revocation
   data.
-- **`ExtendedTriggerMessage`.** It is not implemented, so L01.FR.28/29 are not covered.
+- **`ExtendedTriggerMessage` without a `security16` table.** It keeps the client library's
+  `NotImplemented` reply. With the table, `FirmwareStatusNotification` is answered with a
+  `SignedFirmwareStatusNotification` per L01.FR.28/29 (see [security16.md](security16.md)).
 - **`DownloadPaused`.** It is never reported.
 - **L01.FR.07/19.** Unused connectors are not set to `Unavailable` while waiting for transactions
   to end.

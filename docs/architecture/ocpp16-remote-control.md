@@ -3,7 +3,7 @@
 `v16::remote_control::RemoteControlSession` implements the application `StationCommandPort` for
 one authenticated OCPP 1.6 socket. Compose the existing `CommandCoordinator` and scoped access
 guard around it: ordinary `Start`/`Stop` require control permission; pinned `Reset`,
-`UnlockConnector`, configuration, `TriggerMessage`, `GetCompositeSchedule`,
+`UnlockConnector`, configuration, `TriggerMessage`, `ExtendedTriggerMessage`, `GetCompositeSchedule`,
 `SetChargingProfile` and `ClearChargingProfile` operations require privileged control.
 No new HTTP or authentication path is introduced. The service composes a charging host for
 explicitly opted-in, loopback-only demo ingress; production charging commands remain disabled.
@@ -24,6 +24,7 @@ before durable admission, and a disconnect racing dispatch never queues work for
 | GetConfiguration | Privileged `Ocpp`, action `GetConfiguration`, pinned OCA request schema; station scope, absent/empty/selected key lists and learned `GetConfigurationMaxKeys` bound | Known keys (including read-only flags), unknown keys and optional omitted lists |
 | ChangeConfiguration | Privileged `Ocpp`, action `ChangeConfiguration`, bridge reference schema `urn:uob:ocpp16:ChangeConfigurationReference:1`; station scope and locally provisioned key-bound, expiring reference | Accepted / Rejected / RebootRequired / NotSupported |
 | TriggerMessage | Privileged `Ocpp`, action `TriggerMessage`, schema `urn:OCPP:1.6:2019:12:TriggerMessageRequest`; six pinned native classes with station/connector scope | Accepted / Rejected / NotImplemented |
+| ExtendedTriggerMessage | Privileged `Ocpp`, action `ExtendedTriggerMessage`, schema `urn:OCPP:Cp:1.6:2020:3:ExtendedTriggerMessage.req`; station/connector scope, `connectorId` positive, `LogStatusNotification` and `FirmwareStatusNotification` only with `GetLog` / `SignedUpdateFirmware`; never `SignChargePointCertificate` (see [OCPP 1.6 security events](ocpp16-security-events.md)) | Accepted / Rejected / NotImplemented |
 | GetCompositeSchedule | Privileged `Ocpp`, action `GetCompositeSchedule`, schema `urn:OCPP:1.6:2019:12:GetCompositeScheduleRequest`; station connector 0 or exact positive connector, positive i32 duration and optional A/W unit | Accepted with meaningful typed schedule / Rejected |
 | SetChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:SetChargingProfileRequest`; complete native profile, exact station/connector scope and ongoing transaction checks for TxProfile | Accepted / Rejected / NotSupported |
 | ClearChargingProfile | Privileged `Ocpp`, pinned `urn:OCPP:1.6:2019:12:ClearChargingProfileRequest`; station authority for ID/broad clears, exact connector for child filter clears | Accepted / Unknown |
@@ -81,6 +82,11 @@ station 0 plus connectors for status, positive connectors only for metering. The
 target set is frozen before dispatch, bounded to 64 connectors; a topology change does
 not retroactively broaden that expectation. Invalid/unsupported scope does not reach
 the wire.
+
+`ExtendedTriggerMessage` (Security Whitepaper §5.5) uses the same scope, frozen-target and
+observation rules with a positive `connectorId`, a station option of its own and two further
+classes, `LogStatusNotification` and a signed `FirmwareStatusNotification`. Its admission,
+refusals and result revision are described in [OCPP 1.6 security events](ocpp16-security-events.md).
 
 ## Responses and observed state
 

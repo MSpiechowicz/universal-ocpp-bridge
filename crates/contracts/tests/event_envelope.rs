@@ -169,6 +169,26 @@ fn deserialized_timestamps_are_normalized_before_reemission() {
 }
 
 #[test]
+fn timestamps_outside_the_utc_range_are_rejected_instead_of_panicking() {
+    for input in [
+        "\"9999-12-31T23:00:00-01:00\"",
+        "\"0000-01-01T00:00:00+00:01\"",
+    ] {
+        assert!(
+            serde_json::from_str::<UtcTimestamp>(input).is_err(),
+            "{input}"
+        );
+    }
+
+    let last: UtcTimestamp =
+        serde_json::from_str("\"9999-12-31T23:59:59+00:00\"").expect("last UTC second");
+    assert_eq!(
+        serde_json::to_string(&last).expect("timestamp output"),
+        "\"9999-12-31T23:59:59Z\""
+    );
+}
+
+#[test]
 fn empty_identities_are_rejected_during_deserialization() {
     assert!(serde_json::from_str::<EventId>("\"  \"").is_err());
     assert!(serde_json::from_str::<BridgeId>("\"\"").is_err());

@@ -14,6 +14,7 @@ mod recovery;
 mod reservations;
 mod roster;
 mod runtime;
+mod security16;
 
 use serde_json::Value;
 use std::{
@@ -179,6 +180,7 @@ impl StationSettings {
         }
         device_model::apply(snapshot, self.protocol, self.control);
         monitoring::apply(snapshot, self.protocol, self.control);
+        security16::apply(snapshot, self.protocol, self.control);
         profiles::apply(snapshot, self.protocol, self.control);
         reservations::apply_capabilities(snapshot, self);
         self.apply_transfer_capabilities(snapshot);

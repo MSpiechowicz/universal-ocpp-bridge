@@ -152,6 +152,7 @@ pub(crate) enum Request<C, E, D> {
         UtcTimestamp,
         Reply<Option<CommandResult>>,
     ),
+    SecurityEvent16(crate::security_event16::Query, Reply<bool>),
     PruneCommands(i64, Reply<u64>),
     MaintainRetention(i64, Reply<StorageRetentionStatus>),
     RetentionStatus(Reply<StorageRetentionStatus>),
@@ -361,6 +362,9 @@ fn handle_request<C, E, D>(
         | Request::MonitoringReport(..)
         | Request::PruneCommands(..)) => {
             command_requests::handle(connection, drain, command_request);
+        }
+        Request::SecurityEvent16(query, reply) => {
+            respond(reply, crate::security_event16::recorded(connection, &query));
         }
         Request::MaintainRetention(now, reply) => respond(
             reply,

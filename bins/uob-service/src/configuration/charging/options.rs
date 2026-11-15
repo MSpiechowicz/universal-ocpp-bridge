@@ -9,6 +9,9 @@ use serde::Deserialize;
 pub(crate) struct StationControlOptions {
     pub change_availability: bool,
     pub trigger_message: StationActionOption,
+    /// OCPP 1.6 Security Whitepaper `ExtendedTriggerMessage`; refused for OCPP 2.0.1. Charger
+    /// initiated `SecurityEventNotification` is always answered and needs no option.
+    pub extended_trigger_message: StationActionOption,
     pub get_composite_schedule: StationActionOption,
     pub get_charging_profiles: StationActionOption,
     pub set_charging_profile: StationActionOption,
@@ -65,6 +68,10 @@ impl StationControlOptions {
             || self.set_monitoring_base.enabled()
             || self.set_monitoring_level.enabled()
     }
+    /// Whether the station may ask the charger to send one of its own messages.
+    pub fn trigger_enabled(self) -> bool {
+        self.trigger_message.enabled() || self.extended_trigger_message.enabled()
+    }
     pub fn configuration_enabled(self) -> bool {
         self.set_variables.enabled() || self.set_network_profile.enabled()
     }
@@ -76,6 +83,7 @@ impl StationControlOptions {
     pub(super) fn requires_privileged_grant(self) -> bool {
         self.change_availability
             || self.trigger_message.enabled()
+            || self.extended_trigger_message.enabled()
             || self.get_composite_schedule.enabled()
             || self.get_charging_profiles.enabled()
             || self.charging_profiles_enabled()

@@ -34,6 +34,9 @@ pub trait ProtocolClient: Send + Sync {
     fn diagnostics16(&self) -> Option<crate::diagnostics16::DiagnosticsHandle> {
         None
     }
+    fn security16(&self) -> Option<crate::security16::SecurityHandle> {
+        None
+    }
     fn firmware201(&self) -> Option<crate::firmware201::Firmware201Handle> {
         None
     }

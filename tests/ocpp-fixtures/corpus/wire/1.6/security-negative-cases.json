@@ -1,0 +1,429 @@
+{
+  "cases": [
+    {
+      "id": "event-missing-type",
+      "wire": [
+        2,
+        "neg-1",
+        "SecurityEventNotification",
+        {
+          "timestamp": "2026-10-07T06:15:00Z"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "5.15 type is required (1..1)"
+    },
+    {
+      "id": "event-missing-timestamp",
+      "wire": [
+        2,
+        "neg-2",
+        "SecurityEventNotification",
+        {
+          "type": "StartupOfTheDevice"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "5.15 timestamp is required (1..1)"
+    },
+    {
+      "id": "event-empty-payload",
+      "wire": [
+        2,
+        "neg-3",
+        "SecurityEventNotification",
+        {}
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "5.15 requires both type and timestamp"
+    },
+    {
+      "id": "event-type-too-long",
+      "wire": [
+        2,
+        "neg-4",
+        "SecurityEventNotification",
+        {
+          "type": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+          "timestamp": "2026-10-07T06:15:00Z"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "5.15 type is string[50]; 51 characters exceed it"
+    },
+    {
+      "id": "event-tech-info-too-long",
+      "wire": [
+        2,
+        "neg-5",
+        "SecurityEventNotification",
+        {
+          "type": "ResetOrReboot",
+          "timestamp": "2026-10-07T06:15:00Z",
+          "techInfo": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "5.15 techInfo is string[0..255]; 256 characters exceed it"
+    },
+    {
+      "id": "event-extra-field",
+      "wire": [
+        2,
+        "neg-6",
+        "SecurityEventNotification",
+        {
+          "type": "ResetOrReboot",
+          "timestamp": "2026-10-07T06:15:00Z",
+          "severity": 3
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties; the 2.0.1 NotifyEvent-style severity is not a 1.6 field"
+    },
+    {
+      "id": "event-type-integer",
+      "wire": [
+        2,
+        "neg-7",
+        "SecurityEventNotification",
+        {
+          "type": 7,
+          "timestamp": "2026-10-07T06:15:00Z"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "type is a string, not a number"
+    },
+    {
+      "id": "event-type-null",
+      "wire": [
+        2,
+        "neg-8",
+        "SecurityEventNotification",
+        {
+          "type": null,
+          "timestamp": "2026-10-07T06:15:00Z"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "type is a string; null is not an absent field"
+    },
+    {
+      "id": "event-timestamp-integer",
+      "wire": [
+        2,
+        "neg-9",
+        "SecurityEventNotification",
+        {
+          "type": "ResetOrReboot",
+          "timestamp": 1791353700
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "timestamp is an RFC 3339 string, not epoch seconds"
+    },
+    {
+      "id": "event-timestamp-not-date-time",
+      "wire": [
+        2,
+        "neg-10",
+        "SecurityEventNotification",
+        {
+          "type": "ResetOrReboot",
+          "timestamp": "yesterday evening"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "timestamp must be a dateTime; the schema format keyword rejects free text when formats are asserted"
+    },
+    {
+      "id": "event-tech-info-object",
+      "wire": [
+        2,
+        "neg-11",
+        "SecurityEventNotification",
+        {
+          "type": "MaintenanceLoginFailed",
+          "timestamp": "2026-10-07T06:15:00Z",
+          "techInfo": {
+            "user": "svc",
+            "origin": "touchscreen"
+          }
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "techInfo is a string; the whitepaper's recommended JSON layout must be sent as an escaped string"
+    },
+    {
+      "id": "event-reply-with-field",
+      "wire": [
+        3,
+        "neg-12",
+        {
+          "status": "Accepted"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "SecurityEventNotification.conf defines no fields",
+      "schema": "SecurityEventNotificationResponse"
+    },
+    {
+      "id": "trigger-unknown-message",
+      "wire": [
+        2,
+        "neg-13",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "DiagnosticsStatusNotification"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "DiagnosticsStatusNotification is a legacy TriggerMessage name that MessageTriggerEnumType (6.16) does not contain"
+    },
+    {
+      "id": "trigger-lowercase-message",
+      "wire": [
+        2,
+        "neg-14",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "heartbeat"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "enum values are case-sensitive"
+    },
+    {
+      "id": "trigger-extra-field",
+      "wire": [
+        2,
+        "neg-15",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "Heartbeat",
+          "evseId": 1
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "no additional properties; 2.0.1 evse is not a 1.6 field"
+    },
+    {
+      "id": "trigger-missing-message",
+      "wire": [
+        2,
+        "neg-16",
+        "ExtendedTriggerMessage",
+        {
+          "connectorId": 1
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestedMessage is required (1..1)"
+    },
+    {
+      "id": "trigger-empty-payload",
+      "wire": [
+        2,
+        "neg-17",
+        "ExtendedTriggerMessage",
+        {}
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestedMessage is required (1..1)"
+    },
+    {
+      "id": "trigger-message-integer",
+      "wire": [
+        2,
+        "neg-18",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": 3
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "requestedMessage is an enum string"
+    },
+    {
+      "id": "trigger-connector-string",
+      "wire": [
+        2,
+        "neg-19",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "MeterValues",
+          "connectorId": "1"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "connectorId is an integer"
+    },
+    {
+      "id": "trigger-connector-fractional",
+      "wire": [
+        2,
+        "neg-20",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "MeterValues",
+          "connectorId": 1.5
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "connectorId is an integer"
+    },
+    {
+      "id": "trigger-reply-unknown-status",
+      "wire": [
+        3,
+        "neg-21",
+        {
+          "status": "Scheduled"
+        }
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "TriggerMessageStatusEnumType has only Accepted, Rejected and NotImplemented",
+      "schema": "ExtendedTriggerMessageResponse"
+    },
+    {
+      "id": "trigger-reply-missing-status",
+      "wire": [
+        3,
+        "neg-22",
+        {}
+      ],
+      "level": "schema",
+      "schema_valid": false,
+      "native_valid": false,
+      "reason": "status is required (1..1)",
+      "schema": "ExtendedTriggerMessageResponse"
+    },
+    {
+      "id": "trigger-sign-certificate",
+      "wire": [
+        2,
+        "neg-23",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "SignChargePointCertificate"
+        }
+      ],
+      "level": "application",
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "6.16 lists it and the schema accepts it, but triggering SignCertificate.req belongs to certificate management (issue #129) and is not implemented; the bridge never sends it",
+      "bridge_refusal": "UnsupportedOperation"
+    },
+    {
+      "id": "trigger-sign-certificate-connector",
+      "wire": [
+        2,
+        "neg-24",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "SignChargePointCertificate",
+          "connectorId": 1
+        }
+      ],
+      "level": "application",
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "schema-valid, but the certificate request is station-wide and deferred to issue #129; refused as unsupported before the connector is considered",
+      "bridge_refusal": "UnsupportedOperation"
+    },
+    {
+      "id": "trigger-connector-zero",
+      "wire": [
+        2,
+        "neg-25",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "MeterValues",
+          "connectorId": 0
+        }
+      ],
+      "level": "application",
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "5.5 states connectorId > 0, but the schema only requires an integer; the station scope is expressed by omitting connectorId",
+      "bridge_refusal": "InvalidParameters"
+    },
+    {
+      "id": "trigger-connector-negative",
+      "wire": [
+        2,
+        "neg-26",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "StatusNotification",
+          "connectorId": -1
+        }
+      ],
+      "level": "application",
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "5.5 states connectorId > 0, but the schema only requires an integer",
+      "bridge_refusal": "InvalidParameters"
+    },
+    {
+      "id": "trigger-heartbeat-connector-zero",
+      "wire": [
+        2,
+        "neg-27",
+        "ExtendedTriggerMessage",
+        {
+          "requestedMessage": "Heartbeat",
+          "connectorId": 0
+        }
+      ],
+      "level": "application",
+      "schema_valid": true,
+      "native_valid": false,
+      "reason": "5.5 connectorId > 0 holds for every message type, including the connector-less Heartbeat",
+      "bridge_refusal": "InvalidParameters"
+    }
+  ]
+}

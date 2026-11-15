@@ -50,6 +50,9 @@ async fn a_report_beyond_the_shared_fragment_limit_is_incomplete_with_the_limit_
         if reply[0] == 4 {
             break;
         }
+        // Fragments wait in a four-deep queue, and a loopback station can outrun the collector
+        // into `capacity`. A real link is slower than this pause.
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
     }
     let limited = settled(&client, &fixture, "fragments").await;
     assert_eq!(report(&limited)["state"], "incomplete");

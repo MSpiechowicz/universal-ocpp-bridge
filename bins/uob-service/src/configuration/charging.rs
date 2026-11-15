@@ -254,6 +254,12 @@ fn validate_stations(
         {
             return Err(fail);
         }
+        // `ExtendedTriggerMessage` is a Security Whitepaper message of OCPP 1.6 only.
+        if station.control.extended_trigger_message.enabled()
+            && station.protocol != ProtocolEdition::Ocpp16j
+        {
+            return Err(fail);
+        }
         // Each edition owns its reservation provider and capacity option; neither is shared.
         if (station.control.reserve_connector_zero_supported
             || station.reservation16_file.is_some())
@@ -415,5 +421,7 @@ fn valid_resource_name(value: String) -> Result<String, ConfigurationLoadError> 
     Ok(value)
 }
 
+#[cfg(test)]
+mod security16_tests;
 #[cfg(test)]
 mod tests;

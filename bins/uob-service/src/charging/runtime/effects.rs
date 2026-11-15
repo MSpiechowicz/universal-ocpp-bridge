@@ -80,12 +80,13 @@ pub(super) async fn reconcile(
                         ),
                     }
                 }
-                // Charger-reported limits, needs and monitoring events never prove a command effect.
+                // Charger-reported limits, needs, monitoring and security events never prove a command effect.
                 StationEvent::Invalidation { .. }
                 | StationEvent::TriggerNotification { .. }
                 | StationEvent::TriggerNotification201 { .. }
                 | StationEvent::ChargingNegotiation201 { .. }
-                | StationEvent::MonitoringEvents201 { .. } => None,
+                | StationEvent::MonitoringEvents201 { .. }
+                | StationEvent::SecurityEvent16 { .. } => None,
             };
             if let Some(effect) = effect {
                 coordinator

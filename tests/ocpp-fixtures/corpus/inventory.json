@@ -22,6 +22,8 @@
     {"id":"ocpp16.firmware-diagnostics.firmware-update","feature":"firmware_diagnostics.firmware_update","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.firmware-diagnostics.diagnostics-logs","feature":"firmware_diagnostics.diagnostics_logs","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.monitoring-security","feature":"monitoring_security","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
+    {"id":"ocpp16.monitoring-security.security-events","feature":"monitoring_security.security_events","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
+    {"id":"ocpp16.monitoring-security.extended-trigger","feature":"monitoring_security.extended_trigger","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.smart-charging","feature":"smart_charging","protocol_version":"1.6","direction":"csms_to_charging_station","required":true,"applicable":true},
     {"id":"ocpp16.smart-charging.composite-schedule","feature":"smart_charging.composite_schedule","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
     {"id":"ocpp16.certificates-iso15118","feature":"certificates_iso15118","protocol_version":"1.6","direction":"bidirectional","required":true,"applicable":true},
