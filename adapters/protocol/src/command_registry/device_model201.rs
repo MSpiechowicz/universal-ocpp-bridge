@@ -35,7 +35,7 @@ pub fn valid_schema(index: usize, payload: &Value) -> bool {
     });
     VALIDATORS[index].is_valid(payload)
 }
-fn opaque(value: &Value) -> bool {
+pub(crate) fn opaque(value: &Value) -> bool {
     match value {
         Value::Object(fields) => fields.contains_key("customData") || fields.values().any(opaque),
         Value::Array(values) => values.iter().any(opaque),

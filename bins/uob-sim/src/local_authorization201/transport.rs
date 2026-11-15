@@ -1,4 +1,5 @@
 mod authorization;
+mod monitoring;
 mod sink;
 mod stream;
 

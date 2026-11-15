@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "protocol": "2.0.1",
+  "sources": [
+    {
+      "title": "OCPP 2.0.1 Edition 4 Part 2 Specification with errata 2026-06",
+      "archive_sha256": "192482c82a5e27a2319d2142be2d8c074b68a22851ff5a12d0541efc1eda775a",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "N02",
+        "N03",
+        "N04",
+        "N05",
+        "N06",
+        "N07",
+        "N08",
+        "N02.FR.01",
+        "N02.FR.02",
+        "N02.FR.03",
+        "N02.FR.04",
+        "N02.FR.05",
+        "N02.FR.06",
+        "N02.FR.07",
+        "N02.FR.08",
+        "N02.FR.09",
+        "N02.FR.10",
+        "N02.FR.11",
+        "N02.FR.12",
+        "N02.FR.13",
+        "N02.FR.14",
+        "N02.FR.16",
+        "N02.FR.17",
+        "N02.FR.18",
+        "N02.FR.19",
+        "N02.FR.20",
+        "N02.FR.21",
+        "N03.FR.01",
+        "N03.FR.02",
+        "N03.FR.03",
+        "N03.FR.04",
+        "N03.FR.05",
+        "N04.FR.01",
+        "N04.FR.02",
+        "N04.FR.03",
+        "N04.FR.04",
+        "N04.FR.05",
+        "N04.FR.06",
+        "N04.FR.07",
+        "N04.FR.08",
+        "N04.FR.09",
+        "N04.FR.10",
+        "N04.FR.11",
+        "N04.FR.12",
+        "N04.FR.13",
+        "N04.FR.14",
+        "N04.FR.15",
+        "N04.FR.16",
+        "N04.FR.17",
+        "N04.FR.18",
+        "N04.FR.19",
+        "N04.FR.20",
+        "N05.FR.01",
+        "N05.FR.02",
+        "N05.FR.03",
+        "N06.FR.01",
+        "N06.FR.02",
+        "N06.FR.03",
+        "N06.FR.04",
+        "N06.FR.05",
+        "N06.FR.06",
+        "N06.FR.07",
+        "N07.FR.02",
+        "N07.FR.03",
+        "N07.FR.04",
+        "N07.FR.05",
+        "N07.FR.06",
+        "N07.FR.07",
+        "N07.FR.10",
+        "N07.FR.11",
+        "N07.FR.12",
+        "N07.FR.13",
+        "N07.FR.14",
+        "N07.FR.15",
+        "N07.FR.16",
+        "N07.FR.17",
+        "N07.FR.18",
+        "N07.FR.19",
+        "N08.FR.02",
+        "N08.FR.03",
+        "N08.FR.04",
+        "N08.FR.05",
+        "N08.FR.06",
+        "N08.FR.07",
+        "SetVariableMonitoringRequest",
+        "SetVariableMonitoringResponse",
+        "ClearVariableMonitoringRequest",
+        "ClearVariableMonitoringResponse",
+        "GetMonitoringReportRequest",
+        "GetMonitoringReportResponse",
+        "NotifyMonitoringReportRequest",
+        "NotifyMonitoringReportResponse",
+        "SetMonitoringBaseRequest",
+        "SetMonitoringBaseResponse",
+        "SetMonitoringLevelRequest",
+        "SetMonitoringLevelResponse",
+        "NotifyEventRequest",
+        "NotifyEventResponse",
+        "MonitorEnumType",
+        "MonitoringBaseEnumType",
+        "MonitoringCriterionEnumType",
+        "SetMonitoringStatusEnumType",
+        "ClearMonitoringStatusEnumType",
+        "EventTriggerEnumType",
+        "EventNotificationEnumType"
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "requirements": [
+        "N04.FR.01",
+        "N04.FR.02",
+        "N04.FR.08",
+        "N04.FR.11",
+        "SetVariableMonitoringRequest",
+        "SetVariableMonitoringResponse"
+      ],
+      "assertion": "SetVariableMonitoring carries one SetMonitoringData per monitor with value, type, severity, component and variable and an optional id; the reply holds exactly one result per requested item, each naming a requested component/variable, and an Accepted result carries the id the station generated or kept even though the schema leaves id optional.",
+      "evidence": "wire/2.0.1/monitoring-set-all-types.json;wire/2.0.1/monitoring-set-minimal.json;wire/2.0.1/monitoring-set-reply-accepted.json;wire/2.0.1/monitoring-set-reply-minimal.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N04.FR.03",
+        "N04.FR.04",
+        "N04.FR.05",
+        "N04.FR.06",
+        "N04.FR.07",
+        "N04.FR.10",
+        "N04.FR.13",
+        "N04.FR.16",
+        "N04.FR.18",
+        "N04.FR.20"
+      ],
+      "assertion": "Every non-Accepted SetMonitoringStatusEnumType value (UnknownComponent, UnknownVariable, UnsupportedMonitorType, Rejected with optional statusInfo, Duplicate) is preserved with the item's component, variable, type and severity and without an id; the bridge never turns a refusal into success.",
+      "evidence": "wire/2.0.1/monitoring-set-mixed.json;wire/2.0.1/monitoring-set-reply-mixed.json;wire/2.0.1/monitoring-set-reply-rejected-unknown-id.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N04.FR.12"
+      ],
+      "assertion": "A request with an id replaces the existing monitor with that id for the same component/variable; the Accepted result keeps the requested id.",
+      "evidence": "wire/2.0.1/monitoring-set-replace-id.json;wire/2.0.1/monitoring-set-reply-replaced.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N04.FR.14"
+      ],
+      "assertion": "The CSMS never sends a Delta monitor with a negative value, and a station Rejected reply for one is preserved with its statusInfo.",
+      "evidence": "wire/2.0.1/monitoring-set-all-types.json;wire/2.0.1/monitoring-set-reply-mixed.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N04.FR.17"
+      ],
+      "assertion": "A Delta monitor on a non-numeric variable is sent with the recommended value 1.",
+      "evidence": "wire/2.0.1/monitoring-set-delta-non-numeric.json;wire/2.0.1/monitoring-set-reply-delta-non-numeric.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N06.FR.01",
+        "N06.FR.02",
+        "N06.FR.03",
+        "N06.FR.05"
+      ],
+      "assertion": "ClearVariableMonitoring lists one or more monitor ids; the reply has exactly one result per requested id with Accepted, NotFound or Rejected (for example a hard-wired monitor, with statusInfo), and no result for an id that was not requested.",
+      "evidence": "wire/2.0.1/monitoring-clear-single.json;wire/2.0.1/monitoring-clear-multi.json;wire/2.0.1/monitoring-clear-reply-accepted.json;wire/2.0.1/monitoring-clear-reply-not-found.json;wire/2.0.1/monitoring-clear-reply-rejected.json;wire/2.0.1/monitoring-clear-reply-multi-mixed.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N03.FR.01",
+        "N03.FR.02",
+        "N03.FR.03",
+        "N03.FR.04",
+        "N03.FR.05",
+        "SetMonitoringBaseRequest",
+        "SetMonitoringBaseResponse"
+      ],
+      "assertion": "SetMonitoringBase names one of All, FactoryDefault or HardWiredOnly; Accepted, NotSupported and Rejected replies keep their native status and statusInfo. What each base activates or removes is station behaviour; the bridge only reports the native reply.",
+      "evidence": "wire/2.0.1/monitoring-base-all.json;wire/2.0.1/monitoring-base-factory-default.json;wire/2.0.1/monitoring-base-hard-wired-only.json;wire/2.0.1/monitoring-base-reply-accepted.json;wire/2.0.1/monitoring-base-reply-not-supported.json;wire/2.0.1/monitoring-base-reply-rejected.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N05.FR.01",
+        "N05.FR.02",
+        "SetMonitoringLevelRequest",
+        "SetMonitoringLevelResponse"
+      ],
+      "assertion": "SetMonitoringLevel carries an integer severity of 0 to 9; the bridge never sends an out-of-range severity, and Accepted or Rejected replies keep their native status and statusInfo.",
+      "evidence": "wire/2.0.1/monitoring-level-4.json;wire/2.0.1/monitoring-level-0.json;wire/2.0.1/monitoring-level-9.json;wire/2.0.1/monitoring-level-reply-accepted.json;wire/2.0.1/monitoring-level-reply-rejected.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N02.FR.01",
+        "N02.FR.02",
+        "N02.FR.10",
+        "GetMonitoringReportResponse"
+      ],
+      "assertion": "GetMonitoringReport replies Accepted, EmptyResultSet, NotSupported or Rejected are kept with their native status and statusInfo; only Accepted announces NotifyMonitoringReport messages and EmptyResultSet announces none.",
+      "evidence": "wire/2.0.1/monitoring-get-report-reply-accepted.json;wire/2.0.1/monitoring-get-report-reply-empty-result-set.json;wire/2.0.1/monitoring-get-report-reply-not-supported.json;wire/2.0.1/monitoring-get-report-reply-rejected.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N02.FR.03",
+        "N02.FR.04",
+        "N02.FR.09",
+        "N02.FR.11",
+        "NotifyMonitoringReportRequest",
+        "NotifyMonitoringReportResponse"
+      ],
+      "assertion": "NotifyMonitoringReport parts carry the GetMonitoringReport requestId, start at seqNo 0 and increase by one, set tbc true until the last part and report each component/variable with its monitors (id, transaction, value, type, severity); a part without a monitor list is valid; each part is answered with an empty response, and gaps, duplicates, parts after the last part and foreign requestIds are refused.",
+      "evidence": "wire/2.0.1/monitoring-get-report-no-filter.json;wire/2.0.1/monitoring-report-single.json;wire/2.0.1/monitoring-report-fragment-0.json;wire/2.0.1/monitoring-report-fragment-1.json;wire/2.0.1/monitoring-report-fragment-2.json;wire/2.0.1/monitoring-report-no-monitor.json;wire/2.0.1/monitoring-report-response.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N02.FR.05",
+        "N02.FR.06",
+        "N02.FR.08",
+        "N02.FR.12",
+        "N02.FR.13",
+        "N02.FR.14"
+      ],
+      "assertion": "A report limited by monitoringCriteria (Threshold, Delta, Periodic) or by componentVariable, or by both, contains only matching monitors; a part with a monitor type or component outside the request filter is refused by the CSMS.",
+      "evidence": "wire/2.0.1/monitoring-get-report-criteria.json;wire/2.0.1/monitoring-get-report-criteria-all.json;wire/2.0.1/monitoring-get-report-component-variable.json;wire/2.0.1/monitoring-get-report-both.json;wire/2.0.1/monitoring-report-fragment-0.json;wire/2.0.1/monitoring-report-fragment-1.json;wire/2.0.1/monitoring-report-fragment-2.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N02.FR.16",
+        "N02.FR.17",
+        "N02.FR.18",
+        "N02.FR.19",
+        "N02.FR.20",
+        "N02.FR.21"
+      ],
+      "assertion": "GetMonitoringReport requests may omit variable, variable instance, connector, EVSE or component instance in a componentVariable item; the request shapes are schema-valid and sent as given. Expanding them to every matching variable, instance, connector or EVSE is station behaviour.",
+      "evidence": "wire/2.0.1/monitoring-get-report-component-variable.json;wire/2.0.1/monitoring-get-report-request-id-zero.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/protocol/tests/command_registry/monitoring201.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N07.FR.02",
+        "N07.FR.14"
+      ],
+      "assertion": "An event whose monitored value returned within its threshold arrives with cleared true and is a normal NotifyEvent that the CSMS acknowledges.",
+      "evidence": "wire/2.0.1/monitoring-event-cleared.json;wire/2.0.1/monitoring-event-response.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/src/monitoring201/tests.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N07.FR.03",
+        "N08.FR.02",
+        "NotifyEventResponse"
+      ],
+      "assertion": "Every schema-valid NotifyEventRequest, for monitoring and for periodic events alike, is answered with an empty NotifyEventResponse, including one that carries control characters in its text (replaced with U+FFFD before it is journaled).",
+      "evidence": "wire/2.0.1/monitoring-event-response.json;wire/2.0.1/monitoring-event-control-characters.json;wire/2.0.1/monitoring-event-alerting.json;wire/2.0.1/monitoring-event-periodic.json;wire/2.0.1/monitoring-event-delta.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/src/monitoring201/tests.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N07.FR.05",
+        "N07.FR.06",
+        "N07.FR.07",
+        "N08.FR.04"
+      ],
+      "assertion": "Each eventData names the component, variable and variableMonitoringId that caused it (the schema leaves the id optional, and a charger may omit it), may reference another event through cause, and the first part of a burst has seqNo 0 with tbc true on every part but the last. The CSMS still answers every schema-valid NotifyEvent: sequence gaps and parts after the last part are recorded as evidence, and an event without a monitor id is journaled without one.",
+      "evidence": "wire/2.0.1/monitoring-event-alerting.json;wire/2.0.1/monitoring-event-hard-wired.json;wire/2.0.1/monitoring-event-no-monitor-id.json;wire/2.0.1/monitoring-event-preconfigured.json;wire/2.0.1/monitoring-event-burst-0.json;wire/2.0.1/monitoring-event-burst-1.json;wire/2.0.1/monitoring-event-burst-2.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/src/monitoring201/tests.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N07.FR.10"
+      ],
+      "assertion": "A monitor on a write-only variable reports an empty actualValue.",
+      "evidence": "wire/2.0.1/monitoring-event-write-only.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/src/monitoring201/tests.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    },
+    {
+      "requirements": [
+        "N07.FR.16",
+        "N07.FR.17",
+        "N07.FR.18",
+        "N07.FR.19",
+        "N08.FR.05",
+        "N08.FR.06",
+        "N08.FR.07"
+      ],
+      "assertion": "Threshold monitors raise trigger Alerting, Delta monitors raise trigger Delta and Periodic and PeriodicClockAligned monitors raise trigger Periodic; actualValue, techCode, techInfo and transactionId keep their maximum lengths of 2500, 50, 500 and 36 characters. When to fire is station behaviour.",
+      "evidence": "wire/2.0.1/monitoring-event-alerting.json;wire/2.0.1/monitoring-event-delta.json;wire/2.0.1/monitoring-event-periodic.json;wire/2.0.1/monitoring-event-max-lengths.json;wire/2.0.1/monitoring-negative-cases.json;../tests/monitoring201.rs;../../../adapters/protocol/tests/ocpp201_monitoring.rs;../../../adapters/storage/tests/monitoring201.rs;../../../crates/application/src/monitoring201/tests.rs;../../../crates/application/tests/monitoring201.rs;../../../bins/uob-service/tests/monitoring201.rs;../../../bins/uob-sim/tests/monitoring201_model.rs;../../../bins/uob-sim/tests/monitoring201_wire.rs;../../../bins/uob-sim/tests/monitoring201_independence.rs;../../../bins/uob-sim/tests/monitoring201_joint_smoke.py"
+    }
+  ],
+  "excluded_requirements": [
+    {
+      "requirements": [
+        "N04.FR.09",
+        "N06.FR.04",
+        "N06.FR.06",
+        "N06.FR.07",
+        "N02.FR.07"
+      ],
+      "reason": "The item and byte limits come from the station's ItemsPerMessage and BytesPerMessage configuration variables, so they need the device model and are bridge implementation evidence, not wire fixtures. N06.FR.06 and N06.FR.07 are optional CALLERROR replies of the station."
+    },
+    {
+      "requirements": [
+        "N04.FR.19"
+      ],
+      "reason": "The CSMS-side recommendation to refresh the monitor list after a reboot is bridge behaviour with no fixture."
+    },
+    {
+      "requirements": [
+        "N04.FR.15"
+      ],
+      "reason": "Charging-station classification of a replaced pre-configured monitor as a CustomMonitor; not observable on the wire."
+    },
+    {
+      "requirements": [
+        "N05.FR.03",
+        "N07.FR.15"
+      ],
+      "reason": "Charging-station filtering of events by the active monitoring level; the CSMS sees only the absence of events."
+    },
+    {
+      "requirements": [
+        "N07.FR.04",
+        "N08.FR.03"
+      ],
+      "reason": "Charging-station queueing of events while offline; not observable in a single wire frame."
+    },
+    {
+      "requirements": [
+        "N07.FR.11",
+        "N07.FR.12",
+        "N07.FR.13"
+      ],
+      "reason": "Charging-station handling of modified or removed thresholds and persistence across reboots."
+    }
+  ],
+  "not_covered": [
+    "Security events and SecurityEventNotification (issue #128)",
+    "ExtendedTriggerMessage and TriggerMessage for monitoring reports",
+    "N04.FR.17 beyond the request shape: whether a station accepts Delta on every non-numeric variable",
+    "monitors on variables the device model does not mark monitorable, which depend on station inventory",
+    "physical hardware or OCA certification"
+  ],
+  "execution_status": "Pinned-schema corpus tests, protocol, application, storage, actual-daemon (uob-service), independent simulator and opt-in joint smoke (bins/uob-sim/tests/monitoring201_joint_smoke.py, real uob and uob-sim processes) evidence ran in isolated software verification. Bridge-side tests load 52 of the 56 fixtures from the corpus; set-reply-delta-non-numeric, report-no-monitor, report-response and event-response are consumed only by the independent simulator independence test (the empty responses are asserted literally by the bridge and actual-daemon tests). The corpus request monitoring-set-mixed deliberately repeats a monitor; the bridge refuses to send it by CSMS policy. Not hardware or OCA certification."
+}

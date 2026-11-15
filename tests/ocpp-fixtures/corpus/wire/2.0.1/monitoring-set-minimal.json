@@ -1,0 +1,1 @@
+[2,"mon201-set-3","SetVariableMonitoring",{"setMonitoringData":[{"value":600,"type":"Periodic","severity":9,"component":{"name":"TemperatureSensor","instance":"Cabinet"},"variable":{"name":"Temperature"}}]}]

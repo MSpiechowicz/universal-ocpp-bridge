@@ -4,6 +4,7 @@ mod diagnostics201;
 mod dispatch;
 mod effects;
 mod firmware;
+mod monitoring201;
 mod negotiation201;
 mod session;
 mod state;
@@ -53,6 +54,7 @@ struct StationContext {
     identity: ServiceIdentity,
     target: Option<(TargetInstanceId, u64)>,
     credentials: Option<Arc<super::control_auth::ControlCredentials>>,
+    monitoring: monitoring201::MonitoringGates,
 }
 
 struct CallContext<'a> {
@@ -72,6 +74,12 @@ struct CallContext<'a> {
         crate::configuration::charging::StationDiagnostics,
         &'a super::firmware::Providers,
     )>,
+    /// Shared admission authority; a shed `NotifyEvent` raises its pressure signal.
+    resources: &'a uob_application::RuntimeResourceBudget,
+    /// The station's `NotifyEvent` flood budget and this connection's ordering. Only the
+    /// connection that holds it touches it, so one CALL is judged and committed before the next
+    /// is read.
+    monitoring: &'a mut uob_application::MonitoringEventGate201,
 }
 
 #[derive(Default)]
@@ -102,6 +110,7 @@ pub(super) async fn serve(
         commands_enabled: state.credentials.is_some(),
         credentials: state.credentials.clone(),
         identity: application.identity().clone(),
+        monitoring: monitoring201::MonitoringGates::new(settings.keys()),
         application,
         target,
     };
@@ -186,6 +195,10 @@ async fn station(
         identity,
         ..
     } = &context;
+    // Waits for a previous connection of this station that is still finishing its last call.
+    let Some(mut monitoring) = context.monitoring.begin(&station.station_id).await else {
+        return Err(unavailable());
+    };
     let mut snapshot = state::connected_snapshot(
         store,
         &resources,
@@ -240,7 +253,7 @@ async fn station(
                         break;
                     }
                 } else { None };
-                if let Err(failure) = handle_call(call, &mut snapshot, call_context(&context, &configuration)).await {
+                if let Err(failure) = handle_call(call, &mut snapshot, call_context(&context, &configuration, &mut monitoring)).await {
                     error = Some(failure); break;
                 }
                 if generation.is_some_and(|generation| commands.update(&station.station_id, generation, snapshot.clone()).is_err()) {
@@ -269,6 +282,7 @@ async fn station(
 fn call_context<'a>(
     context: &'a StationContext,
     configuration: &'a StationSettings,
+    monitoring: &'a mut uob_application::MonitoringEventGate201,
 ) -> CallContext<'a> {
     CallContext {
         store: &context.store,
@@ -291,6 +305,8 @@ fn call_context<'a>(
         diagnostics: configuration
             .diagnostics
             .zip(configuration.firmware_providers.as_deref()),
+        resources: context.application.health().resources(),
+        monitoring,
     }
 }
 

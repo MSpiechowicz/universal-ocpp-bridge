@@ -64,7 +64,7 @@ pub fn create(source: &Path, destination: &Path, limits: Limits) -> Result<u64, 
 fn copy(source: &Path, destination: &Path, limits: Limits) -> Result<u64, BackupFailed> {
     let deadline = Instant::now() + limits.timeout;
     let work = || -> rusqlite::Result<u64> {
-        let input = Connection::open_with_flags(
+        let mut input = Connection::open_with_flags(
             source,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NOFOLLOW,
         )?;
@@ -137,7 +137,7 @@ pub fn validate_current(source: &Path, limits: Limits) -> Result<(), BackupFaile
     }
     let deadline = Instant::now() + limits.timeout;
     let check = || -> rusqlite::Result<()> {
-        let db = Connection::open_with_flags(
+        let mut db = Connection::open_with_flags(
             source,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NOFOLLOW,
         )?;

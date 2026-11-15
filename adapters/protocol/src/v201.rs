@@ -3,6 +3,7 @@
 pub mod availability;
 pub mod charging_negotiation;
 pub mod data_transfer;
+pub mod monitoring_event;
 pub mod remote_control;
 mod trigger;
 
@@ -91,6 +92,7 @@ pub fn decode_call(frame: &[u8]) -> Result<DecodedCall, DecodeError> {
         | "NotifyEVChargingSchedule"
         | "NotifyChargingLimit"
         | "ClearedChargingLimit" => charging_negotiation::observation(&action, &payload)?,
+        "NotifyEvent" => monitoring_event::observation(&payload)?,
         _ => {
             return Err(DecodeError::new(
                 PROTOCOL,

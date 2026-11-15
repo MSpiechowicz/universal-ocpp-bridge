@@ -1,0 +1,1 @@
+[2,"mon201-set-2","SetVariableMonitoring",{"setMonitoringData":[{"id":4001,"transaction":false,"value":80.0,"type":"UpperThreshold","severity":3,"component":{"name":"Connector","evse":{"id":1,"connectorId":1}},"variable":{"name":"Temperature"}}]}]

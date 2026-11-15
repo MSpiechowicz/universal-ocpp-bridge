@@ -39,7 +39,10 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
     let has_payload = is_charging_call
         || matches!(
             step.action,
-            ActionKind::OfflineStart | ActionKind::OfflineStop
+            ActionKind::OfflineStart
+                | ActionKind::OfflineStop
+                | ActionKind::SetMonitoredValue
+                | ActionKind::EmitMonitoringEvents
         );
     if has_payload != step.payload.is_some() {
         return Err(setup_failure(
@@ -47,6 +50,7 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
             "charging calls require payload and other actions do not accept it",
         ));
     }
+    super::super::monitoring201::validate_payload(step)?;
     validate_remote_start_binding(step)?;
     if step.use_current_timestamp
         && (!matches!(
@@ -101,6 +105,8 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::AwaitFirmware
                 | ActionKind::AssertDiagnostics
                 | ActionKind::AwaitDiagnostics
+                | ActionKind::AssertMonitoring
+                | ActionKind::AwaitMonitoring
         )
     {
         return Err(setup_failure(

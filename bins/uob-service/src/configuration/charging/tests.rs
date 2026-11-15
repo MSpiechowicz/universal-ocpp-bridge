@@ -430,3 +430,59 @@ fn processing_charging_needs_requires_ocpp201_and_a_path_that_can_send_a_tx_prof
         );
     }
 }
+
+#[test]
+fn monitoring_options_are_ocpp201_only_privileged_and_default_off() {
+    let privileged = CHARGING.replace(
+        "read_grant_file='/run/uob-demo/read-grant'",
+        "read_grant_file='/run/uob-demo/read-grant'\ncontrol_grant_file='/run/uob-demo/control'\nprivileged_grant_file='/run/uob-demo/privileged'",
+    );
+    let ocpp201 = |options: &str| {
+        privileged
+            .replace("protocol='ocpp16j'", "protocol='ocpp201'")
+            .replace(
+                "credential_file='/run/uob-demo/station-a'",
+                &format!("credential_file='/run/uob-demo/station-a'\n{options}"),
+            )
+            .replace(
+                "connector_id='connector-1'\nnative_connector_id=1",
+                "evse_id='evse-1'\nnative_evse_id=1",
+            )
+    };
+    let default = validate_document(&format!("{BASE}{}", ocpp201("")))
+        .unwrap()
+        .unwrap();
+    assert!(!default.stations[0].control.monitoring_enabled());
+
+    for key in [
+        "set_variable_monitoring",
+        "clear_variable_monitoring",
+        "get_monitoring_report",
+        "set_monitoring_base",
+        "set_monitoring_level",
+    ] {
+        let enabled = validate_document(&format!("{BASE}{}", ocpp201(&format!("{key}=true"))))
+            .unwrap()
+            .unwrap();
+        let control = enabled.stations[0].control;
+        assert!(control.monitoring_enabled(), "{key}");
+        assert!(!control.device_model_enabled(), "{key}");
+
+        let without_grant = ocpp201(&format!("{key}=true"))
+            .replace("privileged_grant_file='/run/uob-demo/privileged'\n", "");
+        let without_control = ocpp201(&format!("{key}=true"))
+            .replace("control_grant_file='/run/uob-demo/control'\n", "");
+        let ocpp16 = privileged.replace(
+            "credential_file='/run/uob-demo/station-a'",
+            &format!("credential_file='/run/uob-demo/station-a'\n{key}=true"),
+        );
+        for invalid in [without_grant, without_control, ocpp16] {
+            assert_eq!(
+                validate_document(&format!("{BASE}{invalid}")).err(),
+                Some(ConfigurationLoadError::InvalidCharging),
+                "{key}"
+            );
+        }
+    }
+    assert!(validate_document(&format!("{BASE}{}", ocpp201("set_variable_monitoring=1"))).is_err());
+}

@@ -61,7 +61,9 @@ SummaryInventory returns the supported Enabled/Available facts.
 ConfigurationInventory returns EmptyResultSet because no variable is remotely
 writable. GetReport Available/Enabled criteria use the controller's supported
 enable/availability facts; Active/Problem criteria return NotSupported rather
-than inventing unimplemented monitoring. Selectors are bounded to 256, and pending
+than inventing component state; monitoring itself is the separate `monitoring201` model
+([monitoring201.md](monitoring201.md)), which adds the `MonitoringCtrlr` limits and its monitorable
+variables to these reports and sets `supportsMonitoring` for them. Selectors are bounded to 256, and pending
 NotifyReport acknowledgements to 128 per socket with the request deadline.
 Unacknowledged reports are not retried or carried to another socket generation.
 The shared configuration's `list_supported` controls native list availability and

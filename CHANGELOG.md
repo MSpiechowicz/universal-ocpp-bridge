@@ -335,6 +335,15 @@ All notable changes to this project will be documented in this file. See [conven
   messages crossing encryption-level boundaries
   ([RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285.html)).
 
+- Update the workspace rusqlite pin from 0.40.2 to 0.41.1, which bundles SQLite 3.54.1
+  through libsqlite3-sys 0.39.1. Earlier bundled SQLite could return uninitialized
+  page-cache memory for a database opened with a `-wal` file of a different page size
+  ([RUSTSEC-2026-0459](https://rustsec.org/advisories/RUSTSEC-2026-0459.html)).
+
+- Update the rustix pin from 1.1.4 to 1.1.6, whose extended-attribute functions no longer
+  mark unwritten bytes as initialized for a zero-length buffer
+  ([RUSTSEC-2026-0486](https://rustsec.org/advisories/RUSTSEC-2026-0486.html)).
+
 - - -
 ## [v0.31.0](https://github.com/MSpiechowicz/universal-ocpp-bridge/compare/e87ff4e4b3b76926eb40bb6a3745cee8e65efce7..v0.31.0) - 2026-09-26
 #### Features

@@ -109,6 +109,7 @@ async fn allocation_is_atomic_recoverable_nonreused_and_bound_to_command_retenti
         firmware_201: None,
         diagnostics_16: None,
         diagnostics_201: None,
+        monitoring_201: None,
     };
     let mut write = AtomicStoreWrite::empty();
     write.command_result = Some(result);

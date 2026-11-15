@@ -1,6 +1,8 @@
 //! One connection's shared native report namespaces; no independent socket reader.
-//! `NotifyReport` and `ReportChargingProfiles` request IDs are separate native namespaces that
-//! share the bounded route slots, retired-ID capacity and the socket owner's budget.
+//! `NotifyReport`, `ReportChargingProfiles` and `NotifyMonitoringReport` request IDs are separate
+//! native namespaces that share the bounded route slots, retired-ID capacity and the socket
+//! owner's budget.
+mod monitoring;
 mod session;
 use crate::multipart::{ReportFailure, ReportFragment, ReportKey};
 use crate::v201::remote_control::device_model::{SanitizedNotification, notification};
@@ -13,7 +15,7 @@ use tokio::time::Instant;
 use uob_application::{RuntimeReservation, RuntimeResourceBudget, WorkClass};
 use uob_contracts::{
     ChargingProfileReportFragment201, ChargingProfilesQuery201, DeviceReportFragment201,
-    ResourceRef,
+    MonitoringQuery201, MonitoringReportFragment201, ResourceRef,
 };
 
 /// Native charger-to-CSMS report action routed by the socket owner.
@@ -21,12 +23,17 @@ use uob_contracts::{
 pub(crate) enum ReportKind {
     Device,
     ChargingProfiles,
+    /// `NotifyMonitoringReport` only ever answers this bridge's own `GetMonitoringReport`. It
+    /// stays `NotImplemented` until the session binds report completion, and an unsolicited or
+    /// retired well-formed fragment is acknowledged without being collected.
+    Monitoring,
 }
 impl ReportKind {
     pub(crate) fn from_action(action: &str) -> Option<Self> {
         match action {
             "NotifyReport" => Some(Self::Device),
             "ReportChargingProfiles" => Some(Self::ChargingProfiles),
+            "NotifyMonitoringReport" => Some(Self::Monitoring),
             _ => None,
         }
     }
@@ -34,6 +41,7 @@ impl ReportKind {
         match self {
             Self::Device => 0,
             Self::ChargingProfiles => 1,
+            Self::Monitoring => 2,
         }
     }
 }
@@ -41,12 +49,15 @@ impl ReportKind {
 pub(crate) enum RouteContext {
     Device,
     ChargingProfiles(ChargingProfilesQuery201),
+    /// Always a `MonitoringQuery201::GetMonitoringReport`.
+    Monitoring(MonitoringQuery201),
 }
 impl RouteContext {
     const fn kind(&self) -> ReportKind {
         match self {
             Self::Device => ReportKind::Device,
             Self::ChargingProfiles(_) => ReportKind::ChargingProfiles,
+            Self::Monitoring(_) => ReportKind::Monitoring,
         }
     }
 }
@@ -54,7 +65,7 @@ impl RouteContext {
 pub(crate) struct Registry {
     routes: BTreeMap<(ReportKind, i32), Entry>,
     used: HashSet<(ReportKind, i32)>,
-    enabled: [bool; 2],
+    enabled: [bool; 3],
     closed: bool,
     budget: RuntimeResourceBudget,
     reservation: Option<RuntimeReservation>,
@@ -72,6 +83,7 @@ pub(crate) type SharedReports = Arc<Mutex<Registry>>;
 pub(crate) enum FragmentMetadata {
     Device(DeviceReportFragment201),
     ChargingProfiles(ChargingProfileReportFragment201),
+    Monitoring(MonitoringReportFragment201),
 }
 pub(crate) struct Ingress {
     pub fragment: ReportFragment,
@@ -125,7 +137,7 @@ pub(crate) fn registry(budget: &RuntimeResourceBudget) -> SharedReports {
     Arc::new(Mutex::new(Registry {
         routes: BTreeMap::new(),
         used: HashSet::new(),
-        enabled: [false; 2],
+        enabled: [false; 3],
         closed: false,
         budget: budget.clone(),
         reservation: None,
@@ -200,7 +212,7 @@ pub(crate) fn disconnect(registry: &SharedReports) {
     current.used = HashSet::new();
     current.reservation = None;
     current.closed = true;
-    current.enabled = [false; 2];
+    current.enabled = [false; 3];
 }
 pub(crate) fn enable(registry: &SharedReports, kind: ReportKind) {
     let mut current = registry
@@ -228,6 +240,9 @@ pub(crate) fn route(
     }
     if kind == ReportKind::ChargingProfiles {
         return Some(route_profiles(registry, payload, bytes, budget));
+    }
+    if kind == ReportKind::Monitoring {
+        return Some(monitoring::route(registry, payload, bytes, budget));
     }
     let valid = crate::command_registry::device_model201::valid_schema(6, payload)
         && payload["requestId"]

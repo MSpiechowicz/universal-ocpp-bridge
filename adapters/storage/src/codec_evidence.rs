@@ -28,5 +28,6 @@ pub(crate) fn validate_result_evidence(result: &CommandResult) -> Result<(), Sto
     crate::firmware16::validation::validate_result(result)?;
     crate::firmware201::validation::validate_result(result)?;
     crate::diagnostics16::validation::validate_result(result)?;
-    crate::diagnostics201::validation::validate_result(result)
+    crate::diagnostics201::validation::validate_result(result)?;
+    crate::monitoring201::validate_result(result)
 }

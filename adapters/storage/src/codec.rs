@@ -464,6 +464,7 @@ pub(crate) fn decode_stored_result(
     crate::firmware201::validation::validate_stored(connection, &result)?;
     crate::diagnostics16::validation::validate_stored(connection, &result)?;
     crate::diagnostics201::validation::validate_stored(connection, &result)?;
+    crate::monitoring201::validate_output(&result)?;
     Ok(result)
 }
 

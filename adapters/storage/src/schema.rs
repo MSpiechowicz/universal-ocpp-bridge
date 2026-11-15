@@ -7,7 +7,9 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(unavailable)?;
-    if version > 21 {
+    // Version 22 adds no DDL. It fences downgrades: an older release would fail startup on a
+    // pending monitoring report row and would drop the unknown monitoring field on rewrite.
+    if version > 22 {
         return Err(StorageError::new(
             StorageErrorCode::Unavailable,
             "operational database schema is newer than this release",
@@ -96,7 +98,7 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), StorageError> {
         [],
     ).map_err(unavailable)?;
     transaction
-        .execute_batch("PRAGMA user_version = 21;")
+        .execute_batch("PRAGMA user_version = 22;")
         .map_err(unavailable)?;
     transaction.commit().map_err(unavailable)
 }

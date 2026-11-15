@@ -18,10 +18,12 @@ pub(crate) async fn register(
                         current.boot.clone(),
                         current.socket_generation,
                         current.local.clone(),
-                        current.firmware201.is_some() || current.diagnostics201.is_some(),
+                        current.firmware201.is_some()
+                            || current.diagnostics201.is_some()
+                            || current.monitoring201.is_some(),
                     )
                 };
-                // A firmware or log station re-registers so its durable statuses can be delivered.
+                // A firmware, log or monitoring station re-registers so its statuses and events can be delivered.
                 if !native && !local.is_some_and(|local| local.has_persistence()) {
                     return;
                 }

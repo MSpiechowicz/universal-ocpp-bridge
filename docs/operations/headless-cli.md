@@ -1401,6 +1401,110 @@ answer to a pending trigger and settles a stalled job as `station_idle`. A lost 
 `uncertain` and is never resent after a restart. See
 [OCPP 2.0.1 log retrieval](../architecture/ocpp201-diagnostics.md) for the state rules.
 
+### Protected OCPP 2.0.1 variable monitoring
+
+For `protocol = "ocpp201"`, five independent, privileged, default-off and **demo-only** station
+options enable the native monitoring commands. Each needs the existing distinct control and
+privileged grant files and is refused on `ocpp16j` stations. They target the station root only,
+because monitors belong to the charger's own device model.
+
+| Option | Command |
+| --- | --- |
+| `set_variable_monitoring` | `SetVariableMonitoring` (N04) |
+| `clear_variable_monitoring` | `ClearVariableMonitoring` (N06) |
+| `get_monitoring_report` | `GetMonitoringReport` (N02) |
+| `set_monitoring_base` | `SetMonitoringBase` (N03) |
+| `set_monitoring_level` | `SetMonitoringLevel` (N05) |
+
+```toml
+[[charging.stations]]
+id = "demo-201"
+protocol = "ocpp201"
+credential_file = "/srv/uob-demo/private/demo-201.credential"
+set_variable_monitoring = true
+clear_variable_monitoring = true
+get_monitoring_report = true
+set_monitoring_base = true
+set_monitoring_level = true
+# Optional: lets the bridge learn the station's MonitoringCtrlr message limits.
+get_variables = true
+```
+
+Submit each command to `POST /api/v1/commands` with the **privileged** bearer. The payload is
+the exact native request; `payload_schema` is `urn:OCPP:Cp:2:2020:3:<Action>Request`:
+
+```json
+{"request_id":"monitor-1","resource":{"bridge_id":"local-demo","station_id":"demo-201"},
+ "operation":{"kind":"ocpp","parameters":{"protocol":"ocpp201","action":"SetVariableMonitoring",
+   "payload_schema":"urn:OCPP:Cp:2:2020:3:SetVariableMonitoringRequest",
+   "payload":{"setMonitoringData":[{"value":80.0,"type":"UpperThreshold","severity":3,
+     "component":{"name":"Connector","evse":{"id":1,"connectorId":1}},
+     "variable":{"name":"Temperature"}}]}}},
+ "expires_at":"2026-10-07T12:10:00Z"}
+```
+
+Other payloads are `{"id":[4010,4012]}` (`ClearVariableMonitoring`), `{"requestId":7001}` with
+optional `monitoringCriteria` and `componentVariable` (`GetMonitoringReport`),
+`{"monitoringBase":"All"}` (`FactoryDefault` and `HardWiredOnly` also exist) and
+`{"severity":4}` (`SetMonitoringLevel`).
+
+The bridge refuses before transmitting anything an invalid payload, such as a severity above 9,
+a negative `Delta` value, an empty or duplicated ID list, duplicated monitor IDs, a customData
+member or a non-station target. It sends more than one monitor or ID in a request only after the
+station reported its `MonitoringCtrlr` `ItemsPerMessage` and `BytesPerMessage` for that action,
+which the bridge learns from an accepted `GetVariables` result (`get_variables`); otherwise such a
+command ends `rejected` with `policy_rejected` and is not sent.
+
+The result's `monitoring_201` holds the immutable `query` and the native `outcome`:
+
+- `{"kind":"set_monitors","monitors":[{"id":4010,"status":"Accepted","monitor_type":"UpperThreshold","severity":3,"component":{},"variable":{}}]}`
+  has one result per requested monitor. `id` appears only when the station accepted it.
+- `{"kind":"clear_monitors","monitors":[{"id":4010,"status":"Accepted"}]}` has one result per ID;
+  `status` is `Accepted`, `NotFound` or `Rejected` (with `reason_code`).
+- `{"kind":"base","status":"Accepted"}` and `{"kind":"level","status":"Accepted"}`.
+- `{"kind":"report","ack":"Accepted","report":{"state":"pending"}}` for `GetMonitoringReport`.
+
+The command is `accepted` only when the station accepted every item. A reply that does not match
+the request, such as a different number of results, ends as `transmission_uncertain` and is not
+retried. After a `GetMonitoringReport` acknowledgement, poll `GET /api/v1/commands/{request_id}`
+until `report.state` is `complete` (with `fragments` and `monitors`, each with `id`,
+`monitor_type`, `severity`, `transaction`, `value`, `component` and `variable`),
+`incomplete`, or `not_expected` when the station did not accept a report. The bridge collects
+`NotifyMonitoringReport` fragments for the exact `requestId` under the shared limits (256
+fragments, 4096 monitors, 1 MiB, 30 s). `incomplete` carries a `reason` such as
+`out_of_order_sequence`, `duplicate_sequence`, `fragment_limit`, `item_limit`, `byte_limit`,
+`timeout`, `disconnected` or `interrupted` (daemon restart). A report is never resumed.
+
+#### Charger events
+
+Every accepted OCPP 2.0.1 station is answered `NotifyEvent` with the empty response; no option
+enables it. Each call becomes one `station.monitoring_event.201` journal record, committed
+before the answer, and never changes configuration, policy or commands. Read them with the read
+grant, optionally from a cursor (`after`) or `Last-Event-ID`:
+
+```text
+curl -N -H "Authorization: Bearer $READ" \
+  "http://127.0.0.1:8080/api/v1/events?station_id=demo-201&types=station.monitoring_event.201"
+```
+
+Each server-sent `data` is a journal event whose `payload.monitoring_events_201` holds
+`generated_at`, `seq_no`, `tbc`, `ordering` (`{"kind":"in_sequence"}`, `{"kind":"restarted"}` or
+`{"kind":"gap","expected":N}`) and `events`. Each event has `event_id`, `timestamp`, `trigger`,
+`actual_value`, `notification`, `component`, `variable`, and where present `cause`, `tech_code`,
+`tech_info`, `cleared`, `transaction_id` and `variable_monitoring_id`. A record keeps at most 32
+events and counts the rest as `events_omitted`. The values are charger text: the bridge does not
+write them to logs or traces.
+
+Each configured station has a budget of 60 records and 1 MiB per minute for the life of the
+daemon process; reconnecting does not refresh it. A call beyond it is still answered, writes
+nothing and raises `uob_dropped_diagnostics_total` on `/metrics` (and `dropped_diagnostics` on
+`/api/v1/health`). The next record that is written reports what was lost as `shed_calls` and
+`shed_events`, including losses before a reconnect. A new connection only restarts the `seq_no`
+ordering. Every schema-valid event is journaled and answered: control characters in its text
+are replaced with U+FFFD, and a missing `variable_monitoring_id` stays absent. A station that
+is not yet accepted gets a `ProtocolError`, and a schema-invalid event (or one the typed record
+cannot hold, such as an integer beyond 32 bits) gets a native error; neither is journaled.
+
 ## Commands and exit codes
 
 Validate without binding a socket, resolving DNS, reading credentials, or starting adapters:

@@ -2,6 +2,7 @@ use super::super::{LocalAuthorization201Handle, device_model, native, validation
 use super::{SharedSink, disconnect};
 use crate::Ocpp201State;
 use crate::local_authorization::transport::NativeReplyFault;
+use crate::monitoring201::DeviceVariable201;
 use ocpp_client::{TransportError, TransportEvent, TransportStream};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -25,6 +26,7 @@ struct PreparedCall {
     guard: ReplyGuard,
     reply: Value,
     report: Option<Value>,
+    monitoring: Option<crate::monitoring201::ReportPlan201>,
 }
 impl Drop for Stream {
     fn drop(&mut self) {
@@ -111,6 +113,7 @@ impl TransportStream for Stream {
                         | "CancelReservation"
                 ) && !crate::firmware201::transport::intercepts(action, &self.state)
                     && !crate::diagnostics201::transport::intercepts(action, &self.state)
+                    && !crate::monitoring201::transport::intercepts(action, &self.state)
                 {
                     return Ok(event);
                 }
@@ -133,7 +136,12 @@ impl Drop for ReplyGuard {
         self.0.0.lock().reply_pending -= 1;
     }
 }
-fn native_reply(action: &str, payload: &Value, local: &LocalAuthorization201Handle) -> Value {
+fn native_reply(
+    action: &str,
+    payload: &Value,
+    local: &LocalAuthorization201Handle,
+    monitored: &[DeviceVariable201],
+) -> Value {
     let empty = payload.as_object().is_some_and(|fields| {
         fields.is_empty()
             || (fields.len() == 1
@@ -144,7 +152,7 @@ fn native_reply(action: &str, payload: &Value, local: &LocalAuthorization201Hand
                 }))
     });
     match action {
-        "GetVariables" => device_model::reply(payload, local),
+        "GetVariables" => device_model::reply(payload, local, monitored),
         "GetLocalListVersion" if empty => match local.snapshot()["listVersion"].as_i64() {
             Some(version) => json!({"versionNumber":version}),
             None => json!({"callError":"InternalError"}),
@@ -221,6 +229,12 @@ impl Stream {
         let guard = ReplyGuard(local.clone());
         let fingerprint: [u8; 32] = Sha256::digest(raw.as_bytes()).into();
         let mut report = None;
+        let mut monitoring = None;
+        let monitored = if matches!(action, "GetVariables" | "GetBaseReport" | "GetReport") {
+            crate::monitoring201::transport::device_variables(&self.state)
+        } else {
+            Vec::new()
+        };
         let reply = if let Some((_, previous, response)) =
             self.replies.iter().find(|(previous, _, _)| previous == id)
         {
@@ -240,7 +254,8 @@ impl Stream {
                 if sink.reports.len() >= 128 || !registered {
                     json!({"status":"Rejected"})
                 } else {
-                    let (response, notification) = device_model::report(action, payload, &local);
+                    let (response, notification) =
+                        device_model::report(action, payload, &local, &monitored);
                     report = notification;
                     response
                 }
@@ -250,8 +265,12 @@ impl Stream {
                 crate::firmware201::transport::reply(payload, &self.state)
             } else if action == "GetLog" {
                 crate::diagnostics201::transport::reply(payload, &self.state)
+            } else if crate::monitoring201::MONITORING_ACTIONS_201.contains(&action) {
+                let (response, plan) = self.monitoring_reply(action, payload).await;
+                monitoring = plan;
+                response
             } else {
-                native_reply(action, payload, &local)
+                native_reply(action, payload, &local, &monitored)
             };
             if self.replies.len() == 128 {
                 self.replies.pop_front();
@@ -265,6 +284,7 @@ impl Stream {
             guard,
             reply,
             report,
+            monitoring,
         }))
     }
 
@@ -281,6 +301,7 @@ impl Stream {
             guard,
             reply,
             report,
+            monitoring,
         } = prepared;
         let reset = action == "Reset" && reply["status"] == "Accepted";
         let fault = if matches!(
@@ -307,6 +328,12 @@ impl Stream {
             self.sink.lock().await.inner.close().await?;
             return Ok(true);
         }
+        let before = monitoring.as_ref().filter(|plan| plan.before_reply);
+        if let Some(plan) = before
+            && self.send_monitoring_report(plan).await?
+        {
+            return Ok(true);
+        }
         let response = if let Some(code) = reply.get("callError") {
             json!([4, id, code, "native request unavailable or invalid", {}])
         } else {
@@ -318,6 +345,11 @@ impl Stream {
             .inner
             .send(response.to_string())
             .await?;
+        if let Some(plan) = monitoring.as_ref().filter(|plan| !plan.before_reply)
+            && self.send_monitoring_report(plan).await?
+        {
+            return Ok(true);
+        }
         if let Some(report) = report {
             let mut sink = self.sink.lock().await;
             let report_id = uuid::Uuid::new_v4().to_string();

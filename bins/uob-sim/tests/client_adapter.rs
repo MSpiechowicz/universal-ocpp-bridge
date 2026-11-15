@@ -41,6 +41,7 @@ fn config(endpoint: String, version: OcppVersion) -> SimulatorClientConfig {
         firmware201: None,
         diagnostics16: None,
         diagnostics201: None,
+        monitoring201: None,
     }
 }
 

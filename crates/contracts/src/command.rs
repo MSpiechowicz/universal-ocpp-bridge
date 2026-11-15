@@ -453,6 +453,9 @@ pub struct CommandResult {
     /// Value-free native OCPP 2.0.1 log reply and durable upload job evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagnostics_201: Option<crate::DiagnosticsResult201>,
+    /// Native OCPP 2.0.1 variable monitoring reply and independent report evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitoring_201: Option<crate::MonitoringResult201>,
 }
 
 /// Safe operation category for a browsable command, never including parameters or payloads.

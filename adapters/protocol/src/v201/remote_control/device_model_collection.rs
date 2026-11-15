@@ -15,14 +15,14 @@ struct Source {
     metadata: Vec<DeviceReportFragment201>,
     ingress: Option<RuntimeReservation>,
 }
-fn progress(progress: ReportProgress) -> DeviceReportProgress201 {
+pub(super) fn progress(progress: ReportProgress) -> DeviceReportProgress201 {
     DeviceReportProgress201 {
         fragments: progress.fragments,
         items: progress.items,
         bytes: progress.bytes,
     }
 }
-fn reason(reason: ReportFailure) -> DeviceReportFailure201 {
+pub(super) fn reason(reason: ReportFailure) -> DeviceReportFailure201 {
     match reason {
         ReportFailure::TimedOut => DeviceReportFailure201::Timeout,
         ReportFailure::ByteLimit => DeviceReportFailure201::ByteLimit,

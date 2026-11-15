@@ -1,0 +1,1 @@
+[2,"mon201-ev-3","NotifyEvent",{"generatedAt":"2026-11-10T10:00:00Z","seqNo":0,"eventData":[{"eventId":9003,"timestamp":"2026-11-10T10:00:00Z","trigger":"Delta","actualValue":"11800","transactionId":"a7c3e9d2-5b41-4f60-9a1e-0c2d8e7f6b35","variableMonitoringId":4003,"eventNotificationType":"CustomMonitor","component":{"name":"EVSE","evse":{"id":1}},"variable":{"name":"Power"}}]}]

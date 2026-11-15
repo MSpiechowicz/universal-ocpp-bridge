@@ -37,7 +37,7 @@ previously Inoperative or Faulted connector to become Available. The bridge pres
 reports. Where connector-only evidence cannot establish the complete requested parent state, it
 conservatively leaves the effect unresolved. It does not synthesize parent state, restore child
 state, or misinterpret a fault as a successful command. Device-model NotifyEvent monitoring belongs
-to the separate monitoring feature; this path uses StatusNotification.
+to [OCPP 2.0.1 monitoring](ocpp201-monitoring.md); this path uses StatusNotification.
 
 ## Specification and behavioral evidence
 

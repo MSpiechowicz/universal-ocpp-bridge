@@ -196,6 +196,8 @@ pub(crate) fn interrupt(connection: &Connection) -> Result<(), StorageError> {
                     reason: DeviceReportFailure201::Interrupted,
                     progress: None,
                 };
+            } else if result.monitoring_201.is_some() {
+                crate::monitoring201::interrupt(&mut result);
             } else {
                 crate::charging_profiles201::interrupt(&mut result)?;
             }

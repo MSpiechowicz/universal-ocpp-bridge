@@ -1,0 +1,4924 @@
+{
+  "cases": [
+    {
+      "id": "set-severity-fractional",
+      "wire": [
+        2,
+        "neg201-mon-1",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 4.5,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "severity is an integer"
+    },
+    {
+      "id": "set-missing-component",
+      "wire": [
+        2,
+        "neg201-mon-2",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 9,
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "component is required in SetMonitoringData"
+    },
+    {
+      "id": "set-missing-variable",
+      "wire": [
+        2,
+        "neg201-mon-3",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "variable is required in SetMonitoringData"
+    },
+    {
+      "id": "set-missing-value",
+      "wire": [
+        2,
+        "neg201-mon-4",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "value is required in SetMonitoringData"
+    },
+    {
+      "id": "set-missing-type",
+      "wire": [
+        2,
+        "neg201-mon-5",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "type is required in SetMonitoringData"
+    },
+    {
+      "id": "set-missing-severity",
+      "wire": [
+        2,
+        "neg201-mon-6",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "severity is required in SetMonitoringData"
+    },
+    {
+      "id": "set-type-target-delta",
+      "wire": [
+        2,
+        "neg201-mon-7",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "TargetDelta",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "TargetDelta appears in N02.FR.13 but is not in the pinned MonitorEnumType"
+    },
+    {
+      "id": "set-type-lowercase",
+      "wire": [
+        2,
+        "neg201-mon-8",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "set-empty-array",
+      "wire": [
+        2,
+        "neg201-mon-9",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "set-value-string",
+      "wire": [
+        2,
+        "neg201-mon-10",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": "600",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "value is a number"
+    },
+    {
+      "id": "set-transaction-string",
+      "wire": [
+        2,
+        "neg201-mon-11",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "transaction": "true"
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "transaction is a boolean"
+    },
+    {
+      "id": "set-extra-property",
+      "wire": [
+        2,
+        "neg201-mon-12",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "unit": "s"
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "no additional properties"
+    },
+    {
+      "id": "set-component-name-too-long",
+      "wire": [
+        2,
+        "neg201-mon-13",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "component name is limited to 50 characters"
+    },
+    {
+      "id": "set-id-string",
+      "wire": [
+        2,
+        "neg201-mon-14",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "id": "4001",
+              "transaction": false,
+              "value": 80.0,
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "id is an integer"
+    },
+    {
+      "id": "set-missing-data",
+      "wire": [
+        2,
+        "neg201-mon-15",
+        "SetVariableMonitoring",
+        {}
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "setMonitoringData is required"
+    },
+    {
+      "id": "set-reply-unknown-status",
+      "wire": [
+        3,
+        "neg201-mon-16",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4001,
+              "status": "Unknown",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "id": 4002,
+              "status": "Accepted",
+              "type": "LowerThreshold",
+              "severity": 4,
+              "component": {
+                "name": "ChargingStation"
+              },
+              "variable": {
+                "name": "SupplyVoltage"
+              }
+            },
+            {
+              "id": 4003,
+              "status": "Accepted",
+              "type": "Delta",
+              "severity": 6,
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              }
+            },
+            {
+              "id": 4004,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "id": 4005,
+              "status": "Accepted",
+              "type": "PeriodicClockAligned",
+              "severity": 8,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is outside SetMonitoringStatusEnumType"
+    },
+    {
+      "id": "set-reply-empty",
+      "wire": [
+        3,
+        "neg201-mon-17",
+        {
+          "setMonitoringResult": []
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "set-reply-missing-type",
+      "wire": [
+        3,
+        "neg201-mon-18",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "type is required in SetMonitoringResult"
+    },
+    {
+      "id": "set-reply-severity-string",
+      "wire": [
+        3,
+        "neg201-mon-19",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": "9",
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "severity is an integer"
+    },
+    {
+      "id": "set-reply-status-info-no-reason",
+      "wire": [
+        3,
+        "neg201-mon-20",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4010,
+              "status": "Accepted",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "status": "UnknownComponent",
+              "type": "UpperThreshold",
+              "severity": 5,
+              "component": {
+                "name": "Heater"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "status": "UnknownVariable",
+              "type": "LowerThreshold",
+              "severity": 4,
+              "component": {
+                "name": "ChargingStation"
+              },
+              "variable": {
+                "name": "NoSuchVariable"
+              }
+            },
+            {
+              "status": "UnsupportedMonitorType",
+              "type": "Periodic",
+              "severity": 7,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 2,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "AvailabilityState"
+              }
+            },
+            {
+              "statusInfo": {
+                "additionalInfo": "value exceeds maxLimit of Power"
+              },
+              "status": "Rejected",
+              "type": "UpperThreshold",
+              "severity": 2,
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              }
+            },
+            {
+              "status": "Duplicate",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "statusInfo requires reasonCode"
+    },
+    {
+      "id": "set-reply-reason-code-too-long",
+      "wire": [
+        3,
+        "neg201-mon-21",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4010,
+              "status": "Accepted",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "status": "UnknownComponent",
+              "type": "UpperThreshold",
+              "severity": 5,
+              "component": {
+                "name": "Heater"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "status": "UnknownVariable",
+              "type": "LowerThreshold",
+              "severity": 4,
+              "component": {
+                "name": "ChargingStation"
+              },
+              "variable": {
+                "name": "NoSuchVariable"
+              }
+            },
+            {
+              "status": "UnsupportedMonitorType",
+              "type": "Periodic",
+              "severity": 7,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 2,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "AvailabilityState"
+              }
+            },
+            {
+              "statusInfo": {
+                "reasonCode": "RRRRRRRRRRRRRRRRRRRRR",
+                "additionalInfo": "value exceeds maxLimit of Power"
+              },
+              "status": "Rejected",
+              "type": "UpperThreshold",
+              "severity": 2,
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              }
+            },
+            {
+              "status": "Duplicate",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "reasonCode is limited to 20 characters"
+    },
+    {
+      "id": "set-severity-ten",
+      "wire": [
+        2,
+        "neg201-mon-22",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": 10,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "severity-range",
+      "reason": "severity is 0 to 9 (N05.FR.02 out of range); the schema only says integer"
+    },
+    {
+      "id": "set-severity-negative",
+      "wire": [
+        2,
+        "neg201-mon-23",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": 600,
+              "type": "Periodic",
+              "severity": -1,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "severity-range",
+      "reason": "a negative severity is out of range"
+    },
+    {
+      "id": "set-delta-negative",
+      "wire": [
+        2,
+        "neg201-mon-24",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "value": -2.5,
+              "type": "Delta",
+              "severity": 6,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 2,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "AvailabilityState"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "delta-negative",
+      "reason": "N04.FR.14 the station rejects a negative Delta, so the bridge never sends one"
+    },
+    {
+      "id": "set-request-id-out-of-int32",
+      "wire": [
+        2,
+        "neg201-mon-25",
+        "SetVariableMonitoring",
+        {
+          "setMonitoringData": [
+            {
+              "id": 2147483648,
+              "transaction": false,
+              "value": 80.0,
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "int32",
+      "reason": "monitor ids are 32-bit signed integers"
+    },
+    {
+      "id": "set-reply-too-few-results",
+      "wire": [
+        3,
+        "neg201-mon-26",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4001,
+              "status": "Accepted",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "id": 4002,
+              "status": "Accepted",
+              "type": "LowerThreshold",
+              "severity": 4,
+              "component": {
+                "name": "ChargingStation"
+              },
+              "variable": {
+                "name": "SupplyVoltage"
+              }
+            },
+            {
+              "id": 4003,
+              "status": "Accepted",
+              "type": "Delta",
+              "severity": 6,
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              }
+            },
+            {
+              "id": 4004,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-1",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 75.0,
+                "type": "UpperThreshold",
+                "severity": 3,
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              },
+              {
+                "value": 207.0,
+                "type": "LowerThreshold",
+                "severity": 4,
+                "component": {
+                  "name": "ChargingStation"
+                },
+                "variable": {
+                  "name": "SupplyVoltage"
+                }
+              },
+              {
+                "transaction": true,
+                "value": 2.5,
+                "type": "Delta",
+                "severity": 6,
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "value": 300,
+                "type": "Periodic",
+                "severity": 9,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              },
+              {
+                "value": 900,
+                "type": "PeriodicClockAligned",
+                "severity": 8,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "set-count",
+      "reason": "N04.FR.01 one result per requested item"
+    },
+    {
+      "id": "set-reply-too-many-results",
+      "wire": [
+        3,
+        "neg201-mon-27",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-3",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 600,
+                "type": "Periodic",
+                "severity": 9,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "set-count",
+      "reason": "N04.FR.01 one result per requested item"
+    },
+    {
+      "id": "set-reply-component-not-requested",
+      "wire": [
+        3,
+        "neg201-mon-28",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "Heater"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-3",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 600,
+                "type": "Periodic",
+                "severity": 9,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "set-identity",
+      "reason": "N04.FR.02 every result names a requested component/variable"
+    },
+    {
+      "id": "set-reply-variable-not-requested",
+      "wire": [
+        3,
+        "neg201-mon-29",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Humidity"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-3",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 600,
+                "type": "Periodic",
+                "severity": 9,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "set-identity",
+      "reason": "N04.FR.02 every result names a requested component/variable"
+    },
+    {
+      "id": "set-reply-accepted-without-id",
+      "wire": [
+        3,
+        "neg201-mon-30",
+        {
+          "setMonitoringResult": [
+            {
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 9,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-3",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 600,
+                "type": "Periodic",
+                "severity": 9,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "set-accepted-id",
+      "reason": "N04.FR.08/N04.FR.11 an accepted monitor is identified by the id the station generated or kept; the schema leaves id optional"
+    },
+    {
+      "id": "set-reply-replace-other-id",
+      "wire": [
+        3,
+        "neg201-mon-31",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4999,
+              "status": "Accepted",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-2",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "id": 4001,
+                "transaction": false,
+                "value": 80.0,
+                "type": "UpperThreshold",
+                "severity": 3,
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "set-id-echo",
+      "reason": "N04.FR.12 replacing monitor 4001 keeps its id"
+    },
+    {
+      "id": "set-reply-severity-ten",
+      "wire": [
+        3,
+        "neg201-mon-32",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4006,
+              "status": "Accepted",
+              "type": "Periodic",
+              "severity": 10,
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-3",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 600,
+                "type": "Periodic",
+                "severity": 9,
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "severity-range",
+      "reason": "severity is 0 to 9"
+    },
+    {
+      "id": "set-reply-control-character",
+      "wire": [
+        3,
+        "neg201-mon-33",
+        {
+          "setMonitoringResult": [
+            {
+              "id": 4010,
+              "status": "Accepted",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "status": "UnknownComponent",
+              "type": "UpperThreshold",
+              "severity": 5,
+              "component": {
+                "name": "Heater"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "status": "UnknownVariable",
+              "type": "LowerThreshold",
+              "severity": 4,
+              "component": {
+                "name": "ChargingStation"
+              },
+              "variable": {
+                "name": "NoSuchVariable"
+              }
+            },
+            {
+              "status": "UnsupportedMonitorType",
+              "type": "Periodic",
+              "severity": 7,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 2,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "AvailabilityState"
+              }
+            },
+            {
+              "statusInfo": {
+                "reasonCode": "ValueOutOfRange",
+                "additionalInfo": "bad\u0007info"
+              },
+              "status": "Rejected",
+              "type": "UpperThreshold",
+              "severity": 2,
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              }
+            },
+            {
+              "status": "Duplicate",
+              "type": "UpperThreshold",
+              "severity": 3,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema": "SetVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-set-4",
+          "SetVariableMonitoring",
+          {
+            "setMonitoringData": [
+              {
+                "value": 80.0,
+                "type": "UpperThreshold",
+                "severity": 3,
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              },
+              {
+                "value": 1.0,
+                "type": "UpperThreshold",
+                "severity": 5,
+                "component": {
+                  "name": "Heater"
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              },
+              {
+                "value": 10.0,
+                "type": "LowerThreshold",
+                "severity": 4,
+                "component": {
+                  "name": "ChargingStation"
+                },
+                "variable": {
+                  "name": "NoSuchVariable"
+                }
+              },
+              {
+                "value": 60,
+                "type": "Periodic",
+                "severity": 7,
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 2,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "AvailabilityState"
+                }
+              },
+              {
+                "value": 99999.0,
+                "type": "UpperThreshold",
+                "severity": 2,
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "value": 75.0,
+                "type": "UpperThreshold",
+                "severity": 3,
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "control-chars",
+      "reason": "a control character in statusInfo is refused before it reaches operators"
+    },
+    {
+      "id": "clear-empty-ids",
+      "wire": [
+        2,
+        "neg201-mon-34",
+        "ClearVariableMonitoring",
+        {
+          "id": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "clear-ids-strings",
+      "wire": [
+        2,
+        "neg201-mon-35",
+        "ClearVariableMonitoring",
+        {
+          "id": [
+            "4001"
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "ids are integers"
+    },
+    {
+      "id": "clear-missing-id",
+      "wire": [
+        2,
+        "neg201-mon-36",
+        "ClearVariableMonitoring",
+        {}
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "id is required"
+    },
+    {
+      "id": "clear-extra-property",
+      "wire": [
+        2,
+        "neg201-mon-37",
+        "ClearVariableMonitoring",
+        {
+          "id": [
+            4001
+          ],
+          "all": true
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "no additional properties"
+    },
+    {
+      "id": "clear-reply-missing-result-id",
+      "wire": [
+        3,
+        "neg201-mon-38",
+        {
+          "clearMonitoringResult": [
+            {
+              "status": "NotFound"
+            }
+          ]
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "id is required in ClearMonitoringResult"
+    },
+    {
+      "id": "clear-reply-unknown-status",
+      "wire": [
+        3,
+        "neg201-mon-39",
+        {
+          "clearMonitoringResult": [
+            {
+              "status": "Unknown",
+              "id": 4001
+            }
+          ]
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is outside ClearMonitoringStatusEnumType"
+    },
+    {
+      "id": "clear-reply-empty",
+      "wire": [
+        3,
+        "neg201-mon-40",
+        {
+          "clearMonitoringResult": []
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "clear-reply-unspecified-status",
+      "wire": [
+        3,
+        "neg201-mon-41",
+        {
+          "clearMonitoringResult": [
+            {
+              "status": "EmptyResultSet",
+              "id": 4001
+            }
+          ]
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "EmptyResultSet belongs to GenericDeviceModelStatusEnumType, not ClearMonitoringStatusEnumType"
+    },
+    {
+      "id": "clear-id-out-of-int32",
+      "wire": [
+        2,
+        "neg201-mon-42",
+        "ClearVariableMonitoring",
+        {
+          "id": [
+            4294967296
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "int32",
+      "reason": "monitor ids are 32-bit signed integers"
+    },
+    {
+      "id": "clear-reply-unrequested-id",
+      "wire": [
+        3,
+        "neg201-mon-43",
+        {
+          "clearMonitoringResult": [
+            {
+              "status": "Accepted",
+              "id": 4001
+            },
+            {
+              "status": "Accepted",
+              "id": 4777
+            }
+          ]
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-clear-1",
+          "ClearVariableMonitoring",
+          {
+            "id": [
+              4001
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "clear-ids",
+      "reason": "N06.FR.05 one result per requested id and none for ids that were not requested"
+    },
+    {
+      "id": "clear-reply-missing-requested-id",
+      "wire": [
+        3,
+        "neg201-mon-44",
+        {
+          "clearMonitoringResult": [
+            {
+              "status": "Accepted",
+              "id": 4001
+            },
+            {
+              "status": "NotFound",
+              "id": 4002
+            }
+          ]
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-clear-2",
+          "ClearVariableMonitoring",
+          {
+            "id": [
+              4001,
+              4002,
+              4003
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "clear-ids",
+      "reason": "N06.FR.05 every requested id gets a result"
+    },
+    {
+      "id": "clear-reply-duplicate-id",
+      "wire": [
+        3,
+        "neg201-mon-45",
+        {
+          "clearMonitoringResult": [
+            {
+              "status": "Accepted",
+              "id": 4001
+            },
+            {
+              "status": "Accepted",
+              "id": 4001
+            },
+            {
+              "status": "NotFound",
+              "id": 4003
+            }
+          ]
+        }
+      ],
+      "schema": "ClearVariableMonitoringResponse",
+      "context": [
+        [
+          2,
+          "mon201-clear-2",
+          "ClearVariableMonitoring",
+          {
+            "id": [
+              4001,
+              4002,
+              4003
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "clear-ids",
+      "reason": "N06.FR.05 each id appears once"
+    },
+    {
+      "id": "base-unknown",
+      "wire": [
+        2,
+        "neg201-mon-46",
+        "SetMonitoringBase",
+        {
+          "monitoringBase": "Default"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "monitoringBase is outside MonitoringBaseEnumType"
+    },
+    {
+      "id": "base-lowercase",
+      "wire": [
+        2,
+        "neg201-mon-47",
+        "SetMonitoringBase",
+        {
+          "monitoringBase": "all"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "base-missing",
+      "wire": [
+        2,
+        "neg201-mon-48",
+        "SetMonitoringBase",
+        {}
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "monitoringBase is required"
+    },
+    {
+      "id": "base-extra-property",
+      "wire": [
+        2,
+        "neg201-mon-49",
+        "SetMonitoringBase",
+        {
+          "monitoringBase": "All",
+          "keepCustom": true
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "no additional properties"
+    },
+    {
+      "id": "base-reply-unknown-status",
+      "wire": [
+        3,
+        "neg201-mon-50",
+        {
+          "status": "Busy"
+        }
+      ],
+      "schema": "SetMonitoringBaseResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is outside GenericDeviceModelStatusEnumType"
+    },
+    {
+      "id": "base-reply-missing-status",
+      "wire": [
+        3,
+        "neg201-mon-51",
+        {}
+      ],
+      "schema": "SetMonitoringBaseResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is required"
+    },
+    {
+      "id": "base-reply-status-info-no-reason",
+      "wire": [
+        3,
+        "neg201-mon-52",
+        {
+          "status": "Rejected",
+          "statusInfo": {
+            "additionalInfo": "no code"
+          }
+        }
+      ],
+      "schema": "SetMonitoringBaseResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "statusInfo requires reasonCode"
+    },
+    {
+      "id": "level-severity-string",
+      "wire": [
+        2,
+        "neg201-mon-53",
+        "SetMonitoringLevel",
+        {
+          "severity": "4"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "severity is an integer"
+    },
+    {
+      "id": "level-severity-fractional",
+      "wire": [
+        2,
+        "neg201-mon-54",
+        "SetMonitoringLevel",
+        {
+          "severity": 4.5
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "severity is an integer"
+    },
+    {
+      "id": "level-missing",
+      "wire": [
+        2,
+        "neg201-mon-55",
+        "SetMonitoringLevel",
+        {}
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "severity is required"
+    },
+    {
+      "id": "level-reply-not-supported",
+      "wire": [
+        3,
+        "neg201-mon-56",
+        {
+          "status": "NotSupported"
+        }
+      ],
+      "schema": "SetMonitoringLevelResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "SetMonitoringLevelResponse uses GenericStatusEnumType, which has no NotSupported"
+    },
+    {
+      "id": "level-reply-missing-status",
+      "wire": [
+        3,
+        "neg201-mon-57",
+        {}
+      ],
+      "schema": "SetMonitoringLevelResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is required"
+    },
+    {
+      "id": "level-severity-ten",
+      "wire": [
+        2,
+        "neg201-mon-58",
+        "SetMonitoringLevel",
+        {
+          "severity": 10
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "severity-range",
+      "reason": "N05.FR.02 severity 10 is out of range"
+    },
+    {
+      "id": "level-severity-negative",
+      "wire": [
+        2,
+        "neg201-mon-59",
+        "SetMonitoringLevel",
+        {
+          "severity": -1
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "severity-range",
+      "reason": "N05.FR.02 a negative severity is out of range"
+    },
+    {
+      "id": "get-report-missing-request-id",
+      "wire": [
+        2,
+        "neg201-mon-60",
+        "GetMonitoringReport",
+        {
+          "monitoringCriteria": [
+            "ThresholdMonitoring"
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "requestId is required"
+    },
+    {
+      "id": "get-report-empty-criteria",
+      "wire": [
+        2,
+        "neg201-mon-61",
+        "GetMonitoringReport",
+        {
+          "requestId": 7001,
+          "monitoringCriteria": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "get-report-four-criteria",
+      "wire": [
+        2,
+        "neg201-mon-62",
+        "GetMonitoringReport",
+        {
+          "requestId": 7001,
+          "monitoringCriteria": [
+            "ThresholdMonitoring",
+            "DeltaMonitoring",
+            "PeriodicMonitoring",
+            "ThresholdMonitoring"
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "maxItems 3"
+    },
+    {
+      "id": "get-report-unknown-criterion",
+      "wire": [
+        2,
+        "neg201-mon-63",
+        "GetMonitoringReport",
+        {
+          "requestId": 7001,
+          "monitoringCriteria": [
+            "EventMonitoring"
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "criterion is outside MonitoringCriterionEnumType"
+    },
+    {
+      "id": "get-report-empty-component-variable",
+      "wire": [
+        2,
+        "neg201-mon-64",
+        "GetMonitoringReport",
+        {
+          "requestId": 7001,
+          "componentVariable": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "get-report-component-variable-no-component",
+      "wire": [
+        2,
+        "neg201-mon-65",
+        "GetMonitoringReport",
+        {
+          "requestId": 7001,
+          "componentVariable": [
+            {
+              "variable": {
+                "name": "Power"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "component is required in ComponentVariableType"
+    },
+    {
+      "id": "get-report-request-id-string",
+      "wire": [
+        2,
+        "neg201-mon-66",
+        "GetMonitoringReport",
+        {
+          "requestId": "7001"
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "requestId is an integer"
+    },
+    {
+      "id": "get-report-reply-unknown-status",
+      "wire": [
+        3,
+        "neg201-mon-67",
+        {
+          "status": "Unknown"
+        }
+      ],
+      "schema": "GetMonitoringReportResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is outside GenericDeviceModelStatusEnumType"
+    },
+    {
+      "id": "get-report-reply-missing-status",
+      "wire": [
+        3,
+        "neg201-mon-68",
+        {
+          "statusInfo": {
+            "reasonCode": "Busy"
+          }
+        }
+      ],
+      "schema": "GetMonitoringReportResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "status is required"
+    },
+    {
+      "id": "get-report-request-id-out-of-int32",
+      "wire": [
+        2,
+        "neg201-mon-69",
+        "GetMonitoringReport",
+        {
+          "requestId": 2147483648
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "int32",
+      "reason": "requestId is a 32-bit signed integer"
+    },
+    {
+      "id": "report-missing-seq-no",
+      "wire": [
+        2,
+        "neg201-mon-70",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "seqNo is required"
+    },
+    {
+      "id": "report-missing-generated-at",
+      "wire": [
+        2,
+        "neg201-mon-71",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "generatedAt is required"
+    },
+    {
+      "id": "report-missing-request-id",
+      "wire": [
+        2,
+        "neg201-mon-72",
+        "NotifyMonitoringReport",
+        {
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "requestId is required"
+    },
+    {
+      "id": "report-generated-at-not-date-time",
+      "wire": [
+        2,
+        "neg201-mon-73",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "yesterday",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "generatedAt must be a date-time"
+    },
+    {
+      "id": "report-empty-monitor",
+      "wire": [
+        2,
+        "neg201-mon-74",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "monitor needs at least one item when present"
+    },
+    {
+      "id": "report-monitor-no-variable-monitoring",
+      "wire": [
+        2,
+        "neg201-mon-75",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "variableMonitoring is required"
+    },
+    {
+      "id": "report-empty-variable-monitoring",
+      "wire": [
+        2,
+        "neg201-mon-76",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": []
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "report-monitor-missing-transaction",
+      "wire": [
+        2,
+        "neg201-mon-77",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "transaction is required in VariableMonitoringType"
+    },
+    {
+      "id": "report-monitor-missing-id",
+      "wire": [
+        2,
+        "neg201-mon-78",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "id is required in VariableMonitoringType"
+    },
+    {
+      "id": "report-monitor-type-unknown",
+      "wire": [
+        2,
+        "neg201-mon-79",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "TargetDelta",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "type is outside MonitorEnumType"
+    },
+    {
+      "id": "report-tbc-string",
+      "wire": [
+        2,
+        "neg201-mon-80",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7004,
+          "seqNo": 0,
+          "tbc": "true",
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "tbc is a boolean"
+    },
+    {
+      "id": "report-extra-property",
+      "wire": [
+        2,
+        "neg201-mon-81",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ],
+          "totalParts": 3
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "no additional properties"
+    },
+    {
+      "id": "report-response-extra-property",
+      "wire": [
+        3,
+        "neg201-mon-82",
+        {
+          "status": "Accepted"
+        }
+      ],
+      "schema": "NotifyMonitoringReportResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "NotifyMonitoringReportResponse has no properties"
+    },
+    {
+      "id": "report-first-seq-no-not-zero",
+      "wire": [
+        2,
+        "neg201-mon-83",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7004,
+          "seqNo": 1,
+          "tbc": true,
+          "generatedAt": "2026-11-10T09:15:01Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-4",
+          "GetMonitoringReport",
+          {
+            "requestId": 7004,
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                }
+              },
+              {
+                "component": {
+                  "name": "ChargingStation"
+                }
+              },
+              {
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature",
+                  "instance": "Inlet"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "N02.FR.09 the first part has seqNo 0"
+    },
+    {
+      "id": "report-seq-no-gap",
+      "wire": [
+        2,
+        "neg201-mon-84",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7004,
+          "seqNo": 2,
+          "tbc": false,
+          "generatedAt": "2026-11-10T09:15:02Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature",
+                "instance": "Inlet"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4004,
+                  "transaction": false,
+                  "value": 300,
+                  "type": "Periodic",
+                  "severity": 9
+                },
+                {
+                  "id": 4005,
+                  "transaction": false,
+                  "value": 900,
+                  "type": "PeriodicClockAligned",
+                  "severity": 8
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-4",
+          "GetMonitoringReport",
+          {
+            "requestId": 7004,
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                }
+              },
+              {
+                "component": {
+                  "name": "ChargingStation"
+                }
+              },
+              {
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature",
+                  "instance": "Inlet"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          2,
+          "mon201-rep-2a",
+          "NotifyMonitoringReport",
+          {
+            "requestId": 7004,
+            "seqNo": 0,
+            "tbc": true,
+            "generatedAt": "2026-11-10T09:15:00Z",
+            "monitor": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                },
+                "variableMonitoring": [
+                  {
+                    "id": 4003,
+                    "transaction": true,
+                    "value": 2.5,
+                    "type": "Delta",
+                    "severity": 6
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "N02.FR.09 seqNo increments by one, so 0 is followed by 1"
+    },
+    {
+      "id": "report-seq-no-duplicate",
+      "wire": [
+        2,
+        "neg201-mon-85",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7004,
+          "seqNo": 0,
+          "tbc": true,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-4",
+          "GetMonitoringReport",
+          {
+            "requestId": 7004,
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                }
+              },
+              {
+                "component": {
+                  "name": "ChargingStation"
+                }
+              },
+              {
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature",
+                  "instance": "Inlet"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          2,
+          "mon201-rep-2a",
+          "NotifyMonitoringReport",
+          {
+            "requestId": 7004,
+            "seqNo": 0,
+            "tbc": true,
+            "generatedAt": "2026-11-10T09:15:00Z",
+            "monitor": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                },
+                "variableMonitoring": [
+                  {
+                    "id": 4003,
+                    "transaction": true,
+                    "value": 2.5,
+                    "type": "Delta",
+                    "severity": 6
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "a second part must not repeat seqNo 0"
+    },
+    {
+      "id": "report-fragment-after-final",
+      "wire": [
+        2,
+        "neg201-mon-86",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7004,
+          "seqNo": 1,
+          "tbc": true,
+          "generatedAt": "2026-11-10T09:15:01Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-4",
+          "GetMonitoringReport",
+          {
+            "requestId": 7004,
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                }
+              },
+              {
+                "component": {
+                  "name": "ChargingStation"
+                }
+              },
+              {
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature",
+                  "instance": "Inlet"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          2,
+          "mon201-rep-2a",
+          "NotifyMonitoringReport",
+          {
+            "requestId": 7004,
+            "seqNo": 0,
+            "tbc": false,
+            "generatedAt": "2026-11-10T09:15:00Z",
+            "monitor": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                },
+                "variableMonitoring": [
+                  {
+                    "id": 4003,
+                    "transaction": true,
+                    "value": 2.5,
+                    "type": "Delta",
+                    "severity": 6
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "tbc false closed the report at seqNo 0, so seqNo 1 is unexpected"
+    },
+    {
+      "id": "report-other-request-id",
+      "wire": [
+        2,
+        "neg201-mon-87",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7999,
+          "seqNo": 1,
+          "tbc": true,
+          "generatedAt": "2026-11-10T09:15:01Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-4",
+          "GetMonitoringReport",
+          {
+            "requestId": 7004,
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                }
+              },
+              {
+                "component": {
+                  "name": "ChargingStation"
+                }
+              },
+              {
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature",
+                  "instance": "Inlet"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          2,
+          "mon201-rep-2a",
+          "NotifyMonitoringReport",
+          {
+            "requestId": 7004,
+            "seqNo": 0,
+            "tbc": true,
+            "generatedAt": "2026-11-10T09:15:00Z",
+            "monitor": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                },
+                "variableMonitoring": [
+                  {
+                    "id": 4003,
+                    "transaction": true,
+                    "value": 2.5,
+                    "type": "Delta",
+                    "severity": 6
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "report-request-id",
+      "reason": "N02.FR.04 every part carries the request's requestId"
+    },
+    {
+      "id": "report-unsolicited-request-id",
+      "wire": [
+        2,
+        "neg201-mon-88",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7777,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-1",
+          "GetMonitoringReport",
+          {
+            "requestId": 7001
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "report-request-id",
+      "reason": "N02.FR.04 a report with no matching GetMonitoringReport is unsolicited"
+    },
+    {
+      "id": "report-severity-ten",
+      "wire": [
+        2,
+        "neg201-mon-89",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 10
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "severity-range",
+      "reason": "severity is 0 to 9"
+    },
+    {
+      "id": "report-outside-criteria",
+      "wire": [
+        2,
+        "neg201-mon-90",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7002,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4001,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-2",
+          "GetMonitoringReport",
+          {
+            "requestId": 7002,
+            "monitoringCriteria": [
+              "ThresholdMonitoring"
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "report-criteria",
+      "reason": "N02.FR.06/N02.FR.12 ThresholdMonitoring excludes Delta monitors, and this fragment carries one"
+    },
+    {
+      "id": "report-outside-component-filter",
+      "wire": [
+        2,
+        "neg201-mon-91",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7004,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Heater"
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4050,
+                  "transaction": false,
+                  "value": 90.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-4",
+          "GetMonitoringReport",
+          {
+            "requestId": 7004,
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              },
+              {
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                }
+              },
+              {
+                "component": {
+                  "name": "ChargingStation"
+                }
+              },
+              {
+                "component": {
+                  "name": "TemperatureSensor",
+                  "instance": "Cabinet"
+                },
+                "variable": {
+                  "name": "Temperature",
+                  "instance": "Inlet"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "report-filter",
+      "reason": "N02.FR.08 componentVariable limits the reported components"
+    },
+    {
+      "id": "report-variable-outside-filter",
+      "wire": [
+        2,
+        "neg201-mon-92",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7005,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Voltage"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4051,
+                  "transaction": false,
+                  "value": 5,
+                  "type": "Periodic",
+                  "severity": 9
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-getrep-5",
+          "GetMonitoringReport",
+          {
+            "requestId": 7005,
+            "monitoringCriteria": [
+              "DeltaMonitoring",
+              "PeriodicMonitoring"
+            ],
+            "componentVariable": [
+              {
+                "component": {
+                  "name": "EVSE",
+                  "evse": {
+                    "id": 1
+                  }
+                },
+                "variable": {
+                  "name": "Power"
+                }
+              }
+            ]
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "report-filter",
+      "reason": "N02.FR.08 componentVariable limits the reported variables"
+    },
+    {
+      "id": "report-id-out-of-int32",
+      "wire": [
+        2,
+        "neg201-mon-93",
+        "NotifyMonitoringReport",
+        {
+          "requestId": 7001,
+          "seqNo": 0,
+          "generatedAt": "2026-11-10T09:15:00Z",
+          "monitor": [
+            {
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "variableMonitoring": [
+                {
+                  "id": -2147483649,
+                  "transaction": false,
+                  "value": 75.0,
+                  "type": "UpperThreshold",
+                  "severity": 3
+                }
+              ]
+            },
+            {
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              },
+              "variableMonitoring": [
+                {
+                  "id": 4003,
+                  "transaction": true,
+                  "value": 2.5,
+                  "type": "Delta",
+                  "severity": 6
+                },
+                {
+                  "id": 4007,
+                  "transaction": false,
+                  "value": 22000,
+                  "type": "UpperThreshold",
+                  "severity": 2
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "int32",
+      "reason": "monitor ids are 32-bit signed integers"
+    },
+    {
+      "id": "event-missing-event-data",
+      "wire": [
+        2,
+        "neg201-mon-94",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "eventData is required"
+    },
+    {
+      "id": "event-empty-event-data",
+      "wire": [
+        2,
+        "neg201-mon-95",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": []
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "minItems 1"
+    },
+    {
+      "id": "event-missing-eventId",
+      "wire": [
+        2,
+        "neg201-mon-96",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "eventId is required in EventDataType"
+    },
+    {
+      "id": "event-missing-timestamp",
+      "wire": [
+        2,
+        "neg201-mon-97",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "timestamp is required in EventDataType"
+    },
+    {
+      "id": "event-missing-trigger",
+      "wire": [
+        2,
+        "neg201-mon-98",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "trigger is required in EventDataType"
+    },
+    {
+      "id": "event-missing-actualValue",
+      "wire": [
+        2,
+        "neg201-mon-99",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "actualValue is required in EventDataType"
+    },
+    {
+      "id": "event-missing-eventNotificationType",
+      "wire": [
+        2,
+        "neg201-mon-100",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "eventNotificationType is required in EventDataType"
+    },
+    {
+      "id": "event-missing-component",
+      "wire": [
+        2,
+        "neg201-mon-101",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "component is required in EventDataType"
+    },
+    {
+      "id": "event-missing-variable",
+      "wire": [
+        2,
+        "neg201-mon-102",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "variable is required in EventDataType"
+    },
+    {
+      "id": "event-missing-seq-no",
+      "wire": [
+        2,
+        "neg201-mon-103",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "seqNo is required"
+    },
+    {
+      "id": "event-missing-generated-at",
+      "wire": [
+        2,
+        "neg201-mon-104",
+        "NotifyEvent",
+        {
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "generatedAt is required"
+    },
+    {
+      "id": "event-trigger-unknown",
+      "wire": [
+        2,
+        "neg201-mon-105",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Threshold",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "trigger is outside EventTriggerEnumType"
+    },
+    {
+      "id": "event-trigger-lowercase",
+      "wire": [
+        2,
+        "neg201-mon-106",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "enumeration is case-sensitive"
+    },
+    {
+      "id": "event-notification-type-unknown",
+      "wire": [
+        2,
+        "neg201-mon-107",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "BuiltIn",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "eventNotificationType is outside EventNotificationEnumType"
+    },
+    {
+      "id": "event-actual-value-too-long",
+      "wire": [
+        2,
+        "neg201-mon-108",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "actualValue is limited to 2500 characters"
+    },
+    {
+      "id": "event-tech-info-too-long",
+      "wire": [
+        2,
+        "neg201-mon-109",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "techInfo": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "techInfo is limited to 500 characters"
+    },
+    {
+      "id": "event-tech-code-too-long",
+      "wire": [
+        2,
+        "neg201-mon-110",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "techCode": "ccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "techCode is limited to 50 characters"
+    },
+    {
+      "id": "event-transaction-id-too-long",
+      "wire": [
+        2,
+        "neg201-mon-111",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "transactionId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "transactionId is limited to 36 characters"
+    },
+    {
+      "id": "event-actual-value-number",
+      "wire": [
+        2,
+        "neg201-mon-112",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": 78.4,
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "actualValue is a string"
+    },
+    {
+      "id": "event-cleared-string",
+      "wire": [
+        2,
+        "neg201-mon-113",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:05:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9002,
+              "timestamp": "2026-11-10T10:05:00Z",
+              "trigger": "Alerting",
+              "actualValue": "71.2",
+              "cleared": "true",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "cleared is a boolean"
+    },
+    {
+      "id": "event-timestamp-not-date-time",
+      "wire": [
+        2,
+        "neg201-mon-114",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "10:00",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "timestamp must be a date-time"
+    },
+    {
+      "id": "event-extra-property",
+      "wire": [
+        2,
+        "neg201-mon-115",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              },
+              "severity": 3
+            }
+          ]
+        }
+      ],
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "EventDataType has no severity field"
+    },
+    {
+      "id": "event-response-extra-property",
+      "wire": [
+        3,
+        "neg201-mon-116",
+        {
+          "status": "Accepted"
+        }
+      ],
+      "schema": "NotifyEventResponse",
+      "schema_valid": false,
+      "native_valid": false,
+      "rule": "schema",
+      "reason": "NotifyEventResponse has no properties"
+    },
+    {
+      "id": "event-first-seq-no-not-zero",
+      "wire": [
+        2,
+        "neg201-mon-117",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 1,
+          "eventData": [
+            {
+              "eventId": 9001,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "N07.FR.07 the first NotifyEventRequest for an event has seqNo 0"
+    },
+    {
+      "id": "event-seq-no-gap",
+      "wire": [
+        2,
+        "neg201-mon-118",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:02Z",
+          "seqNo": 2,
+          "eventData": [
+            {
+              "eventId": 9013,
+              "timestamp": "2026-11-10T10:00:02Z",
+              "trigger": "Periodic",
+              "actualValue": "34.9",
+              "techInfo": "clock aligned report",
+              "variableMonitoringId": 4004,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "TemperatureSensor",
+                "instance": "Cabinet"
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ],
+          "tbc": false
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-ev-5a",
+          "NotifyEvent",
+          {
+            "generatedAt": "2026-11-10T10:00:00Z",
+            "seqNo": 0,
+            "eventData": [
+              {
+                "eventId": 9010,
+                "timestamp": "2026-11-10T10:00:00Z",
+                "trigger": "Alerting",
+                "actualValue": "81.0",
+                "variableMonitoringId": 4001,
+                "eventNotificationType": "CustomMonitor",
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              },
+              {
+                "eventId": 9011,
+                "timestamp": "2026-11-10T10:00:00Z",
+                "trigger": "Alerting",
+                "actualValue": "251.0",
+                "variableMonitoringId": 4012,
+                "eventNotificationType": "CustomMonitor",
+                "component": {
+                  "name": "ChargingStation"
+                },
+                "variable": {
+                  "name": "SupplyVoltage"
+                }
+              }
+            ],
+            "tbc": true
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "seqNo increments by one, so 0 is followed by 1"
+    },
+    {
+      "id": "event-fragment-after-final",
+      "wire": [
+        2,
+        "neg201-mon-119",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:01Z",
+          "seqNo": 1,
+          "eventData": [
+            {
+              "eventId": 9012,
+              "timestamp": "2026-11-10T10:00:01Z",
+              "trigger": "Delta",
+              "actualValue": "12.5",
+              "cause": 9010,
+              "variableMonitoringId": 4003,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "EVSE",
+                "evse": {
+                  "id": 1
+                }
+              },
+              "variable": {
+                "name": "Power"
+              }
+            }
+          ],
+          "tbc": true
+        }
+      ],
+      "context": [
+        [
+          2,
+          "mon201-ev-5a",
+          "NotifyEvent",
+          {
+            "generatedAt": "2026-11-10T10:00:00Z",
+            "seqNo": 0,
+            "eventData": [
+              {
+                "eventId": 9010,
+                "timestamp": "2026-11-10T10:00:00Z",
+                "trigger": "Alerting",
+                "actualValue": "81.0",
+                "variableMonitoringId": 4001,
+                "eventNotificationType": "CustomMonitor",
+                "component": {
+                  "name": "Connector",
+                  "evse": {
+                    "id": 1,
+                    "connectorId": 1
+                  }
+                },
+                "variable": {
+                  "name": "Temperature"
+                }
+              },
+              {
+                "eventId": 9011,
+                "timestamp": "2026-11-10T10:00:00Z",
+                "trigger": "Alerting",
+                "actualValue": "251.0",
+                "variableMonitoringId": 4012,
+                "eventNotificationType": "CustomMonitor",
+                "component": {
+                  "name": "ChargingStation"
+                },
+                "variable": {
+                  "name": "SupplyVoltage"
+                }
+              }
+            ],
+            "tbc": false
+          }
+        ]
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "fragment-sequence",
+      "reason": "tbc false closed the burst at seqNo 0"
+    },
+    {
+      "id": "event-id-out-of-int32",
+      "wire": [
+        2,
+        "neg201-mon-121",
+        "NotifyEvent",
+        {
+          "generatedAt": "2026-11-10T10:00:00Z",
+          "seqNo": 0,
+          "eventData": [
+            {
+              "eventId": 2147483648,
+              "timestamp": "2026-11-10T10:00:00Z",
+              "trigger": "Alerting",
+              "actualValue": "78.4",
+              "variableMonitoringId": 4001,
+              "eventNotificationType": "CustomMonitor",
+              "component": {
+                "name": "Connector",
+                "evse": {
+                  "id": 1,
+                  "connectorId": 1
+                }
+              },
+              "variable": {
+                "name": "Temperature"
+              }
+            }
+          ]
+        }
+      ],
+      "schema_valid": true,
+      "native_valid": false,
+      "rule": "int32",
+      "reason": "eventId is a 32-bit signed integer"
+    }
+  ]
+}

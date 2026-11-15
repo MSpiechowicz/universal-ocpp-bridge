@@ -1,0 +1,84 @@
+schema_version = 1
+seed = 126
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+# chargingStation.model is CiString20 and vendorName CiString50.
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "sim.ocpp201.boot.accepted"
+payload = { reason = "PowerUp", chargingStation = { vendorName = "UOB", model = "MonitoringSt201", firmwareVersion = "sim-1.0.0" } }
+
+# The CSMS sets a monitor with SetVariableMonitoring: the station generated id 4031.
+[[steps]]
+id = "await-monitor"
+station = "alpha"
+action = "await_monitoring"
+timeout_ms = 120000
+expect_response = { monitorIds = [4003, 4030, 4031] }
+
+# The CSMS asks for a report; every fragment is delivered with the same requestId.
+[[steps]]
+id = "await-report"
+station = "alpha"
+action = "await_monitoring"
+timeout_ms = 120000
+expect_response = { reportsDelivered = 1 }
+
+# The monitored value exceeds the CSMS's UpperThreshold: one Alerting NotifyEvent.
+[[steps]]
+id = "exceed-threshold"
+station = "alpha"
+action = "set_monitored_value"
+timeout_ms = 5000
+payload = { component = { name = "Connector", evse = { id = 1, connectorId = 1 } }, variable = { name = "Temperature" }, value = "95" }
+
+[[steps]]
+id = "await-alert"
+station = "alpha"
+action = "await_monitoring"
+timeout_ms = 30000
+expect_response = { eventsAcknowledged = 1, eventsQueued = 0, lastEventOutcome = "Result" }
+
+# A burst of five events is chained over three NotifyEvent messages (events_per_message = 2).
+[[steps]]
+id = "event-burst"
+station = "alpha"
+action = "emit_monitoring_events"
+timeout_ms = 5000
+payload = { component = { name = "Connector", evse = { id = 1, connectorId = 1 } }, variable = { name = "Temperature" }, count = 5, monitorId = 4031 }
+
+[[steps]]
+id = "await-burst"
+station = "alpha"
+action = "await_monitoring"
+timeout_ms = 30000
+expect_response = { eventsAcknowledged = 4, eventsQueued = 0 }
+
+# The CSMS clears the monitor again.
+[[steps]]
+id = "await-clear"
+station = "alpha"
+action = "await_monitoring"
+timeout_ms = 120000
+expect_response = { monitorIds = [4003, 4030] }
+
+[[steps]]
+id = "assert-final"
+station = "alpha"
+action = "assert_monitoring"
+timeout_ms = 5000
+expect_response = { monitorCount = 2, hardWired = 1 }
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

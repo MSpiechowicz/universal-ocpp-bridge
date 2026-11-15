@@ -11,6 +11,7 @@ mod live;
 mod local_authorization;
 mod local_authorization201;
 mod model;
+mod monitoring201;
 mod report;
 mod reservation16;
 mod runner;

@@ -11,6 +11,7 @@ fn paired(request: &str, context: &RouteContext) -> bool {
         RouteContext::ChargingProfiles(_) => {
             request == crate::command_registry::charging_profiles201::ACTION
         }
+        RouteContext::Monitoring(_) => request == "GetMonitoringReport",
     }
 }
 
@@ -20,6 +21,12 @@ impl CallSessionHandle {
     }
     pub(crate) fn enable_profile_reports(&self) {
         enable(&self.reports, ReportKind::ChargingProfiles);
+    }
+    /// `NotifyMonitoringReport` only ever answers this bridge's own `GetMonitoringReport`, so it
+    /// stays disabled (and a stray fragment gets `NotImplemented`) until the session binds the
+    /// durable report store.
+    pub(crate) fn enable_monitoring_reports(&self) {
+        enable(&self.reports, ReportKind::Monitoring);
     }
     pub(crate) fn report_store_failed(&self, correlation: CorrelationId) {
         self.diagnostics

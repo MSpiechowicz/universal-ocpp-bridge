@@ -83,6 +83,9 @@ pub(super) async fn dispatch_call(
             | "NotifyChargingLimit"
             | "ClearedChargingLimit",
         ) => super::negotiation201::complete(&incoming, snapshot, &services).await,
+        (ProtocolEdition::Ocpp201, "NotifyEvent") => {
+            super::monitoring201::complete(&incoming, snapshot, &mut services).await
+        }
         (ProtocolEdition::Ocpp201, "ReservationStatusUpdate") => {
             super::calls::reservation_status_update(&incoming, snapshot, &services).await
         }
