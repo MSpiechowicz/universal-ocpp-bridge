@@ -24,6 +24,11 @@ mod local_authorization_schema;
 pub mod local_authorization_values;
 pub(crate) mod local_authorization_wire;
 mod mapping;
+mod monitoring;
+mod monitoring_collect;
+mod monitoring_reply;
+mod monitoring_report;
+pub(crate) mod monitoring_values;
 mod phase_capability;
 mod reservation;
 mod reservation_values;
@@ -95,6 +100,7 @@ pub struct RemoteControlSession {
     profile_reports: Option<Arc<dyn uob_application::ChargingProfileReportStore201>>,
     firmware: Option<Arc<FirmwareSettings201>>,
     diagnostics: Option<Arc<DiagnosticsSettings201>>,
+    monitoring_reports: Option<Arc<dyn uob_application::MonitoringReportStore201>>,
 }
 
 impl RemoteControlSession {
@@ -145,6 +151,7 @@ impl RemoteControlSession {
             profile_reports: None,
             firmware: None,
             diagnostics: None,
+            monitoring_reports: None,
         })
     }
 
@@ -265,6 +272,9 @@ impl RemoteControlSession {
             }
             if diagnostics::owns(&command) {
                 return Ok(self.dispatch_diagnostics(&command).await);
+            }
+            if monitoring::owns(&command) {
+                return Ok(self.dispatch_monitoring(command).await);
             }
             if matches!(&command.operation, uob_contracts::CommandOperation::Ocpp(operation)
                 if crate::command_registry::reservation201::ACTIONS.contains(&operation.action.as_str()))

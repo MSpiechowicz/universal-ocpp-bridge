@@ -145,6 +145,13 @@ pub(crate) enum Request<C, E, D> {
         UtcTimestamp,
         Reply<Option<CommandResult>>,
     ),
+    MonitoringReport(
+        String,
+        Box<uob_contracts::MonitoringResult201>,
+        uob_contracts::CommandLifecycle,
+        UtcTimestamp,
+        Reply<Option<CommandResult>>,
+    ),
     PruneCommands(i64, Reply<u64>),
     MaintainRetention(i64, Reply<StorageRetentionStatus>),
     RetentionStatus(Reply<StorageRetentionStatus>),
@@ -351,6 +358,7 @@ fn handle_request<C, E, D>(
         | Request::DeviceReport(..)
         | Request::InterruptDeviceReports(..)
         | Request::ChargingProfilesReport(..)
+        | Request::MonitoringReport(..)
         | Request::PruneCommands(..)) => {
             command_requests::handle(connection, drain, command_request);
         }

@@ -1,0 +1,1 @@
+[2,"mon201-ev-5b","NotifyEvent",{"generatedAt":"2026-11-10T10:00:01Z","seqNo":1,"eventData":[{"eventId":9012,"timestamp":"2026-11-10T10:00:01Z","trigger":"Delta","actualValue":"12.5","cause":9010,"variableMonitoringId":4003,"eventNotificationType":"CustomMonitor","component":{"name":"EVSE","evse":{"id":1}},"variable":{"name":"Power"}}],"tbc":true}]

@@ -7,6 +7,7 @@ mod errors;
 mod finalization;
 mod local_authorization16;
 mod local_authorization201;
+pub mod monitoring201;
 mod recovery;
 mod results;
 use results::{command_result, rejected_external, validation_rejection};
@@ -102,6 +103,8 @@ pub enum CommandDispatchOutcome {
     /// Native OCPP 2.0.1 log reply and offered-destination facts; upload progress is
     /// reconciled in storage.
     DiagnosticsResponse201(uob_contracts::DiagnosticsResult201),
+    /// Native OCPP 2.0.1 monitoring reply; a report is collected independently in storage.
+    MonitoringResponse201(Box<uob_contracts::MonitoringResult201>),
 }
 
 /// Sanitized failure to inspect or use the current station session.

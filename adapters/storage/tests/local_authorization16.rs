@@ -72,6 +72,7 @@ fn accepted(command: &Command<Value>) -> CommandResult {
         firmware_201: None,
         diagnostics_16: None,
         diagnostics_201: None,
+        monitoring_201: None,
     }
 }
 async fn admit(

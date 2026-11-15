@@ -105,7 +105,8 @@ impl LiveCommands {
         let session = Arc::new(
             session
                 .with_charging_profile_reports(Arc::new(store.clone()))
-                .with_device_model(Arc::new(store), generation),
+                .with_device_model(Arc::new(store.clone()), generation)
+                .with_monitoring_reports(Arc::new(store)),
         );
         if let Some((_, old)) = self
             .sessions

@@ -101,3 +101,12 @@ diagnostics_job_timeout_seconds and diagnostics_upload_max_bytes options and the
 [charging.firmware] artifact service. get_diagnostics is refused for ocpp201 stations, because
 2.0.1 has no GetDiagnostics. See
 [the 2.0.1 operator example](../operations/headless-cli.md#protected-ocpp-201-log-retrieval).
+
+For exact ocpp201 stations, the independent options set_variable_monitoring,
+clear_variable_monitoring, get_monitoring_report, set_monitoring_base and set_monitoring_level
+enable the OCPP 2.0.1 monitoring commands SetVariableMonitoring, ClearVariableMonitoring,
+GetMonitoringReport, SetMonitoringBase and SetMonitoringLevel (N02 to N06). They are
+default-off, privileged and demo-only, target the station root only, and are refused for ocpp16j
+stations. They need no further section. Charger-initiated NotifyEvent (N07) is different: every
+accepted ocpp201 station is answered and journaled with no option. See
+[the operator example](../operations/headless-cli.md#protected-ocpp-201-variable-monitoring).

@@ -1,0 +1,86 @@
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "2.0.1"
+request_timeout_ms = 5000
+# Events and reports are delivered after the station registers again on a new socket.
+reconnect = true
+
+[[stations.evses]]
+id = 1
+connectors = [1]
+
+[stations.monitoring201]
+# MonitoringCtrlr limits the station reports and enforces.
+items_per_message_set = 4
+bytes_per_message_set = 8192
+items_per_message_clear = 4
+bytes_per_message_clear = 1024
+max_monitors = 32
+# A report with more monitors than this is cut into several NotifyMonitoringReport fragments,
+# and a burst with more events is chained over several NotifyEvent messages.
+monitors_per_fragment = 2
+events_per_message = 2
+initial_level = 9
+supported_criteria = ["ThresholdMonitoring", "DeltaMonitoring", "PeriodicMonitoring"]
+supported_bases = ["All", "FactoryDefault", "HardWiredOnly"]
+# Misbehave on purpose: none, skip_seq_no, duplicate_seq_no, omit_final_fragment,
+# disconnect_mid_report or fragments_before_reply.
+report_fault = "none"
+# none, wrong_result_count or mismatched_component.
+set_reply_fault = "none"
+
+# The seeded device model. Scenario steps change `value`; monitors judge the change.
+[[stations.monitoring201.variables]]
+component = { name = "Connector", evse = { id = 1, connectorId = 1 } }
+variable = { name = "Temperature" }
+data_type = "decimal"
+value = "40"
+min = -40.0
+max = 150.0
+monitor_types = ["UpperThreshold", "LowerThreshold", "Delta"]
+
+[[stations.monitoring201.variables]]
+component = { name = "ChargingStation" }
+variable = { name = "SupplyVoltage" }
+value = "230"
+min = 0.0
+max = 300.0
+monitor_types = ["UpperThreshold", "LowerThreshold", "Delta"]
+
+[[stations.monitoring201.variables]]
+component = { name = "TemperatureSensor", instance = "Cabinet" }
+variable = { name = "Temperature" }
+value = "30"
+min = -40.0
+max = 120.0
+monitor_types = ["UpperThreshold", "Delta", "Periodic", "PeriodicClockAligned"]
+
+# A variable with no monitor types is reported with supportsMonitoring=false.
+[[stations.monitoring201.variables]]
+component = { name = "ChargingStation" }
+variable = { name = "Tamper" }
+data_type = "boolean"
+value = "false"
+
+# A firmware-owned monitor (HardWiredMonitor): it cannot be replaced or cleared.
+[[stations.monitoring201.monitors]]
+id = 4003
+kind = "hard_wired"
+component = { name = "ChargingStation" }
+variable = { name = "SupplyVoltage" }
+type = "UpperThreshold"
+value = 280.0
+severity = 1
+
+# A factory preset (PreconfiguredMonitor): replacing it makes it a custom monitor.
+[[stations.monitoring201.monitors]]
+id = 4030
+kind = "preconfigured"
+component = { name = "TemperatureSensor", instance = "Cabinet" }
+variable = { name = "Temperature" }
+type = "UpperThreshold"
+value = 100.0
+severity = 4

@@ -1,0 +1,1 @@
+[2,"mon201-rep-2b","NotifyMonitoringReport",{"requestId":7004,"seqNo":1,"tbc":true,"generatedAt":"2026-11-10T09:15:01Z","monitor":[{"component":{"name":"Connector","evse":{"id":1,"connectorId":1}},"variable":{"name":"Temperature"},"variableMonitoring":[{"id":4001,"transaction":false,"value":75.0,"type":"UpperThreshold","severity":3}]}]}]

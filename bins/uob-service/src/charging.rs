@@ -7,6 +7,7 @@ mod diagnostics;
 mod files;
 mod firmware;
 mod local_authorization;
+mod monitoring;
 mod profiles;
 mod provision;
 mod recovery;
@@ -177,6 +178,7 @@ impl StationSettings {
             }
         }
         device_model::apply(snapshot, self.protocol, self.control);
+        monitoring::apply(snapshot, self.protocol, self.control);
         profiles::apply(snapshot, self.protocol, self.control);
         reservations::apply_capabilities(snapshot, self);
         self.apply_transfer_capabilities(snapshot);

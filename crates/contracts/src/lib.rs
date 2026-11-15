@@ -44,6 +44,8 @@ mod diagnostics16;
 pub use diagnostics16::*;
 mod diagnostics201;
 pub use diagnostics201::*;
+mod monitoring201;
+pub use monitoring201::*;
 
 pub use command::{
     AuthenticatedCommandOrigin, ChargingLimit, Command, CommandError, CommandErrorCode,
@@ -205,6 +207,11 @@ impl ContractVersion {
     pub const V1_DIAGNOSTICS_201: Self = Self {
         major: 1,
         revision: 17,
+    };
+    /// Additive native OCPP 2.0.1 variable monitoring evidence.
+    pub const V1_MONITORING_201: Self = Self {
+        major: 1,
+        revision: 18,
     };
 }
 

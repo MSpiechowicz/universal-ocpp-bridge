@@ -137,6 +137,7 @@ pub(super) async fn run(
     let mut reservations = JoinSet::new();
     let mut firmware = JoinSet::new();
     let mut diagnostics = JoinSet::new();
+    let mut monitoring = JoinSet::new();
     let mut replay_generation = None;
     let mut housekeeping = tokio::time::interval(std::time::Duration::from_millis(50));
     loop {
@@ -145,6 +146,7 @@ pub(super) async fn run(
                 crate::reservation201::transport::tick(&client, &state, &mut reservations, &traces);
                 crate::firmware201::transport::tick(&client, &state, &mut firmware, &traces);
                 crate::diagnostics201::transport::tick(&client, &state, &mut diagnostics, &traces);
+                crate::monitoring201::transport::tick(&client, &state, &mut monitoring, &traces);
                 let candidate = {
                     let current = state.lock().expect("native state lock");
                     (current.registered && current.socket_connected && replay_generation != Some(current.socket_generation))
@@ -168,6 +170,7 @@ pub(super) async fn run(
             _ = reservations.join_next(), if !reservations.is_empty() => {}
             _ = firmware.join_next(), if !firmware.is_empty() => {}
             _ = diagnostics.join_next(), if !diagnostics.is_empty() => {}
+            _ = monitoring.join_next(), if !monitoring.is_empty() => {}
             _ = requests.join_next(), if !requests.is_empty() => {}
             command = commands.recv(), if requests.len() < outstanding_capacity => match command {
                 Some(Command::Heartbeat(result)) => {
@@ -222,23 +225,26 @@ pub(super) async fn run(
                     reservations.shutdown().await;
                     firmware.shutdown().await;
                     diagnostics.shutdown().await;
+                    monitoring.shutdown().await;
                     let response = client.disconnect().await
                         .map_err(|_| SimulatorClientError::Protocol("native disconnect failed".to_owned()));
                     state.lock().expect("native state lock").local = None;
                     state.lock().expect("native state lock").reservation201 = None;
                     state.lock().expect("native state lock").firmware201 = None;
                     state.lock().expect("native state lock").diagnostics201 = None;
+                    state.lock().expect("native state lock").monitoring201 = None;
                     traces.push(TraceKind::Stopped, "client disconnected");
                     let _ = result.send(response);
                     break;
                 }
-                None => { requests.shutdown().await; replay.shutdown().await; reservations.shutdown().await; firmware.shutdown().await; diagnostics.shutdown().await; break; }
+                None => { requests.shutdown().await; replay.shutdown().await; reservations.shutdown().await; firmware.shutdown().await; diagnostics.shutdown().await; monitoring.shutdown().await; break; }
             }
         }
     }
     state.lock().expect("native state lock").reservation201 = None;
     state.lock().expect("native state lock").firmware201 = None;
     state.lock().expect("native state lock").diagnostics201 = None;
+    state.lock().expect("native state lock").monitoring201 = None;
 }
 
 async fn send_call(

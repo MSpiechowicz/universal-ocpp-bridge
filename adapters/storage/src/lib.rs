@@ -22,6 +22,7 @@ mod drain;
 mod firmware16;
 mod firmware201;
 mod lifecycle;
+mod monitoring201;
 mod recovery;
 mod remote_control;
 mod reservation16;

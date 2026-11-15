@@ -12,7 +12,7 @@ use uob_contracts::{
     DeviceVariableResult201, DeviceVariableStatus201, NativeProtocolReference, ResourceRef,
 };
 
-pub(super) fn component(value: &Value) -> Option<DeviceComponent201> {
+pub(crate) fn component(value: &Value) -> Option<DeviceComponent201> {
     let evse = if let Some(evse) = value.get("evse") {
         let id = i32::try_from(evse["id"].as_i64()?).ok()?;
         let connector_id = if let Some(id) = evse.get("connectorId") {
@@ -34,7 +34,7 @@ pub(super) fn component(value: &Value) -> Option<DeviceComponent201> {
     };
     valid_component(&result).then_some(result)
 }
-pub(super) fn variable(value: &Value) -> Option<DeviceVariable201> {
+pub(crate) fn variable(value: &Value) -> Option<DeviceVariable201> {
     Some(DeviceVariable201 {
         name: value["name"].as_str()?.to_owned(),
         instance: value
@@ -47,22 +47,33 @@ fn named(value: &str, lowercase: &str) -> bool {
     value.chars().default_case_fold().eq(lowercase.chars())
 }
 /// Only explicitly queried native station request-limit identities disclose numeric values.
+/// The action index is the row of [`LearnedLimits::values`]: 0 `GetVariables`, 1 `GetReport`,
+/// 2 `SetVariables` (`DeviceDataCtrlr`), 3 `SetVariableMonitoring`, 4 `ClearVariableMonitoring`
+/// (`MonitoringCtrlr`).
 #[must_use]
 pub fn limit_identity(
     component: &DeviceComponent201,
     variable: &DeviceVariable201,
 ) -> Option<(usize, bool)> {
-    if !named(&component.name, "devicedatactrlr")
-        || component.instance.is_some()
-        || component.evse.is_some()
-    {
+    if component.instance.is_some() || component.evse.is_some() {
         return None;
     }
-    let action = match variable.instance.as_deref()? {
-        name if named(name, "getvariables") => 0,
-        name if named(name, "getreport") => 1,
-        name if named(name, "setvariables") => 2,
-        _ => return None,
+    let instance = variable.instance.as_deref()?;
+    let action = if named(&component.name, "devicedatactrlr") {
+        match instance {
+            name if named(name, "getvariables") => 0,
+            name if named(name, "getreport") => 1,
+            name if named(name, "setvariables") => 2,
+            _ => return None,
+        }
+    } else if named(&component.name, "monitoringctrlr") {
+        match instance {
+            name if named(name, "setvariablemonitoring") => 3,
+            name if named(name, "clearvariablemonitoring") => 4,
+            _ => return None,
+        }
+    } else {
+        return None;
     };
     if named(&variable.name, "itemspermessage") {
         Some((action, false))
@@ -243,7 +254,7 @@ pub fn report_items(payload: &Value, resource: &ResourceRef) -> Option<Vec<Devic
 /// Generation-scoped learned station limits. No probing, splitting or retries.
 #[derive(Default)]
 pub(crate) struct LearnedLimits {
-    pub values: [[Option<usize>; 2]; 3],
+    pub values: [[Option<usize>; 2]; 5],
     pub local:
         std::sync::Arc<std::sync::Mutex<super::local_authorization_limits::LocalListLimits201>>,
 }
@@ -290,7 +301,28 @@ impl LearnedLimits {
         if items == 0 || items > 4096 || bytes > 256 * 1024 {
             return false;
         }
-        let [item_limit, byte_limit] = self.values[2];
+        self.fits(2, items, bytes)
+    }
+
+    /// `SetVariableMonitoring` (3) or `ClearVariableMonitoring` (4): without both learned limits
+    /// only one item is sent.
+    pub fn allows_monitoring(&self, action: usize, items: usize, bytes: usize) -> bool {
+        if items == 0 || items > 4096 || bytes > 256 * 1024 {
+            return false;
+        }
+        self.fits(action, items, bytes)
+    }
+
+    /// `GetMonitoringReport` component-variable selectors share the `GetReport` limits (N02.FR.07).
+    pub fn allows_report_selectors(&self, items: usize, bytes: usize) -> bool {
+        if items > 4096 || bytes > 256 * 1024 {
+            return false;
+        }
+        items == 0 || self.fits(1, items, bytes)
+    }
+
+    fn fits(&self, action: usize, items: usize, bytes: usize) -> bool {
+        let [item_limit, byte_limit] = self.values[action];
         if items > 1 && (item_limit.is_none() || byte_limit.is_none()) {
             return false;
         }

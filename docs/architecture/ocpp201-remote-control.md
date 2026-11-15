@@ -24,6 +24,7 @@ backward. Reconnect requires a new port. Old commands are never queued for a rep
 | SetNetworkProfile | Privileged Ocpp with `urn:uob:ocpp201:SetNetworkProfileReference:1` | Station-only signed configurationSlot and private full connectionData; Accepted/Rejected/Failed, Accepted means staged |
 | GetLog | Privileged Ocpp with `urn:uob:ocpp201:GetLogReference:1` | Station root only; `DiagnosticsLog` or `SecurityLog` upload destination bound to a durable job before dispatch, no caller-supplied location (see [OCPP 2.0.1 log retrieval](ocpp201-diagnostics.md)); Accepted/Rejected/AcceptedCanceled |
 | UpdateFirmware | Privileged Ocpp with `urn:uob:ocpp201:UpdateFirmwareReference:1` | Station root only; a provider artifact matching the station's secure/non-secure mode and a durable job before dispatch (see [OCPP 2.0.1 firmware](ocpp201-firmware.md)); Accepted/Rejected/AcceptedCanceled/InvalidCertificate/RevokedCertificate |
+| SetVariableMonitoring, ClearVariableMonitoring, GetMonitoringReport, SetMonitoringBase, SetMonitoringLevel | Privileged Ocpp with `urn:OCPP:Cp:2:2020:3:<Action>Request`, each enabled by its own station option | Station root only; native per-item results, multipart report collection and `NotifyEvent` journaling (see [OCPP 2.0.1 monitoring](ocpp201-monitoring.md)) |
 
 A start cannot select a connector on the wire. Connector-scoped starts fail explicitly rather
 than widening permission to their EVSE. Station-scoped starts omit evseId and require station-scoped
@@ -350,8 +351,8 @@ topics carry the additive evidence without widening target ingress privileges
 or payload limits.
 
 The read-only #109 addition remains distinct from the protected writes below.
-Other device-model writes, monitoring, OCA certification and the complete-release gate
-are not implied by either capability.
+Other device-model writes, OCA certification and the complete-release gate are not implied by
+either capability. Variable monitoring has its own [workflow](ocpp201-monitoring.md).
 
 ## Opt-in protected device and network writes
 
@@ -500,8 +501,8 @@ peer state, malformed uncertainty, expiry/rotation and disconnect/restart no rep
 Enabled redacted capture and public results excluded synthetic values/profiles/
 capabilities; SQLite/WAL and logs excluded private values. These are software
 boundary observations, not hardware interoperability, physical activation or OCA
-certification. Broader monitoring, simulator completeness and production/provider
-enablement remain separate.
+certification. Simulator completeness and production/provider enablement remain separate; variable
+monitoring is covered in [OCPP 2.0.1 monitoring](ocpp201-monitoring.md).
 
 ## Verification and specification provenance
 

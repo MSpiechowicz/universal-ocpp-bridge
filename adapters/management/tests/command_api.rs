@@ -84,6 +84,7 @@ impl CommandAdmissionPort<Value> for CommandState {
                 firmware_201: None,
                 diagnostics_16: None,
                 diagnostics_201: None,
+                monitoring_201: None,
             };
             *self.result.lock() = Some(result.clone());
             Ok(result)

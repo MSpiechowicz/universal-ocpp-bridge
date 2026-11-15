@@ -1,0 +1,1 @@
+[2,"mon201-getrep-5","GetMonitoringReport",{"requestId":7005,"monitoringCriteria":["DeltaMonitoring","PeriodicMonitoring"],"componentVariable":[{"component":{"name":"EVSE","evse":{"id":1}},"variable":{"name":"Power"}}]}]

@@ -264,7 +264,89 @@ from:
 - an opt-in separate-process joint smoke.
 
 The broad `ocpp201.firmware-diagnostics` row stays `planned` until the remaining diagnostic
-areas are implemented. Security events (#128) and monitoring (#126) are not claimed.
+areas are implemented. Security events (#128) are not claimed; monitoring has its own
+corpus section below.
+
+## OCPP 2.0.1 monitoring fixtures
+
+The fourteen request and response schemas for SetVariableMonitoring, ClearVariableMonitoring,
+GetMonitoringReport, NotifyMonitoringReport, SetMonitoringBase, SetMonitoringLevel and
+NotifyEvent were added to `schemas/2.0.1/` byte-identical (LF, Draft 6) from the pinned 2.0.1
+Part 3 archive in `provenance.json`.
+
+The 58 fixture IDs beginning with `wire.ocpp201.monitoring-` were authored independently from
+use cases N02 to N08. They cover:
+
+- `SetVariableMonitoring` with all five monitor types, an `id` that replaces a monitor, a minimal
+  item and a Delta on a non-numeric variable; replies with all-Accepted ids, a replaced id and a
+  mixed reply with `UnknownComponent`, `UnknownVariable`, `UnsupportedMonitorType`, `Rejected`
+  (with `statusInfo`) and `Duplicate`;
+- `ClearVariableMonitoring` for one and several ids, with `Accepted`, `NotFound`, `Rejected`
+  and a mixed multi-id reply;
+- `SetMonitoringBase` for `All`, `FactoryDefault` and `HardWiredOnly` with `Accepted`,
+  `NotSupported` and `Rejected` replies;
+- `SetMonitoringLevel` for severity 0, 4 and 9 with `Accepted` and `Rejected` replies;
+- `GetMonitoringReport` with no filter, criteria only, `componentVariable` only (component
+  only, with variable and instance, with EVSE/connector) and both, with `Accepted`,
+  `EmptyResultSet`, `NotSupported` and `Rejected` replies;
+- `NotifyMonitoringReport` as a single part, a three-part sequence (`seqNo` 0 to 2, `tbc` on
+  all but the last), a part without a `monitor` list and the empty response;
+- `NotifyEvent` for Alerting, a cleared event, Delta, Periodic, a three-part burst with
+  `cause`, a hard-wired notification without `variableMonitoringId`, a write-only variable with
+  an empty `actualValue`, a preconfigured monitor, maximum lengths (`actualValue` 2500,
+  `techInfo` 500, `techCode` 50, `transactionId` 36), a monitor event without
+  `variableMonitoringId` and one with control characters (both tolerated, see below) and the
+  empty response.
+
+`wire/2.0.1/monitoring-negative-cases.json` holds 120 cases. Each case names a `rule`;
+CALLRESULT cases carry a `schema` key and cases that depend on earlier frames carry a `context`
+array (the request, or the earlier parts of a sequence). The schema-invalid cases (rule
+`schema`) include:
+
+- a fractional or string severity, missing required fields, `TargetDelta` and other unknown or
+  wrongly cased enumerations, empty arrays, more than three monitoring criteria;
+- over-long `actualValue` (2501), `techInfo`, `techCode`, `transactionId`, component names and
+  `reasonCode`, non-date-time timestamps, extra properties and non-empty acknowledgements;
+- `NotSupported` in a `SetMonitoringLevelResponse` and `EmptyResultSet` in a
+  `ClearVariableMonitoringResponse`, which belong to other enumerations.
+
+Schema-valid cases refused natively are checked by independent reference rules in
+`tests/monitoring201/rules.rs`, not by bridge code:
+
+- severity outside 0 to 9 and integers outside the 32-bit range (`severity-range`, `int32`);
+- a negative Delta value the bridge must never send (`delta-negative`, N04.FR.14);
+- a Set reply with the wrong result count, an unrequested component or variable, an Accepted
+  result without `id` or a replaced monitor whose id changed (`set-*`);
+- a Clear reply with an unrequested, missing or duplicate id (`clear-ids`);
+- report or event parts with the wrong first `seqNo`, a gap, a duplicate or a part after the last
+  one (`fragment-sequence`), a foreign `requestId`, and report parts outside the requested
+  criteria or `componentVariable` filter;
+- control characters in a command reply's text fields (`control-chars`).
+
+Two native-invalid `NotifyEvent` frames are **not** negative cases, because the CSMS must still
+answer them: an event for a `CustomMonitor` without `variableMonitoringId` and an event with
+control characters in `actualValue` and `techInfo` (N07.FR.03, N08.FR.02: a refused event is
+retried by the charger and can stall its queue). They are the registered fixtures
+`monitoring-event-no-monitor-id` and `monitoring-event-control-characters`, which are
+schema-valid, and the fixture tests assert that the independent reference rules in
+`tests/monitoring201/rules.rs` still recognise them as native-invalid (`event-monitor-id`,
+`control-chars`). The bridge accepts both and journals the control characters replaced with U+FFFD.
+
+`monitoring201-requirements.json` maps every N02 to N08 requirement ID to fixtures. Station-only
+behaviour (offline queuing, level filtering, persistence, monitor classification) and the
+configuration-variable limits are listed under `excluded_requirements` with a reason.
+
+The `ocpp201.monitoring-security.monitoring` row is `verified`. Its evidence comes from the
+fixtures above (`fixture:`), a `source:` entry for `monitoring201-requirements.json` and exact
+`test:` symbols of the protocol-adapter, application, storage and actual-daemon tests and of the
+independent simulator tests (`monitoring201_*`), plus the opt-in joint smoke
+`bins/uob-sim/tests/monitoring201_joint_smoke.py`. Bridge-side tests load 54 of the 58 fixtures
+from the corpus; `monitoring-set-reply-delta-non-numeric`, `monitoring-report-no-monitor`,
+`monitoring-report-response` and `monitoring-event-response` are consumed only by the simulator's
+independence test (the bridge and daemon tests assert the empty responses literally).
+`monitoring-set-mixed` repeats a monitor on purpose; it is wire-valid but the bridge refuses to
+send it by CSMS policy (see [OCPP 2.0.1 monitoring](../architecture/ocpp201-monitoring.md)). The
+broad `ocpp201.monitoring-security` row stays `planned`: security events (#128) are not claimed.
 
 ## OCPP 1.6 TriggerMessage fixtures
 
@@ -486,7 +568,7 @@ profile descriptors, not nested profile editing or hardware behavior.
 The narrow bidirectional `ocpp201.device-model.queries` row covers
 GetVariables, GetBaseReport, GetReport and their correlated NotifyReport exchange.
 It is separate from the broad `ocpp201.device-model` row, which remains `planned`:
-read-only queries do not complete variable writes, monitoring or every device-model
+read-only queries do not complete variable writes or every device-model
 requirement. The complete-release gate remains fail-closed; narrow implementation
 evidence is not OCA certification, physical-station interoperability or release
 qualification.

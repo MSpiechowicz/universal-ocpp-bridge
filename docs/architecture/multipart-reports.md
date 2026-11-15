@@ -4,8 +4,9 @@
 device-model, monitoring, and other multipart report owners. It is an awaited future with no
 spawned worker, background timer, detached task, or internal queue. The OCPP 2.0.1 read-only
 [device-model workflow](ocpp201-remote-control.md#opt-in-read-only-device-model-queries) (#109)
-uses this policy with connection-owned supervision. Monitoring (#126) remains a separate
-planned workflow; a reusable collector is not a blanket feature-coverage claim.
+uses this policy with connection-owned supervision, as does the OCPP 2.0.1
+[variable monitoring report](ocpp201-monitoring.md#report-collection) (#126). A reusable
+collector is not a blanket feature-coverage claim.
 
 ## Correlation and sequence
 

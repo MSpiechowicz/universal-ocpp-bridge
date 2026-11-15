@@ -1,0 +1,1 @@
+[2,"mon201-ev-6","NotifyEvent",{"generatedAt":"2026-11-10T10:00:00Z","seqNo":0,"eventData":[{"eventId":9020,"timestamp":"2026-11-10T10:00:00Z","trigger":"Alerting","actualValue":"true","techCode":"OTP","techInfo":"thermal cut-out opened","eventNotificationType":"HardWiredNotification","component":{"name":"ChargingStation"},"variable":{"name":"OverTemperatureTrip"}}]}]

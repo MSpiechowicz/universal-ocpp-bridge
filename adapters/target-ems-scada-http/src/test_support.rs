@@ -183,7 +183,7 @@ pub(crate) async fn send(
         .await
         .expect("response");
     let status = response.status();
-    let body = to_bytes(response.into_body(), 256 * 1024)
+    let body = to_bytes(response.into_body(), 1024 * 1024)
         .await
         .expect("response body");
     let value = serde_json::from_slice(&body).unwrap_or(Value::Null);

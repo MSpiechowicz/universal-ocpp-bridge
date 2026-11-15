@@ -265,6 +265,7 @@ fn write_command(
         firmware_201: None,
         diagnostics_16: None,
         diagnostics_201: None,
+        monitoring_201: None,
     });
     write_history_command(store, command, command_result);
 }

@@ -1,4 +1,5 @@
 use super::{LocalAuthorization201Handle, validation};
+use crate::monitoring201::{DeviceVariable201, knows_component};
 use caseless::Caseless;
 use serde_json::{Value, json};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -35,7 +36,12 @@ fn value(local: &super::Model, index: usize) -> String {
         _ => unreachable!("fixed controller inventory"),
     }
 }
-pub(super) fn reply(payload: &Value, local: &LocalAuthorization201Handle) -> Value {
+/// `GetVariables`. The monitoring model adds its own variables to the fixed controller inventory.
+pub(super) fn reply(
+    payload: &Value,
+    local: &LocalAuthorization201Handle,
+    monitored: &[DeviceVariable201],
+) -> Value {
     if !validation::valid_variables(payload) {
         return json!({"callError":"FormationViolation"});
     }
@@ -53,10 +59,18 @@ pub(super) fn reply(payload: &Value, local: &LocalAuthorization201Handle) -> Val
             .position(|(c, v, _)| same_name(component, c) && same_name(variable, v));
         let attribute = index
             .filter(|_| actual && root_identity(component, Some(variable)) && !model.unavailable)
-            .map(|index| value(&model, index));
+            .map(|index| value(&model, index))
+            .or_else(|| {
+                monitored
+                    .iter()
+                    .find(|entry| actual && entry.matches_query(component, variable))
+                    .map(|entry| entry.value().to_owned())
+            });
+        let known_component = VARIABLES.iter().any(|(c, _, _)| same_name(component, c))
+            || knows_component(monitored, component);
         let status = if !actual {
             "NotSupportedAttributeType"
-        } else if !VARIABLES.iter().any(|(c, _, _)| same_name(component, c)) {
+        } else if !known_component {
             "UnknownComponent"
         } else if attribute.is_some() {
             "Accepted"
@@ -77,11 +91,12 @@ pub(super) fn reply(payload: &Value, local: &LocalAuthorization201Handle) -> Val
 }
 
 // One finite, read-only controller inventory. No identifier or private metadata
-// is copied into reports, and no unimplemented monitoring/configuration is claimed.
+// is copied into reports. Monitoring facts come only from a configured monitoring model.
 pub(super) fn report(
     action: &str,
     payload: &Value,
     local: &LocalAuthorization201Handle,
+    monitored: &[DeviceVariable201],
 ) -> (Value, Option<Value>) {
     if !validation::valid_report(action, payload) {
         return (json!({"callError":"FormationViolation"}), None);
@@ -135,7 +150,13 @@ pub(super) fn report(
         {
             continue;
         }
-        let mut characteristics = json!({"dataType":data_type,"supportsMonitoring":false});
+        // The monitoring model decides which variables can be monitored.
+        let supports_monitoring = monitored.iter().any(|entry| {
+            entry.supports_monitoring()
+                && entry.matches_query(&json!({"name": component}), &json!({"name": variable}))
+        });
+        let mut characteristics =
+            json!({"dataType":data_type,"supportsMonitoring":supports_monitoring});
         if index == 2 {
             characteristics["minLimit"] = json!(0);
             characteristics["maxLimit"] = json!(super::ENTRY_LIMIT);
@@ -144,6 +165,12 @@ pub(super) fn report(
             "variableAttribute":[{"type":"Actual","value":value(&model,index),"mutability":"ReadOnly"}],
             "variableCharacteristics":characteristics}));
     }
+    data.extend(
+        monitored
+            .iter()
+            .filter(|entry| monitored_selected(action, payload, entry))
+            .map(DeviceVariable201::report_json),
+    );
     if data.is_empty() {
         return (json!({"status":"EmptyResultSet"}), None);
     }
@@ -159,4 +186,29 @@ pub(super) fn report(
         "seqNo":0,"tbc":false,"reportData":data}),
         ),
     )
+}
+
+/// Whether a report includes one monitoring-model variable.
+fn monitored_selected(action: &str, payload: &Value, entry: &DeviceVariable201) -> bool {
+    if action == "GetBaseReport" {
+        // Everything monitoring owns is read-only configuration.
+        if payload["reportBase"] == "ConfigurationInventory" {
+            return false;
+        }
+        if payload["reportBase"] == "SummaryInventory" && !entry.summary() {
+            return false;
+        }
+    }
+    // Only the controller is known to be available and enabled.
+    if payload.get("componentCriteria").is_some() && !entry.controller() {
+        return false;
+    }
+    payload
+        .get("componentVariable")
+        .and_then(Value::as_array)
+        .is_none_or(|selectors| {
+            selectors
+                .iter()
+                .any(|selector| entry.matches_selector(selector))
+        })
 }

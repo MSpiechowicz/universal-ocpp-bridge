@@ -44,6 +44,7 @@ where
         let mut firmware_201 = None;
         let mut diagnostics_16 = None;
         let mut diagnostics_201 = None;
+        let mut monitoring_201 = None;
         let outcome = if let Some(reservation) = profile {
             self.stations
                 .dispatch_reserved_profile(command.clone(), generation, *reservation)
@@ -373,6 +374,12 @@ where
                     }),
                 }
             }
+            CommandDispatchOutcome::MonitoringResponse201(evidence) => {
+                let (lifecycle, flow) = super::monitoring201::lifecycle(&evidence);
+                trace.emit(FlowStage::ProtocolResponse, flow);
+                monitoring_201 = Some(*evidence);
+                lifecycle
+            }
             CommandDispatchOutcome::TransmissionUncertain { detail } => {
                 trace.emit(FlowStage::ProtocolResponse, FlowEvidence::Uncertain);
                 CommandLifecycle::TransmissionUncertain { detail }
@@ -450,6 +457,10 @@ where
         if let Some(evidence) = diagnostics_201 {
             result.schema_version = ContractVersion::V1_DIAGNOSTICS_201;
             result.diagnostics_201 = Some(evidence);
+        }
+        if let Some(evidence) = monitoring_201 {
+            result.schema_version = ContractVersion::V1_MONITORING_201;
+            result.monitoring_201 = Some(evidence);
         }
         if let Some(expectation) = trigger.as_ref()
             && !matches!(result.lifecycle, CommandLifecycle::Rejected { .. })

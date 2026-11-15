@@ -122,6 +122,7 @@ fn config(endpoint: String) -> SimulatorClientConfig {
         firmware201: None,
         diagnostics16: None,
         diagnostics201: None,
+        monitoring201: None,
     }
 }
 

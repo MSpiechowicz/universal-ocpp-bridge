@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.16 and serves
-the current v1.17 command-result; OpenAPI command result responses reference v1.17.
-Current nested export-record and export-batch references use v1.18, while released
-export schemas through v1.17 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.17 and serves
+the current v1.18 command-result; OpenAPI command result responses reference v1.18.
+Current nested export-record and export-batch references use v1.19, while released
+export schemas through v1.18 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -105,7 +105,8 @@ fail-closed before persistence, capture and export: only validated numeric
 DeviceDataCtrlr request-limit identities initially disclose values. Unknown/vendor
 and WriteOnly values are redacted, while statusInfo/customData/valuesList are omitted.
 This additive result contract does not widen privileged ingress, change topology
-or grants, implement writes/monitoring, or certify full device-model coverage.
+or grants, implement writes, or certify full device-model coverage. Monitoring arrives later
+as a separate contract (see below).
 
 OCPP 1.6J full privileged `SetChargingProfile`/`ClearChargingProfile` add optional
 `charging_profile_16` to command-result v1.6. This action-tagged evidence contains the
@@ -411,3 +412,26 @@ public exports advance to v1.18; runtime ExportRecord/ExportBatch advance separa
 revision 17. SQLite advances additively to v21 with a `diagnostics201_jobs` owner table. MQTT
 explicitly supports result revision 17 while future revision 18 is rejected before
 publication.
+
+OCPP 2.0.1 variable monitoring adds the optional `monitoring_201` field in command-result v1.18
+(`ContractVersion` revision 18, `V1_MONITORING_201`). It carries the immutable `query` (an
+`action` of `SetVariableMonitoring`, `ClearVariableMonitoring`, `GetMonitoringReport`,
+`SetMonitoringBase` or `SetMonitoringLevel`, with the native request fields) and the native
+`outcome` (`kind` `set_monitors`, `clear_monitors`, `base`, `level` or `report`). Monitor
+`value` is an exact decimal string, never a binary float, and every `severity` is an integer
+from 0 (Danger) to 9 (Debug). Set and clear results are independent per item with the exact
+native status and an optional 1 to 20 character printable ASCII `reason_code`. A report
+outcome keeps the native acknowledgement apart from the collected report, whose `state` is
+`not_expected`, `pending`, `complete` (fragment metadata, monitors and a count of monitors
+omitted for the output limit) or `incomplete` (a payload-free reason and optional progress).
+`customData` and free station text are never retained.
+
+Charger-initiated `NotifyEvent` is journaled as a station event, not a command result. The
+`StationEvent` variant carrying `monitoring_events_201` holds one acknowledged call: its
+generation time, `seq_no`, `tbc`, an `ordering` of `in_sequence`, `restarted` or `gap`, up to
+32 events with bounded native text (`actual_value` 2500, `tech_code` 50, `tech_info` 500 and
+`transaction_id` 36 characters), counts of events omitted by the record bounds and of calls
+and events shed by the flood gate since the previous record. Events are observed evidence only
+and never change configuration, policy or canonical state. Nested public exports advance to
+v1.19; runtime ExportRecord/ExportBatch advance separately to revision 18. MQTT explicitly
+supports result revision 18 while future revision 19 is rejected before publication.

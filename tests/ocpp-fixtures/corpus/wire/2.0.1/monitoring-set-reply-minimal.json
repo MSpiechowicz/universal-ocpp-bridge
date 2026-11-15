@@ -1,0 +1,1 @@
+[3,"mon201-set-3",{"setMonitoringResult":[{"id":4006,"status":"Accepted","type":"Periodic","severity":9,"component":{"name":"TemperatureSensor","instance":"Cabinet"},"variable":{"name":"Temperature"}}]}]

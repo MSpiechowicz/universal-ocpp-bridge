@@ -1,0 +1,1 @@
+[2,"mon201-ev-1","NotifyEvent",{"generatedAt":"2026-11-10T10:00:00Z","seqNo":0,"eventData":[{"eventId":9001,"timestamp":"2026-11-10T10:00:00Z","trigger":"Alerting","actualValue":"78.4","variableMonitoringId":4001,"eventNotificationType":"CustomMonitor","component":{"name":"Connector","evse":{"id":1,"connectorId":1}},"variable":{"name":"Temperature"}}]}]

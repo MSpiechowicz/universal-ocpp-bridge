@@ -111,6 +111,7 @@ pub(crate) fn write_result_value(
         retire_trigger_201 = crate::trigger201::merge(&previous, &mut incoming)?;
         crate::device_model201::merge(&mut previous, &mut incoming)?;
         crate::charging_profiles201::merge(&previous, &mut incoming)?;
+        crate::monitoring201::merge(&previous, &mut incoming)?;
         codec::local_authorization16::merge(&previous, &mut incoming)?;
         codec::local_authorization201::merge(&previous, &mut incoming)?;
         crate::reservation16::validation::merge(&previous, &mut incoming)?;
@@ -226,6 +227,9 @@ pub(crate) fn write_result_value(
     crate::device_model201::bound_output(&mut incoming)?;
     crate::charging_profiles201::bound_output(&mut incoming);
     crate::charging_profiles201::validate_stored(&incoming)?;
+    crate::monitoring201::bound_output(&mut incoming)?;
+    crate::monitoring201::validate_result(&incoming)?;
+    crate::monitoring201::validate_output(&incoming)?;
     crate::charging_profile201::finish(transaction, &incoming)?;
     codec::configuration201::validate_stored(transaction, &incoming)?;
     codec::local_authorization16::validate_stored(transaction, &incoming)?;
@@ -265,7 +269,8 @@ fn persist_result(
              trigger_reconcile_active = MIN(command_results.trigger_reconcile_active, excluded.trigger_reconcile_active)",
             params![request, payload, i64::from(!retire_trigger_201),
                 i64::from(incoming.device_model_201.as_ref().is_some_and(|e| e.report.pending())
-                    || crate::charging_profiles201::pending(incoming))],
+                    || crate::charging_profiles201::pending(incoming)
+                    || crate::monitoring201::pending(incoming))],
         )
         .map_err(unavailable)?;
     transaction

@@ -162,6 +162,7 @@ pub fn result(command: &Command<Value>, lifecycle: CommandLifecycle) -> CommandR
         firmware_201: None,
         diagnostics_16: None,
         diagnostics_201: None,
+        monitoring_201: None,
     }
 }
 pub async fn persist(store: &Store, result: CommandResult) {

@@ -116,8 +116,8 @@ interrupted by a daemon restart fails and the station reports the failure.
 - `SecurityEventNotification` and the security-log contents themselves (#128).
 - FTP/FTPS uploads, resume, `Expect: 100-continue` and basic authorization in upload locations
   (N01.FR.14, N01.FR.17, N01.FR.22, N01.FR.23).
-- Monitoring and event reporting (#126), persistent production artifact storage, physical
-  stations and OCA certification.
+- Persistent production artifact storage, physical stations and OCA certification. Variable
+  monitoring and `NotifyEvent` are covered in [OCPP 2.0.1 monitoring](ocpp201-monitoring.md).
 
 ## Verification
 

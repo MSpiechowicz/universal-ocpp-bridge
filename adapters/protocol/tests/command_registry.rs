@@ -16,6 +16,8 @@ mod diagnostics201;
 mod firmware16;
 #[path = "command_registry/firmware201.rs"]
 mod firmware201;
+#[path = "command_registry/monitoring201.rs"]
+mod monitoring201;
 #[path = "command_registry/schedules201.rs"]
 mod schedules201;
 #[path = "command_registry/trigger_201.rs"]

@@ -1,0 +1,1 @@
+[2,"mon201-rep-2a","NotifyMonitoringReport",{"requestId":7004,"seqNo":0,"tbc":true,"generatedAt":"2026-11-10T09:15:00Z","monitor":[{"component":{"name":"EVSE","evse":{"id":1}},"variable":{"name":"Power"},"variableMonitoring":[{"id":4003,"transaction":true,"value":2.5,"type":"Delta","severity":6}]}]}]

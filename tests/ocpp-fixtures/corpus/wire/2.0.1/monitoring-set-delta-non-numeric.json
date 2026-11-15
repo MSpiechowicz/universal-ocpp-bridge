@@ -1,0 +1,1 @@
+[2,"mon201-set-5","SetVariableMonitoring",{"setMonitoringData":[{"value":1,"type":"Delta","severity":6,"component":{"name":"Connector","evse":{"id":2,"connectorId":1}},"variable":{"name":"AvailabilityState"}}]}]

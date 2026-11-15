@@ -33,6 +33,10 @@ pub enum ActionKind {
     AwaitFirmware,
     AssertDiagnostics,
     AwaitDiagnostics,
+    AssertMonitoring,
+    AwaitMonitoring,
+    SetMonitoredValue,
+    EmitMonitoringEvents,
 }
 
 impl ActionKind {
@@ -69,6 +73,10 @@ impl ActionKind {
             Self::AwaitFirmware => "await_firmware",
             Self::AssertDiagnostics => "assert_diagnostics",
             Self::AwaitDiagnostics => "await_diagnostics",
+            Self::AssertMonitoring => "assert_monitoring",
+            Self::AwaitMonitoring => "await_monitoring",
+            Self::SetMonitoredValue => "set_monitored_value",
+            Self::EmitMonitoringEvents => "emit_monitoring_events",
         }
     }
 
@@ -102,6 +110,9 @@ impl ActionKind {
             Self::AssertReservation | Self::AwaitReservation => "reservation_observed",
             Self::AssertFirmware | Self::AwaitFirmware => "firmware_observed",
             Self::AssertDiagnostics | Self::AwaitDiagnostics => "diagnostics_observed",
+            Self::AssertMonitoring | Self::AwaitMonitoring => "monitoring_observed",
+            Self::SetMonitoredValue => "monitored_value_set",
+            Self::EmitMonitoringEvents => "monitoring_events_emitted",
         }
     }
 
@@ -137,6 +148,10 @@ impl ActionKind {
             | Self::AwaitFirmware
             | Self::AssertDiagnostics
             | Self::AwaitDiagnostics
+            | Self::AssertMonitoring
+            | Self::AwaitMonitoring
+            | Self::SetMonitoredValue
+            | Self::EmitMonitoringEvents
             | Self::Disconnect => None,
         }
     }

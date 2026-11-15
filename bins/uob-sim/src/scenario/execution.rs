@@ -58,6 +58,12 @@ pub(super) async fn execute_action(
         ActionKind::AssertDiagnostics | ActionKind::AwaitDiagnostics => {
             super::diagnostics16::observe(step, client.as_deref()).await
         }
+        ActionKind::AssertMonitoring | ActionKind::AwaitMonitoring => {
+            super::monitoring201::observe(step, client.as_deref()).await
+        }
+        ActionKind::SetMonitoredValue | ActionKind::EmitMonitoringEvents => {
+            super::monitoring201::act(step, client.as_deref())
+        }
         ActionKind::CsmsOffline
         | ActionKind::CsmsReconnect
         | ActionKind::OfflineStart

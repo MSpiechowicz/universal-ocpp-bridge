@@ -40,6 +40,9 @@ pub trait ProtocolClient: Send + Sync {
     fn diagnostics201(&self) -> Option<crate::diagnostics201::Diagnostics201Handle> {
         None
     }
+    fn monitoring201(&self) -> Option<crate::monitoring201::Monitoring201Handle> {
+        None
+    }
     fn reboot_count(&self) -> u64 {
         0
     }

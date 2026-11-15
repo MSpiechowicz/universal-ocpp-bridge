@@ -123,6 +123,7 @@ pub(crate) fn validate_result(result: &CommandResult) -> Result<(), StorageError
         || result.composite_schedule_16.is_some()
         || result.composite_schedule_201.is_some()
         || result.device_model_201.is_some()
+        || result.monitoring_201.is_some()
         || result.charging_profile_16.is_some()
         || result.charging_profile_201.is_some()
         || result.charging_profiles_201.is_some()

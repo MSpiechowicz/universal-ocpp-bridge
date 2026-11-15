@@ -387,6 +387,42 @@
           }
         ]
       },
+      "ClearMonitorResult201": {
+        "additionalProperties": false,
+        "description": "Native `ClearMonitoringResultType`.",
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reason_code": {
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[!-~]{1,20}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClearMonitoringStatus201"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ClearMonitoringStatus201": {
+        "description": "Native `ClearMonitoringStatusEnumType`.",
+        "enum": [
+          "Accepted",
+          "Rejected",
+          "NotFound"
+        ],
+        "type": "string"
+      },
       "CommandRequest": {
         "additionalProperties": false,
         "description": "Untrusted command fields that an adapter may deserialize from a request payload.\n\nAuthentication and target-instance context are deliberately absent. Unknown fields and\noperation variants fail deserialization instead of being ignored or treated as extensions.",
@@ -2114,6 +2150,415 @@
         ],
         "type": "string"
       },
+      "MonitorSeverity201": {
+        "description": "Native severity, 0 (highest) to 9 (lowest): 0 Danger, 1 Hardware Failure, 2 System Failure,\n3 Critical, 4 Error, 5 Alert, 6 Warning, 7 Notice, 8 Informational, 9 Debug. Deserialization\nrejects every other number.",
+        "format": "uint8",
+        "maximum": 9,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "MonitorType201": {
+        "description": "Native `MonitorEnumType`.",
+        "enum": [
+          "UpperThreshold",
+          "LowerThreshold",
+          "Delta",
+          "Periodic",
+          "PeriodicClockAligned"
+        ],
+        "type": "string"
+      },
+      "MonitoringBase201": {
+        "description": "Native `MonitoringBaseEnumType`.",
+        "enum": [
+          "All",
+          "FactoryDefault",
+          "HardWiredOnly"
+        ],
+        "type": "string"
+      },
+      "MonitoringCriterion201": {
+        "description": "Native `MonitoringCriterionEnumType`; criteria are OR-combined by the charger.",
+        "enum": [
+          "ThresholdMonitoring",
+          "DeltaMonitoring",
+          "PeriodicMonitoring"
+        ],
+        "type": "string"
+      },
+      "MonitoringLevelStatus201": {
+        "description": "Native `GenericStatusEnumType` answered to `SetMonitoringLevel`.",
+        "enum": [
+          "Accepted",
+          "Rejected"
+        ],
+        "type": "string"
+      },
+      "MonitoringOutcome201": {
+        "description": "Native reply of the charger, one shape per action.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "description": "`SetVariableMonitoringResponse`, one independent result per requested monitor.",
+            "properties": {
+              "kind": {
+                "const": "set_monitors",
+                "type": "string"
+              },
+              "monitors": {
+                "items": {
+                  "$ref": "#/components/schemas/SetMonitorResult201"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "monitors"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "`ClearVariableMonitoringResponse`, one independent result per requested ID.",
+            "properties": {
+              "kind": {
+                "const": "clear_monitors",
+                "type": "string"
+              },
+              "monitors": {
+                "items": {
+                  "$ref": "#/components/schemas/ClearMonitorResult201"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "monitors"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "`SetMonitoringBaseResponse`.",
+            "properties": {
+              "kind": {
+                "const": "base",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "/bridge/v1/schemas/v1.5/command-result.schema.json#/$defs/DeviceReportAck201"
+              }
+            },
+            "required": [
+              "kind",
+              "status"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "`SetMonitoringLevelResponse`.",
+            "properties": {
+              "kind": {
+                "const": "level",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/MonitoringLevelStatus201"
+              }
+            },
+            "required": [
+              "kind",
+              "status"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "`GetMonitoringReportResponse` and the separately collected report.",
+            "properties": {
+              "ack": {
+                "anyOf": [
+                  {
+                    "$ref": "/bridge/v1/schemas/v1.5/command-result.schema.json#/$defs/DeviceReportAck201"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Absent when no valid CALLRESULT was received."
+              },
+              "kind": {
+                "const": "report",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/MonitoringReportState201"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "MonitoringQuery201": {
+        "description": "Immutable request echo, one variant per native action.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "SetVariableMonitoring",
+                "type": "string"
+              },
+              "monitors": {
+                "items": {
+                  "$ref": "#/components/schemas/SetMonitor201"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "action",
+              "monitors"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "ClearVariableMonitoring",
+                "type": "string"
+              },
+              "ids": {
+                "items": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "action",
+              "ids"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "GetMonitoringReport",
+                "type": "string"
+              },
+              "component_variables": {
+                "description": "Native selectors; an absent variable keeps the component wildcard.",
+                "items": {
+                  "$ref": "/bridge/v1/schemas/v1.5/command-result.schema.json#/$defs/DeviceSelector201"
+                },
+                "type": "array"
+              },
+              "criteria": {
+                "items": {
+                  "$ref": "#/components/schemas/MonitoringCriterion201"
+                },
+                "type": "array"
+              },
+              "request_id": {
+                "format": "int32",
+                "maximum": 2147483647,
+                "minimum": -2147483648,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "action",
+              "request_id"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "SetMonitoringBase",
+                "type": "string"
+              },
+              "base": {
+                "$ref": "#/components/schemas/MonitoringBase201"
+              }
+            },
+            "required": [
+              "action",
+              "base"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "action": {
+                "const": "SetMonitoringLevel",
+                "type": "string"
+              },
+              "severity": {
+                "$ref": "#/components/schemas/MonitorSeverity201"
+              }
+            },
+            "required": [
+              "action",
+              "severity"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "MonitoringReportFragment201": {
+        "additionalProperties": false,
+        "description": "Metadata for every accepted native report fragment.",
+        "properties": {
+          "generated_at": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/UtcTimestamp"
+          },
+          "monitors": {
+            "description": "Monitors carried by this fragment, including any omitted from the result.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "more": {
+            "type": "boolean"
+          },
+          "sequence": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generated_at",
+          "sequence",
+          "more",
+          "monitors"
+        ],
+        "type": "object"
+      },
+      "MonitoringReportState201": {
+        "description": "Collection result, independent of the native CALL response.",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "description": "The action produces no report, or the charger did not accept one.",
+            "properties": {
+              "state": {
+                "const": "not_expected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Accepted; fragments are still being collected.",
+            "properties": {
+              "state": {
+                "const": "pending",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fragments": {
+                "items": {
+                  "$ref": "#/components/schemas/MonitoringReportFragment201"
+                },
+                "type": "array"
+              },
+              "monitors": {
+                "items": {
+                  "$ref": "#/components/schemas/ReportedMonitor201"
+                },
+                "type": "array"
+              },
+              "monitors_omitted": {
+                "description": "Monitors received but not retained because of the output limit.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "state": {
+                "const": "complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "fragments",
+              "monitors"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "progress": {
+                "anyOf": [
+                  {
+                    "$ref": "/bridge/v1/schemas/v1.5/command-result.schema.json#/$defs/DeviceReportProgress201"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "$ref": "/bridge/v1/schemas/v1.5/command-result.schema.json#/$defs/DeviceReportFailure201"
+              },
+              "state": {
+                "const": "incomplete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "reason"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "MonitoringResult201": {
+        "additionalProperties": false,
+        "description": "Typed command evidence: the immutable request and the charger's native reply.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/MonitoringOutcome201"
+          },
+          "query": {
+            "$ref": "#/components/schemas/MonitoringQuery201"
+          }
+        },
+        "required": [
+          "query",
+          "outcome"
+        ],
+        "type": "object"
+      },
       "PointPage": {
         "description": "Bounded canonical point page.",
         "properties": {
@@ -2272,6 +2717,44 @@
           "TxProfile"
         ],
         "type": "string"
+      },
+      "ReportedMonitor201": {
+        "additionalProperties": false,
+        "description": "One monitor installed on the charger, as reported by `NotifyMonitoringReport`.",
+        "properties": {
+          "component": {
+            "$ref": "/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json#/$defs/DeviceComponent201"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "monitor_type": {
+            "$ref": "#/components/schemas/MonitorType201"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/MonitorSeverity201"
+          },
+          "transaction": {
+            "type": "boolean"
+          },
+          "value": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/ExactDecimal"
+          },
+          "variable": {
+            "$ref": "/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json#/$defs/DeviceVariable201"
+          }
+        },
+        "required": [
+          "component",
+          "variable",
+          "id",
+          "transaction",
+          "value",
+          "monitor_type",
+          "severity"
+        ],
+        "type": "object"
       },
       "ReservationReconciliation201": {
         "additionalProperties": false,
@@ -2494,6 +2977,107 @@
             "type": "object"
           }
         ]
+      },
+      "SetMonitor201": {
+        "additionalProperties": false,
+        "description": "One native `SetMonitoringDataType`. `value` is the threshold or delta, or the interval in\nseconds for periodic monitors; it is exact, never binary floating point.",
+        "properties": {
+          "component": {
+            "$ref": "/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json#/$defs/DeviceComponent201"
+          },
+          "id": {
+            "description": "Only given to replace an existing monitor; the charger assigns IDs to new ones.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "monitor_type": {
+            "$ref": "#/components/schemas/MonitorType201"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/MonitorSeverity201"
+          },
+          "transaction": {
+            "description": "Active only during a transaction on the component. Absent means native default false.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "value": {
+            "$ref": "/bridge/v1/schemas/v1.0/station-snapshot.schema.json#/$defs/ExactDecimal"
+          },
+          "variable": {
+            "$ref": "/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json#/$defs/DeviceVariable201"
+          }
+        },
+        "required": [
+          "value",
+          "monitor_type",
+          "severity",
+          "component",
+          "variable"
+        ],
+        "type": "object"
+      },
+      "SetMonitorResult201": {
+        "additionalProperties": false,
+        "description": "Native `SetMonitoringResultType`; the ID is present only when the charger accepted.",
+        "properties": {
+          "component": {
+            "$ref": "/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json#/$defs/DeviceComponent201"
+          },
+          "id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "monitor_type": {
+            "$ref": "#/components/schemas/MonitorType201"
+          },
+          "reason_code": {
+            "maxLength": 20,
+            "minLength": 1,
+            "pattern": "^[!-~]{1,20}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "severity": {
+            "$ref": "#/components/schemas/MonitorSeverity201"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SetMonitoringStatus201"
+          },
+          "variable": {
+            "$ref": "/bridge/v1/schemas/v1.0/set-variables-reference-201.schema.json#/$defs/DeviceVariable201"
+          }
+        },
+        "required": [
+          "status",
+          "monitor_type",
+          "severity",
+          "component",
+          "variable"
+        ],
+        "type": "object"
+      },
+      "SetMonitoringStatus201": {
+        "description": "Native `SetMonitoringStatusEnumType`.",
+        "enum": [
+          "Accepted",
+          "UnknownComponent",
+          "UnknownVariable",
+          "UnsupportedMonitorType",
+          "Rejected",
+          "Duplicate"
+        ],
+        "type": "string"
       },
       "SignedUpdateFirmwareStatus16": {
         "description": "`SignedUpdateFirmware.conf` status (Whitepaper §6.18).",
@@ -2769,7 +3353,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.17/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.18/command-result.schema.json"
                     }
                   ]
                 }
@@ -2815,7 +3399,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.17/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.18/command-result.schema.json"
                     }
                   ]
                 }
@@ -2862,7 +3446,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.17/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.18/command-result.schema.json"
                     }
                   ]
                 }
@@ -2882,7 +3466,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.17/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.18/command-result.schema.json"
                     }
                   ]
                 }
@@ -2915,7 +3499,7 @@
                       "$ref": "#/components/schemas/IntegrationError"
                     },
                     {
-                      "$ref": "/bridge/v1/schemas/v1.17/command-result.schema.json"
+                      "$ref": "/bridge/v1/schemas/v1.18/command-result.schema.json"
                     }
                   ]
                 }
@@ -3002,7 +3586,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "/bridge/v1/schemas/v1.17/command-result.schema.json"
+                  "$ref": "/bridge/v1/schemas/v1.18/command-result.schema.json"
                 }
               }
             },
@@ -6003,6 +6587,7 @@
             "required": true,
             "schema": {
               "enum": [
+                "command-result.schema.json",
                 "export-record.schema.json",
                 "export-batch.schema.json"
               ],
@@ -6082,6 +6667,153 @@
       "head": {
         "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
         "operationId": "schemas_v1_18_head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "command-result.schema.json",
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Same handler as GET; response body omitted."
+      }
+    },
+    "/bridge/v1/schemas/v1.19/{schema}": {
+      "get": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_19",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema",
+            "required": true,
+            "schema": {
+              "enum": [
+                "export-record.schema.json",
+                "export-batch.schema.json"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/schema+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Read an unmodified canonical Draft 2020-12 schema."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unauthenticated, ems_scada_http.invalid_credential",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer challenge",
+                "schema": {
+                  "const": "Bearer",
+                  "type": "string"
+                }
+              }
+            },
+            "x-uob-error-codes": [
+              "ems_scada_http.unauthenticated",
+              "ems_scada_http.invalid_credential"
+            ]
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.unsupported_operation",
+            "x-uob-error-codes": [
+              "ems_scada_http.unsupported_operation"
+            ]
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationError"
+                }
+              }
+            },
+            "description": "ems_scada_http.capacity_exhausted",
+            "x-uob-error-codes": [
+              "ems_scada_http.capacity_exhausted"
+            ]
+          }
+        },
+        "security": [
+          {
+            "integrationBearer": []
+          },
+          {}
+        ],
+        "summary": "Read an unmodified canonical Draft 2020-12 schema."
+      },
+      "head": {
+        "description": "Anonymous access only when no credential file is configured on loopback. Otherwise integrationBearer is required.",
+        "operationId": "schemas_v1_19_head",
         "parameters": [
           {
             "in": "path",

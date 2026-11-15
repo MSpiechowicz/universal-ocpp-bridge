@@ -24,6 +24,8 @@ use uob_contracts::{
 };
 
 type Coordinator = CommandCoordinator<String, String, String, String>;
+#[path = "command_recovery/monitoring201.rs"]
+mod monitoring201;
 #[path = "command_recovery/store.rs"]
 mod store;
 
@@ -355,6 +357,7 @@ fn result(command: &Command<String>, lifecycle: CommandLifecycle) -> CommandResu
         firmware_201: None,
         diagnostics_16: None,
         diagnostics_201: None,
+        monitoring_201: None,
     }
 }
 
