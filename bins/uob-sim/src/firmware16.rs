@@ -283,6 +283,34 @@ impl FirmwareHandle {
             .filter(|_| model.settings.mode == FirmwareMode::Legacy)
     }
 
+    /// `SignedFirmwareStatusNotification` for an `ExtendedTriggerMessage(FirmwareStatusNotification)`:
+    /// `Idle` without requestId when the last sent status was `Installed` or no signed update ran
+    /// (L01.FR.28), otherwise the last sent status with its requestId (L01.FR.29).
+    #[must_use]
+    pub fn extended_trigger_status(&self) -> (String, Option<i32>) {
+        let model = self.0.lock();
+        let Some(job) = model
+            .state
+            .job
+            .as_ref()
+            .filter(|job| job.kind == FirmwareMode::Signed)
+        else {
+            return ("Idle".to_owned(), None);
+        };
+        let queued = || {
+            model
+                .state
+                .outbox
+                .iter()
+                .find(|status| status.job == job.id)
+                .map(|status| status.status.clone())
+        };
+        match job.sent.last().cloned().or_else(queued) {
+            Some(status) if status != "Installed" => (status, job.request_id),
+            _ => ("Idle".to_owned(), None),
+        }
+    }
+
     #[must_use]
     pub fn status_delay(&self) -> Duration {
         self.0.lock().settings.status_delay

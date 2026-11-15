@@ -64,6 +64,10 @@ pub(super) async fn execute_action(
         ActionKind::SetMonitoredValue | ActionKind::EmitMonitoringEvents => {
             super::monitoring201::act(step, client.as_deref())
         }
+        ActionKind::AssertSecurity | ActionKind::AwaitSecurity => {
+            super::security16::observe(step, client.as_deref()).await
+        }
+        ActionKind::EmitSecurityEvent => super::security16::act(step, client.as_deref()),
         ActionKind::CsmsOffline
         | ActionKind::CsmsReconnect
         | ActionKind::OfflineStart

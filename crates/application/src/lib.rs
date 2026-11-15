@@ -33,6 +33,8 @@ pub mod remote_control;
 pub mod reservation16;
 pub mod reservation201;
 mod resource;
+pub mod security_event16;
+pub use security_event16::*;
 mod security;
 mod station;
 mod storage;

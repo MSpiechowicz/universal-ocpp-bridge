@@ -1,8 +1,8 @@
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use uob_application::{StorageError, StorageErrorCode};
 use uob_contracts::{
-    CommandLifecycle, CommandResult, ContractVersion, EventEnvelope, EventOrigin, RequestId,
-    ResourceRef, StationEvent, TriggerMessageClass, TriggerObservationStatus, TriggerObservedEvent,
+    CommandLifecycle, CommandResult, EventEnvelope, EventOrigin, RequestId, ResourceRef,
+    StationEvent, TriggerMessageClass, TriggerObservationStatus, TriggerObservedEvent,
     UtcTimestamp,
 };
 
@@ -38,7 +38,7 @@ pub(crate) fn merge(
     }
     let Some(next) = incoming.trigger_observation.as_mut() else {
         incoming.trigger_observation = Some(stored.clone());
-        incoming.schema_version = ContractVersion::V1_TRIGGER;
+        incoming.schema_version = stored.requested_class.contract_version();
         return Ok(());
     };
     if stored.requested_class != next.requested_class
@@ -76,7 +76,7 @@ pub(crate) fn merge(
             stored.dispatch_started_at
         });
     next.refresh_status(at);
-    incoming.schema_version = ContractVersion::V1_TRIGGER;
+    incoming.schema_version = next.requested_class.contract_version();
     Ok(())
 }
 
@@ -246,7 +246,8 @@ fn validate_trigger_command(
          WHERE request_id = ?1
            AND json_extract(payload,'$.operation.kind') = 'ocpp'
            AND json_extract(payload,'$.operation.parameters.protocol') = 'ocpp16j'
-           AND json_extract(payload,'$.operation.parameters.action') = 'TriggerMessage'
+           AND json_extract(payload,'$.operation.parameters.action')
+               IN ('TriggerMessage','ExtendedTriggerMessage')
            AND json_extract(payload,'$.resource.bridge_id') = ?2
            AND json_extract(payload,'$.resource.station_id') = ?3",
             params![

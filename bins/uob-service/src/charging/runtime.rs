@@ -6,6 +6,7 @@ mod effects;
 mod firmware;
 mod monitoring201;
 mod negotiation201;
+mod security16;
 mod session;
 mod state;
 mod status;
@@ -55,6 +56,7 @@ struct StationContext {
     target: Option<(TargetInstanceId, u64)>,
     credentials: Option<Arc<super::control_auth::ControlCredentials>>,
     monitoring: monitoring201::MonitoringGates,
+    security: security16::SecurityGates16,
 }
 
 struct CallContext<'a> {
@@ -80,6 +82,8 @@ struct CallContext<'a> {
     /// connection that holds it touches it, so one CALL is judged and committed before the next
     /// is read.
     monitoring: &'a mut uob_application::MonitoringEventGate201,
+    /// The station's `SecurityEventNotification` flood budget, held like `monitoring`.
+    security: &'a mut uob_application::SecurityEventGate16,
 }
 
 #[derive(Default)]
@@ -111,6 +115,7 @@ pub(super) async fn serve(
         credentials: state.credentials.clone(),
         identity: application.identity().clone(),
         monitoring: monitoring201::MonitoringGates::new(settings.keys()),
+        security: security16::SecurityGates16::new(settings.keys()),
         application,
         target,
     };
@@ -199,6 +204,10 @@ async fn station(
     let Some(mut monitoring) = context.monitoring.begin(&station.station_id).await else {
         return Err(unavailable());
     };
+    // Always second: the monitoring gate is taken before the security gate.
+    let Some(mut security) = context.security.begin(&station.station_id).await else {
+        return Err(unavailable());
+    };
     let mut snapshot = state::connected_snapshot(
         store,
         &resources,
@@ -253,7 +262,7 @@ async fn station(
                         break;
                     }
                 } else { None };
-                if let Err(failure) = handle_call(call, &mut snapshot, call_context(&context, &configuration, &mut monitoring)).await {
+                if let Err(failure) = handle_call(call, &mut snapshot, call_context(&context, &configuration, &mut monitoring, &mut security)).await {
                     error = Some(failure); break;
                 }
                 if generation.is_some_and(|generation| commands.update(&station.station_id, generation, snapshot.clone()).is_err()) {
@@ -283,6 +292,7 @@ fn call_context<'a>(
     context: &'a StationContext,
     configuration: &'a StationSettings,
     monitoring: &'a mut uob_application::MonitoringEventGate201,
+    security: &'a mut uob_application::SecurityEventGate16,
 ) -> CallContext<'a> {
     CallContext {
         store: &context.store,
@@ -290,8 +300,7 @@ fn call_context<'a>(
         commands: &context.commands,
         identity: &context.identity,
         target: context.target.clone(),
-        trigger_enabled: configuration.control.trigger_message.enabled()
-            && context.commands_enabled,
+        trigger_enabled: configuration.control.trigger_enabled() && context.commands_enabled,
         reservations: configuration.reservations.as_deref(),
         reservations_201: configuration.reservations_201.as_deref(),
         // Processing promises a later TxProfile, which only an enabled command path can send.
@@ -307,6 +316,7 @@ fn call_context<'a>(
             .zip(configuration.firmware_providers.as_deref()),
         resources: context.application.health().resources(),
         monitoring,
+        security,
     }
 }
 

@@ -111,8 +111,7 @@
     }
   ],
   "not_covered": [
-    "ExtendedTriggerMessage for LogStatusNotification (N01.FR.12 trigger path)",
-    "SecurityEventNotification and the security-log contents themselves (N01.FR.05, issue #127)",
+    "the security-log contents themselves (N01.FR.05)",
     "FTP/FTPS uploads, upload resume and Expect: 100-continue (N01.FR.14, N01.FR.22, N01.FR.23)",
     "basic-authorization credentials in upload locations (N01.FR.17)",
     "physical hardware, production artifact storage or OCA certification"

@@ -27,6 +27,14 @@ pub(super) fn validate_station_topology(station: &StationDefinition) -> Result<(
             "native diagnostics state requires a valid OCPP 1.6 station configuration",
         ));
     }
+    if let Some(security) = &station.security16
+        && (station.ocpp_version != ConfiguredOcppVersion::V1_6 || security.validate().is_err())
+    {
+        return Err(setup_failure(
+            "invalid_security_configuration",
+            "native security state requires a valid OCPP 1.6 station configuration",
+        ));
+    }
     if let Some(diagnostics) = &station.diagnostics201
         && (station.ocpp_version != ConfiguredOcppVersion::V2_0_1
             || diagnostics.validate().is_err())

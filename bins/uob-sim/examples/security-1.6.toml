@@ -1,0 +1,55 @@
+schema_version = 1
+seed = 127
+
+[[steps]]
+id = "connect"
+station = "alpha"
+action = "connect"
+timeout_ms = 5000
+
+[[steps]]
+id = "boot"
+station = "alpha"
+action = "boot"
+timeout_ms = 5000
+fixture_id = "wire.ocpp16.boot.valid"
+payload = { chargePointVendor = "UOB", chargePointModel = "SecurityStation" }
+
+# Queues a SecurityEventNotification. The event is persisted first and stays queued until the
+# CSMS answers with SecurityEventNotification.conf, across reconnects and process restarts.
+# An omitted timestamp is the current time.
+[[steps]]
+id = "startup-event"
+station = "alpha"
+action = "emit_security_event"
+timeout_ms = 5000
+payload = { type = "StartupOfTheDevice" }
+
+[[steps]]
+id = "tamper-event"
+station = "alpha"
+action = "emit_security_event"
+timeout_ms = 5000
+payload = { type = "TamperDetectionActivated", timestamp = "2026-10-01T12:00:00Z", techInfo = "cover switch opened" }
+
+[[steps]]
+id = "await-acknowledged"
+station = "alpha"
+action = "await_security"
+timeout_ms = 30000
+expect_response = { pendingEvents = 0, eventsEmitted = 2, eventsAcknowledged = 2 }
+
+# While the scenario waits, the CSMS may send ExtendedTriggerMessage; the station answers per its
+# configured replies and then sends the triggered message.
+[[steps]]
+id = "park"
+station = "alpha"
+action = "wait"
+duration_ms = 2000
+timeout_ms = 5000
+
+[[steps]]
+id = "disconnect"
+station = "alpha"
+action = "disconnect"
+timeout_ms = 5000

@@ -13,6 +13,8 @@ use uob_contracts::{
 use uob_storage_adapter::SqliteOperationalStore;
 use uuid::Uuid;
 
+#[path = "trigger_observation/extended.rs"]
+mod extended;
 #[path = "trigger_observation/fixtures.rs"]
 mod fixtures;
 

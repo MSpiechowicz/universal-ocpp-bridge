@@ -82,6 +82,9 @@ pub enum ChargerObservation {
     ChargingNegotiation201(crate::charging_negotiation201::NegotiationObservation201),
     /// Native OCPP 2.0.1 `NotifyEvent` (N07): charger-reported monitoring evidence, never policy.
     MonitoringEvents201(crate::monitoring201::NotifyEventObservation201),
+    /// Native OCPP 1.6 Security Whitepaper `SecurityEventNotification`: charger-reported
+    /// evidence with credential-redacted `techInfo`, never policy.
+    SecurityEvent16(crate::security_event16::SecurityEventObservation16),
     /// Native OCPP 2.0.1 `ReservationStatusUpdate`; reservationId is a station-local identity.
     ReservationStatusUpdate201 {
         reservation_id: i32,

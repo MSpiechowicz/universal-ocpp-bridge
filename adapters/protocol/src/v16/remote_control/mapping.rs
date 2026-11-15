@@ -117,12 +117,9 @@ pub(super) fn prepare(
                 *profile_request = Some(request);
                 return Ok((action, operation.payload.clone()));
             }
-            if operation.action.as_str() == "TriggerMessage" {
-                if operation.payload_schema.as_str() != trigger::SCHEMA {
-                    return Err(InvalidParameters);
-                }
-                return trigger::prepare(operation, &command.resource, snapshot)
-                    .map(|(payload, _)| ("TriggerMessage", payload));
+            if trigger::is_trigger(operation) {
+                return trigger::prepare_operation(operation, &command.resource, snapshot)
+                    .map(|(action, payload, _)| (action, payload));
             }
             privileged(
                 operation,
@@ -195,7 +192,7 @@ fn boot_trigger(command: &Command<Value>) -> bool {
         &command.operation,
         CommandOperation::Ocpp(operation)
             if operation.protocol == ProtocolEdition::Ocpp16j
-                && operation.action.as_str() == "TriggerMessage"
+                && trigger::is_trigger(operation)
                 && operation.payload["requestedMessage"] == "BootNotification"
     )
 }
@@ -208,9 +205,8 @@ pub(super) fn trigger_expectation(
     let CommandOperation::Ocpp(operation) = &command.operation else {
         return None;
     };
-    if operation.action.as_str() != "TriggerMessage"
-        || operation.protocol != ProtocolEdition::Ocpp16j
-        || operation.payload_schema.as_str() != trigger::SCHEMA
+    if operation.protocol != ProtocolEdition::Ocpp16j
+        || !trigger::is_trigger(operation)
         || boot_trigger(command) == uob_application::registration::accepted(snapshot).is_ok()
     {
         return None;
@@ -224,9 +220,9 @@ pub(super) fn trigger_expectation(
             .ok()?,
     )
     .ok()?;
-    trigger::prepare(operation, &command.resource, snapshot)
+    trigger::prepare_operation(operation, &command.resource, snapshot)
         .ok()
-        .map(|(_, expectation)| TriggerExpectation::Ocpp16(expectation))
+        .map(|(_, _, expectation)| TriggerExpectation::Ocpp16(expectation))
 }
 
 fn privileged(
@@ -360,7 +356,7 @@ fn encode(value: impl serde::Serialize) -> Result<Value, CommandErrorCode> {
     serde_json::to_value(value).map_err(|_| CommandErrorCode::InvalidParameters)
 }
 pub(super) fn response(action: &str, payload: &Value) -> CommandDispatchOutcome {
-    if action == "TriggerMessage" {
+    if matches!(action, "TriggerMessage" | "ExtendedTriggerMessage") {
         return trigger::response(payload);
     }
     if exact_fields(payload, &["status"]).is_err() {

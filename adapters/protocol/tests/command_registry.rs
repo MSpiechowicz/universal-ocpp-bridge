@@ -12,6 +12,8 @@ mod composite_schedule16;
 mod diagnostics16;
 #[path = "command_registry/diagnostics201.rs"]
 mod diagnostics201;
+#[path = "command_registry/extended_trigger16.rs"]
+mod extended_trigger16;
 #[path = "command_registry/firmware16.rs"]
 mod firmware16;
 #[path = "command_registry/firmware201.rs"]

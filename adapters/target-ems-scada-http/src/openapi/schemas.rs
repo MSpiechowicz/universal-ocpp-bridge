@@ -274,6 +274,10 @@ pub(super) const CANONICAL_V1_18: &[(&str, &str)] = &[
 ];
 pub(super) const CANONICAL_V1_19: &[(&str, &str)] = &[
     (
+        "command-result.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.19/command-result.schema.json"),
+    ),
+    (
         "export-record.schema.json",
         include_str!("../../../../crates/contracts/schemas/v1.19/export-record.schema.json"),
     ),
@@ -282,11 +286,21 @@ pub(super) const CANONICAL_V1_19: &[(&str, &str)] = &[
         include_str!("../../../../crates/contracts/schemas/v1.19/export-batch.schema.json"),
     ),
 ];
+pub(super) const CANONICAL_V1_20: &[(&str, &str)] = &[
+    (
+        "export-record.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.20/export-record.schema.json"),
+    ),
+    (
+        "export-batch.schema.json",
+        include_str!("../../../../crates/contracts/schemas/v1.20/export-batch.schema.json"),
+    ),
+];
 
 pub(super) fn reference(name: &str) -> Value {
     let revision = match name {
-        "command-result" => "v1.18",
-        "export-record" | "export-batch" => "v1.19",
+        "command-result" => "v1.19",
+        "export-record" | "export-batch" => "v1.20",
         _ => "v1.0",
     };
     json!({"$ref": format!("/bridge/v1/schemas/{revision}/{name}.schema.json")})
@@ -314,6 +328,7 @@ pub(super) fn canonical(revision: &str) -> &'static [(&'static str, &'static str
         "v1.17" => CANONICAL_V1_17,
         "v1.18" => CANONICAL_V1_18,
         "v1.19" => CANONICAL_V1_19,
+        "v1.20" => CANONICAL_V1_20,
         _ => &[],
     }
 }

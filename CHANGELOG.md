@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file. See [conven
 ## Unreleased
 
 ### Features
+- Journal OCPP 1.6J `SecurityEventNotification` and add a privileged `ExtendedTriggerMessage`
+  (Security Whitepaper Edition 4, A04, N01.FR.12, L01.FR.28/29) (#127).
+  - Every accepted 1.6J station is answered `SecurityEventNotification` with the empty
+    response, with no option. Each call is committed as one `station.security_event.16`
+    journal event before the answer, with the type kept verbatim, the timestamp as UTC and
+    `techInfo` redacted. Redelivery is acknowledged without a second record; a station that
+    is not accepted gets `ProtocolError` and an invalid payload `PropertyConstraintViolation`.
+  - Redaction finds values after a secret label, including labels at the end of an identifier,
+    plural or numbered variants and `Authorization` values, tokens after `Basic`/`Bearer`, URL user
+    information and long hex or mixed-case base64 strings. A short unlabelled secret is not
+    detected.
+  - Each station has a budget of 60 records per minute. A call beyond it is acknowledged, not
+    stored and counted on `uob_dropped_diagnostics_total`; the next record reports `shed_calls`.
+  - The new privileged, default-off, demo-only `extended_trigger_message` station option (OCPP 1.6J
+    only) sends `ExtendedTriggerMessage` for Boot, Heartbeat, MeterValues, StatusNotification,
+    and, with `get_log` or `signed_update_firmware`, `LogStatusNotification` and a signed
+    `FirmwareStatusNotification`. `SignChargePointCertificate` (#129) is refused.
+  - Publish command result v1.19 and nested export v1.20 (revision 19 only for the two new
+    classes); SQLite schema version 23 adds the deduplication index.
+  - Add four pinned Whitepaper schemas, twenty independent wire fixtures, a requirements mapping,
+    two verified coverage rows and an independent simulator model. The parent
+    `ocpp16.monitoring-security` row stays planned; security profiles are #345 and #346.
+    Software verification only, not hardware interoperability or OCA certification.
 - Record and answer OCPP 2.0.1 charging needs, EV charging schedules and external
   charging limits (K11–K17) (#121).
   - Charging needs are answered `Rejected` with `NotEnabled` by default. The new 2.0.1-only

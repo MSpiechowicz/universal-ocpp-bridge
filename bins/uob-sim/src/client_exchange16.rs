@@ -25,7 +25,8 @@ impl NativeExchange {
                 local,
                 (state.reservation16.is_some()
                     || state.firmware16.is_some()
-                    || state.diagnostics16.is_some())
+                    || state.diagnostics16.is_some()
+                    || state.security16.is_some())
                     && call.action != crate::SimulatorAction::BootNotification,
             )
         };

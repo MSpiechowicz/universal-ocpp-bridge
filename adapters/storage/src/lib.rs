@@ -29,6 +29,7 @@ mod reservation16;
 mod reservation201;
 mod retention;
 mod schema;
+mod security_event16;
 mod snapshots;
 mod spool;
 mod store;

@@ -68,9 +68,14 @@ impl<'de> Deserialize<'de> for UtcTimestamp {
             where
                 E: de::Error,
             {
+                // Untrusted text: an offset can push a parseable instant outside the years
+                // RFC 3339 can express in UTC, which `to_offset` would answer with a panic.
                 OffsetDateTime::parse(value, &Rfc3339)
-                    .map(UtcTimestamp::new)
-                    .map_err(E::custom)
+                    .map_err(E::custom)?
+                    .checked_to_offset(UtcOffset::UTC)
+                    .filter(|utc| (0..=9999).contains(&utc.year()))
+                    .map(UtcTimestamp)
+                    .ok_or_else(|| E::custom("timestamp is outside the supported UTC range"))
             }
         }
 

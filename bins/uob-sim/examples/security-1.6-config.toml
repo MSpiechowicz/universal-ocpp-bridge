@@ -1,0 +1,29 @@
+schema_version = 1
+
+[[stations]]
+id = "alpha"
+endpoint = "ws://127.0.0.1:9000/ocpp/alpha"
+ocpp_version = "1.6"
+request_timeout_ms = 5000
+reconnect = true
+connectors = [1]
+
+[stations.security16]
+# Owner-only (0700) directory; the file and its lock are created mode 0600.
+private_state_file = "/tmp/uob-sim-security-127/security.json"
+# Fault knobs (both default to false):
+duplicate_acknowledged = false   # send each acknowledged event once more
+send_before_accepted = false     # deliver before the CSMS accepted this connection's Boot
+
+# How ExtendedTriggerMessage is answered per requestedMessage: "accepted", "rejected" or
+# "not_implemented". SignChargePointCertificate defaults to "not_implemented" (not modelled).
+[stations.security16.extended_trigger]
+heartbeat = "accepted"
+meter_values = "accepted"
+status_notification = "accepted"
+boot_notification = "accepted"
+log_status_notification = "accepted"
+firmware_status_notification = "accepted"
+sign_charge_point_certificate = "not_implemented"
+reply_delay_ms = 0               # 0..=30000 before the ExtendedTriggerMessage.conf is written
+omit = false                     # answer Accepted but never send the triggered message

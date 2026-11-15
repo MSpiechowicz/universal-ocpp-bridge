@@ -73,7 +73,9 @@ either cancelled it (`AcceptedCanceled`, L01.FR.26) or no longer had it in progr
 Startup recovery marks a job `uncertain` if dispatch had started and `not_sent` otherwise,
 and restores a missing release-drain entry. `Idle` reported after a `TriggerMessage`
 resolves a stalled job as `station_idle`. The same notification still counts as trigger
-evidence.
+evidence. A signed station's own trigger is `ExtendedTriggerMessage` for
+`FirmwareStatusNotification`, which yields a `SignedFirmwareStatusNotification` (see
+[OCPP 1.6 security events](ocpp16-security-events.md)).
 
 ## Public evidence
 
@@ -89,10 +91,10 @@ exports.
 
 ## Not covered
 
-- `SecurityEventNotification` for `InvalidFirmwareSigningCertificate`,
-  `InvalidFirmwareSignature` and `FirmwareUpdated` (L01.FR.02/03/33) belongs to the 1.6
-  security-event work (#127).
-- `ExtendedTriggerMessage` (L01.FR.28/29) and certificate revocation checking.
+- Firmware-related `SecurityEventNotification` (L01.FR.02/03/33) is journaled as station
+  evidence ([OCPP 1.6 security events](ocpp16-security-events.md)) and never advances or ends a
+  firmware job.
+- Certificate revocation checking.
 - Persistent production artifact storage and production PKI.
 - Physical stations and OCA certification.
 

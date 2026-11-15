@@ -235,6 +235,19 @@ impl DiagnosticsHandle {
         }
     }
 
+    /// `LogStatusNotification` for an `ExtendedTriggerMessage` (N01.FR.12): without an ongoing
+    /// `GetLog` upload `Idle` and no requestId, otherwise the current status with its requestId.
+    #[must_use]
+    pub fn extended_trigger_status(&self) -> (&'static str, Option<i32>) {
+        let model = self.0.lock();
+        match model.state.job.as_ref() {
+            Some(job) if model.state.active() && !job.kind.legacy() => {
+                ("Uploading", job.request_id)
+            }
+            _ => ("Idle", None),
+        }
+    }
+
     #[must_use]
     pub fn status_delay(&self) -> Duration {
         self.0.lock().settings.status_delay

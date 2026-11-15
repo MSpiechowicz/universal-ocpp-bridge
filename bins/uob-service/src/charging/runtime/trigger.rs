@@ -49,6 +49,14 @@ pub(super) async fn marker(
         },
     }))
 }
+/// The native wire name of an enum status, for trigger evidence.
+pub(super) fn status_name(status: &impl serde::Serialize) -> Option<String> {
+    match serde_json::to_value(status) {
+        Ok(serde_json::Value::String(name)) => Some(name),
+        _ => None,
+    }
+}
+
 /// A diagnostic/firmware status has no workflow snapshot to replace; keep only its bounded evidence.
 pub(super) async fn commit_status(
     store: &ChargingStore,

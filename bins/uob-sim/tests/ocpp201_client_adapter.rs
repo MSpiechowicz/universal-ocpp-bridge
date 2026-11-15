@@ -36,6 +36,7 @@ fn config(endpoint: String) -> SimulatorClientConfig {
         diagnostics16: None,
         diagnostics201: None,
         monitoring201: None,
+        security16: None,
     }
 }
 

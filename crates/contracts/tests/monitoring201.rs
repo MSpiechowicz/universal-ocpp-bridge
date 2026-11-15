@@ -14,7 +14,7 @@ fn every_result_survives_command_results_and_nested_exports() {
     let mut result: CommandResult = serde_json::from_value(old[1].clone()).unwrap();
     assert!(result.monitoring_201.is_none());
     let command_results = validator(include_str!("../schemas/v1.18/command-result.schema.json"));
-    let exports = validator(include_str!("../schemas/v1.19/export-record.schema.json"));
+    let exports = validator(include_str!("../schemas/v1.20/export-record.schema.json"));
     let batch: ExportBatch =
         serde_json::from_str(include_str!("fixtures/export-batch-v1.json")).unwrap();
     assert_eq!(ContractVersion::V1_MONITORING_201.revision, 18);
@@ -35,7 +35,7 @@ fn every_result_survives_command_results_and_nested_exports() {
             batch.records()[0].metadata().clone(),
             ExportPayload::CommandResult(result.clone()),
         );
-        assert_eq!(record.metadata().schema_version.revision, 18);
+        assert_eq!(record.metadata().schema_version.revision, 19);
         assert!(exports.is_valid(&serde_json::to_value(record).unwrap()));
     }
 }

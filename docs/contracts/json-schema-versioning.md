@@ -46,10 +46,10 @@ v1.2 while v1.0/v1.1 exports remain unchanged. The bridge-owned
 `configuration-change-reference` v1.0 schema accepts only a key and an opaque
 protected reference; it is not the native OCA ChangeConfiguration request.
 
-The EMS HTTP contract retains released command-result schemas through v1.17 and serves
-the current v1.18 command-result; OpenAPI command result responses reference v1.18.
-Current nested export-record and export-batch references use v1.19, while released
-export schemas through v1.18 and their historical routes remain available unchanged.
+The EMS HTTP contract retains released command-result schemas through v1.18 and serves
+the current v1.19 command-result; OpenAPI command result responses reference v1.19.
+Current nested export-record and export-batch references use v1.20, while released
+export schemas through v1.19 and their historical routes remain available unchanged.
 
 OCPP 1.6 `TriggerMessage` adds optional `trigger_observation` to command-result
 v1.2, with immutable requested class/native scope/expected targets, dispatch
@@ -435,3 +435,33 @@ and events shed by the flood gate since the previous record. Events are observed
 and never change configuration, policy or canonical state. Nested public exports advance to
 v1.19; runtime ExportRecord/ExportBatch advance separately to revision 18. MQTT explicitly
 supports result revision 18 while future revision 19 is rejected before publication.
+
+OCPP 1.6 `ExtendedTriggerMessage` (OCPP 1.6 Security Whitepaper Ed. 4) reuses the 1.6
+`trigger_observation` of command-result v1.2 and adds no field. Command-result v1.19
+(`ContractVersion` revision 19, `V1_EXTENDED_TRIGGER_16`) widens `requested_class` with
+`LogStatusNotification` and `SignedFirmwareStatusNotification`; both are station-only. A result
+whose class is one of those two declares revision 19, and every other class keeps revision 2
+(`V1_TRIGGER`). Plain `TriggerMessage` never produces the two classes. A plain
+`FirmwareStatusNotification` never satisfies a `SignedFirmwareStatusNotification` expectation
+and the reverse. Nested public exports advance to v1.20; runtime ExportRecord/ExportBatch advance
+separately to revision 19. MQTT does not publish revision 19: it keeps supporting result revision
+18 and rejects revision 19 and later before publication.
+
+Charger-initiated `SecurityEventNotification` is journaled as a station event, not a command
+result, so it adds no command-result field and no public schema. The `StationEvent` variant
+carrying `security_event_16` holds one acknowledged call: the verbatim `event_type` (at most 50
+characters), `standard` (the name is one of the 21 Security Whitepaper section 8 events), the
+charger timestamp normalised to UTC, the credential-redacted `tech_info` (at most 1024
+characters) with `tech_info_redactions`, and `shed_calls` counted by the flood gate since the
+previous record. The two counters are omitted when zero. Readers without the variant decode it
+as an `Invalidation` marker. The record is observed evidence only and never changes
+configuration, policy or canonical state.
+
+OCPP 1.6 security events and `ExtendedTriggerMessage` advance the operational SQLite database to
+v23. The `security16_station_events` partial index on `journal_events` covers
+`(resource, timestamp, event_type, tech_info)` of the stored security event and backs the
+duplicate check of `SecurityEventNotification` as an exact-key lookup; it is created idempotently
+when an existing database is opened.
+The version also fences downgrades, because a release that predates it cannot decode the new
+`requested_class` values of extended trigger results. A release refuses a database whose
+`user_version` is above 23.

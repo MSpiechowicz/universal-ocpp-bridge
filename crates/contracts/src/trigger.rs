@@ -1,9 +1,11 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{EventId, UtcTimestamp};
+use crate::{ContractVersion, EventId, UtcTimestamp};
 
-/// OCPP 1.6 message requested by `TriggerMessage`; never an extended or 2.0.1 action.
+/// OCPP 1.6 message a station was asked to send, by `TriggerMessage` or `ExtendedTriggerMessage`.
+/// The two Whitepaper-only classes can only be requested by `ExtendedTriggerMessage`; this is
+/// never a 2.0.1 action.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum TriggerMessageClass {
@@ -13,6 +15,11 @@ pub enum TriggerMessageClass {
     Heartbeat,
     MeterValues,
     StatusNotification,
+    // Whitepaper classes: requestable by `ExtendedTriggerMessage` only. An extended
+    // `FirmwareStatusNotification` request produces `SignedFirmwareStatusNotification`, which the
+    // plain `FirmwareStatusNotification` never satisfies. Plain comments keep the schema a flat enum.
+    LogStatusNotification,
+    SignedFirmwareStatusNotification,
 }
 impl TriggerMessageClass {
     /// Native OCPP 1.6 action name.
@@ -25,6 +32,25 @@ impl TriggerMessageClass {
             Self::Heartbeat => "Heartbeat",
             Self::MeterValues => "MeterValues",
             Self::StatusNotification => "StatusNotification",
+            Self::LogStatusNotification => "LogStatusNotification",
+            Self::SignedFirmwareStatusNotification => "SignedFirmwareStatusNotification",
+        }
+    }
+
+    /// Whether the station can only report this class for itself, never for one connector.
+    #[must_use]
+    pub const fn is_station_only(self) -> bool {
+        !matches!(self, Self::MeterValues | Self::StatusNotification)
+    }
+
+    /// Contract revision a result carrying this class must declare.
+    #[must_use]
+    pub const fn contract_version(self) -> ContractVersion {
+        match self {
+            Self::LogStatusNotification | Self::SignedFirmwareStatusNotification => {
+                ContractVersion::V1_EXTENDED_TRIGGER_16
+            }
+            _ => ContractVersion::V1_TRIGGER,
         }
     }
 }

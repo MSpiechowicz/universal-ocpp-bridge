@@ -148,6 +148,11 @@ pub(crate) fn validate_client_config(
             "OCPP 1.6 diagnostics cannot attach to OCPP 2.0.1".to_owned(),
         ));
     }
+    if config.version != OcppVersion::V1_6 && config.security16.is_some() {
+        return Err(SimulatorClientError::Protocol(
+            "OCPP 1.6 security cannot attach to OCPP 2.0.1".to_owned(),
+        ));
+    }
     if config.version != OcppVersion::V2_0_1 && config.diagnostics201.is_some() {
         return Err(SimulatorClientError::Protocol(
             "OCPP 2.0.1 diagnostics cannot attach to OCPP 1.6".to_owned(),

@@ -84,7 +84,9 @@ time window, and is padded to the configured size. It never contains the locatio
 
 A `TriggerMessage(DiagnosticsStatusNotification)` reports `Idle` unless a `GetDiagnostics` upload
 is active, in which case it reports `Uploading` (§4.4). A `GetLog` upload is reported only through
-`LogStatusNotification`.
+`LogStatusNotification`. An `ExtendedTriggerMessage(LogStatusNotification)` (N01.FR.12) reports
+`Idle` without `requestId` unless a `GetLog` upload is ongoing, in which case it reports
+`Uploading` with that upload's `requestId`.
 
 ## Durability and delivery
 
@@ -112,12 +114,14 @@ locations or log content. See `bins/uob-sim/examples/diagnostics-1.6*.toml`.
 
 ## Not modeled
 
-- **`ExtendedTriggerMessage`.** It is not implemented, so a triggered `LogStatusNotification`
-  without `requestId` (N01.FR.12) is never sent.
+- **`ExtendedTriggerMessage` without a `security16` table.** It keeps the client library's
+  `NotImplemented` reply. With the table, a triggered `LogStatusNotification` follows N01.FR.12
+  (see [security16.md](security16.md)).
 - **`AcceptedCanceled` status notification.** N01.FR.20 names it, but the pinned
   `UploadLogStatusEnumType` schema does not contain it, so a cancelled upload reports nothing.
 - **FTP/FTPS, POST uploads and resume.** Uploads use HTTP(S) PUT only (N01.FR.14/18/19/22/23).
-- **Security events.** No security log entries are recorded for events (N01.FR.05, issue #127).
+- **Security log entries.** No security log entries are recorded for events (N01.FR.05); events are
+  sent as `SecurityEventNotification` (see [security16.md](security16.md)).
 
 ## Verification
 

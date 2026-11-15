@@ -101,6 +101,23 @@ pub(super) async fn complete_status(
         write.journal_events.push(marker);
         commits.trigger_committed = true;
     }
+    // The Whitepaper message counts as evidence for `ExtendedTriggerMessage` once it commits.
+    if log
+        && services.trigger_enabled
+        && let Some(marker) = trigger::marker(
+            services.store,
+            &snapshot.station,
+            services.identity,
+            TriggerMessageClass::LogStatusNotification,
+            None,
+            trigger::status_name(&status).as_deref(),
+            now,
+        )
+        .await?
+    {
+        write.journal_events.push(marker);
+        commits.trigger_committed = true;
+    }
     services
         .store
         .write_atomic(write)

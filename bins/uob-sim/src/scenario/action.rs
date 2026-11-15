@@ -37,6 +37,9 @@ pub enum ActionKind {
     AwaitMonitoring,
     SetMonitoredValue,
     EmitMonitoringEvents,
+    EmitSecurityEvent,
+    AssertSecurity,
+    AwaitSecurity,
 }
 
 impl ActionKind {
@@ -77,6 +80,9 @@ impl ActionKind {
             Self::AwaitMonitoring => "await_monitoring",
             Self::SetMonitoredValue => "set_monitored_value",
             Self::EmitMonitoringEvents => "emit_monitoring_events",
+            Self::EmitSecurityEvent => "emit_security_event",
+            Self::AssertSecurity => "assert_security",
+            Self::AwaitSecurity => "await_security",
         }
     }
 
@@ -113,6 +119,8 @@ impl ActionKind {
             Self::AssertMonitoring | Self::AwaitMonitoring => "monitoring_observed",
             Self::SetMonitoredValue => "monitored_value_set",
             Self::EmitMonitoringEvents => "monitoring_events_emitted",
+            Self::EmitSecurityEvent => "security_event_queued",
+            Self::AssertSecurity | Self::AwaitSecurity => "security_observed",
         }
     }
 
@@ -152,6 +160,9 @@ impl ActionKind {
             | Self::AwaitMonitoring
             | Self::SetMonitoredValue
             | Self::EmitMonitoringEvents
+            | Self::EmitSecurityEvent
+            | Self::AssertSecurity
+            | Self::AwaitSecurity
             | Self::Disconnect => None,
         }
     }

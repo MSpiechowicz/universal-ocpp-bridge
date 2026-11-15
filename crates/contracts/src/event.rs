@@ -167,6 +167,13 @@ pub enum StationEvent {
         /// Distinct property prevents deserializing this as any other station marker.
         monitoring_events_201: crate::MonitoringEventRecord201,
     },
+    /// Charger-initiated OCPP 1.6 `SecurityEventNotification` evidence. Readers without this
+    /// variant decode it as an `Invalidation` marker, so it must stay before that variant.
+    SecurityEvent16 {
+        station_snapshot_invalidated: StationId,
+        /// Distinct property prevents deserializing this as any other station marker.
+        security_event_16: crate::SecurityEvent16,
+    },
     /// Small, explicitly incomplete station change marker. Fetch the authoritative snapshot.
     Invalidation {
         /// Station whose authoritative snapshot changed.

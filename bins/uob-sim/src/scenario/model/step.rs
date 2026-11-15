@@ -43,6 +43,7 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::OfflineStop
                 | ActionKind::SetMonitoredValue
                 | ActionKind::EmitMonitoringEvents
+                | ActionKind::EmitSecurityEvent
         );
     if has_payload != step.payload.is_some() {
         return Err(setup_failure(
@@ -51,6 +52,7 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
         ));
     }
     super::super::monitoring201::validate_payload(step)?;
+    super::super::security16::validate_payload(step)?;
     validate_remote_start_binding(step)?;
     if step.use_current_timestamp
         && (!matches!(
@@ -107,6 +109,8 @@ pub(super) fn validate_fields(step: &StepDefinition) -> Result<(), RunFailure> {
                 | ActionKind::AwaitDiagnostics
                 | ActionKind::AssertMonitoring
                 | ActionKind::AwaitMonitoring
+                | ActionKind::AssertSecurity
+                | ActionKind::AwaitSecurity
         )
     {
         return Err(setup_failure(

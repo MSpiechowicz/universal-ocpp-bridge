@@ -234,6 +234,7 @@ impl TransportStream for Stream {
                         | "CancelReservation"
                 ) && !crate::firmware16::transport::intercepts(action, &self.state)
                     && !crate::diagnostics16::transport::intercepts(action, &self.state)
+                    && !crate::security16::transport::intercepts(action, &self.state)
                 {
                     return Ok(event);
                 }
@@ -308,6 +309,9 @@ impl Stream {
         if let Some(NativeReplyFault::Delay(duration)) = fault {
             tokio::time::sleep(duration).await;
         }
+        if let Some(delay) = crate::security16::transport::reply_delay(action, &self.state) {
+            tokio::time::sleep(delay).await;
+        }
         if matches!(fault, Some(NativeReplyFault::DropConnection)) {
             self.sink.lock().await.close().await?;
             return Ok(true);
@@ -342,6 +346,7 @@ impl Stream {
             .inner
             .send(response.to_string())
             .await?;
+        crate::security16::transport::replied(action, &self.state);
         if successful_reset {
             {
                 let mut state = self.state.lock().expect("OCPP 1.6 state lock");
@@ -376,6 +381,7 @@ fn station_reply(
         "GetDiagnostics" | "GetLog" => {
             crate::diagnostics16::transport::reply(action, payload, state)
         }
+        "ExtendedTriggerMessage" => crate::security16::transport::reply(payload, state),
         _ => native_reply(action, payload, local, wire_bytes),
     }
 }

@@ -1,0 +1,317 @@
+{
+  "schema_version": 1,
+  "protocol": "1.6",
+  "sources": [
+    {
+      "title": "Improved security for OCPP 1.6-J, Edition 4 (2026-02-05)",
+      "archive_sha256": "158b883e8ee712fd80fad3610b69fad355f7831d7a0ccdd996ce6b5452ce6859",
+      "license": "CC BY-ND 4.0",
+      "sections": [
+        "3 / A04",
+        "5.5",
+        "5.6",
+        "5.15",
+        "5.16",
+        "6.16",
+        "6.17",
+        "8",
+        "A04.FR.01",
+        "A04.FR.02",
+        "A04.FR.03",
+        "A04.FR.04",
+        "N01.FR.12",
+        "L01.FR.28",
+        "L01.FR.29"
+      ]
+    }
+  ],
+  "security_events": [
+    {
+      "name": "FirmwareUpdated",
+      "critical": true
+    },
+    {
+      "name": "FailedToAuthenticateAtCentralSystem",
+      "critical": false
+    },
+    {
+      "name": "CentralSystemFailedToAuthenticate",
+      "critical": false
+    },
+    {
+      "name": "SettingSystemTime",
+      "critical": true
+    },
+    {
+      "name": "StartupOfTheDevice",
+      "critical": true
+    },
+    {
+      "name": "ResetOrReboot",
+      "critical": true
+    },
+    {
+      "name": "SecurityLogWasCleared",
+      "critical": true
+    },
+    {
+      "name": "ReconfigurationOfSecurityParameters",
+      "critical": false
+    },
+    {
+      "name": "MemoryExhaustion",
+      "critical": true
+    },
+    {
+      "name": "InvalidMessages",
+      "critical": false
+    },
+    {
+      "name": "AttemptedReplayAttacks",
+      "critical": false
+    },
+    {
+      "name": "TamperDetectionActivated",
+      "critical": true
+    },
+    {
+      "name": "InvalidFirmwareSignature",
+      "critical": false
+    },
+    {
+      "name": "InvalidFirmwareSigningCertificate",
+      "critical": true
+    },
+    {
+      "name": "InvalidCentralSystemCertificate",
+      "critical": true
+    },
+    {
+      "name": "InvalidChargePointCertificate",
+      "critical": true
+    },
+    {
+      "name": "InvalidTLSVersion",
+      "critical": true
+    },
+    {
+      "name": "InvalidTLSCipherSuite",
+      "critical": true
+    },
+    {
+      "name": "MaintenanceLoginAccepted",
+      "critical": true
+    },
+    {
+      "name": "MaintenanceLoginFailed",
+      "critical": true
+    },
+    {
+      "name": "DiscardedRenewedClientCertificate",
+      "critical": true
+    }
+  ],
+  "assertions": [
+    {
+      "requirements": [
+        "A04.FR.01",
+        "A04.FR.03",
+        "5.15",
+        "5.16"
+      ],
+      "assertion": "A charger reports a security event with SecurityEventNotification.req carrying a required type (string[50]) and dateTime timestamp and an optional techInfo (string[0..255]); the CSMS confirms receipt with the empty SecurityEventNotification.conf. The bridge keeps the type verbatim and the timestamp's instant, including a non-UTC offset.",
+      "evidence": "wire/1.6/security-event-firmware-updated.json;wire/1.6/security-event-minimal.json;wire/1.6/security-event-reset-or-reboot.json;wire/1.6/security-event-offset-timestamp.json;wire/1.6/security-event-acknowledged.json;wire/1.6/security-negative-cases.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-protocol-adapter/ocpp16_security_event_decode::every_inbound_fixture_decodes_to_its_expected_observation",
+        "uob-protocol-adapter/ocpp16_security_event_decode::offset_timestamp_is_normalised_to_utc",
+        "uob-protocol-adapter/ocpp16_security_event_decode::the_acknowledged_fixture_is_the_adapter_response",
+        "uob-application/security_event16::an_event_is_journaled_as_station_evidence_with_the_snapshot_activity",
+        "uob-application/security_event16::the_source_time_is_the_charger_timestamp_in_utc",
+        "uob-service/security16::events::a_registered_stations_event_is_journaled_before_the_ack_and_replays_identically",
+        "uob-service/security16::events::events_are_always_answered_and_never_become_commands_or_capabilities",
+        "uob-service/security16::refusals::schema_invalid_events_are_refused_with_a_property_violation_and_write_nothing",
+        "uob-service/security16::refusals::an_unregistered_station_gets_a_protocol_error_and_nothing_is_written",
+        "uob-service/security16::refusals::an_ocpp201_station_has_no_security_event_notification",
+        "uob-sim/security16_wire::events_are_sent_in_order_one_at_a_time_and_dequeued_by_the_confirmation"
+      ],
+      "behavioural_evidence_pending": [
+        "storage-failure InternalError path: proven in the application tests only (a_failed_write_leaves_the_snapshot_unchanged_and_the_gate_keeps_its_shed_calls), not in the daemon tests",
+        "the uob events command is not exercised; the HTTP event stream it reads is"
+      ]
+    },
+    {
+      "requirements": [
+        "A04.FR.02"
+      ],
+      "assertion": "The charger queues security events with guaranteed delivery while disconnected, so the CSMS must expect redelivery of an event it already acknowledged. This is a charger-side obligation; the bridge's deduplicated acknowledgement of identical redelivery is bridge design, not a requirement text.",
+      "evidence": "wire/1.6/security-event-minimal.json;wire/1.6/security-event-acknowledged.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-storage-adapter/security_event16::a_committed_event_is_recognised_exactly_and_across_reopen",
+        "uob-storage-adapter/security_event16::instants_written_with_different_offsets_are_the_same_event",
+        "uob-application/security_event16::a_redelivery_is_recognised_by_type_timestamp_and_redacted_text",
+        "uob-service/security16::events::redelivery_on_the_same_connection_and_after_reconnect_is_acknowledged_once_stored",
+        "uob-service/security16::recovery::a_redelivered_event_is_not_duplicated_after_a_daemon_restart",
+        "uob-service/security16::flood::a_flood_is_acknowledged_shed_and_signalled_without_dropping_the_session",
+        "uob-sim/security16_wire::duplicate_fault_resends_the_acknowledged_event_identically",
+        "uob-sim/security16_process::killed_binary_resends_the_unacknowledged_event_from_its_durable_queue"
+      ],
+      "behavioural_evidence_pending": [
+        "redelivery after journal retention pruned the first record is proven in the storage tests only (a_pruned_event_is_no_longer_recorded)",
+        "the next stored record carrying shed_calls after a flood window is proven in the application gate tests, not in the daemon tests"
+      ]
+    },
+    {
+      "requirements": [
+        "8"
+      ],
+      "assertion": "The 21 standard security event names are spelled as in section 8 and flagged critical or not as listed there; a type outside the list (up to 50 characters) is still a valid notification and is kept verbatim as a vendor type.",
+      "evidence": "wire/1.6/security-event-firmware-updated.json;wire/1.6/security-event-minimal.json;wire/1.6/security-event-reset-or-reboot.json;wire/1.6/security-event-offset-timestamp.json;wire/1.6/security-event-vendor-type.json;wire/1.6/security-event-type-max.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-application/security_event16::tests::every_section_8_name_is_standard_and_matching_is_exact",
+        "uob-application/security_event16::tests::a_vendor_type_is_kept_verbatim_and_not_standard",
+        "uob-protocol-adapter/ocpp16_security_event_decode::native_length_bounds_are_counted_in_characters",
+        "uob-service/security16::events::vendor_event_types_are_kept_verbatim_and_every_standard_name_is_marked",
+        "uob-ocpp-fixtures/security16::section_eight_names_are_spelled_as_the_whitepaper_spells_them"
+      ],
+      "behavioural_evidence_pending": [
+        "the daemon tests sample three standard names and the vendor types; all 21 names are checked in the application unit test only"
+      ]
+    },
+    {
+      "requirements": [
+        "5.15 techInfo",
+        "8 MaintenanceLoginAccepted",
+        "8 MaintenanceLoginFailed"
+      ],
+      "assertion": "techInfo may carry operator-supplied text up to 255 characters, including the recommended user and origin layout for maintenance logins. The whitepaper does not forbid credentials in techInfo, so a bridge must treat the field as untrusted; the credential fixture uses obviously fake values.",
+      "evidence": "wire/1.6/security-event-tech-info-max.json;wire/1.6/security-event-tech-info-credential.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-application/security_event16::tests::redaction::a_labelled_value_is_replaced_and_the_context_is_kept",
+        "uob-application/security_event16::tests::redaction::basic_and_bearer_tokens_are_replaced",
+        "uob-application/security_event16::tests::redaction::url_userinfo_is_replaced_and_the_host_is_kept",
+        "uob-application/security_event16::tests::redaction::long_hex_and_mixed_case_base64_runs_are_replaced",
+        "uob-application/security_event16::tests::redaction::a_label_at_the_end_of_an_identifier_is_recognised",
+        "uob-application/security_event16::tests::redaction::a_backslash_escapes_a_quote_inside_a_quoted_value",
+        "uob-application/security_event16::tests::redaction::alternative_and_url_encoded_separators_are_recognised",
+        "uob-application/security_event16::tests::redaction::an_authorization_value_is_replaced_as_a_whole",
+        "uob-application/security_event16::tests::redaction::the_credential_fixture_text_loses_both_secrets_and_keeps_its_context",
+        "uob-application/security_event16::tests::redaction::property::a_planted_secret_never_survives_any_label_separator_and_value_shape",
+        "uob-application/security_event16::tests::the_observation_holds_only_redacted_text_even_in_debug_output",
+        "uob-application/security_event16::the_journal_never_holds_the_raw_secret",
+        "uob-protocol-adapter/ocpp16_security_event_decode::credential_in_tech_info_is_redacted_everywhere_the_observation_goes",
+        "uob-protocol-adapter/ocpp16_security_event_decode::further_malformed_requests_are_refused_without_echoing_the_secret",
+        "uob-service/security16::events::credentials_in_tech_info_are_redacted_everywhere_the_daemon_keeps_or_publishes_data"
+      ],
+      "behavioural_evidence_pending": [
+        "known limits: a short secret with no label, natural-language phrasing such as password is x, other encodings and Digest parameter lists are not detected; long mixed-case identifiers and hex fingerprints are redacted although they are not secrets"
+      ]
+    },
+    {
+      "requirements": [
+        "5.5",
+        "5.6",
+        "6.16",
+        "6.17"
+      ],
+      "assertion": "ExtendedTriggerMessage.req carries a required requestedMessage from the seven MessageTriggerEnumType values and an optional connectorId (> 0); ExtendedTriggerMessage.conf answers Accepted, Rejected or NotImplemented.",
+      "evidence": "wire/1.6/extended-trigger-boot.json;wire/1.6/extended-trigger-heartbeat.json;wire/1.6/extended-trigger-log-status.json;wire/1.6/extended-trigger-firmware-status.json;wire/1.6/extended-trigger-meter-connector-1.json;wire/1.6/extended-trigger-meter-all.json;wire/1.6/extended-trigger-status-connector-1.json;wire/1.6/extended-trigger-status-all.json;wire/1.6/extended-trigger-accepted.json;wire/1.6/extended-trigger-rejected.json;wire/1.6/extended-trigger-not-implemented.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-protocol-adapter/command_registry::extended_trigger16::descriptor_requires_the_station_option_on_each_resource",
+        "uob-protocol-adapter/command_registry::extended_trigger16::every_corpus_request_validates_on_its_native_scope",
+        "uob-protocol-adapter/ocpp16_extended_trigger::every_request_fixture_is_sent_as_that_exact_native_call_with_frozen_targets",
+        "uob-protocol-adapter/ocpp16_extended_trigger::each_reply_fixture_maps_to_its_native_response_and_observation",
+        "uob-service/security16::extended_trigger::the_log_status_trigger_sends_one_call_and_is_observed_by_the_triggered_idle",
+        "uob-service/security16::extended_trigger::the_station_can_reject_and_an_unreplied_request_ends_absent",
+        "uob-service/security16::extended_trigger::a_delayed_reply_does_not_block_heartbeats_and_the_station_scope_classes_work",
+        "uob-storage-adapter/trigger_observation::extended::pending_extended_command_is_observed_by_a_matching_marker",
+        "uob-storage-adapter/trigger_observation::extended::extended_window_reconciles_after_reopen",
+        "uob-sim/security16_trigger_wire::configured_replies_decide_whether_anything_is_sent"
+      ],
+      "behavioural_evidence_pending": [
+        "a partial observation (some targets observed, the deadline passed) is not tested",
+        "a BootNotification trigger before acceptance is proven in the protocol adapter tests only"
+      ]
+    },
+    {
+      "requirements": [
+        "6.16 FirmwareStatusNotification",
+        "L01.FR.28",
+        "L01.FR.29"
+      ],
+      "assertion": "ExtendedTriggerMessage with FirmwareStatusNotification triggers a SignedFirmwareStatusNotification, not the legacy FirmwareStatusNotification: Idle when the last sent status was Installed, otherwise the last sent status. A plain FirmwareStatusNotification therefore never satisfies this trigger.",
+      "evidence": "wire/1.6/extended-trigger-firmware-status.json;wire/1.6/signed-firmware-status-idle-unattributed.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-service/security16::extended_trigger::the_firmware_trigger_needs_the_signed_notification_and_a_plain_one_never_counts",
+        "uob-service/security16::jobs::a_triggered_signed_firmware_idle_resolves_the_firmware_job_and_is_the_triggers_evidence",
+        "uob-storage-adapter/trigger_observation::extended::plain_and_signed_firmware_markers_never_cross_match",
+        "uob-protocol-adapter/command_registry::extended_trigger16::requested_values_follow_the_capabilities_that_produce_the_reply",
+        "uob-sim/security16_model::triggered_signed_firmware_status_is_idle_after_installed_else_the_last_sent_status"
+      ],
+      "behavioural_evidence_pending": [
+        "the Idle-after-Installed choice is the station's (L01.FR.28/29) and is proven on the simulator model only; the bridge accepts whichever signed status arrives"
+      ]
+    },
+    {
+      "requirements": [
+        "N01.FR.12",
+        "6.16 LogStatusNotification"
+      ],
+      "assertion": "ExtendedTriggerMessage with LogStatusNotification triggers a LogStatusNotification.req whose requestId may be omitted only when no log upload is ongoing; the bridge accepts that Idle report as trigger evidence while keeping its job reconciliation by exact requestId.",
+      "evidence": "wire/1.6/extended-trigger-log-status.json;wire/1.6/log-status-idle-unattributed.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-service/security16::jobs::a_triggered_log_idle_resolves_the_log_job_and_is_the_triggers_evidence",
+        "uob-service/security16::extended_trigger::the_log_status_trigger_sends_one_call_and_is_observed_by_the_triggered_idle",
+        "uob-sim/security16_model::triggered_log_status_is_idle_without_request_id_unless_a_get_log_upload_is_ongoing"
+      ],
+      "behavioural_evidence_pending": [
+        "an Uploading report with a requestId in answer to a trigger is proven on the simulator model only"
+      ]
+    },
+    {
+      "requirements": [
+        "6.16 BootNotification",
+        "6.16 Heartbeat",
+        "6.16 MeterValues",
+        "6.16 StatusNotification",
+        "5.5 connectorId"
+      ],
+      "assertion": "A connector-specific trigger names a connector greater than zero; a station-wide trigger omits connectorId. Zero and negative connector numbers are schema-valid integers but violate the 5.5 constraint, so the bridge refuses them itself before anything is sent.",
+      "evidence": "wire/1.6/extended-trigger-meter-connector-1.json;wire/1.6/extended-trigger-meter-all.json;wire/1.6/extended-trigger-status-connector-1.json;wire/1.6/extended-trigger-status-all.json;wire/1.6/security-negative-cases.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-protocol-adapter/command_registry::extended_trigger16::scope_follows_plain_trigger_but_requires_positive_connector_ids",
+        "uob-protocol-adapter/command_registry::extended_trigger16::negative_corpus_cases_are_refused_with_their_documented_code",
+        "uob-protocol-adapter/ocpp16_extended_trigger::refusals::every_negative_corpus_request_is_refused_with_its_code_and_never_sent",
+        "uob-service/security16::extended_trigger::invalid_and_unauthorized_requests_are_refused_before_anything_is_sent"
+      ],
+      "behavioural_evidence_pending": [
+        "at the management HTTP surface a non-positive connectorId is refused as 400 command.invalid_schema_or_payload before the adapter's InvalidParameters applies"
+      ]
+    },
+    {
+      "requirements": [
+        "6.16 SignChargePointCertificate"
+      ],
+      "assertion": "SignChargePointCertificate is a legal wire value but triggers a SignCertificate.req, which belongs to certificate management (issue #129); the bridge refuses it as unsupported and never sends it.",
+      "evidence": "wire/1.6/security-negative-cases.json;../tests/security16.rs",
+      "behavioural_evidence": [
+        "uob-protocol-adapter/command_registry::extended_trigger16::schema_edition_and_certificate_requests_are_refused_by_code",
+        "uob-protocol-adapter/ocpp16_extended_trigger::refusals::missing_option_or_capability_refuses_before_anything_is_sent",
+        "uob-service/security16::extended_trigger::invalid_and_unauthorized_requests_are_refused_before_anything_is_sent",
+        "uob-service/security16::extended_trigger::a_class_without_its_enabling_capability_or_a_disabled_option_is_unsupported"
+      ],
+      "behavioural_evidence_pending": [
+        "at the management HTTP surface SignChargePointCertificate is refused as 400 command.invalid_schema_or_payload because the offered descriptor lacks the value; the adapter's UnsupportedOperation is proven in the registry and adapter tests"
+      ]
+    }
+  ],
+  "not_covered": [
+    "charger-side A04.FR.04 security-log storage and the contents of the security log (issue #127 only receives notifications; log retrieval is covered by the diagnostics fixtures)",
+    "AuthorizationKey rotation (use case A01)",
+    "security profiles and their transitions (A00, A05; issues #345 and #346)",
+    "certificate management, SignCertificate, CertificateSigned and other certificate messages (issue #129)",
+    "triggering SignChargePointCertificate: refused as unsupported until issue #129",
+    "OCPP 2.0.1 security events (issue #128); the bridge keeps answering them NotImplemented",
+    "physical hardware, production artifact storage or OCA certification"
+  ],
+  "execution_status": "Fixture corpus validated against the pinned Whitepaper Edition 4 schemas. Each assertion's behavioural_evidence names the contract, application, storage, protocol, actual-daemon and simulator tests that prove it in isolated software verification, and its behavioural_evidence_pending lists what those tests do not prove (key name kept for the corpus test; it now holds remaining gaps only). Not proven at service level: the storage-failure InternalError answer (application tests only), a partial trigger observation, redelivery after journal pruning, shed_calls on the record after a flood window, and the uob events command. The opt-in separate-process joint smoke (bins/uob-sim/tests/security16_joint_smoke.py) ran outside the workspace verifier. Software verification only, not hardware interoperability or OCA certification; the ocpp16.monitoring-security.security-events and ocpp16.monitoring-security.extended-trigger rows are verified and the parent ocpp16.monitoring-security row stays planned for the security-profile half (issues #345 and #346)."
+}
