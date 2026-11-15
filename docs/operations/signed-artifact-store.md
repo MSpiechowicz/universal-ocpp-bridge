@@ -84,7 +84,7 @@ on exit, so a previous CLI success must not be treated as durable activation aut
 The process holds `.disk-admission.lock`, using the same OS flock namespace as the administrative
 disk preflight. Capacity includes the incoming files, explicit previous/backup reserves and at least
 512 MiB remaining headroom. The installer actually allocates file blocks and temporary reserve
-blocks with [rustix fallocate](https://docs.rs/rustix/1.1.4/rustix/fs/fn.fallocate.html), then checks
+blocks with [rustix fallocate](https://docs.rs/rustix/1.1.6/rustix/fs/fn.fallocate.html), then checks
 remaining space/inodes again before streaming. Unsupported allocation or exhaustion fails closed.
 Reserves are released after successful verification; later backup/activation work reserves its own
 space. Existing preflight reservations are not silently consumed or removed, so their occupied
